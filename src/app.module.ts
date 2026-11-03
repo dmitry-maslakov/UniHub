@@ -19,6 +19,7 @@ import { PrismaService } from './prisma/prisma.service.js';
 import { REDIS, RedisModule } from './redis/redis.module.js';
 import type { Redis } from 'ioredis';
 import { CatalogModule } from './catalog/catalog.module.js';
+import { IdentityModule } from './identity/identity.module.js';
 import { IngestModule } from './ingest/ingest.module.js';
 import { StorageModule } from './storage/storage.module.js';
 import { ProcessingModule } from './processing/processing.module.js';
@@ -73,6 +74,7 @@ import { PluginsModule } from './plugins/plugins.module.js';
     ScheduleModule.forRoot(),
     PluginsModule,
     CatalogModule,
+    IdentityModule,
     IngestModule,
     StorageModule.forRootAsync({
       inject: [ConfigService],

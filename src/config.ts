@@ -50,6 +50,16 @@ export const envSchema = z.object({
       'portal=token pairs: portal names are lower-case letters, digits and dashes, tokens are unique and at least 16 characters',
   }),
   STORAGE_PATH: z.string().default('./data/blobs'),
+  // signs sessions and tokens: openssl rand -base64 32
+  BETTER_AUTH_SECRET: z.string().min(32),
+  // where users reach the hub; links in mails point here
+  BETTER_AUTH_URL: z.url().default('http://localhost:3000'),
+  // smtp://user:pass@host:587; without it mails are only logged
+  SMTP_URL: z.string().default(''),
+  MAIL_FROM: z.string().default('UniHub <no-reply@localhost>'),
+  // Google sign-in is on when both are set
+  GOOGLE_CLIENT_ID: z.string().default(''),
+  GOOGLE_CLIENT_SECRET: z.string().default(''),
 });
 
 export type Env = z.output<typeof envSchema>;

@@ -1,8 +1,7 @@
 import { envSchema } from './config.js';
 
-const tokens = (CONNECTOR_TOKENS: string) =>
-  envSchema.safeParse({ DATABASE_URL: 'postgres://h/db', CONNECTOR_TOKENS })
-    .success;
+const tokens = (value: string) =>
+  envSchema.shape.CONNECTOR_TOKENS.safeParse(value).success;
 
 describe('CONNECTOR_TOKENS', () => {
   it('takes portal=token pairs', () => {

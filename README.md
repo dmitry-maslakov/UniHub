@@ -7,7 +7,7 @@ Server that pulls study materials, announcements and deadlines from FTN systems 
 Needs Node 22+ and Docker.
 
 ```bash
-cp .env.example .env
+cp .env.example .env   # then set BETTER_AUTH_SECRET
 docker compose up -d
 npm install
 npx prisma migrate dev
@@ -19,6 +19,17 @@ npm run start:dev
 - `src/` — the hub: core modules (`catalog`, `ingest`, `storage`, `processing`)
 - `libs/plugin-sdk` — everything a plugin may depend on, plugins never import the core directly
 - `prisma/schema/` — one schema file per module
+
+## Users
+
+[Better Auth](https://better-auth.com) serves `/api/auth/*`:
+
+- email and password, the email confirmed by a link in a mail (without `SMTP_URL` mails only go to the log)
+- Google, when `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set
+- sign-in by QR code: a new screen asks for a code (device authorization), a signed-in phone approves it
+- session tokens as `Authorization: Bearer`, and API keys for MCP clients
+
+Every HTTP route needs a signed-in user unless it says `@AllowAnonymous()`. Admins read every course, other users the ones granted to them (`GrantCourseAccessCommand`).
 
 ## Plugins
 
