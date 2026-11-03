@@ -6,6 +6,8 @@ import { TransactionHost } from '@nestjs-cls/transactional';
 import { AppModule } from '../src/app.module.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 import {
+  FILE_CONTENT_CHANGED,
+  RemoveFileCommand,
   SetFileContentCommand,
   UnknownReferenceError,
   UpsertFileCommand,
@@ -186,6 +188,54 @@ describe('catalog', () => {
       where: { id: created.id },
     });
     expect(row.contentHash).toBe('abc');
+  });
+
+  it('keeps asking for content until new content arrives', async () => {
+    const f = file({ externalId: 'stale' });
+    const { id } = await commands.execute(new UpsertFileCommand(f));
+    await commands.execute(new SetFileContentCommand(id, 'v1'));
+
+    const changed = { ...f, size: 4_000_000 };
+    expect(
+      await commands.execute(new UpsertFileCommand(changed)),
+    ).toMatchObject({ needsContent: true });
+    // the download failed, the next sync sends the same metadata
+    expect(
+      await commands.execute(new UpsertFileCommand(changed)),
+    ).toMatchObject({ changed: false, needsContent: true });
+
+    await commands.execute(new SetFileContentCommand(id, 'v2'));
+    expect(
+      await commands.execute(new UpsertFileCommand(changed)),
+    ).toMatchObject({ needsContent: false });
+  });
+
+  it('announces a removed file when it comes back', async () => {
+    const published: { topic: string; payload: unknown }[] = [];
+    const subscription = app
+      .get(OutboxEvents)
+      .events$.subscribe(
+        (e) => e.type === 'published' && published.push(e.message),
+      );
+    const f = file({ externalId: 'comes-back' });
+    const { id } = await commands.execute(new UpsertFileCommand(f));
+    await commands.execute(new SetFileContentCommand(id, 'same'));
+    await commands.execute(new RemoveFileCommand(portal, 'comes-back'));
+
+    await commands.execute(new UpsertFileCommand(f));
+
+    await vi.waitFor(
+      () =>
+        expect(
+          published.filter(
+            (m) =>
+              m.topic === FILE_CONTENT_CHANGED &&
+              (m.payload as { fileId: string }).fileId === id,
+          ),
+        ).toHaveLength(2),
+      { timeout: 10_000 },
+    );
+    subscription.unsubscribe();
   });
 
   it('stores sizes over 2 GB', async () => {

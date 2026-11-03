@@ -15,12 +15,14 @@ export interface File {
   mime: string | null;
   sourceUpdatedAt: Date | null;
   contentHash: string | null;
+  // the portal changed the file since its content was stored
+  contentStale: boolean;
   // the portal said it's gone; sending it again clears this
   removedAt: Date | null;
 }
 
-// contentHash isn't the portal's to set, storage fills it in
-export type FileData = Omit<File, 'id' | 'contentHash'>;
+// the content fields aren't the portal's to set
+export type FileData = Omit<File, 'id' | 'contentHash' | 'contentStale'>;
 
 export abstract class FileRepository {
   abstract upsert(data: FileData): Promise<Upserted<File>>;
@@ -29,8 +31,9 @@ export abstract class FileRepository {
     portal: string,
     externalId: string,
   ): Promise<File | null>;
-  // false if the file already had this content
+  // also clears contentStale; false if the file already had this content
   abstract setContentHash(id: string, hash: string): Promise<boolean>;
+  abstract markContentStale(id: string): Promise<void>;
   // null if there is no such file
   abstract markRemoved(
     portal: string,

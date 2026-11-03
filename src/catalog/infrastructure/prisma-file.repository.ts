@@ -21,6 +21,7 @@ const toEntity = (row: Row): File => ({
   mime: row.mime,
   sourceUpdatedAt: row.sourceUpdatedAt,
   contentHash: row.contentHash,
+  contentStale: row.contentStale,
   removedAt: row.removedAt,
 });
 
@@ -62,15 +63,25 @@ export class PrismaFileRepository extends FileRepository {
   }
 
   async setContentHash(id: string, hash: string) {
-    // `not` alone would skip rows where contentHash is still null
+    // conditional updates, so two concurrent calls can't both report a change
+    // (`not` alone would skip rows where contentHash is still null)
     const { count } = await this.db.updateMany({
       where: {
         id,
         OR: [{ contentHash: null }, { contentHash: { not: hash } }],
       },
-      data: { contentHash: hash },
+      data: { contentHash: hash, contentStale: false },
     });
+    if (count === 0)
+      await this.db.updateMany({
+        where: { id, contentStale: true },
+        data: { contentStale: false },
+      });
     return count > 0;
+  }
+
+  async markContentStale(id: string) {
+    await this.db.update({ where: { id }, data: { contentStale: true } });
   }
 
   async markRemoved(portal: string, externalId: string) {

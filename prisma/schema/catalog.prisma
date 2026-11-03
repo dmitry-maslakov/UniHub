@@ -59,6 +59,8 @@ model File {
   sourceUpdatedAt DateTime?
   // sha256 of the content once storage has it
   contentHash     String?
+  // the portal changed the file since its content was stored
+  contentStale    Boolean       @default(false)
   removedAt       DateTime?
   updatedAt       DateTime      @updatedAt
 
