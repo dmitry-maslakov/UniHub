@@ -1,0 +1,89 @@
+// How an external connector sends data to the hub. Every call carries
+// `authorization: Bearer <token>` metadata; the token decides the portal.
+// Ids are the portal's own, json fields are json text.
+// One sync per portal at a time is the connector's job: with two running,
+// the last SaveState wins.
+
+syntax = "proto3";
+
+package unihub.ingest.v1;
+
+import "google/protobuf/timestamp.proto";
+
+service Ingest {
+  rpc Course (CourseRecord) returns (Changed);
+  rpc Item (ItemRecord) returns (Changed);
+  rpc File (FileRecord) returns (FileResult);
+  // external_id of a file already sent with File, then data, then sha256
+  rpc Content (stream ContentChunk) returns (ContentResult);
+  // the portal no longer has it; sending it again brings it back
+  rpc RemoveItem (Ref) returns (Changed);
+  rpc RemoveFile (Ref) returns (Changed);
+  rpc GetState (Empty) returns (State);
+  rpc SaveState (State) returns (Empty);
+}
+
+message Empty {}
+
+message Changed {
+  bool changed = 1;
+}
+
+message CourseRecord {
+  string external_id = 1;
+  string name = 2;
+  optional string url = 3;
+  optional string meta_json = 4;
+}
+
+message ItemRecord {
+  string external_id = 1;
+  optional string course = 2;
+  string kind = 3;
+  optional string title = 4;
+  optional string url = 5;
+  google.protobuf.Timestamp published_at = 6;
+  string raw_json = 7;
+}
+
+message FileRecord {
+  string external_id = 1;
+  optional string course = 2;
+  optional string item = 3;
+  string name = 4;
+  optional string path = 5;
+  optional string url = 6;
+  optional int64 size = 7;
+  optional string mime = 8;
+  google.protobuf.Timestamp updated_at = 9;
+}
+
+message FileResult {
+  bool changed = 1;
+  bool needs_content = 2;
+}
+
+message ContentChunk {
+  oneof part {
+    string external_id = 1;
+    // gRPC takes messages up to 4 MB, so send the bytes in smaller pieces
+    bytes data = 2;
+    // hex sha256 of all the data. Nothing is stored without it, so an upload
+    // cut off halfway never passes for the whole file; DATA_LOSS on mismatch
+    string sha256 = 3;
+  }
+}
+
+message ContentResult {
+  string hash = 1;
+  bool changed = 2;
+}
+
+message Ref {
+  string external_id = 1;
+}
+
+message State {
+  // null when the connector never saved one
+  optional string json = 1;
+}

@@ -4,6 +4,7 @@ import {
   ConnectorMark,
   ContentProcessorMark,
 } from '@app/plugin-sdk';
+import type { ConnectorTokens } from '../ingest/contracts.js';
 import { PluginRegistry } from './plugin-registry.js';
 
 interface Fake {
@@ -16,6 +17,10 @@ interface Fake {
 
 // DiscoveryService only matters for what it returns, so it's faked here
 function registry(...plugins: Fake[]) {
+  return registryWith([], ...plugins);
+}
+
+function registryWith(external: string[], ...plugins: Fake[]) {
   const discovery = {
     getProviders: ({ metadataKey }: { metadataKey: string }) =>
       plugins
@@ -30,7 +35,8 @@ function registry(...plugins: Fake[]) {
     getMetadataByDecorator: (_: unknown, wrapper: { options: unknown }) =>
       wrapper.options,
   } as unknown as DiscoveryService;
-  const r = new PluginRegistry(discovery);
+  const tokens = { portals: () => external } as unknown as ConnectorTokens;
+  const r = new PluginRegistry(discovery, tokens);
   r.onModuleInit();
   return r;
 }
@@ -91,5 +97,15 @@ describe('PluginRegistry', () => {
         instance: { start() {} },
       }),
     ).toThrow('connector acs has no poll()');
+  });
+
+  it('refuses a portal that also has an external connector', () => {
+    expect(() =>
+      registryWith(['acs'], {
+        key: ConnectorMark.KEY,
+        options: { portal: 'acs', mode: 'poll', schedule: '* * * * *' },
+        instance: { poll() {} },
+      }),
+    ).toThrow('portal "acs" has a connector and a gRPC token');
   });
 });

@@ -24,6 +24,8 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@grpc/grpc-js": "^1.14.7",
+    "@grpc/proto-loader": "^0.8.1",
     "@nestjs-cls/transactional": "^4.0.2",
     "@nestjs-cls/transactional-adapter-prisma": "^2.0.2",
     "@nestjs/bullmq": "^12.0.0",
@@ -31,6 +33,7 @@
     "@nestjs/config": "^12.0.1",
     "@nestjs/core": "^12.0.1",
     "@nestjs/cqrs": "^12.1.2",
+    "@nestjs/microservices": "^12.3.2",
     "@nestjs/outbox": "0.1.4",
     "@nestjs/platform-express": "^12.0.1",
     "@nestjs/schedule": "^12.0.2",

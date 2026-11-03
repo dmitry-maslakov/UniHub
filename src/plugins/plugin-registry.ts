@@ -15,6 +15,7 @@ import {
   type PushesFromPortal,
   type Topic,
 } from '@app/plugin-sdk';
+import { ConnectorTokens } from '../ingest/contracts.js';
 
 export interface Plugin<O, I> {
   options: O;
@@ -52,7 +53,10 @@ export class PluginRegistry implements OnModuleInit {
   private processors: Plugin<ContentProcessorOptions, ProcessesContent>[] = [];
   private aggregators: Plugin<AggregatorOptions, HandlesMessages>[] = [];
 
-  constructor(private readonly discovery: DiscoveryService) {}
+  constructor(
+    private readonly discovery: DiscoveryService,
+    private readonly tokens: ConnectorTokens,
+  ) {}
 
   onModuleInit() {
     this.connectors = this.find<ConnectorOptions, object>(ConnectorMark).map(
@@ -130,6 +134,12 @@ export class PluginRegistry implements OnModuleInit {
       const bad = list.find((n) => !n || n.includes(':'));
       if (bad !== undefined) throw new Error(`bad ${what} "${bad}"`);
     }
+
+    // two writers of one portal would overwrite each other's records and state
+    const external = this.tokens.portals();
+    const both = portals.find((p) => external.includes(p));
+    if (both)
+      throw new Error(`portal "${both}" has a connector and a gRPC token`);
 
     for (const { mode, options, instance } of this.connectors) {
       const needs = mode === 'poll' ? ['poll'] : ['start', 'stop'];

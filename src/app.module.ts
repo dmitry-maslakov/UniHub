@@ -24,7 +24,7 @@ import { StorageModule } from './storage/storage.module.js';
 import { ProcessingModule } from './processing/processing.module.js';
 import { BullMqTransport } from './processing/infrastructure/bullmq.transport.js';
 import { routeFor } from './processing/outbox-routes.js';
-import { isConnectionError } from './redis/is-connection-error.js';
+import { isConnectionError } from './is-connection-error.js';
 import { plugins } from './plugins/enabled.js';
 import { PluginsModule } from './plugins/plugins.module.js';
 

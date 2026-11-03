@@ -5,9 +5,16 @@ const CODES = new Set([
   'EPIPE',
   'ENOTFOUND',
   'EAI_AGAIN',
+  // prisma: can't reach the database, timed out, socket timeout, connection
+  // closed, no free connection in the pool
+  'P1001',
+  'P1002',
+  'P1008',
+  'P1017',
+  'P2024',
 ]);
 
-// redis being down for a while is worth waiting out, a bug isn't
+// redis or postgres being down for a while is worth waiting out, a bug isn't
 export function isConnectionError(error: unknown) {
   if (!(error instanceof Error)) return false;
   const code = (error as NodeJS.ErrnoException).code;
