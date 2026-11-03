@@ -12,6 +12,7 @@ const withPath = (url: string, path: string) => {
 // so they never touch the developer's data
 export const testEnv = {
   DATABASE_URL: withPath(process.env.DATABASE_URL!, '/unihub_test'),
-  REDIS_URL: withPath(process.env.REDIS_URL ?? 'redis://localhost:6379', '/1'),
+  // db 15: far from the 0 a developer normally uses, it gets flushed
+  REDIS_URL: withPath(process.env.REDIS_URL ?? 'redis://localhost:6379', '/15'),
   STORAGE_PATH: join(tmpdir(), 'unihub-e2e'),
 };

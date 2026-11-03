@@ -38,6 +38,11 @@ export class PrismaPortalCourseRepository extends PortalCourseRepository {
     return this.txHost.tx.portalCourse;
   }
 
+  async findById(id: string) {
+    const row = await this.db.findUnique({ where: { id } });
+    return row && toEntity(row);
+  }
+
   async findByExternalId(portal: string, externalId: string) {
     const row = await this.db.findUnique({
       where: { portal_externalId: { portal, externalId } },

@@ -17,9 +17,11 @@ export class UpsertItemHandler implements ICommandHandler<UpsertItemCommand> {
   @Transactional()
   async execute({ data: { course, ...data } }: UpsertItemCommand) {
     const portalCourseId = await resolveId(this.courses, data.portal, course);
+    // sending a removed item again brings it back
     const { entity, changed } = await this.items.upsert({
       ...data,
       portalCourseId,
+      removedAt: null,
     });
     if (changed)
       await this.events.itemChanged({ portal: data.portal, itemId: entity.id });

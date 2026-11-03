@@ -1,6 +1,10 @@
-// what a plugin wants back on its next run (cursors, hashes...), the shape is up to the plugin
+// what a connector wants back on its next run (cursors, hashes...), per
+// portal and account; the shape is up to the connector
 model SyncState {
-  portal    String   @id
+  portal    String
+  account   String
   state     Json
   updatedAt DateTime @updatedAt
+
+  @@id([portal, account])
 }

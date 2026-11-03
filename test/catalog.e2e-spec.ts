@@ -1,12 +1,13 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { CommandBus } from '@nestjs/cqrs';
-import { getQueueToken } from '@nestjs/bullmq';
+import { OutboxEvents } from '@nestjs/outbox';
 import { TransactionHost } from '@nestjs-cls/transactional';
-import type { Queue } from 'bullmq';
 import { AppModule } from '../src/app.module.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 import {
+  FILE_CONTENT_CHANGED,
+  RemoveFileCommand,
   SetFileContentCommand,
   UnknownReferenceError,
   UpsertFileCommand,
@@ -15,7 +16,6 @@ import {
   type FileInput,
   type ItemInput,
 } from '../src/catalog/contracts.js';
-import { ITEMS_QUEUE } from '../src/processing/queues.js';
 
 const portal = 'catalog-test';
 
@@ -123,39 +123,39 @@ describe('catalog', () => {
   });
 
   it('commits or rolls back an item together with its message', async () => {
-    const items = app.get<Queue>(getQueueToken(ITEMS_QUEUE));
-    const queued = async (externalId: string) => {
-      const row = await prisma.item.findFirst({ where: { externalId } });
-      const jobs = await items.getJobs();
-      return !!row && jobs.some((job) => job.data.itemId === row.id);
-    };
+    const published: unknown[] = [];
+    const subscription = app
+      .get(OutboxEvents)
+      .events$.subscribe(
+        (e) => e.type === 'published' && published.push(e.message.payload),
+      );
+    const inPortal = (p: string) =>
+      published.filter((m) => (m as { portal: string }).portal === p);
 
     await expect(
       app.get(TransactionHost).withTransaction(async () => {
         await commands.execute(
-          new UpsertItemCommand(item({ externalId: 'post-rolled-back' })),
+          new UpsertItemCommand(
+            item({ portal: 'rolled-back', externalId: 'a' }),
+          ),
         );
         throw new Error('later step failed');
       }),
     ).rejects.toThrow('later step failed');
     await commands.execute(
-      new UpsertItemCommand(item({ externalId: 'post-committed' })),
+      new UpsertItemCommand(item({ portal: 'committed', externalId: 'a' })),
     );
 
-    await vi.waitFor(
-      async () => expect(await queued('post-committed')).toBe(true),
-      { timeout: 10_000 },
-    );
+    await vi.waitFor(() => expect(inPortal('committed')).toHaveLength(1), {
+      timeout: 10_000,
+    });
     // the relay has had its chance by now
     await sleep(1_500);
+    subscription.unsubscribe();
+    expect(inPortal('rolled-back')).toEqual([]);
     expect(
-      await prisma.item.findFirst({
-        where: { externalId: 'post-rolled-back' },
-      }),
+      await prisma.item.findFirst({ where: { portal: 'rolled-back' } }),
     ).toBeNull();
-    const [pending] = await prisma.$queryRaw<{ count: bigint }[]>`
-      SELECT count(*) FROM nest_outbox.messages WHERE payload->>'portal' = ${portal}`;
-    expect(pending.count).toBe(0n);
   });
 
   it('says when a file needs its content', async () => {
@@ -188,6 +188,54 @@ describe('catalog', () => {
       where: { id: created.id },
     });
     expect(row.contentHash).toBe('abc');
+  });
+
+  it('keeps asking for content until new content arrives', async () => {
+    const f = file({ externalId: 'stale' });
+    const { id } = await commands.execute(new UpsertFileCommand(f));
+    await commands.execute(new SetFileContentCommand(id, 'v1'));
+
+    const changed = { ...f, size: 4_000_000 };
+    expect(
+      await commands.execute(new UpsertFileCommand(changed)),
+    ).toMatchObject({ needsContent: true });
+    // the download failed, the next sync sends the same metadata
+    expect(
+      await commands.execute(new UpsertFileCommand(changed)),
+    ).toMatchObject({ changed: false, needsContent: true });
+
+    await commands.execute(new SetFileContentCommand(id, 'v2'));
+    expect(
+      await commands.execute(new UpsertFileCommand(changed)),
+    ).toMatchObject({ needsContent: false });
+  });
+
+  it('announces a removed file when it comes back', async () => {
+    const published: { topic: string; payload: unknown }[] = [];
+    const subscription = app
+      .get(OutboxEvents)
+      .events$.subscribe(
+        (e) => e.type === 'published' && published.push(e.message),
+      );
+    const f = file({ externalId: 'comes-back' });
+    const { id } = await commands.execute(new UpsertFileCommand(f));
+    await commands.execute(new SetFileContentCommand(id, 'same'));
+    await commands.execute(new RemoveFileCommand(portal, 'comes-back'));
+
+    await commands.execute(new UpsertFileCommand(f));
+
+    await vi.waitFor(
+      () =>
+        expect(
+          published.filter(
+            (m) =>
+              m.topic === FILE_CONTENT_CHANGED &&
+              (m.payload as { fileId: string }).fileId === id,
+          ),
+        ).toHaveLength(2),
+      { timeout: 10_000 },
+    );
+    subscription.unsubscribe();
   });
 
   it('stores sizes over 2 GB', async () => {

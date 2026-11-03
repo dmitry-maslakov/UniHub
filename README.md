@@ -22,10 +22,12 @@ npm run start:dev
 
 ## Plugins
 
-A plugin is a Nest module that depends only on `@app/plugin-sdk`:
+A plugin is a Nest module that depends only on `@app/plugin-sdk` (a lint rule checks it):
 
-- `@Connector({ portal })` pulls data from a portal when it wants to and sends it through `Ingest.forPortal(portal)`
+- `@Connector({ portal, mode: 'poll', schedule })` — the hub calls `poll(ctx)` on the cron schedule, one run per account at a time
+- `@Connector({ portal, mode: 'push' })` — keeps its own connection; the hub calls `start(ctx)` / `stop()`, only on the instance with `RUN_CONNECTORS=true`
+- either way data goes in only through `ctx.ingest`, bound to the connector's portal and account
 - `@ContentProcessor({ name, version, accepts })` turns file content into text for models
-- `@Aggregator({ name, topics })` reacts to messages (`item.ingested`, `file.content-stored`)
+- `@Aggregator({ name, topics })` reacts to messages (`item.ingested`, `item.removed`, `file.content-stored`, `file.removed`) and reads the rest through `HubReader`
 
-Built-in plugins are listed in `src/plugins/enabled.ts` and turned on by name in `PLUGINS`. `test/fake-plugins.ts` shows one of each.
+Every plugin gets its own queue job per message, so one failing plugin only retries itself. Built-in plugins are listed in `src/plugins/enabled.ts` and turned on by name in `PLUGINS`; `test/fake-plugins.ts` shows one of each.

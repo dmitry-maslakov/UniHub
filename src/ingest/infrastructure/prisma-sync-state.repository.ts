@@ -15,18 +15,18 @@ export class PrismaSyncStateRepository extends SyncStateRepository {
     super();
   }
 
-  async get(portal: string) {
+  async get(portal: string, account: string) {
     const row = await this.txHost.tx.syncState.findUnique({
-      where: { portal },
+      where: { portal_account: { portal, account } },
     });
     return (row?.state as Json | undefined) ?? null;
   }
 
-  async save(portal: string, state: Json) {
+  async save(portal: string, account: string, state: Json) {
     const value = state as object;
     await this.txHost.tx.syncState.upsert({
-      where: { portal },
-      create: { portal, state: value },
+      where: { portal_account: { portal, account } },
+      create: { portal, account, state: value },
       update: { state: value },
     });
   }

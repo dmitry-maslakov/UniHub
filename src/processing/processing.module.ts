@@ -1,25 +1,38 @@
-import { Module } from '@nestjs/common';
-import { BullModule } from '@nestjs/bullmq';
-import { PluginsModule } from '../plugins/plugins.module.js';
-import { FilesWorker } from './application/files.worker.js';
-import { ItemsWorker } from './application/items.worker.js';
-import { OutboxToQueues } from './infrastructure/outbox-to-queues.js';
-import { FILES_QUEUE, ITEMS_QUEUE } from './queues.js';
+import { Module, type OnApplicationBootstrap } from '@nestjs/common';
+import { BullModule, BullRegistrar } from '@nestjs/bullmq';
+import { PluginRunner } from './application/plugin-runner.js';
+import { OutboxRetention } from './infrastructure/outbox-retention.js';
+import { PluginsWorker } from './infrastructure/plugins.worker.js';
+import { PLUGINS_QUEUE } from './queues.js';
 
-// a failed job is retried with backoff, plugins have to be idempotent
-const defaultJobOptions = {
-  attempts: 5,
-  backoff: { type: 'exponential', delay: 5_000 },
-};
+const DAY = 24 * 60 * 60;
 
 @Module({
   imports: [
-    PluginsModule,
-    BullModule.registerQueue(
-      { name: FILES_QUEUE, defaultJobOptions },
-      { name: ITEMS_QUEUE, defaultJobOptions },
-    ),
+    BullModule.registerQueue({
+      name: PLUGINS_QUEUE,
+      defaultJobOptions: {
+        // plugins have to be idempotent
+        attempts: 5,
+        backoff: { type: 'exponential', delay: 5_000 },
+        // a finished job keeps its id for a day, longer than the outbox may
+        // take to publish the same message again
+        removeOnComplete: { age: DAY },
+        removeOnFail: { age: 14 * DAY },
+      },
+    }),
   ],
-  providers: [OutboxToQueues, FilesWorker, ItemsWorker],
+  providers: [PluginRunner, PluginsWorker, OutboxRetention],
+  // the outbox transport adds jobs to the queue
+  exports: [BullModule],
 })
-export class ProcessingModule {}
+export class ProcessingModule implements OnApplicationBootstrap {
+  constructor(private readonly registrar: BullRegistrar) {}
+
+  // Workers are registered by hand (manualRegistration in the app module), once
+  // every module is initialised, so no job runs before the plugin registry is
+  // filled.
+  onApplicationBootstrap() {
+    this.registrar.register();
+  }
+}
