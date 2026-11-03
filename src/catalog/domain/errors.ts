@@ -8,3 +8,17 @@ export class UnknownReferenceError extends Error {
     this.name = 'UnknownReferenceError';
   }
 }
+
+export class UnknownCourseError extends Error {
+  constructor(readonly slug: string) {
+    super(`unknown course ${slug}`);
+    this.name = 'UnknownCourseError';
+  }
+}
+
+export class CourseSlugTakenError extends Error {
+  constructor(readonly slug: string) {
+    super(`course ${slug} already exists`);
+    this.name = 'CourseSlugTakenError';
+  }
+}
