@@ -8,6 +8,13 @@ export {
   UpsertFileCommand,
   type FileInput,
 } from './application/commands/upsert-file.command.js';
+export { CreateCourseCommand } from './application/commands/create-course.command.js';
+export { LinkPortalCourseCommand } from './application/commands/link-portal-course.command.js';
+export { UnlinkPortalCourseCommand } from './application/commands/unlink-portal-course.command.js';
+export {
+  ListCoursesQuery,
+  type CourseDto,
+} from './application/queries/list-courses.query.js';
 export { SetFileContentCommand } from './application/commands/set-file-content.command.js';
 export { RemoveItemCommand } from './application/commands/remove-item.command.js';
 export { RemoveFileCommand } from './application/commands/remove-file.command.js';
@@ -22,7 +29,11 @@ export type {
   PortalCourseDto,
 } from './application/queries/dtos.js';
 export type { Json } from './domain/changes.js';
-export { UnknownReferenceError } from './domain/errors.js';
+export {
+  CourseSlugTakenError,
+  UnknownCourseError,
+  UnknownReferenceError,
+} from './domain/errors.js';
 export type {
   FileContentChanged,
   FileRemoved,

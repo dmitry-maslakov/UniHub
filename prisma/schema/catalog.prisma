@@ -1,22 +1,37 @@
 // a subject as we know it, portal courses get linked to it
 model Course {
-  id   String @id @default(uuid())
-  slug String @unique
-  name String
+  id    String       @id @default(uuid())
+  slug  String       @unique
+  name  String
+  links CourseLink[]
+}
+
+// which portal courses a course is made of; a portal course belongs to at
+// most one course. Canvas makes a new course every year, so the year is here
+model CourseLink {
+  portalCourseId String       @id
+  portalCourse   PortalCourse @relation(fields: [portalCourseId], references: [id], onDelete: Cascade)
+  courseId       String
+  course         Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  // academic year the portal course is for; null when it spans years (acs)
+  year           Int?
+
+  @@index([courseId])
 }
 
 // a course as it exists in one portal (canvas course, acs group, teams team...).
 // portal is a plugin id, not an enum, so a new plugin doesn't need a migration
 model PortalCourse {
-  id         String   @id @default(uuid())
+  id         String      @id @default(uuid())
   portal     String
   externalId String
   name       String
   url        String?
   meta       Json?
-  updatedAt  DateTime @updatedAt
+  updatedAt  DateTime    @updatedAt
   items      Item[]
   files      File[]
+  link       CourseLink?
 
   @@unique([portal, externalId])
 }

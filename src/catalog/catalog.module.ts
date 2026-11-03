@@ -1,4 +1,10 @@
 import { Module } from '@nestjs/common';
+import { CreateCourseHandler } from './application/commands/create-course.handler.js';
+import { LinkPortalCourseHandler } from './application/commands/link-portal-course.handler.js';
+import { UnlinkPortalCourseHandler } from './application/commands/unlink-portal-course.handler.js';
+import { ListCoursesHandler } from './application/queries/list-courses.handler.js';
+import { CourseRepository } from './domain/course.js';
+import { PrismaCourseRepository } from './infrastructure/prisma-course.repository.js';
 import { RemoveFileHandler } from './application/commands/remove-file.handler.js';
 import { RemoveItemHandler } from './application/commands/remove-item.handler.js';
 import { ListFilesWithContentHandler } from './application/queries/list-files-with-content.handler.js';
@@ -25,6 +31,11 @@ import { PrismaPortalCourseRepository } from './infrastructure/prisma-portal-cou
     { provide: ItemRepository, useClass: PrismaItemRepository },
     { provide: FileRepository, useClass: PrismaFileRepository },
     { provide: CatalogEvents, useClass: OutboxCatalogEvents },
+    { provide: CourseRepository, useClass: PrismaCourseRepository },
+    CreateCourseHandler,
+    LinkPortalCourseHandler,
+    UnlinkPortalCourseHandler,
+    ListCoursesHandler,
     UpsertPortalCourseHandler,
     UpsertItemHandler,
     UpsertFileHandler,
