@@ -61,10 +61,10 @@ export class FakeTextProcessor implements ProcessesContent {
 })
 @Injectable()
 export class FakePdfProcessor implements ProcessesContent {
-  calls = 0;
+  seen: string[] = [];
 
-  async process() {
-    this.calls++;
+  async process(input: ProcessorInput) {
+    this.seen.push(input.name);
     return { parts: [] };
   }
 }
