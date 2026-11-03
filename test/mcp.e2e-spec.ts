@@ -21,6 +21,7 @@ describe('MCP', { timeout: 20_000 }, () => {
   const mails: Mail[] = [];
   const { http, post, signUp } = accounts(() => app, mails);
   let key: string;
+  let cookie: string;
   let fileId: string;
 
   // one JSON-RPC call to /api/mcp, the way an MCP client makes it
@@ -86,7 +87,7 @@ describe('MCP', { timeout: 20_000 }, () => {
       new LinkPortalCourseCommand('alg', PORTAL, 'c1', 2026),
     );
 
-    const cookie = await signUp('agent@mcp.test');
+    cookie = await signUp('agent@mcp.test');
     const { id: userId } = await prisma.user.findUniqueOrThrow({
       where: { email: 'agent@mcp.test' },
     });
@@ -98,9 +99,18 @@ describe('MCP', { timeout: 20_000 }, () => {
 
   afterAll(() => app.close());
 
-  it('needs an API key or a session', async () => {
+  it('needs an API key, a session is not enough', async () => {
     await rpc('tools/list', {}, {}).expect(401);
-    await rpc('tools/list', {}, { 'x-api-key': 'not-a-key' }).expect(401);
+    // a bad key is counted by address before it's even checked
+    const bad = await rpc(
+      'tools/list',
+      {},
+      { 'x-api-key': 'not-a-key' },
+    ).expect(401);
+    expect(bad.headers['x-ratelimit-limit-mcp-ip']).toBe('1200');
+    // the route exists only behind the guards, under /api
+    await http().post('/mcp').expect(404);
+    await rpc('tools/list', {}, { cookie }).expect(401);
     // the key as a bearer token works too, the way MCP clients send it
     await rpc('tools/list', {}, { authorization: `Bearer ${key}` }).expect(200);
   });
@@ -110,8 +120,9 @@ describe('MCP', { timeout: 20_000 }, () => {
     expect(
       res.body.result.tools.map((t: { name: string }) => t.name).sort(),
     ).toEqual(['list_courses', 'list_files', 'list_items', 'read_file']);
-    // per key and minute
-    expect(res.headers['x-ratelimit-limit']).toBe('600');
+    // per user and minute, and per address before the key is checked
+    expect(res.headers['x-ratelimit-limit-mcp']).toBe('600');
+    expect(res.headers['x-ratelimit-limit-mcp-ip']).toBe('1200');
   });
 
   it("reads the user's courses, posts and files", async () => {
@@ -158,5 +169,33 @@ describe('MCP', { timeout: 20_000 }, () => {
       where: { email: 'agent@mcp.test' },
       data: { banned: false },
     });
+  });
+
+  it('counts calls per user, whatever key they come with', async () => {
+    const second = (
+      await post('/api-key/create', { name: 'second' }, cookie).expect(200)
+    ).body.key;
+    const left = async (k: string) =>
+      Number(
+        (await rpc('tools/list', {}, { 'x-api-key': k }).expect(200)).headers[
+          'x-ratelimit-remaining-mcp'
+        ],
+      );
+    const first = await left(key);
+    expect(await left(second)).toBe(first - 1);
+  });
+
+  it("doesn't let another user's key read the course", async () => {
+    const other = await signUp('other@mcp.test');
+    const otherKey = (
+      await post('/api-key/create', { name: 'x' }, other).expect(200)
+    ).body.key;
+    const res = await rpc(
+      'tools/call',
+      { name: 'list_items', arguments: { course: 'alg' } },
+      { 'x-api-key': otherKey },
+    ).expect(200);
+    expect(res.body.result.isError).toBe(true);
+    expect(res.body.result.content[0].text).toContain('course not found');
   });
 });

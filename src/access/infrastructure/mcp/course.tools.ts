@@ -5,6 +5,9 @@ import { z } from 'zod';
 import { userIdOf } from '../../../identity/contracts.js';
 import { CourseReader, MAX_LIMIT } from '../../application/course-reader.js';
 
+// the HTTP request, with the user the key guard put on it
+type Caller = Parameters<typeof userIdOf>[0];
+
 const page = {
   offset: z.number().int().min(0).default(0),
   limit: z.number().int().min(1).max(MAX_LIMIT).default(50),
@@ -32,8 +35,8 @@ export class CourseTools {
     parameters: z.object({}),
     annotations: readOnly,
   })
-  async courses(@Payload() _: unknown, @McpRawRequest() req: unknown) {
-    return json(await this.reader.courses(userIdOf(req as never)));
+  async courses(@Payload() _: unknown, @McpRawRequest() req: Caller) {
+    return json(await this.reader.courses(userIdOf(req)));
   }
 
   @Tool({
@@ -53,9 +56,9 @@ export class CourseTools {
       offset,
       limit,
     }: { course: string; offset: number; limit: number },
-    @McpRawRequest() req: unknown,
+    @McpRawRequest() req: Caller,
   ) {
-    const items = await this.reader.items(userIdOf(req as never), course, {
+    const items = await this.reader.items(userIdOf(req), course, {
       offset,
       limit,
     });
@@ -79,9 +82,9 @@ export class CourseTools {
       offset,
       limit,
     }: { course: string; offset: number; limit: number },
-    @McpRawRequest() req: unknown,
+    @McpRawRequest() req: Caller,
   ) {
-    const files = await this.reader.files(userIdOf(req as never), course, {
+    const files = await this.reader.files(userIdOf(req), course, {
       offset,
       limit,
     });
@@ -100,10 +103,10 @@ export class CourseTools {
   })
   async read(
     @Payload() { file, page }: { file: string; page: number },
-    @McpRawRequest() req: unknown,
+    @McpRawRequest() req: Caller,
   ) {
     const text = found(
-      await this.reader.text(userIdOf(req as never), file, page),
+      await this.reader.text(userIdOf(req), file, page),
       'page',
     );
     return {

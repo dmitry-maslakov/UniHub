@@ -1,22 +1,29 @@
 import { Controller, Injectable, UseGuards } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
-import { ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerGuard, type ThrottlerRequest } from '@nestjs/throttler';
 import { McpHttpControllerFor } from '@rekog/mcp-nest';
-import { OptionalAuth } from '@thallesp/nestjs-better-auth';
-import { ApiKeyGuard } from '../../../identity/contracts.js';
+import { ApiKeyAuth } from '../../../identity/contracts.js';
 import { mcpTransport } from './mcp.strategy.js';
 
-// limits count per key, or per user for a session
-@Injectable()
-class PerCallerThrottler extends ThrottlerGuard {
-  protected getTracker(req: Record<string, any>) {
-    return Promise.resolve(req.apiKeyId ?? req.user?.id ?? req.ip);
+// a ThrottlerGuard for one of the named limits in AppModule
+const throttleBy = (name: string) => {
+  @Injectable()
+  class Only extends ThrottlerGuard {
+    protected handleRequest(request: ThrottlerRequest) {
+      return request.throttler.name === name
+        ? super.handleRequest(request)
+        : Promise.resolve(true);
+    }
   }
-}
+  return Only;
+};
 
-// /api/mcp: MCP over streamable HTTP, for a signed-in user or an API key
+// /api/mcp: MCP over streamable HTTP, for API keys. Guards run in the order
+// they're added, and the lower decorator adds first: the limit by address,
+// the key, then the limit by the key's user.
 @Controller('mcp')
 @ApiExcludeController()
-@OptionalAuth()
-@UseGuards(ApiKeyGuard, PerCallerThrottler)
+@UseGuards(throttleBy('mcp'))
+@ApiKeyAuth()
+@UseGuards(throttleBy('mcp-ip'))
 export class McpHttpController extends McpHttpControllerFor(mcpTransport) {}

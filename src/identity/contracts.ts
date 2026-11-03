@@ -7,7 +7,7 @@ export {
   type ReadableCourses,
 } from './application/queries/readable-courses.query.js';
 export { UnknownUserError } from './domain/errors.js';
-export { ApiKeyGuard } from './infrastructure/http/api-key.guard.js';
+export { ApiKeyAuth } from './infrastructure/http/api-key.guard.js';
 export {
   CurrentUserId,
   userIdOf,

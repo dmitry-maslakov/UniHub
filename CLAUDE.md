@@ -25,10 +25,12 @@ Declined:
 
 Put off:
 
-- helmet with a CSP for `/api/docs`, `@nestjs/throttler`, client IP behind the proxy, Better Auth rate limits in Redis, `trustedOrigins`, gRPC behind TLS: deploy (#17)
+- helmet with a CSP for `/api/docs`, an app-wide `@nestjs/throttler` as the first global guard (Better Auth's guard looks up a session on every request, before any controller's limit), client IP behind the proxy, Better Auth rate limits in Redis, `trustedOrigins`, gRPC behind TLS: deploy (#17)
 - connector API keys, and moving the "portal both built-in and external" check to key creation (#33)
 - cursor paging for MCP, if agents need it
 - OAuth for MCP clients (claude.ai connectors need it); API keys until then
+- an `Origin` allowlist on the MCP transport (the spec asks for it against DNS rebinding); MCP takes no cookies, so a page can't call it as the user
+- MCP tools answer JSON as text, not `structuredContent` with an `outputSchema`
 - device sign-in: approval screen details and shorter device sessions, with the web portal
 - grants of a deleted course: when catalog can delete courses (an event for identity)
 
