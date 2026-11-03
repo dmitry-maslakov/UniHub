@@ -1,0 +1,6 @@
+// what a plugin wants back on its next run (cursors, hashes...), the shape is up to the plugin
+model SyncState {
+  portal    String   @id
+  state     Json
+  updatedAt DateTime @updatedAt
+}
