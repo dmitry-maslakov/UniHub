@@ -1,12 +1,27 @@
 import { Injectable } from '@nestjs/common';
 import { TransactionHost } from '@nestjs-cls/transactional';
 import type { TransactionalAdapterPrisma } from '@nestjs-cls/transactional-adapter-prisma';
-import type { File as Row } from '../../generated/prisma/client.js';
 import type { PrismaService } from '../../prisma/prisma.service.js';
+import type { File as Row } from '../../generated/prisma/client.js';
 import { type File, type FileData, FileRepository } from '../domain/file.js';
+import { LOCK, lockRecord } from './lock.js';
 import { upsertTracked } from './upsert-tracked.js';
 
-const toEntity = (row: Row): File => row;
+// size is a bigint in the db (files over 2 GB), a number everywhere else
+const toEntity = (row: Row): File => ({
+  id: row.id,
+  portal: row.portal,
+  externalId: row.externalId,
+  portalCourseId: row.portalCourseId,
+  itemId: row.itemId,
+  name: row.name,
+  path: row.path,
+  url: row.url,
+  size: row.size === null ? null : Number(row.size),
+  mime: row.mime,
+  sourceUpdatedAt: row.sourceUpdatedAt,
+  contentHash: row.contentHash,
+});
 
 @Injectable()
 export class PrismaFileRepository extends FileRepository {
@@ -36,6 +51,8 @@ export class PrismaFileRepository extends FileRepository {
 
   upsert(data: FileData) {
     return upsertTracked<File>(data, {
+      lock: () =>
+        lockRecord(this.txHost, LOCK.file, data.portal, data.externalId),
       find: () => this.findByExternalId(data.portal, data.externalId),
       create: async () => toEntity(await this.db.create({ data })),
       update: async ({ id }) =>

@@ -1,12 +1,8 @@
 import { Command } from '@nestjs/cqrs';
 
-export class SetFileContentCommand extends Command<{
-  fileId: string;
-  changed: boolean;
-}> {
+export class SetFileContentCommand extends Command<{ changed: boolean }> {
   constructor(
-    public readonly portal: string,
-    public readonly externalId: string,
+    public readonly fileId: string,
     public readonly hash: string,
   ) {
     super();

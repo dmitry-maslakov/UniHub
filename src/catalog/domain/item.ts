@@ -13,10 +13,7 @@ export interface Item {
   raw: Json;
 }
 
-type Optional = 'portalCourseId' | 'title' | 'url' | 'publishedAt';
-
-export type ItemData = Omit<Item, 'id' | Optional> &
-  Partial<Pick<Item, Optional>>;
+export type ItemData = Omit<Item, 'id'>;
 
 export abstract class ItemRepository {
   abstract upsert(data: ItemData): Promise<Upserted<Item>>;

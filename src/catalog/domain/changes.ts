@@ -5,6 +5,8 @@ export type Json =
 
 export interface Upserted<T> {
   entity: T;
+  // what was there before, null for a new record
+  previous: T | null;
   // false when the portal sent exactly what we already had
   changed: boolean;
 }

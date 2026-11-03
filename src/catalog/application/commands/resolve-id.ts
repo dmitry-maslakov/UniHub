@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { UnknownReferenceError } from '../../domain/errors.js';
 
 interface FindsByExternalId {
   findByExternalId(
@@ -8,16 +8,14 @@ interface FindsByExternalId {
 }
 
 // Maps a portal's id to ours. A reference to something the portal never sent
-// is a bug in the plugin (it has to send the course before its items), so it
-// fails instead of silently dropping the link.
+// is a bug in the plugin, so it fails instead of silently dropping the link.
 export async function resolveId(
   repository: FindsByExternalId,
   portal: string,
-  externalId: string | undefined,
+  externalId: string | null,
 ) {
-  if (externalId === undefined) return null;
+  if (externalId === null) return null;
   const found = await repository.findByExternalId(portal, externalId);
-  if (!found)
-    throw new NotFoundException(`${portal}: unknown reference ${externalId}`);
+  if (!found) throw new UnknownReferenceError(portal, externalId);
   return found.id;
 }
