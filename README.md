@@ -13,3 +13,9 @@ npm install
 npx prisma migrate dev
 npm run start:dev
 ```
+
+## Layout
+
+- `src/` — the hub: core modules (`catalog`, `ingest`, `storage`, `processing`)
+- `libs/plugin-sdk` — everything a plugin may depend on, plugins never import the core directly
+- `prisma/schema/` — one schema file per module

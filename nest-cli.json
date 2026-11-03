@@ -3,6 +3,18 @@
   "collection": "@nestjs/schematics",
   "sourceRoot": "src",
   "compilerOptions": {
-    "deleteOutDir": true
+    "deleteOutDir": true,
+    "builder": "rspack"
+  },
+  "projects": {
+    "plugin-sdk": {
+      "type": "library",
+      "root": "libs/plugin-sdk",
+      "entryFile": "index",
+      "sourceRoot": "libs/plugin-sdk/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/plugin-sdk/tsconfig.lib.json"
+      }
+    }
   }
 }
