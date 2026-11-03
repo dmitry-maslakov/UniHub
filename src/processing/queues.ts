@@ -1,3 +1,9 @@
-// BullMQ queues of the pipeline, workers (processors, aggregators) come with plugins
-export const FILES_QUEUE = 'files';
-export const ITEMS_QUEUE = 'items';
+import type { Message } from '@app/plugin-sdk';
+
+// one job per (message, plugin), so a failing plugin only retries itself
+export const PLUGINS_QUEUE = 'plugins';
+
+export interface PluginJob {
+  plugin: string;
+  message: Message;
+}

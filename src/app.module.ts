@@ -18,7 +18,10 @@ import { CatalogModule } from './catalog/catalog.module.js';
 import { IngestModule } from './ingest/ingest.module.js';
 import { StorageModule } from './storage/storage.module.js';
 import { ProcessingModule } from './processing/processing.module.js';
+import { BullMqTransport } from './processing/infrastructure/bullmq.transport.js';
+import { isConnectionError } from './redis/is-connection-error.js';
 import { plugins } from './plugins/enabled.js';
+import { PluginsModule } from './plugins/plugins.module.js';
 
 @Module({
   imports: [
@@ -38,8 +41,17 @@ import { plugins } from './plugins/enabled.js';
     }),
     PrismaModule,
     OutboxModule.forRoot({
+      transports: { plugins: BullMqTransport },
+      imports: [ProcessingModule],
+      route: () => 'plugins',
       relay: { pollInterval: '1s' },
-      retry: { attempts: 10, backoff: { delay: '1s', maxDelay: '1m' } },
+      retry: {
+        // the attempt limit always applies, so it is set high and retryIf
+        // decides: ten tries, or for as long as redis is unreachable
+        attempts: 10_000,
+        retryIf: (error, attempt) => attempt < 10 || isConnectionError(error),
+        backoff: { delay: '1s', maxDelay: '1m' },
+      },
     }),
     RedisModule,
     BullModule.forRootAsync({
@@ -47,6 +59,7 @@ import { plugins } from './plugins/enabled.js';
       useFactory: (connection: Redis) => ({ connection }),
     }),
     ScheduleModule.forRoot(),
+    PluginsModule,
     CatalogModule,
     IngestModule,
     StorageModule.forRootAsync({
