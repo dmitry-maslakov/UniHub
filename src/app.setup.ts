@@ -1,6 +1,10 @@
 import type { INestApplication, NestApplicationOptions } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import helmet from 'helmet';
 import { mcp } from './access/contracts.js';
+import type { Env } from './config.js';
 
 // How the HTTP app is set up, shared by main.ts and the e2e apps so they
 // can't drift apart.
@@ -11,6 +15,13 @@ export const appOptions: NestApplicationOptions = { bodyParser: false };
 // Connect other microservices (gRPC) first: this starts them all, as it must
 // before the app listens.
 export async function configureApp(app: INestApplication) {
+  const config = app.get<ConfigService<Env, true>>(ConfigService);
+  // behind caddy, the client's address comes from X-Forwarded-For
+  (app as NestExpressApplication).set(
+    'trust proxy',
+    config.get('TRUST_PROXY', { infer: true }),
+  );
+  app.use(helmet());
   // The auth module has already put /api/auth on the prefix's exclude list.
   // Options here would replace that list: leave them out, or include it.
   app.setGlobalPrefix('api');

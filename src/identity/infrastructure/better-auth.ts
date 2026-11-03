@@ -14,6 +14,7 @@ export interface AuthDeps {
   mailer: Mailer;
   secret: string;
   baseURL: string;
+  trustedOrigins: string[];
   google?: { clientId: string; clientSecret: string };
 }
 
@@ -24,6 +25,7 @@ export function createAuth({
   mailer,
   secret,
   baseURL,
+  trustedOrigins,
   google,
 }: AuthDeps) {
   // not awaited, so how long sending takes doesn't tell whether an account
@@ -38,6 +40,7 @@ export function createAuth({
   return betterAuth({
     secret,
     baseURL,
+    trustedOrigins,
     database: prismaAdapter(prisma, { provider: 'postgresql' }),
     // Better Auth skips origin checks under NODE_ENV=test; on here, tests see
     // what production does

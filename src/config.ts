@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 // "pdf-text, acs" → ['pdf-text', 'acs']
-export const parsePlugins = (value = '') =>
+export const parseList = (value = '') =>
   value
     .split(',')
     .map((s) => s.trim())
@@ -9,7 +9,7 @@ export const parsePlugins = (value = '') =>
 
 // "acs=token1, teams=token2" → [['acs', 'token1'], ['teams', 'token2']]
 export const parseConnectorTokens = (value = '') =>
-  parsePlugins(value).map((pair) => {
+  parseList(value).map((pair) => {
     const at = pair.indexOf('=');
     // no "=": no portal, so validation rejects it
     if (at < 0) return ['', pair] as const;
@@ -38,7 +38,7 @@ export const envSchema = z
     PLUGINS: z
       .string()
       .default('')
-      .refine((v) => parsePlugins(v).every((n) => /^[a-z0-9-]+$/.test(n)), {
+      .refine((v) => parseList(v).every((n) => /^[a-z0-9-]+$/.test(n)), {
         message: 'plugin names are lower-case letters, digits and dashes',
       }),
     // this instance starts push connectors (one instance should)
@@ -59,6 +59,11 @@ export const envSchema = z
     // smtp://user:pass@host:587; without it mails are only logged
     SMTP_URL: z.string().default(''),
     MAIL_FROM: z.string().default('UniHub <no-reply@localhost>'),
+    // other sites (the web app) allowed to call the API with cookies, comma
+    // separated; they get CORS too
+    TRUSTED_ORIGINS: z.string().default(''),
+    // how many proxies in front of the app set X-Forwarded-For (caddy: 1)
+    TRUST_PROXY: z.coerce.number().int().min(0).default(0),
     // Google sign-in is on when both are set
     GOOGLE_CLIENT_ID: z.string().default(''),
     GOOGLE_CLIENT_SECRET: z.string().default(''),

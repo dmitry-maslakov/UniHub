@@ -20,6 +20,7 @@ import { PrismaService } from './prisma/prisma.service.js';
 import { REDIS, RedisModule } from './redis/redis.module.js';
 import type { Redis } from 'ioredis';
 import { AccessModule } from './access/access.module.js';
+import { HealthModule } from './health/health.module.js';
 import { CatalogModule } from './catalog/catalog.module.js';
 import { IdentityModule } from './identity/identity.module.js';
 import { IngestModule } from './ingest/ingest.module.js';
@@ -91,6 +92,7 @@ import { PluginsModule } from './plugins/plugins.module.js';
     CatalogModule,
     IdentityModule,
     AccessModule,
+    HealthModule,
     IngestModule,
     StorageModule.forRootAsync({
       inject: [ConfigService],

@@ -67,3 +67,19 @@ Every plugin gets its own queue job per message, so one failing plugin only retr
 A connector can also run as its own service, in any language, and send data over gRPC (`proto/ingest.proto`). Each one gets a token in `CONNECTOR_TOKENS="portal=token,…"` and sends it as `authorization: Bearer <token>`; the token decides the portal. The hub doesn't schedule these, they sync when they want.
 
 The gRPC server starts only when some token is set and listens on `GRPC_URL` without TLS, so keep it on a private network or behind a TLS proxy.
+
+## Deploy
+
+`deploy/compose.yml` runs the hub on one server: caddy (TLS from Let's Encrypt) in front of the app, postgres and redis.
+
+```bash
+cp deploy/.env.example deploy/.env   # then fill it in
+docker compose -f deploy/compose.yml up -d --build
+# the first admin, with the build image's tools
+docker compose -f deploy/compose.yml run --rm migrate npm run auth:create-admin -- --email you@example.com --password '…'
+```
+
+- the `migrate` service applies prisma's and the outbox's migrations before the app starts
+- `/api/health` checks the database and redis; compose waits for it
+- external connectors reach gRPC through caddy over TLS on the same address (`DOMAIN:443`); the gRPC port isn't published
+- file content lives in the `blobs` volume, keep it with the database's
