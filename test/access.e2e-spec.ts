@@ -68,6 +68,13 @@ describe('REST API', { timeout: 20_000 }, () => {
         raw: { body: `text of ${id}` },
       });
     await ingest.remove('item', 'gone');
+    await ingest.item({
+      externalId: 'gone-later',
+      course: 'c1',
+      kind: 'announcement',
+      title: 'exam solutions (too early)',
+      raw: {},
+    });
 
     const files: [string, object, Buffer | null][] = [
       [
@@ -79,6 +86,12 @@ describe('REST API', { timeout: 20_000 }, () => {
           mime: 'application/pdf',
         },
         slides,
+      ],
+      // with a post that gets removed
+      [
+        'solutions',
+        { item: 'gone-later', name: 'solutions.pdf' },
+        Buffer.from('ans'),
       ],
       // attached to a post, no course of its own
       ['homework', { item: 'new', name: 'homework.docx' }, Buffer.from('hw')],
@@ -106,6 +119,7 @@ describe('REST API', { timeout: 20_000 }, () => {
       ).id;
     }
     await ingest.remove('file', 'removed');
+    await ingest.remove('item', 'gone-later');
 
     // two versions of one processor's text and another processor's
     for (const [processor, version, parts] of [
@@ -262,6 +276,9 @@ describe('REST API', { timeout: 20_000 }, () => {
     await get(`/api/files/${ids.copy}/content`, student).expect(404);
     // removed, or not there at all: the same answer
     await get(`/api/files/${ids.removed}`, student).expect(404);
+    // and an attachment goes with its post
+    await get(`/api/files/${ids.solutions}`, student).expect(404);
+    await get(`/api/files/${ids.solutions}/content`, student).expect(404);
     await get('/api/courses/nope/items', student).expect(404);
   });
 

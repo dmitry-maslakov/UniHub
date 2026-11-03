@@ -4,6 +4,7 @@ import {
   CourseOfQuery,
   FindCourseQuery,
   GetFileQuery,
+  GetItemQuery,
   ListCourseFilesQuery,
   ListCourseItemsQuery,
   ListCoursesQuery,
@@ -51,10 +52,15 @@ export class CourseReader {
     return course && (await this.canRead(userId, course.id)) ? course : null;
   }
 
-  // a file of a course the user may read, not removed
+  // a file of a course the user may read, not removed, nor attached to a
+  // removed post
   private async readableFile(userId: string, fileId: string) {
     const file = await this.queries.execute(new GetFileQuery(fileId));
     if (!file || file.removed || !file.portalCourseId) return null;
+    if (file.itemId) {
+      const item = await this.queries.execute(new GetItemQuery(file.itemId));
+      if (!item || item.removed) return null;
+    }
     const courseId = await this.queries.execute(
       new CourseOfQuery(file.portalCourseId),
     );

@@ -46,7 +46,12 @@ export class PrismaFileRepository extends FileRepository {
 
   async listOfCourse(courseId: string, offset: number, limit: number) {
     const rows = await this.db.findMany({
-      where: { removedAt: null, portalCourse: { link: { courseId } } },
+      where: {
+        removedAt: null,
+        portalCourse: { link: { courseId } },
+        // attachments go with their post
+        OR: [{ itemId: null }, { item: { removedAt: null } }],
+      },
       orderBy: [{ path: 'asc' }, { name: 'asc' }, { id: 'asc' }],
       skip: offset,
       take: limit,
