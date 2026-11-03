@@ -1,19 +1,15 @@
 import { readdir } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import { Test, type TestingModule } from '@nestjs/testing';
-import { getQueueToken } from '@nestjs/bullmq';
-import type { Queue } from 'bullmq';
 import {
-  FILE_CONTENT_STORED,
-  ITEM_INGESTED,
-  Ingest,
+  InvalidRecordError,
+  UnknownReferenceError,
   type ItemRecord,
   type PortalIngest,
 } from '@app/plugin-sdk';
 import { AppModule } from '../src/app.module.js';
-import { UnknownReferenceError } from '../src/catalog/contracts.js';
+import { HubIngest } from '../src/ingest/contracts.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
-import { FILES_QUEUE, ITEMS_QUEUE } from '../src/processing/queues.js';
 import { testEnv } from './env.js';
 
 const portal = 'ingest-test';
@@ -44,44 +40,21 @@ describe('ingest', () => {
     ];
   }
 
-  async function jobs() {
-    const queues = [ITEMS_QUEUE, FILES_QUEUE].map((name) =>
-      app.get<Queue>(getQueueToken(name)),
-    );
-    const all = (await Promise.all(queues.map((q) => q.getJobs()))).flat();
-    return all
-      .filter((job) => job.data.portal === portal)
-      .map((job) => [job.name, job.data]);
-  }
-
   beforeAll(async () => {
     app = await Test.createTestingModule({ imports: [AppModule] }).compile();
     await app.init();
-    hub = app.get(Ingest).forPortal(portal);
+    hub = app.get(HubIngest).forPortal(portal);
     prisma = app.get(PrismaService);
   });
 
   afterAll(() => app.close());
 
-  it('stores what a plugin sends and queues work for plugins', async () => {
+  it('stores what a plugin sends', async () => {
     const results = await sync('slides v1');
     expect(results.every((r) => r.changed)).toBe(true);
 
-    const item = await prisma.item.findFirstOrThrow({ where: { portal } });
     const file = await prisma.file.findFirstOrThrow({ where: { portal } });
-    await vi.waitFor(
-      async () =>
-        expect(await jobs()).toEqual(
-          expect.arrayContaining([
-            [ITEM_INGESTED, { portal, itemId: item.id }],
-            [
-              FILE_CONTENT_STORED,
-              { portal, fileId: file.id, hash: file.contentHash },
-            ],
-          ]),
-        ),
-      { timeout: 10_000 },
-    );
+    expect(file.contentHash).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it('reports nothing changed when the plugin resends the same data', async () => {
@@ -89,16 +62,49 @@ describe('ingest', () => {
     expect(results.map((r) => r.changed)).toEqual([false, false, false, false]);
   });
 
-  it('queues new content of the same file', async () => {
+  it('notices new content of the same file', async () => {
     const [, , , content] = await sync('slides v2');
     expect(content.changed).toBe(true);
-    await vi.waitFor(
-      async () =>
-        expect(
-          (await jobs()).filter(([name]) => name === FILE_CONTENT_STORED),
-        ).toHaveLength(2),
-      { timeout: 10_000 },
-    );
+  });
+
+  it('asks for content only when the file needs it', async () => {
+    const file = {
+      externalId: 'file-1',
+      course: 'ar',
+      item: 'post-1',
+      name: 'lecture-5.pdf',
+    };
+    expect(await hub.file(file)).toEqual({
+      changed: false,
+      needsContent: false,
+    });
+    expect(await hub.file({ ...file, externalId: 'file-2' })).toEqual({
+      changed: true,
+      needsContent: true,
+    });
+  });
+
+  it('removes an item and brings it back when it is sent again', async () => {
+    const post = {
+      externalId: 'post-1',
+      course: 'ar',
+      kind: 'post',
+      title: 'Lecture 5 is up',
+      raw: { guid: 'post-1' },
+    };
+    expect(await hub.remove('item', 'post-1')).toEqual({ changed: true });
+    expect(await hub.remove('item', 'post-1')).toEqual({ changed: false });
+    expect(await hub.item(post)).toEqual({ changed: true });
+    const row = await prisma.item.findFirstOrThrow({
+      where: { portal, externalId: 'post-1' },
+    });
+    expect(row.removedAt).toBeNull();
+  });
+
+  it('rejects a record that is missing required fields', async () => {
+    await expect(
+      hub.item({ externalId: 'post-x' } as unknown as ItemRecord),
+    ).rejects.toBeInstanceOf(InvalidRecordError);
   });
 
   it("drops fields a record isn't allowed to set", async () => {
@@ -149,9 +155,11 @@ describe('ingest', () => {
     expect(await blobs()).toBe(before);
   });
 
-  it('keeps the plugin state between runs', async () => {
+  it('keeps the plugin state between runs, per account', async () => {
     expect(await hub.state()).toBeNull();
     await hub.saveState({ cursor: 5 });
     expect(await hub.state()).toEqual({ cursor: 5 });
+    const other = app.get(HubIngest).forPortal(portal, 'someone');
+    expect(await other.state()).toBeNull();
   });
 });
