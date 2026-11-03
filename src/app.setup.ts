@@ -1,5 +1,6 @@
 import type { INestApplication, NestApplicationOptions } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { mcp } from './access/contracts.js';
 
 // How the HTTP app is set up, shared by main.ts and the e2e apps so they
 // can't drift apart.
@@ -7,7 +8,9 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 // Better Auth reads raw request bodies; the auth module parses the rest
 export const appOptions: NestApplicationOptions = { bodyParser: false };
 
-export function configureApp(app: INestApplication) {
+// Connect other microservices (gRPC) first: this starts them all, as it must
+// before the app listens.
+export async function configureApp(app: INestApplication) {
   // The auth module has already put /api/auth on the prefix's exclude list.
   // Options here would replace that list: leave them out, or include it.
   app.setGlobalPrefix('api');
@@ -22,4 +25,9 @@ export function configureApp(app: INestApplication) {
         .build(),
     ),
   );
+  // MCP runs as a microservice strategy on the same HTTP server; its route is
+  // a guarded controller in access (/api/mcp)
+  mcp.setHttpAdapter(app.getHttpAdapter());
+  app.connectMicroservice({ strategy: mcp });
+  await app.startAllMicroservices();
 }

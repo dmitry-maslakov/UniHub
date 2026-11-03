@@ -41,7 +41,16 @@ export function createAuth({
     database: prismaAdapter(prisma, { provider: 'postgresql' }),
     // Better Auth skips origin checks under NODE_ENV=test; on here, tests see
     // what production does
-    advanced: { disableOriginCheck: false },
+    advanced: {
+      disableOriginCheck: false,
+      // work that can wait until the response is out (API key bookkeeping)
+      backgroundTasks: {
+        handler: (task) =>
+          void task.catch((err: unknown) =>
+            logger.error('background task failed', err as Error),
+          ),
+      },
+    },
     emailAndPassword: {
       enabled: true,
       requireEmailVerification: true,
@@ -78,7 +87,8 @@ export function createAuth({
       // for MCP clients. The plugin's limit only resets after a quiet
       // window, so a steadily working agent gets locked out; MCP routes
       // throttle per key instead (#16)
-      apiKey({ rateLimit: { enabled: false } }),
+      // a key's last use is written after the answer, not before it
+      apiKey({ rateLimit: { enabled: false }, deferUpdates: true }),
     ],
   });
 }

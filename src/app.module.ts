@@ -4,6 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CqrsModule } from '@nestjs/cqrs';
 import { BullModule } from '@nestjs/bullmq';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerModule } from '@nestjs/throttler';
 import {
   OutboxModule,
   OutboxPublishTimeoutError,
@@ -73,6 +74,19 @@ import { PluginsModule } from './plugins/plugins.module.js';
       },
     }),
     ScheduleModule.forRoot(),
+    // named limits, applied where a guard picks them (MCP). One instance's
+    // memory until the deploy (#17)
+    ThrottlerModule.forRoot([
+      // by user, however many keys they make
+      {
+        name: 'mcp',
+        ttl: 60_000,
+        limit: 600,
+        // a plain ThrottlerGuard runs every named limit, before sign-in too
+        getTracker: (req) =>
+          (req.user as { id: string } | null | undefined)?.id ?? req.ip,
+      },
+    ]),
     PluginsModule,
     CatalogModule,
     IdentityModule,
