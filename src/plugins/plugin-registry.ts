@@ -1,6 +1,5 @@
 import { extname } from 'node:path';
 import { Injectable, type OnModuleInit } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { DiscoveryService, type DiscoverableDecorator } from '@nestjs/core';
 import {
   AggregatorMark,
@@ -16,7 +15,7 @@ import {
   type PushesFromPortal,
   type Topic,
 } from '@app/plugin-sdk';
-import { parseConnectorTokens, type Env } from '../config.js';
+import { ConnectorTokens } from '../ingest/contracts.js';
 
 export interface Plugin<O, I> {
   options: O;
@@ -56,7 +55,7 @@ export class PluginRegistry implements OnModuleInit {
 
   constructor(
     private readonly discovery: DiscoveryService,
-    private readonly config: ConfigService<Env, true>,
+    private readonly tokens: ConnectorTokens,
   ) {}
 
   onModuleInit() {
@@ -137,9 +136,7 @@ export class PluginRegistry implements OnModuleInit {
     }
 
     // two writers of one portal would overwrite each other's records and state
-    const external = parseConnectorTokens(
-      this.config.get('CONNECTOR_TOKENS', { infer: true }),
-    ).map(([portal]) => portal);
+    const external = this.tokens.portals();
     const both = portals.find((p) => external.includes(p));
     if (both)
       throw new Error(`portal "${both}" has a connector and a gRPC token`);

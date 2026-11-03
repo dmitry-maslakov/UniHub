@@ -1,10 +1,10 @@
-import type { ConfigService } from '@nestjs/config';
 import type { DiscoveryService } from '@nestjs/core';
 import {
   AggregatorMark,
   ConnectorMark,
   ContentProcessorMark,
 } from '@app/plugin-sdk';
+import type { ConnectorTokens } from '../ingest/contracts.js';
 import { PluginRegistry } from './plugin-registry.js';
 
 interface Fake {
@@ -17,10 +17,10 @@ interface Fake {
 
 // DiscoveryService only matters for what it returns, so it's faked here
 function registry(...plugins: Fake[]) {
-  return registryWith('', ...plugins);
+  return registryWith([], ...plugins);
 }
 
-function registryWith(connectorTokens: string, ...plugins: Fake[]) {
+function registryWith(external: string[], ...plugins: Fake[]) {
   const discovery = {
     getProviders: ({ metadataKey }: { metadataKey: string }) =>
       plugins
@@ -35,10 +35,8 @@ function registryWith(connectorTokens: string, ...plugins: Fake[]) {
     getMetadataByDecorator: (_: unknown, wrapper: { options: unknown }) =>
       wrapper.options,
   } as unknown as DiscoveryService;
-  const config = {
-    get: () => connectorTokens,
-  } as unknown as ConfigService<never, true>;
-  const r = new PluginRegistry(discovery, config);
+  const tokens = { portals: () => external } as unknown as ConnectorTokens;
+  const r = new PluginRegistry(discovery, tokens);
   r.onModuleInit();
   return r;
 }
@@ -103,7 +101,7 @@ describe('PluginRegistry', () => {
 
   it('refuses a portal that also has an external connector', () => {
     expect(() =>
-      registryWith('acs=0123456789abcdef', {
+      registryWith(['acs'], {
         key: ConnectorMark.KEY,
         options: { portal: 'acs', mode: 'poll', schedule: '* * * * *' },
         instance: { poll() {} },

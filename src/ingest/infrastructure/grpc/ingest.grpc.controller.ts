@@ -151,9 +151,10 @@ export class IngestGrpcController {
 
   @GrpcMethod('Ingest', 'SaveState')
   async saveState({ json }: State, metadata: Metadata) {
+    const ingest = this.ingest(metadata);
     // "null" clears it; a missing field is more likely a mistake
     if (json === undefined) throw new InvalidRecordError(['json is required']);
-    await this.ingest(metadata).saveState(parseJson(json) as Json);
+    await ingest.saveState(parseJson(json) as Json);
     return {};
   }
 }

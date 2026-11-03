@@ -13,6 +13,6 @@ import { PrismaSyncStateRepository } from './infrastructure/prisma-sync-state.re
     ConnectorTokens,
     { provide: SyncStateRepository, useClass: PrismaSyncStateRepository },
   ],
-  exports: [HubIngest],
+  exports: [HubIngest, ConnectorTokens],
 })
 export class IngestModule {}
