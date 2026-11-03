@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { status, type Metadata } from '@grpc/grpc-js';
-import { RpcException } from '@nestjs/microservices';
+import type { Metadata } from '@grpc/grpc-js';
+import { GrpcUnauthenticatedException } from '@nestjs/microservices';
 import { parseConnectorTokens, type Env } from '../../../config.js';
 
 // A connector's token decides its portal, it can't write as another one.
-// Proper credentials come with auth.
+// Several tokens for one portal let a token be rotated. Proper credentials
+// come with auth.
 @Injectable()
 export class ConnectorTokens {
   private readonly portals: Map<string, string>;
@@ -23,10 +24,7 @@ export class ConnectorTokens {
     const token = header.replace(/^Bearer\s+/i, '');
     const portal = token && this.portals.get(token);
     if (!portal)
-      throw new RpcException({
-        code: status.UNAUTHENTICATED,
-        message: 'unknown connector token',
-      });
+      throw new GrpcUnauthenticatedException('unknown connector token');
     return portal;
   }
 }

@@ -1,3 +1,4 @@
+import type { ConfigService } from '@nestjs/config';
 import type { DiscoveryService } from '@nestjs/core';
 import {
   AggregatorMark,
@@ -16,6 +17,10 @@ interface Fake {
 
 // DiscoveryService only matters for what it returns, so it's faked here
 function registry(...plugins: Fake[]) {
+  return registryWith('', ...plugins);
+}
+
+function registryWith(connectorTokens: string, ...plugins: Fake[]) {
   const discovery = {
     getProviders: ({ metadataKey }: { metadataKey: string }) =>
       plugins
@@ -30,7 +35,10 @@ function registry(...plugins: Fake[]) {
     getMetadataByDecorator: (_: unknown, wrapper: { options: unknown }) =>
       wrapper.options,
   } as unknown as DiscoveryService;
-  const r = new PluginRegistry(discovery);
+  const config = {
+    get: () => connectorTokens,
+  } as unknown as ConfigService<never, true>;
+  const r = new PluginRegistry(discovery, config);
   r.onModuleInit();
   return r;
 }
@@ -91,5 +99,15 @@ describe('PluginRegistry', () => {
         instance: { start() {} },
       }),
     ).toThrow('connector acs has no poll()');
+  });
+
+  it('refuses a portal that also has an external connector', () => {
+    expect(() =>
+      registryWith('acs=0123456789abcdef', {
+        key: ConnectorMark.KEY,
+        options: { portal: 'acs', mode: 'poll', schedule: '* * * * *' },
+        instance: { poll() {} },
+      }),
+    ).toThrow('portal "acs" has a connector and a gRPC token');
   });
 });

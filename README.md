@@ -36,4 +36,6 @@ Every plugin gets its own queue job per message, so one failing plugin only retr
 
 ## External connectors
 
-A connector can also run as its own service, in any language, and send data over gRPC (`proto/ingest.proto`, port `GRPC_URL`). Each one gets a token in `CONNECTOR_TOKENS="portal=token,…"` and sends it as `authorization: Bearer <token>`; the token decides the portal. The hub doesn't schedule these, they sync when they want.
+A connector can also run as its own service, in any language, and send data over gRPC (`proto/ingest.proto`). Each one gets a token in `CONNECTOR_TOKENS="portal=token,…"` and sends it as `authorization: Bearer <token>`; the token decides the portal. The hub doesn't schedule these, they sync when they want.
+
+The gRPC server starts only when some token is set and listens on `GRPC_URL` without TLS, so keep it on a private network or behind a TLS proxy.

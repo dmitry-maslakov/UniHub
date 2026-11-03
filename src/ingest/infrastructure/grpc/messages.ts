@@ -1,6 +1,12 @@
 // the .proto messages as @grpc/proto-loader hands them over (camelCase,
 // optional fields left out when not set)
 
+// google.protobuf.Timestamp
+export interface Timestamp {
+  seconds: number;
+  nanos?: number;
+}
+
 export interface CourseRecord {
   externalId: string;
   name: string;
@@ -14,7 +20,7 @@ export interface ItemRecord {
   kind: string;
   title?: string;
   url?: string;
-  publishedAt?: string;
+  publishedAt?: Timestamp;
   rawJson: string;
 }
 
@@ -27,16 +33,21 @@ export interface FileRecord {
   url?: string;
   size?: number;
   mime?: string;
-  updatedAt?: string;
+  updatedAt?: Timestamp;
 }
 
 export interface ContentChunk {
   externalId?: string;
   data?: Buffer;
+  sha256?: string;
 }
 
-export interface Removal {
-  kind: string;
+export interface ContentResult {
+  hash: string;
+  changed: boolean;
+}
+
+export interface Ref {
   externalId: string;
 }
 

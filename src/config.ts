@@ -41,8 +41,9 @@ export const envSchema = z.object({
     }),
   // this instance starts push connectors (one instance should)
   RUN_CONNECTORS: z.stringbool().default(true),
-  // external connectors connect here over gRPC
-  GRPC_URL: z.string().default('0.0.0.0:50051'),
+  // external connectors connect here over gRPC, which has no TLS of its own:
+  // keep it on a private network or behind a TLS proxy
+  GRPC_URL: z.string().default('127.0.0.1:50051'),
   // "portal=token,portal=token" until connectors get real credentials
   CONNECTOR_TOKENS: z.string().default('').refine(validTokens, {
     message:

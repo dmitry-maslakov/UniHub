@@ -5,7 +5,7 @@ import type { CourseRecord, FileRecord, ItemRecord, Json } from './records.js';
 
 // A plugin is an ordinary Nest module in this repo whose providers carry one
 // of these decorators; it imports only this sdk, never the hub. Providers
-// must be singletons. Anything outside the repo talks to the hub over gRPC.
+// must be singletons. Connectors outside the repo talk to the hub over gRPC.
 // Names (and portals) are unique and can't contain ':'.
 
 // ---- connectors: bring data in from a portal

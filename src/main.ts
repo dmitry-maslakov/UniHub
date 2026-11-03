@@ -9,8 +9,13 @@ async function bootstrap() {
   // without it nothing closes on SIGTERM: outbox relay, queues, db pools
   app.enableShutdownHooks();
   const config = app.get<ConfigService<Env, true>>(ConfigService);
-  app.connectMicroservice(grpcOptions(config.get('GRPC_URL', { infer: true })));
-  await app.startAllMicroservices();
+  // only needed once some external connector has a token
+  if (config.get('CONNECTOR_TOKENS', { infer: true })) {
+    app.connectMicroservice(
+      grpcOptions(config.get('GRPC_URL', { infer: true })),
+    );
+    await app.startAllMicroservices();
+  }
   await app.listen(config.get('PORT', { infer: true }));
 }
 await bootstrap();

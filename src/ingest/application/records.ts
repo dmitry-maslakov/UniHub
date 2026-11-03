@@ -38,10 +38,7 @@ export const fileRecord = z.object({
   course: optional(id),
   item: optional(id),
   name: text.min(1),
-  path: z
-    .string()
-    .nullish()
-    .transform((v) => v ?? ''),
+  path: text.nullish().transform((v) => v ?? ''),
   url: optional(text),
   size: optional(z.number().int().nonnegative()),
   mime: optional(text),

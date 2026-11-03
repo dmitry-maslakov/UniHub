@@ -1,5 +1,6 @@
 import { extname } from 'node:path';
 import { Injectable, type OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { DiscoveryService, type DiscoverableDecorator } from '@nestjs/core';
 import {
   AggregatorMark,
@@ -15,6 +16,7 @@ import {
   type PushesFromPortal,
   type Topic,
 } from '@app/plugin-sdk';
+import { parseConnectorTokens, type Env } from '../config.js';
 
 export interface Plugin<O, I> {
   options: O;
@@ -52,7 +54,10 @@ export class PluginRegistry implements OnModuleInit {
   private processors: Plugin<ContentProcessorOptions, ProcessesContent>[] = [];
   private aggregators: Plugin<AggregatorOptions, HandlesMessages>[] = [];
 
-  constructor(private readonly discovery: DiscoveryService) {}
+  constructor(
+    private readonly discovery: DiscoveryService,
+    private readonly config: ConfigService<Env, true>,
+  ) {}
 
   onModuleInit() {
     this.connectors = this.find<ConnectorOptions, object>(ConnectorMark).map(
@@ -130,6 +135,14 @@ export class PluginRegistry implements OnModuleInit {
       const bad = list.find((n) => !n || n.includes(':'));
       if (bad !== undefined) throw new Error(`bad ${what} "${bad}"`);
     }
+
+    // two writers of one portal would overwrite each other's records and state
+    const external = parseConnectorTokens(
+      this.config.get('CONNECTOR_TOKENS', { infer: true }),
+    ).map(([portal]) => portal);
+    const both = portals.find((p) => external.includes(p));
+    if (both)
+      throw new Error(`portal "${both}" has a connector and a gRPC token`);
 
     for (const { mode, options, instance } of this.connectors) {
       const needs = mode === 'poll' ? ['poll'] : ['start', 'stop'];
