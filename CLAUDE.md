@@ -13,6 +13,7 @@ See @AGENTS.md as well.
 Declined:
 
 - TypedSQL for the text queries: generating needs a live database, the client is generated on install (#35)
+- graceful gRPC shutdown: Nest has no timeout for it (and no `unwrap()` for gRPC to add one), so one stalled upload would hold up the whole shutdown; uploads are cut instead, which is safe (sha256 at the end, the connector resends)
 - swagger CLI plugin via `PluginMetadataGenerator`: explicit `@ApiProperty` instead
 - `protoPath` from `import.meta.dirname`: rspack bundles, so it's `process.cwd()`; Docker WORKDIR must be the repo root
 - connector token mapping to (portal, account): env tokens get replaced by API keys (#33), not extended
@@ -25,10 +26,10 @@ Declined:
 Put off:
 
 - API key guard for HTTP, per-key throttling, `deferUpdates`, ban check on keys: MCP (#16)
-- helmet with a CSP for `/api/docs`, `@nestjs/throttler`, client IP behind the proxy, Better Auth rate limits in Redis, `trustedOrigins`, gRPC behind TLS, a `stop_grace_period` that bounds the graceful gRPC shutdown: deploy (#17)
+- helmet with a CSP for `/api/docs`, `@nestjs/throttler`, client IP behind the proxy, Better Auth rate limits in Redis, `trustedOrigins`, gRPC behind TLS: deploy (#17)
 - connector API keys, and moving the "portal both built-in and external" check to key creation (#33)
 - cursor paging for MCP, if agents need it
 - device sign-in: approval screen details and shorter device sessions, with the web portal
 - grants of a deleted course: when catalog can delete courses (an event for identity)
 
-Done the standard way after all: global prefix, gRPC guard, graceful gRPC shutdown (#36).
+Done the standard way after all: global prefix, gRPC guard (#36).

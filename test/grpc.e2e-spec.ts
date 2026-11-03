@@ -60,10 +60,10 @@ describe('gRPC ingest', () => {
     );
 
   // opens Content and hands back the stream and its answer
-  const openContent = () => {
+  const openContent = (token = TOKEN) => {
     let stream!: grpc.ClientWritableStream<object>;
     const answer = new Promise<Record<string, unknown>>((resolve, reject) => {
-      stream = client.Content(metadata(TOKEN), ((err, out) =>
+      stream = client.Content(metadata(token), ((err, out) =>
         err ? reject(err) : resolve(out)) as Callback) as typeof stream;
     });
     return { stream, answer };
@@ -218,5 +218,13 @@ describe('gRPC ingest', () => {
     await expect(
       sendContent('nope', Buffer.from('bytes')),
     ).rejects.toMatchObject({ code: grpc.status.FAILED_PRECONDITION });
+
+    // the client stream is guarded too
+    const { stream, answer } = openContent('wrong-token');
+    stream.write({ externalId: 'f1' });
+    stream.end();
+    await expect(answer).rejects.toMatchObject({
+      code: grpc.status.UNAUTHENTICATED,
+    });
   });
 });
