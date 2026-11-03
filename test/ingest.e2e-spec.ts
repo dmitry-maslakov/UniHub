@@ -1,6 +1,10 @@
 import { Readable } from 'node:stream';
 import { Test } from '@nestjs/testing';
-import { CommandBus, EventBus, QueryBus, type IEvent } from '@nestjs/cqrs';
+import { setTimeout as sleep } from 'node:timers/promises';
+import { CommandBus, QueryBus } from '@nestjs/cqrs';
+import { getQueueToken } from '@nestjs/bullmq';
+import type { Queue } from 'bullmq';
+import { FILE_CONTENT_STORED, ITEM_INGESTED } from '@app/plugin-sdk';
 import { AppModule } from '../src/app.module.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 import { IngestCourseCommand } from '../src/ingest/application/commands/ingest-course.command.js';
@@ -9,10 +13,7 @@ import { IngestFileCommand } from '../src/ingest/application/commands/ingest-fil
 import { IngestFileContentCommand } from '../src/ingest/application/commands/ingest-file-content.command.js';
 import { SaveSyncStateCommand } from '../src/ingest/application/commands/save-sync-state.command.js';
 import { GetSyncStateQuery } from '../src/ingest/application/queries/get-sync-state.query.js';
-import {
-  FileContentStoredEvent,
-  ItemIngestedEvent,
-} from '../src/ingest/domain/events.js';
+import { FILES_QUEUE, ITEMS_QUEUE } from '../src/processing/queues.js';
 
 const portal = 'fake';
 
@@ -20,7 +21,8 @@ describe('ingest', () => {
   let commands: CommandBus;
   let queries: QueryBus;
   let prisma: PrismaService;
-  let events: IEvent[];
+  let files: Queue;
+  let items: Queue;
   let close: () => Promise<void>;
 
   // what a plugin does on every run: sends everything it sees
@@ -58,7 +60,10 @@ describe('ingest', () => {
     commands = app.get(CommandBus);
     queries = app.get(QueryBus);
     prisma = app.get(PrismaService);
-    app.get(EventBus).subscribe((e) => events.push(e));
+    files = app.get(getQueueToken(FILES_QUEUE));
+    items = app.get(getQueueToken(ITEMS_QUEUE));
+    await files.obliterate({ force: true });
+    await items.obliterate({ force: true });
     close = () => app.close();
 
     await prisma.file.deleteMany({ where: { portal } });
@@ -67,31 +72,42 @@ describe('ingest', () => {
     await prisma.syncState.deleteMany({ where: { portal } });
   });
 
-  beforeEach(() => {
-    events = [];
-  });
+  // jobs reach the queues through the outbox relay, so not right away
+  async function jobs() {
+    await sleep(1500);
+    const [f, i] = await Promise.all([files.getJobs(), items.getJobs()]);
+    return [...i, ...f].map((job) => [job.name, job.data]);
+  }
 
   afterAll(() => close());
 
   it('stores what a plugin sends and announces it', async () => {
     await sync('slides v1');
 
+    const item = await prisma.item.findFirstOrThrow({ where: { portal } });
     const file = await prisma.file.findFirstOrThrow({ where: { portal } });
     expect(file.contentHash).toMatch(/^[0-9a-f]{64}$/);
-    expect(events).toEqual([
-      expect.any(ItemIngestedEvent),
-      new FileContentStoredEvent(portal, file.id, file.contentHash!),
+    expect(await jobs()).toEqual([
+      [ITEM_INGESTED, { portal, itemId: item.id }],
+      [
+        FILE_CONTENT_STORED,
+        { portal, fileId: file.id, hash: file.contentHash },
+      ],
     ]);
   });
 
   it('stays quiet when the plugin resends the same data', async () => {
     await sync('slides v1');
-    expect(events).toEqual([]);
+    expect(await jobs()).toHaveLength(2);
   });
 
   it('notices new content of the same file', async () => {
     await sync('slides v2');
-    expect(events).toEqual([expect.any(FileContentStoredEvent)]);
+    const all = await jobs();
+    expect(all).toHaveLength(3);
+    expect(all.filter(([name]) => name === FILE_CONTENT_STORED)).toHaveLength(
+      2,
+    );
   });
 
   it('refuses an item of a course it was never told about', async () => {
