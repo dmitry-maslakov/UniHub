@@ -25,6 +25,20 @@ export class PrismaRepresentationRepository extends RepresentationRepository {
     return row !== null;
   }
 
+  async latestOf(hash: string) {
+    const rows = await this.txHost.tx.representation.findMany({
+      where: { hash },
+      distinct: ['processor'],
+      orderBy: [{ processor: 'asc' }, { version: 'desc' }],
+    });
+    return rows.map((r) => ({
+      hash: r.hash,
+      processor: r.processor,
+      version: r.version,
+      parts: r.parts as string[],
+    }));
+  }
+
   async save({ hash, processor, version, parts }: Representation) {
     await this.txHost.tx.representation.upsert({
       where: { hash_processor_version: { hash, processor, version } },

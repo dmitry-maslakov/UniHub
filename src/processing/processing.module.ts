@@ -1,3 +1,4 @@
+import { ListRepresentationsHandler } from './application/queries/list-representations.handler.js';
 import { Module, type OnApplicationBootstrap } from '@nestjs/common';
 import { BullModule, BullRegistrar } from '@nestjs/bullmq';
 import { PluginRunner } from './application/plugin-runner.js';
@@ -27,6 +28,7 @@ const DAY = 24 * 60 * 60;
     }),
   ],
   providers: [
+    ListRepresentationsHandler,
     PluginRunner,
     PluginsWorker,
     OutboxRetention,

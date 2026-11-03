@@ -21,4 +21,6 @@ export abstract class CourseRepository {
   abstract link(link: CourseLink): Promise<void>;
   abstract unlink(portalCourseId: string): Promise<boolean>;
   abstract linksOf(courseIds: string[]): Promise<CourseLink[]>;
+  // the course a portal course is linked to
+  abstract courseIdOf(portalCourseId: string): Promise<string | null>;
 }

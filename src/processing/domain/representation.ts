@@ -12,6 +12,8 @@ export abstract class RepresentationRepository {
     processor: string,
     version: number,
   ): Promise<boolean>;
+  // the newest version of each processor's result
+  abstract latestOf(hash: string): Promise<Representation[]>;
   // saving the same one again is harmless
   abstract save(representation: Representation): Promise<void>;
 }

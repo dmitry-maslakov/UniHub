@@ -64,6 +64,14 @@ export class PrismaCourseRepository extends CourseRepository {
     return count > 0;
   }
 
+  async courseIdOf(portalCourseId: string) {
+    const row = await this.db.courseLink.findUnique({
+      where: { portalCourseId },
+      select: { courseId: true },
+    });
+    return row?.courseId ?? null;
+  }
+
   async linksOf(courseIds: string[]) {
     const rows = await this.db.courseLink.findMany({
       where: { courseId: { in: courseIds } },

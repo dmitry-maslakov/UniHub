@@ -20,6 +20,12 @@ export type ItemData = Omit<Item, 'id'>;
 export abstract class ItemRepository {
   abstract upsert(data: ItemData): Promise<Upserted<Item>>;
   abstract findById(id: string): Promise<Item | null>;
+  // not removed, in the course's linked portal courses, newest first
+  abstract listOfCourse(
+    courseId: string,
+    offset: number,
+    limit: number,
+  ): Promise<Item[]>;
   abstract findByExternalId(
     portal: string,
     externalId: string,

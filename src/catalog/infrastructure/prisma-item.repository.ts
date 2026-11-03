@@ -40,6 +40,19 @@ export class PrismaItemRepository extends ItemRepository {
     return row && toEntity(row);
   }
 
+  async listOfCourse(courseId: string, offset: number, limit: number) {
+    const rows = await this.db.findMany({
+      where: { removedAt: null, portalCourse: { link: { courseId } } },
+      orderBy: [
+        { publishedAt: { sort: 'desc', nulls: 'last' } },
+        { id: 'asc' },
+      ],
+      skip: offset,
+      take: limit,
+    });
+    return rows.map(toEntity);
+  }
+
   async findByExternalId(portal: string, externalId: string) {
     const row = await this.db.findUnique({
       where: { portal_externalId: { portal, externalId } },
