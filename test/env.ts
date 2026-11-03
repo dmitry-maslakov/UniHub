@@ -17,4 +17,5 @@ export const testEnv = {
   STORAGE_PATH: join(tmpdir(), 'unihub-e2e'),
   // real plugins are tested on their own; e2e use the fakes
   PLUGINS: '',
+  CONNECTOR_TOKENS: 'grpc-test=good-test-token-0001',
 };
