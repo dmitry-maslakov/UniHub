@@ -9,5 +9,8 @@ export const grpcOptions = (url: string): GrpcOptions => ({
     protoPath: join(process.cwd(), 'proto/ingest.proto'),
     url,
     loader: { keepCase: false, longs: Number, defaults: false },
+    // uploads in progress finish on shutdown; the process manager's stop
+    // timeout (docker's stop_grace_period) bounds how long that may take
+    gracefulShutdown: true,
   },
 });

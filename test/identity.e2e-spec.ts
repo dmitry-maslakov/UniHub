@@ -3,6 +3,7 @@ import type { INestApplication } from '@nestjs/common';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { AuthService } from '@thallesp/nestjs-better-auth';
 import { AppModule } from '../src/app.module.js';
+import { appOptions, configureApp } from '../src/app.setup.js';
 import {
   CreateCourseCommand,
   UnknownCourseError,
@@ -27,7 +28,8 @@ describe('identity', { timeout: 20_000 }, () => {
       .overrideProvider(Mailer)
       .useValue({ send: async (mail: Mail) => void mails.push(mail) })
       .compile();
-    app = moduleRef.createNestApplication({ bodyParser: false });
+    app = moduleRef.createNestApplication(appOptions);
+    configureApp(app);
     await app.init();
   });
 
