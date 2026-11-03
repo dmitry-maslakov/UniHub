@@ -34,6 +34,35 @@
       }
     },
     {
+      "files": ["src/catalog/application/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "**/ingest/**",
+                  "!**/ingest/contracts.js",
+                  "**/storage/**",
+                  "!**/storage/contracts.js",
+                  "**/processing/**",
+                  "!**/processing/contracts.js",
+                  "**/plugins/**",
+                  "!**/plugins/contracts.js"
+                ],
+                "message": "other modules are used through their contracts.ts"
+              },
+              {
+                "group": ["**/infrastructure/**", "**/generated/**"],
+                "message": "application code talks to infrastructure through domain ports"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "files": ["src/ingest/**"],
       "rules": {
         "no-restricted-imports": [
@@ -59,6 +88,35 @@
       }
     },
     {
+      "files": ["src/ingest/application/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "**/catalog/**",
+                  "!**/catalog/contracts.js",
+                  "**/storage/**",
+                  "!**/storage/contracts.js",
+                  "**/processing/**",
+                  "!**/processing/contracts.js",
+                  "**/plugins/**",
+                  "!**/plugins/contracts.js"
+                ],
+                "message": "other modules are used through their contracts.ts"
+              },
+              {
+                "group": ["**/infrastructure/**", "**/generated/**"],
+                "message": "application code talks to infrastructure through domain ports"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "files": ["src/storage/**"],
       "rules": {
         "no-restricted-imports": [
@@ -77,6 +135,35 @@
                   "!**/plugins/contracts.js"
                 ],
                 "message": "other modules are used through their contracts.ts"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/storage/application/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "**/catalog/**",
+                  "!**/catalog/contracts.js",
+                  "**/ingest/**",
+                  "!**/ingest/contracts.js",
+                  "**/processing/**",
+                  "!**/processing/contracts.js",
+                  "**/plugins/**",
+                  "!**/plugins/contracts.js"
+                ],
+                "message": "other modules are used through their contracts.ts"
+              },
+              {
+                "group": ["**/infrastructure/**", "**/generated/**"],
+                "message": "application code talks to infrastructure through domain ports"
               }
             ]
           }
@@ -110,6 +197,36 @@
       }
     },
     {
+      "files": ["src/processing/application/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "**/catalog/**",
+                  "!**/catalog/contracts.js",
+                  "**/ingest/**",
+                  "!**/ingest/contracts.js",
+                  "**/storage/**",
+                  "!**/storage/contracts.js",
+                  "**/plugins/**",
+                  "!**/plugins/contracts.js",
+                  "!**/plugins/plugin-registry.js"
+                ],
+                "message": "other modules are used through their contracts.ts"
+              },
+              {
+                "group": ["**/infrastructure/**", "**/generated/**"],
+                "message": "application code talks to infrastructure through domain ports"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "files": ["src/plugins/**"],
       "rules": {
         "no-restricted-imports": [
@@ -128,6 +245,35 @@
                   "!**/processing/contracts.js"
                 ],
                 "message": "other modules are used through their contracts.ts"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/plugins/application/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "**/catalog/**",
+                  "!**/catalog/contracts.js",
+                  "**/ingest/**",
+                  "!**/ingest/contracts.js",
+                  "**/storage/**",
+                  "!**/storage/contracts.js",
+                  "**/processing/**",
+                  "!**/processing/contracts.js"
+                ],
+                "message": "other modules are used through their contracts.ts"
+              },
+              {
+                "group": ["**/infrastructure/**", "**/generated/**"],
+                "message": "application code talks to infrastructure through domain ports"
               }
             ]
           }

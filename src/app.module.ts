@@ -4,7 +4,11 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CqrsModule } from '@nestjs/cqrs';
 import { BullModule } from '@nestjs/bullmq';
 import { ScheduleModule } from '@nestjs/schedule';
-import { OutboxModule, OutboxStorage } from '@nestjs/outbox';
+import {
+  OutboxModule,
+  OutboxPublishTimeoutError,
+  OutboxStorage,
+} from '@nestjs/outbox';
 import { fromPrisma, PostgresOutboxStore } from '@nestjs/outbox/postgres';
 import { ClsModule } from 'nestjs-cls';
 import { ClsPluginTransactional } from '@nestjs-cls/transactional';
@@ -19,6 +23,7 @@ import { IngestModule } from './ingest/ingest.module.js';
 import { StorageModule } from './storage/storage.module.js';
 import { ProcessingModule } from './processing/processing.module.js';
 import { BullMqTransport } from './processing/infrastructure/bullmq.transport.js';
+import { routeFor } from './processing/outbox-routes.js';
 import { isConnectionError } from './redis/is-connection-error.js';
 import { plugins } from './plugins/enabled.js';
 import { PluginsModule } from './plugins/plugins.module.js';
@@ -26,6 +31,10 @@ import { PluginsModule } from './plugins/plugins.module.js';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validationSchema: envSchema }),
+    // Redis and Prisma come before anything that pulls in BullMQ: global
+    // modules shut down in reverse order, so they close after the workers
+    RedisModule,
+    PrismaModule,
     CqrsModule.forRoot(),
     ClsModule.forRoot({
       global: true,
@@ -39,24 +48,27 @@ import { PluginsModule } from './plugins/plugins.module.js';
         }),
       ],
     }),
-    PrismaModule,
-    OutboxModule.forRoot({
-      transports: { plugins: BullMqTransport },
-      imports: [ProcessingModule],
-      route: () => 'plugins',
-      relay: { pollInterval: '1s' },
-      retry: {
-        // the attempt limit always applies, so it is set high and retryIf
-        // decides: ten tries, or for as long as redis is unreachable
-        attempts: 10_000,
-        retryIf: (error, attempt) => attempt < 10 || isConnectionError(error),
-        backoff: { delay: '1s', maxDelay: '1m' },
-      },
-    }),
-    RedisModule,
     BullModule.forRootAsync({
       inject: [REDIS],
       useFactory: (connection: Redis) => ({ connection }),
+      extraOptions: { manualRegistration: true },
+    }),
+    OutboxModule.forRoot({
+      transports: { plugins: BullMqTransport },
+      imports: [ProcessingModule],
+      route: (message) => routeFor(message.topic),
+      relay: { pollInterval: '1s' },
+      retry: {
+        // the attempt limit always applies, so it is set high and retryIf
+        // decides: ten tries, or for as long as redis is unreachable (with
+        // maxRetriesPerRequest: null that shows up as a publish timeout)
+        attempts: 10_000,
+        retryIf: (error, attempt) =>
+          attempt < 10 ||
+          error instanceof OutboxPublishTimeoutError ||
+          isConnectionError(error),
+        backoff: { delay: '1s', maxDelay: '1m' },
+      },
     }),
     ScheduleModule.forRoot(),
     PluginsModule,

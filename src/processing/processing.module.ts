@@ -1,5 +1,5 @@
-import { Module } from '@nestjs/common';
-import { BullModule } from '@nestjs/bullmq';
+import { Module, type OnApplicationBootstrap } from '@nestjs/common';
+import { BullModule, BullRegistrar } from '@nestjs/bullmq';
 import { PluginRunner } from './application/plugin-runner.js';
 import { OutboxRetention } from './infrastructure/outbox-retention.js';
 import { PluginsWorker } from './infrastructure/plugins.worker.js';
@@ -26,4 +26,13 @@ const DAY = 24 * 60 * 60;
   // the outbox transport adds jobs to the queue
   exports: [BullModule],
 })
-export class ProcessingModule {}
+export class ProcessingModule implements OnApplicationBootstrap {
+  constructor(private readonly registrar: BullRegistrar) {}
+
+  // Workers are registered by hand (manualRegistration in the app module), once
+  // every module is initialised, so no job runs before the plugin registry is
+  // filled.
+  onApplicationBootstrap() {
+    this.registrar.register();
+  }
+}

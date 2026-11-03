@@ -34,6 +34,7 @@ export class PluginRunner {
     if (!file || file.removed || file.contentHash !== hash) return;
 
     const opened: Readable[] = [];
+    let done = false;
     try {
       const result = await found.plugin.instance.process({
         name: file.name,
@@ -41,6 +42,11 @@ export class PluginRunner {
         hash,
         content: async () => {
           const stream = await this.queries.execute(new GetContentQuery(hash));
+          // asked for after the run ended: nobody would close it
+          if (done) {
+            stream.destroy();
+            throw new Error(`${plugin} asked for content after it finished`);
+          }
           opened.push(stream);
           return stream;
         },
@@ -48,6 +54,7 @@ export class PluginRunner {
       // results get stored with #13
       this.logger.log(`${plugin}: ${file.name}, ${result.parts.length} parts`);
     } finally {
+      done = true;
       for (const stream of opened) stream.destroy();
     }
   }

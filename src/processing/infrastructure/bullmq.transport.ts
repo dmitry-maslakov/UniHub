@@ -24,7 +24,8 @@ export class BullMqTransport extends OutboxTransport {
 
   async publish(outboxMessage: OutboxMessage) {
     const message = toSdkMessage(outboxMessage.topic, outboxMessage.payload);
-    if (!message) return;
+    if (!message)
+      throw new Error(`no plugin message for ${outboxMessage.topic}`);
 
     const plugins = await this.targets(message);
     if (!plugins.length) return;
