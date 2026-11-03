@@ -165,6 +165,8 @@ describe('REST API', { timeout: 20_000 }, () => {
 
   it("lists a student's courses and what's in them", async () => {
     const courses = await get('/api/courses', student).expect(200);
+    // per signed-in user and minute
+    expect(courses.headers['x-ratelimit-limit-api']).toBe('1200');
     expect(courses.body).toEqual([
       {
         slug: 'sys',

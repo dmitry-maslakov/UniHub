@@ -27,6 +27,16 @@ const validTokens = (value: string) => {
   );
 };
 
+// "https://app.example.com", nothing more: no path, no wildcard
+const isOrigin = (value: string) => {
+  try {
+    const url = new URL(value);
+    return !value.includes('*') && url.origin === value;
+  } catch {
+    return false;
+  }
+};
+
 export const envSchema = z
   .object({
     NODE_ENV: z.string().default('development'),
@@ -61,7 +71,13 @@ export const envSchema = z
     MAIL_FROM: z.string().default('UniHub <no-reply@localhost>'),
     // other sites (the web app) allowed to call the API with cookies, comma
     // separated; they get CORS too
-    TRUSTED_ORIGINS: z.string().default(''),
+    TRUSTED_ORIGINS: z
+      .string()
+      .default('')
+      .refine((v) => parseList(v).every(isOrigin), {
+        message:
+          'exact origins like https://app.example.com: Better Auth reads * as a wildcard',
+      }),
     // how many proxies in front of the app set X-Forwarded-For (caddy: 1)
     TRUST_PROXY: z.coerce.number().int().min(0).default(0),
     // Google sign-in is on when both are set

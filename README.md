@@ -82,4 +82,8 @@ docker compose -f deploy/compose.yml run --rm migrate npm run auth:create-admin 
 - the `migrate` service applies prisma's and the outbox's migrations before the app starts
 - `/api/health` checks the database and redis; compose waits for it
 - external connectors reach gRPC through caddy over TLS on the same address (`DOMAIN:443`); the gRPC port isn't published
-- file content lives in the `blobs` volume, keep it with the database's
+- logs are capped per container
+- give the domain an A record only (or turn on IPv6 in docker): docker forwards IPv6 through its proxy, and every IPv6 client would show up with one address
+- backups: `deploy/backup.sh <folder>` from cron dumps the database and copies new files; keep the folder, and `deploy/.env`, off the server too
+
+Updating: back up, `git pull`, then `up -d --build` again. The old app keeps running while `migrate` applies the new schema, so a migration only adds until the code that needed the old shape is gone; going back past a migration means restoring a backup.

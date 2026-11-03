@@ -1,4 +1,10 @@
-import { Controller, Get, NotFoundException, Param } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  NotFoundException,
+  Param,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiNotFoundResponse,
@@ -7,12 +13,15 @@ import {
 } from '@nestjs/swagger';
 import { CurrentUserId } from '../../../identity/contracts.js';
 import { CourseReader } from '../../application/course-reader.js';
+import { throttleBy } from '../throttle.js';
 import { Limit, Offset, Paged } from './paging.js';
 import { CourseResponse, FileResponse, ItemResponse } from './responses.js';
 
 @ApiTags('courses')
 @ApiBearerAuth()
 @Controller('courses')
+// after the session guard, so it counts per user
+@UseGuards(throttleBy('api'))
 export class CoursesController {
   constructor(private readonly reader: CourseReader) {}
 

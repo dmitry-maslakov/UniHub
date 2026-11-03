@@ -78,7 +78,15 @@ import { PluginsModule } from './plugins/plugins.module.js';
     // named limits, applied where a guard picks them (MCP). One instance's
     // memory until the deploy (#17)
     ThrottlerModule.forRoot([
-      // by user, however many keys they make
+      // REST, per signed-in user
+      {
+        name: 'api',
+        ttl: 60_000,
+        limit: 1200,
+        getTracker: (req) =>
+          (req.user as { id: string } | null | undefined)?.id ?? req.ip,
+      },
+      // MCP, per user, however many keys they make
       {
         name: 'mcp',
         ttl: 60_000,

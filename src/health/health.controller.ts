@@ -6,16 +6,16 @@ import {
   HealthIndicatorService,
   PrismaHealthIndicator,
 } from '@nestjs/terminus';
-import { AllowAnonymous } from '@thallesp/nestjs-better-auth';
+import { Public } from '../identity/contracts.js';
 import type { Redis } from 'ioredis';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { REDIS } from '../redis/redis.module.js';
 
 // /api/health: up when the database and redis answer; for the container's
-// health check and the proxy
+// health check (caddy doesn't let it out: a failure names internal hosts)
 @Controller('health')
 @ApiExcludeController()
-@AllowAnonymous()
+@Public()
 export class HealthController {
   constructor(
     private readonly health: HealthCheckService,
@@ -30,14 +30,11 @@ export class HealthController {
   check() {
     return this.health.check([
       () => this.db.pingCheck('database', this.prisma),
-      async () => {
+      // the connection's state: a command would wait in ioredis's offline
+      // queue for as long as redis is away
+      () => {
         const redis = this.indicators.check('redis');
-        try {
-          await this.redis.ping();
-          return redis.up();
-        } catch {
-          return redis.down();
-        }
+        return this.redis.status === 'ready' ? redis.up() : redis.down();
       },
     ]);
   }

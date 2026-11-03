@@ -12,7 +12,9 @@ export const grpcOptions = (url: string): GrpcOptions => ({
     // Shutdown cuts uploads in progress (Nest's default): a graceful one has no
     // timeout, so one stalled upload would hold up the whole app. A cut upload
     // stores nothing and the connector sends it again.
-    // Pings find connections that died without closing (a sleeping laptop).
+    // Pings find connections that died without closing: a connector's own
+    // when it connects directly, caddy's when caddy is in front (caddy then
+    // notices a dead connector itself and cancels the call).
     keepalive: { keepaliveTimeMs: 60_000, keepaliveTimeoutMs: 20_000 },
   },
 });

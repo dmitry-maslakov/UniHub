@@ -2,25 +2,39 @@
 # Settings in deploy/.env (see README).
 name: unihub
 
+# docker's default logs grow until the disk (the database's, the files') is full
+x-logging: &logging
+  logging:
+    driver: local
+    options:
+      max-size: 20m
+      max-file: '5'
+
 services:
   caddy:
+    <<: *logging
     image: caddy:2
     restart: unless-stopped
     ports:
       - '80:80'
       - '443:443'
+      - '443:443/udp'
     environment:
       DOMAIN: ${DOMAIN:?set DOMAIN in deploy/.env}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddydata:/data
+      - caddyconfig:/config
     depends_on:
       app:
         condition: service_healthy
 
   app:
+    <<: *logging
     build: ..
     restart: unless-stopped
+    # a real init as PID 1: signals and child processes handled properly
+    init: true
     env_file: .env
     environment:
       NODE_ENV: production
@@ -53,6 +67,7 @@ services:
   # keeps its own schema (nest_outbox), which it migrates itself only outside
   # production
   migrate:
+    <<: *logging
     build:
       context: ..
       target: build
@@ -69,6 +84,7 @@ services:
         condition: service_healthy
 
   postgres:
+    <<: *logging
     image: postgres:18
     restart: unless-stopped
     environment:
@@ -82,6 +98,7 @@ services:
       interval: 5s
 
   redis:
+    <<: *logging
     image: redis:8
     restart: unless-stopped
     # jobs live only in redis, keep them across restarts
@@ -91,6 +108,7 @@ services:
 
 volumes:
   caddydata:
+  caddyconfig:
   pgdata:
   redisdata:
   blobs:
