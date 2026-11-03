@@ -3,8 +3,8 @@ import { Readable } from 'node:stream';
 import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import { CommandBus } from '@nestjs/cqrs';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from '../src/app.module.js';
+import { appOptions, configureApp } from '../src/app.setup.js';
 import {
   CreateCourseCommand,
   LinkPortalCourseCommand,
@@ -45,7 +45,8 @@ describe('REST API', { timeout: 20_000 }, () => {
       .overrideProvider(Mailer)
       .useValue({ send: async (mail: Mail) => void mails.push(mail) })
       .compile();
-    app = moduleRef.createNestApplication({ bodyParser: false });
+    app = moduleRef.createNestApplication(appOptions);
+    configureApp(app);
     await app.init();
     const prisma = app.get(PrismaService);
     const commands = app.get(CommandBus);
@@ -290,11 +291,8 @@ describe('REST API', { timeout: 20_000 }, () => {
     await get(`/api/files/${ids.copy}`, admin).expect(200);
   });
 
-  it('describes itself in OpenAPI', () => {
-    const doc = SwaggerModule.createDocument(
-      app,
-      new DocumentBuilder().build(),
-    );
+  it('describes itself in OpenAPI, for anyone', async () => {
+    const doc = (await http().get('/api/docs-json').expect(200)).body;
     expect(Object.keys(doc.paths)).toEqual(
       expect.arrayContaining([
         '/api/courses',

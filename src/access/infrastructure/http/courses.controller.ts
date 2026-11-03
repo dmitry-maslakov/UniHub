@@ -12,7 +12,7 @@ import { CourseResponse, FileResponse, ItemResponse } from './responses.js';
 
 @ApiTags('courses')
 @ApiBearerAuth()
-@Controller('api/courses')
+@Controller('courses')
 export class CoursesController {
   constructor(private readonly reader: CourseReader) {}
 

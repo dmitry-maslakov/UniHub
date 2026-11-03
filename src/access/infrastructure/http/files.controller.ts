@@ -33,7 +33,7 @@ const contentType = (mime: string | null) => {
 @ApiTags('files')
 @ApiBearerAuth()
 @ApiNotFoundResponse()
-@Controller('api/files')
+@Controller('files')
 export class FilesController {
   constructor(private readonly reader: CourseReader) {}
 
