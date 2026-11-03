@@ -1,19 +1,64 @@
+// a subject as we know it, portal courses get linked to it
 model Course {
-  id          String         @id @default(uuid())
-  slug        String         @unique
+  id          String       @id @default(uuid())
+  slug        String       @unique
   name        String
-  sources     CourseSource[]
   enrollments Enrollment[]
 }
 
-// where the course lives in an external system (canvas course, acs group, teams team...)
-// system is a connector id, not an enum, so adding a connector doesn't need a migration
-model CourseSource {
-  id         String @id @default(uuid())
-  courseId   String
-  course     Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  system     String
+// a course as it exists in one portal (canvas course, acs group, teams team...).
+// portal is a plugin id, not an enum, so a new plugin doesn't need a migration
+model PortalCourse {
+  id         String   @id @default(uuid())
+  portal     String
   externalId String
+  name       String
+  url        String?
+  meta       Json?
+  updatedAt  DateTime @updatedAt
+  items      Item[]
+  files      File[]
 
-  @@unique([system, externalId])
+  @@unique([portal, externalId])
+}
+
+// anything a portal publishes that isn't a file: posts, announcements, pages...
+model Item {
+  id             String        @id @default(uuid())
+  portal         String
+  externalId     String
+  portalCourseId String?
+  portalCourse   PortalCourse? @relation(fields: [portalCourseId], references: [id], onDelete: Cascade)
+  kind           String
+  title          String?
+  url            String?
+  publishedAt    DateTime?
+  raw            Json
+  updatedAt      DateTime      @updatedAt
+  files          File[]
+
+  @@unique([portal, externalId])
+}
+
+model File {
+  id              String        @id @default(uuid())
+  portal          String
+  externalId      String
+  portalCourseId  String?
+  portalCourse    PortalCourse? @relation(fields: [portalCourseId], references: [id], onDelete: Cascade)
+  itemId          String?
+  item            Item?         @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  name            String
+  // folder inside the portal, e.g. "Lectures/2026"
+  path            String        @default("")
+  url             String?
+  // as reported by the portal, may be rounded
+  size            Int?
+  mime            String?
+  sourceUpdatedAt DateTime?
+  // sha256 of the content once storage has it
+  contentHash     String?
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([portal, externalId])
 }
