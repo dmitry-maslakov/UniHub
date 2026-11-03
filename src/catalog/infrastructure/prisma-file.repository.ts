@@ -22,6 +22,11 @@ export class PrismaFileRepository extends FileRepository {
     return this.txHost.tx.file;
   }
 
+  async findById(id: string) {
+    const row = await this.db.findUnique({ where: { id } });
+    return row && toEntity(row);
+  }
+
   async findByExternalId(portal: string, externalId: string) {
     const row = await this.db.findUnique({
       where: { portal_externalId: { portal, externalId } },

@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CqrsModule } from '@nestjs/cqrs';
 import { BullModule } from '@nestjs/bullmq';
+import { ScheduleModule } from '@nestjs/schedule';
 import { OutboxModule, OutboxStorage } from '@nestjs/outbox';
 import { fromPrisma, PostgresOutboxStore } from '@nestjs/outbox/postgres';
 import { ClsModule } from 'nestjs-cls';
@@ -19,6 +20,8 @@ import { CatalogModule } from './catalog/catalog.module.js';
 import { IngestModule } from './ingest/ingest.module.js';
 import { StorageModule } from './storage/storage.module.js';
 import { ProcessingModule } from './processing/processing.module.js';
+import { plugins } from './plugins/enabled.js';
+import { PluginsModule } from './plugins/plugins.module.js';
 
 @Module({
   imports: [
@@ -46,6 +49,8 @@ import { ProcessingModule } from './processing/processing.module.js';
       inject: [RedisConnection],
       useFactory: (connection: RedisConnection) => ({ connection }),
     }),
+    ScheduleModule.forRoot(),
+    PluginsModule,
     CatalogModule,
     IngestModule,
     StorageModule.forRootAsync({
@@ -56,6 +61,7 @@ import { ProcessingModule } from './processing/processing.module.js';
       }),
     }),
     ProcessingModule,
+    ...plugins,
   ],
   controllers: [AppController],
   providers: [
