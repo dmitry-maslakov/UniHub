@@ -84,7 +84,9 @@ import { PluginsModule } from './plugins/plugins.module.js';
         name: 'mcp',
         ttl: 60_000,
         limit: 600,
-        getTracker: (req) => (req.user as { id: string }).id,
+        // a plain ThrottlerGuard runs every named limit, before sign-in too
+        getTracker: (req) =>
+          (req.user as { id: string } | null | undefined)?.id ?? req.ip,
       },
     ]),
     PluginsModule,

@@ -25,7 +25,7 @@ Declined:
 
 Put off:
 
-- helmet with a CSP for `/api/docs`, an app-wide `@nestjs/throttler` as the first global guard (Better Auth's guard looks up a session on every request, before any controller's limit), client IP behind the proxy, Better Auth rate limits in Redis, `trustedOrigins`, gRPC behind TLS: deploy (#17)
+- helmet with a CSP for `/api/docs`, an app-wide `@nestjs/throttler` as the first global guard (Better Auth's guard looks up a session on every request, before any controller's limit; it must run only its own named limit, like `throttleBy` in access, or it runs MCP's too), client IP behind the proxy, Better Auth rate limits in Redis, `trustedOrigins`, gRPC behind TLS: deploy (#17)
 - connector API keys, and moving the "portal both built-in and external" check to key creation (#33)
 - cursor paging for MCP, if agents need it
 - OAuth for MCP clients (claude.ai connectors need it); API keys until then
