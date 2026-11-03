@@ -1,12 +1,13 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { resolve } from 'node:path';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CqrsModule } from '@nestjs/cqrs';
 import { ClsModule } from 'nestjs-cls';
 import { ClsPluginTransactional } from '@nestjs-cls/transactional';
 import { TransactionalAdapterPrisma } from '@nestjs-cls/transactional-adapter-prisma';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
-import { validateEnv } from './config.js';
+import { type Env, validateEnv } from './config.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { PrismaService } from './prisma/prisma.service.js';
 import { CatalogModule } from './catalog/catalog.module.js';
@@ -33,7 +34,13 @@ import { ProcessingModule } from './processing/processing.module.js';
     PrismaModule,
     CatalogModule,
     IngestModule,
-    StorageModule,
+    StorageModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService<Env, true>) => ({
+        driver: 'fs',
+        location: resolve(config.get('STORAGE_PATH', { infer: true })),
+      }),
+    }),
     ProcessingModule,
   ],
   controllers: [AppController],
