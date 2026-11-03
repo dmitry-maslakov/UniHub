@@ -15,6 +15,7 @@ export { GetPortalCourseQuery } from './application/queries/get-portal-course.qu
 export { GetItemQuery } from './application/queries/get-item.query.js';
 export { GetFileQuery } from './application/queries/get-file.query.js';
 export { FindFileQuery } from './application/queries/find-file.query.js';
+export { ListFilesWithContentQuery } from './application/queries/list-files-with-content.query.js';
 export type {
   FileDto,
   ItemDto,

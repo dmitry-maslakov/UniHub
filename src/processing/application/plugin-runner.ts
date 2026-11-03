@@ -5,6 +5,7 @@ import { FILE_CONTENT_STORED } from '@app/plugin-sdk';
 import { GetFileQuery } from '../../catalog/contracts.js';
 import { PluginRegistry } from '../../plugins/plugin-registry.js';
 import { GetContentQuery } from '../../storage/contracts.js';
+import { RepresentationRepository } from '../domain/representation.js';
 import type { PluginJob } from '../queues.js';
 
 // runs one plugin for one message
@@ -15,6 +16,7 @@ export class PluginRunner {
   constructor(
     private readonly registry: PluginRegistry,
     private readonly queries: QueryBus,
+    private readonly representations: RepresentationRepository,
   ) {}
 
   async run({ plugin, message }: PluginJob) {
@@ -32,6 +34,9 @@ export class PluginRunner {
     const file = await this.queries.execute(new GetFileQuery(fileId));
     // gone, or the job is about content that has been replaced since
     if (!file || file.removed || file.contentHash !== hash) return;
+    // the same content in another file, or a job queued twice
+    const { name, version } = found.plugin.options;
+    if (await this.representations.exists(hash, name, version)) return;
 
     const opened: Readable[] = [];
     let done = false;
@@ -51,7 +56,12 @@ export class PluginRunner {
           return stream;
         },
       });
-      // results get stored with #13
+      await this.representations.save({
+        hash,
+        processor: name,
+        version,
+        parts: result.parts,
+      });
       this.logger.log(`${plugin}: ${file.name}, ${result.parts.length} parts`);
     } finally {
       done = true;

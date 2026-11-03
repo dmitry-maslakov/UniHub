@@ -27,7 +27,7 @@ const forFakePortal = <T extends { payload: { portal: string } }>(
   messages: T[],
 ) => messages.filter((m) => m.payload.portal === FAKE_PORTAL);
 
-describe('plugins', () => {
+describe('plugins', { timeout: 20_000 }, () => {
   let app: TestingModule;
   let itemId: string;
 

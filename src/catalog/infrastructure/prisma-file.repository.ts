@@ -44,6 +44,19 @@ export class PrismaFileRepository extends FileRepository {
     return row && toEntity(row);
   }
 
+  async listWithContent(after: string | null, limit: number) {
+    const rows = await this.db.findMany({
+      where: {
+        contentHash: { not: null },
+        removedAt: null,
+        ...(after && { id: { gt: after } }),
+      },
+      orderBy: { id: 'asc' },
+      take: limit,
+    });
+    return rows.map(toEntity);
+  }
+
   async findByExternalId(portal: string, externalId: string) {
     const row = await this.db.findUnique({
       where: { portal_externalId: { portal, externalId } },

@@ -1,0 +1,12 @@
+// What a content processor made of some content. Keyed by the content, so a
+// file shared by several courses is processed once; a new processor version
+// gets its own row.
+model Representation {
+  hash      String
+  processor String
+  version   Int
+  parts     Json
+  createdAt DateTime @default(now())
+
+  @@id([hash, processor, version])
+}

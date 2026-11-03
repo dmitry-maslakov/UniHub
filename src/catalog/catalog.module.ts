@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { RemoveFileHandler } from './application/commands/remove-file.handler.js';
 import { RemoveItemHandler } from './application/commands/remove-item.handler.js';
+import { ListFilesWithContentHandler } from './application/queries/list-files-with-content.handler.js';
 import { GetItemHandler } from './application/queries/get-item.handler.js';
 import { GetPortalCourseHandler } from './application/queries/get-portal-course.handler.js';
 import { SetFileContentHandler } from './application/commands/set-file-content.handler.js';
@@ -34,6 +35,7 @@ import { PrismaPortalCourseRepository } from './infrastructure/prisma-portal-cou
     GetItemHandler,
     GetFileHandler,
     FindFileHandler,
+    ListFilesWithContentHandler,
   ],
 })
 export class CatalogModule {}
