@@ -75,9 +75,10 @@ export function createAuth({
       deviceAuthorization({
         validateClient: (clientId) => DEVICE_CLIENTS.includes(clientId),
       }),
-      // for MCP clients; the default limit of 10 requests a day is for paid
-      // APIs, an agent reading courses makes many more
-      apiKey({ rateLimit: { timeWindow: 60_000, maxRequests: 600 } }),
+      // for MCP clients. The plugin's limit only resets after a quiet
+      // window, so a steadily working agent gets locked out; MCP routes
+      // throttle per key instead (#16)
+      apiKey({ rateLimit: { enabled: false } }),
     ],
   });
 }
