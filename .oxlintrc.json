@@ -26,7 +26,9 @@
                   "**/plugins/**",
                   "!**/plugins/contracts.js",
                   "**/identity/**",
-                  "!**/identity/contracts.js"
+                  "!**/identity/contracts.js",
+                  "**/access/**",
+                  "!**/access/contracts.js"
                 ],
                 "message": "other modules are used through their contracts.ts"
               }
@@ -53,7 +55,9 @@
                   "**/plugins/**",
                   "!**/plugins/contracts.js",
                   "**/identity/**",
-                  "!**/identity/contracts.js"
+                  "!**/identity/contracts.js",
+                  "**/access/**",
+                  "!**/access/contracts.js"
                 ],
                 "message": "other modules are used through their contracts.ts"
               },
@@ -84,7 +88,9 @@
                   "**/plugins/**",
                   "!**/plugins/contracts.js",
                   "**/identity/**",
-                  "!**/identity/contracts.js"
+                  "!**/identity/contracts.js",
+                  "**/access/**",
+                  "!**/access/contracts.js"
                 ],
                 "message": "other modules are used through their contracts.ts"
               }
@@ -111,7 +117,9 @@
                   "**/plugins/**",
                   "!**/plugins/contracts.js",
                   "**/identity/**",
-                  "!**/identity/contracts.js"
+                  "!**/identity/contracts.js",
+                  "**/access/**",
+                  "!**/access/contracts.js"
                 ],
                 "message": "other modules are used through their contracts.ts"
               },
@@ -142,7 +150,9 @@
                   "**/plugins/**",
                   "!**/plugins/contracts.js",
                   "**/identity/**",
-                  "!**/identity/contracts.js"
+                  "!**/identity/contracts.js",
+                  "**/access/**",
+                  "!**/access/contracts.js"
                 ],
                 "message": "other modules are used through their contracts.ts"
               }
@@ -169,7 +179,9 @@
                   "**/plugins/**",
                   "!**/plugins/contracts.js",
                   "**/identity/**",
-                  "!**/identity/contracts.js"
+                  "!**/identity/contracts.js",
+                  "**/access/**",
+                  "!**/access/contracts.js"
                 ],
                 "message": "other modules are used through their contracts.ts"
               },
@@ -201,7 +213,9 @@
                   "!**/plugins/contracts.js",
                   "!**/plugins/plugin-registry.js",
                   "**/identity/**",
-                  "!**/identity/contracts.js"
+                  "!**/identity/contracts.js",
+                  "**/access/**",
+                  "!**/access/contracts.js"
                 ],
                 "message": "other modules are used through their contracts.ts"
               }
@@ -229,7 +243,9 @@
                   "!**/plugins/contracts.js",
                   "!**/plugins/plugin-registry.js",
                   "**/identity/**",
-                  "!**/identity/contracts.js"
+                  "!**/identity/contracts.js",
+                  "**/access/**",
+                  "!**/access/contracts.js"
                 ],
                 "message": "other modules are used through their contracts.ts"
               },
@@ -260,7 +276,9 @@
                   "**/processing/**",
                   "!**/processing/contracts.js",
                   "**/identity/**",
-                  "!**/identity/contracts.js"
+                  "!**/identity/contracts.js",
+                  "**/access/**",
+                  "!**/access/contracts.js"
                 ],
                 "message": "other modules are used through their contracts.ts"
               }
@@ -287,7 +305,9 @@
                   "**/processing/**",
                   "!**/processing/contracts.js",
                   "**/identity/**",
-                  "!**/identity/contracts.js"
+                  "!**/identity/contracts.js",
+                  "**/access/**",
+                  "!**/access/contracts.js"
                 ],
                 "message": "other modules are used through their contracts.ts"
               },
@@ -318,7 +338,9 @@
                   "**/processing/**",
                   "!**/processing/contracts.js",
                   "**/plugins/**",
-                  "!**/plugins/contracts.js"
+                  "!**/plugins/contracts.js",
+                  "**/access/**",
+                  "!**/access/contracts.js"
                 ],
                 "message": "other modules are used through their contracts.ts"
               }
@@ -345,7 +367,71 @@
                   "**/processing/**",
                   "!**/processing/contracts.js",
                   "**/plugins/**",
-                  "!**/plugins/contracts.js"
+                  "!**/plugins/contracts.js",
+                  "**/access/**",
+                  "!**/access/contracts.js"
+                ],
+                "message": "other modules are used through their contracts.ts"
+              },
+              {
+                "group": ["**/infrastructure/**", "**/generated/**"],
+                "message": "application code talks to infrastructure through domain ports"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/access/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "**/catalog/**",
+                  "!**/catalog/contracts.js",
+                  "**/ingest/**",
+                  "!**/ingest/contracts.js",
+                  "**/storage/**",
+                  "!**/storage/contracts.js",
+                  "**/processing/**",
+                  "!**/processing/contracts.js",
+                  "**/plugins/**",
+                  "!**/plugins/contracts.js",
+                  "**/identity/**",
+                  "!**/identity/contracts.js"
+                ],
+                "message": "other modules are used through their contracts.ts"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/access/application/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "**/catalog/**",
+                  "!**/catalog/contracts.js",
+                  "**/ingest/**",
+                  "!**/ingest/contracts.js",
+                  "**/storage/**",
+                  "!**/storage/contracts.js",
+                  "**/processing/**",
+                  "!**/processing/contracts.js",
+                  "**/plugins/**",
+                  "!**/plugins/contracts.js",
+                  "**/identity/**",
+                  "!**/identity/contracts.js"
                 ],
                 "message": "other modules are used through their contracts.ts"
               },
@@ -379,7 +465,8 @@
                   "**/storage/**",
                   "**/processing/**",
                   "**/plugins/**",
-                  "**/identity/**"
+                  "**/identity/**",
+                  "**/access/**"
                 ],
                 "message": "domain code depends on nothing but itself"
               }

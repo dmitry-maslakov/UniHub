@@ -27,6 +27,13 @@ export type FileData = Omit<File, 'id' | 'contentHash' | 'contentStale'>;
 export abstract class FileRepository {
   abstract upsert(data: FileData): Promise<Upserted<File>>;
   abstract findById(id: string): Promise<File | null>;
+  // not removed and not attached to a removed post, in the course's linked
+  // portal courses, by folder and name
+  abstract listOfCourse(
+    courseId: string,
+    offset: number,
+    limit: number,
+  ): Promise<File[]>;
   // files that have content and aren't removed, by id, after the given one
   abstract listWithContent(
     after: string | null,

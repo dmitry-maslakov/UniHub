@@ -2,7 +2,6 @@ import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { AuthService } from '@thallesp/nestjs-better-auth';
-import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
 import {
   CreateCourseCommand,
@@ -16,43 +15,12 @@ import {
 } from '../src/identity/contracts.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 import { Mailer, type Mail } from '../src/identity/domain/mailer.js';
-
-const ORIGIN = 'http://localhost:3000';
+import { accounts } from './accounts.js';
 
 describe('identity', { timeout: 20_000 }, () => {
   let app: INestApplication;
   const mails: Mail[] = [];
-
-  const http = () => request(app.getHttpServer());
-  const post = (path: string, body: object, cookie = '') =>
-    http()
-      .post(`/api/auth${path}`)
-      .set('origin', ORIGIN)
-      .set('cookie', cookie)
-      .send(body);
-  // the link in the last mail to someone
-  const linkTo = async (to: string) => {
-    const mail = await vi.waitFor(() => {
-      const found = mails.findLast((m) => m.to === to);
-      expect(found).toBeDefined();
-      return found!;
-    });
-    return new URL(/https?:\/\/\S+/.exec(mail.text)![0]);
-  };
-  const signIn = async (email: string, password: string) => {
-    const res = await post('/sign-in/email', { email, password }).expect(200);
-    return (res.headers['set-cookie'] as unknown as string[]).join('; ');
-  };
-  const signUp = async (email: string, password = 'correct horse 1') => {
-    await post('/sign-up/email', { email, password, name: 'Student' }).expect(
-      200,
-    );
-    const link = await linkTo(email);
-    await http()
-      .get(link.pathname + link.search)
-      .expect(302);
-    return signIn(email, password);
-  };
+  const { http, post, linkTo, signIn, signUp } = accounts(() => app, mails);
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })

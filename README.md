@@ -33,6 +33,17 @@ The first admin: `npm run auth:create-admin -- --email you@example.com --passwor
 
 Every HTTP route needs a signed-in user unless it says `@AllowAnonymous()`. Admins read every course, other users the ones granted to them (`GrantCourseAccessCommand`).
 
+## REST API
+
+OpenAPI at `/api/docs`. A signed-in user reads the courses they were given:
+
+- `GET /api/courses`, then `/api/courses/{slug}/items` and `/files` (`offset`, `limit`)
+- `GET /api/files/{id}`: the file and the texts made from it
+- `GET /api/files/{id}/text?page=2`: one page, slide or section of a text
+- `GET /api/files/{id}/content`: the file itself
+
+Everything goes through `CourseReader` (`src/access`), which MCP will share.
+
 ## Plugins
 
 A plugin is a Nest module that depends only on `@app/plugin-sdk` (a lint rule checks it):

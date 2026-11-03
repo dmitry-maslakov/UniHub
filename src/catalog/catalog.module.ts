@@ -4,6 +4,9 @@ import { LinkPortalCourseHandler } from './application/commands/link-portal-cour
 import { UnlinkPortalCourseHandler } from './application/commands/unlink-portal-course.handler.js';
 import { ListCoursesHandler } from './application/queries/list-courses.handler.js';
 import { FindCourseHandler } from './application/queries/find-course.handler.js';
+import { ListCourseItemsHandler } from './application/queries/list-course-items.handler.js';
+import { ListCourseFilesHandler } from './application/queries/list-course-files.handler.js';
+import { CourseOfHandler } from './application/queries/course-of.handler.js';
 import { CourseRepository } from './domain/course.js';
 import { PrismaCourseRepository } from './infrastructure/prisma-course.repository.js';
 import { RemoveFileHandler } from './application/commands/remove-file.handler.js';
@@ -38,6 +41,9 @@ import { PrismaPortalCourseRepository } from './infrastructure/prisma-portal-cou
     UnlinkPortalCourseHandler,
     ListCoursesHandler,
     FindCourseHandler,
+    ListCourseItemsHandler,
+    ListCourseFilesHandler,
+    CourseOfHandler,
     UpsertPortalCourseHandler,
     UpsertItemHandler,
     UpsertFileHandler,
