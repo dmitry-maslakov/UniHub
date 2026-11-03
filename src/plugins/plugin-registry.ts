@@ -1,7 +1,6 @@
 import { extname } from 'node:path';
 import { Injectable } from '@nestjs/common';
-import { DiscoveryService } from '@nestjs/core';
-import type { DiscoverableDecorator } from '@nestjs/core/discovery/discovery-service.js';
+import { DiscoveryService, type DiscoverableDecorator } from '@nestjs/core';
 import {
   Aggregator,
   Connector,

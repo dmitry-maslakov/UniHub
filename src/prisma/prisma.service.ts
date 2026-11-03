@@ -1,4 +1,8 @@
-import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  type OnApplicationShutdown,
+  type OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/prisma/client.js';
@@ -6,7 +10,7 @@ import { PrismaClient } from '../generated/prisma/client.js';
 @Injectable()
 export class PrismaService
   extends PrismaClient
-  implements OnModuleInit, OnModuleDestroy
+  implements OnModuleInit, OnApplicationShutdown
 {
   constructor(config: ConfigService) {
     const adapter = new PrismaPg({
@@ -19,7 +23,9 @@ export class PrismaService
     await this.$connect();
   }
 
-  async onModuleDestroy() {
+  // not onModuleDestroy: queue workers finish their jobs in
+  // onApplicationShutdown and may still need the database
+  async onApplicationShutdown() {
     await this.$disconnect();
   }
 }
