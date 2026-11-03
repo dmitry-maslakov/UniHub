@@ -7,6 +7,7 @@ import {
   ParseUUIDPipe,
   Query,
   StreamableFile,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -19,6 +20,7 @@ import {
 import { create as contentDisposition } from 'content-disposition';
 import { CurrentUserId } from '../../../identity/contracts.js';
 import { CourseReader } from '../../application/course-reader.js';
+import { throttleBy } from '../throttle.js';
 import { PageNumber } from './paging.js';
 import { FileDetailsResponse, TextPageResponse } from './responses.js';
 
@@ -34,6 +36,8 @@ const contentType = (mime: string | null) => {
 @ApiBearerAuth()
 @ApiNotFoundResponse()
 @Controller('files')
+// after the session guard, so it counts per user
+@UseGuards(throttleBy('api'))
 export class FilesController {
   constructor(private readonly reader: CourseReader) {}
 

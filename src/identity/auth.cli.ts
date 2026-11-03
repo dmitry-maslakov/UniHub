@@ -12,6 +12,7 @@ export const auth = createAuth({
   mailer: { send: async () => {} },
   secret: process.env.BETTER_AUTH_SECRET ?? '',
   baseURL: process.env.BETTER_AUTH_URL ?? 'http://localhost:3000',
+  trustedOrigins: [],
   // so the schema covers Google accounts too
   google: { clientId: 'cli', clientSecret: 'cli' },
 });

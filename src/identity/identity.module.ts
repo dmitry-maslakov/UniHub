@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuthModule } from '@thallesp/nestjs-better-auth';
-import type { Env } from '../config.js';
+import { parseList, type Env } from '../config.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { GrantCourseAccessHandler } from './application/commands/grant-course-access.handler.js';
 import { RevokeCourseAccessHandler } from './application/commands/revoke-course-access.handler.js';
@@ -39,6 +39,9 @@ import { PrismaUserRepository } from './infrastructure/prisma-user.repository.js
             mailer,
             secret: config.get('BETTER_AUTH_SECRET', { infer: true }),
             baseURL: config.get('BETTER_AUTH_URL', { infer: true }),
+            trustedOrigins: parseList(
+              config.get('TRUSTED_ORIGINS', { infer: true }),
+            ),
             google:
               clientId && clientSecret ? { clientId, clientSecret } : undefined,
           }),

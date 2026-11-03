@@ -41,3 +41,21 @@ describe('production', () => {
     ).toBe(true);
   });
 });
+
+describe('TRUSTED_ORIGINS', () => {
+  const origins = (value: string) =>
+    envSchema.shape.TRUSTED_ORIGINS.safeParse(value).success;
+
+  it('takes exact origins only', () => {
+    expect(origins('')).toBe(true);
+    expect(origins('https://app.uni.test, http://localhost:5173')).toBe(true);
+    for (const bad of [
+      '*',
+      'https://*',
+      'https://*.uni.test',
+      'app.uni.test',
+      'https://app.uni.test/',
+    ])
+      expect(origins(bad)).toBe(false);
+  });
+});

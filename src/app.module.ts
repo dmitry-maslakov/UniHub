@@ -20,6 +20,7 @@ import { PrismaService } from './prisma/prisma.service.js';
 import { REDIS, RedisModule } from './redis/redis.module.js';
 import type { Redis } from 'ioredis';
 import { AccessModule } from './access/access.module.js';
+import { HealthModule } from './health/health.module.js';
 import { CatalogModule } from './catalog/catalog.module.js';
 import { IdentityModule } from './identity/identity.module.js';
 import { IngestModule } from './ingest/ingest.module.js';
@@ -74,14 +75,25 @@ import { PluginsModule } from './plugins/plugins.module.js';
       },
     }),
     ScheduleModule.forRoot(),
-    // named limits, applied where a guard picks them (MCP). One instance's
-    // memory until the deploy (#17)
+    // named limits, each route's guard picks its own (throttleBy in access).
+    // One budget per user across all a limit's routes. In one instance's
+    // memory: there is one
     ThrottlerModule.forRoot([
-      // by user, however many keys they make
+      // REST, per signed-in user
+      {
+        name: 'api',
+        ttl: 60_000,
+        limit: 1200,
+        generateKey: (_, tracker, name) => `${name}-${tracker}`,
+        getTracker: (req) =>
+          (req.user as { id: string } | null | undefined)?.id ?? req.ip,
+      },
+      // MCP, per user, however many keys they make
       {
         name: 'mcp',
         ttl: 60_000,
         limit: 600,
+        generateKey: (_, tracker, name) => `${name}-${tracker}`,
         // a plain ThrottlerGuard runs every named limit, before sign-in too
         getTracker: (req) =>
           (req.user as { id: string } | null | undefined)?.id ?? req.ip,
@@ -91,6 +103,7 @@ import { PluginsModule } from './plugins/plugins.module.js';
     CatalogModule,
     IdentityModule,
     AccessModule,
+    HealthModule,
     IngestModule,
     StorageModule.forRootAsync({
       inject: [ConfigService],

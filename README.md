@@ -67,3 +67,34 @@ Every plugin gets its own queue job per message, so one failing plugin only retr
 A connector can also run as its own service, in any language, and send data over gRPC (`proto/ingest.proto`). Each one gets a token in `CONNECTOR_TOKENS="portal=token,…"` and sends it as `authorization: Bearer <token>`; the token decides the portal. The hub doesn't schedule these, they sync when they want.
 
 The gRPC server starts only when some token is set and listens on `GRPC_URL` without TLS, so keep it on a private network or behind a TLS proxy.
+
+## Deploy
+
+`deploy/compose.yml` runs the hub on one server: caddy (TLS from Let's Encrypt) in front of the app, postgres and redis.
+
+```bash
+cp deploy/.env.example deploy/.env   # then fill it in
+docker compose -f deploy/compose.yml up -d --build
+# the first admin, with the build image's tools
+docker compose -f deploy/compose.yml run --rm migrate npm run auth:create-admin -- --email you@example.com --password '…'
+```
+
+- the `migrate` service applies prisma's and the outbox's migrations before the app starts
+- `/api/health` checks the database and redis; compose waits for it
+- external connectors reach gRPC through caddy over TLS on the same address (`DOMAIN:443`); the gRPC port isn't published
+- logs are capped per container
+- give the domain an A record only (or turn on IPv6 in docker): docker forwards IPv6 through its proxy, and every IPv6 client would show up with one address
+- backups: `deploy/backup.sh <folder>` from cron dumps the database and copies new files; keep the folder, and `deploy/.env`, off the server too
+
+Restoring, into an empty stack with the same `deploy/.env`:
+
+```bash
+docker compose -f deploy/compose.yml up -d postgres
+docker compose -f deploy/compose.yml exec -T postgres pg_restore -U unihub -d unihub --no-owner < backups/db-<date>.dump
+docker compose -f deploy/compose.yml create app   # makes the blobs volume
+rsync -a backups/blobs/ "$(docker volume inspect -f '{{ .Mountpoint }}' unihub_blobs)/blobs/"
+chown -R 1000:1000 "$(docker volume inspect -f '{{ .Mountpoint }}' unihub_blobs)"
+docker compose -f deploy/compose.yml up -d
+```
+
+Updating: back up, `git pull`, then `up -d --build` again. The old app keeps running while `migrate` applies the new schema, so a migration only adds until the code that needed the old shape is gone; going back past a migration means restoring a backup.

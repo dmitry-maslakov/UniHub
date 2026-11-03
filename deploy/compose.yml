@@ -1,0 +1,114 @@
+# The hub on one server: caddy (TLS) in front of the app, postgres, redis.
+# Settings in deploy/.env (see README).
+name: unihub
+
+# docker's default logs grow until the disk (the database's, the files') is full
+x-logging: &logging
+  logging:
+    driver: local
+    options:
+      max-size: 20m
+      max-file: '5'
+
+services:
+  caddy:
+    <<: *logging
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in deploy/.env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    depends_on:
+      app:
+        condition: service_healthy
+
+  app:
+    <<: *logging
+    build: ..
+    restart: unless-stopped
+    # a real init as PID 1: signals and child processes handled properly
+    init: true
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://unihub:${POSTGRES_PASSWORD}@postgres:5432/unihub
+      REDIS_URL: redis://redis:6379
+      STORAGE_PATH: /app/data/blobs
+      # only caddy reaches it, over the compose network
+      GRPC_URL: 0.0.0.0:50051
+      TRUST_PROXY: 1
+    volumes:
+      - blobs:/app/data
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://localhost:3000/api/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+      interval: 10s
+      start_period: 30s
+    # queue jobs get time to finish on a restart
+    stop_grace_period: 30s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+
+  # applies the migrations, then exits; the app starts after it. The outbox
+  # keeps its own schema (nest_outbox), which it migrates itself only outside
+  # production
+  migrate:
+    <<: *logging
+    build:
+      context: ..
+      target: build
+    command:
+      - sh
+      - -c
+      - npx prisma migrate deploy && npx @nestjs/outbox migrate
+    # the build image has the dev tools too, for one-off tasks (the first admin)
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://unihub:${POSTGRES_PASSWORD}@postgres:5432/unihub
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    <<: *logging
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: unihub
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
+      POSTGRES_DB: unihub
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', 'unihub']
+      interval: 5s
+
+  redis:
+    <<: *logging
+    image: redis:8
+    restart: unless-stopped
+    # jobs live only in redis, keep them across restarts
+    command: ['redis-server', '--appendonly', 'yes']
+    volumes:
+      - redisdata:/data
+
+volumes:
+  caddydata:
+  caddyconfig:
+  pgdata:
+  redisdata:
+  blobs:

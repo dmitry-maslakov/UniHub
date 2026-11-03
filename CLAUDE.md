@@ -22,17 +22,22 @@ Declined:
 - portal courses not linked to a course: nobody reads them through the API, admins included
 - tests of Better Auth's own device flow cases (deny, expiry, reuse)
 - file-level access: files inherit their course's
+- an app-wide limit per address: a campus behind NAT shares one address, so one script would lock everyone out. Better Auth limits `/api/auth` itself, MCP is limited per user
 
 Put off:
 
-- failed API key attempts limited per address (at the proxy, or counting only failures): each costs a database lookup. Not a limit on all MCP calls per address, which lets anyone lock out everyone behind the same proxy or campus NAT
-- helmet with a CSP for `/api/docs`, an app-wide `@nestjs/throttler` as the first global guard (Better Auth's guard looks up a session on every request, before any controller's limit; it must run only its own named limit, like `throttleBy` in access, or it runs MCP's too), client IP behind the proxy, Better Auth rate limits in Redis, `trustedOrigins`, gRPC behind TLS: deploy (#17)
+- failed API key attempts limited per address, counting only failures: each costs a database lookup (caddy has no rate limits without a plugin). Not a limit on all calls per address. Any app-wide throttler must run only its own named limit, like `throttleBy` in access, or it runs MCP's too
+- Better Auth's rate limits in Redis (`secondaryStorage`): in memory is right for the one instance there is; with a second one, they'd need sharing
+- Better Auth reads the client's address from `X-Forwarded-For` regardless of `TRUST_PROXY`: right behind caddy, which overwrites it; in production the app runs only behind it
+- images built and tagged in CI (ghcr) instead of on the server, for rollbacks without a rebuild
+- monitoring: NestJS Observe (see AGENTS.md), alerts on downtime, disk space and dead letters; failed jobs only reach the logs now
 - connector API keys, and moving the "portal both built-in and external" check to key creation (#33)
 - cursor paging for MCP, if agents need it
 - OAuth for MCP clients (claude.ai connectors need it); API keys until then
 - an `Origin` allowlist on the MCP transport (the spec asks for it against DNS rebinding); MCP takes no cookies, so a page can't call it as the user
 - MCP tools answer JSON as text, not `structuredContent` with an `outputSchema`
 - device sign-in: approval screen details and shorter device sessions, with the web portal
+- helmet's `Cross-Origin-Resource-Policy: same-origin` stops another origin embedding file content (`<img>`, `<iframe>`); `same-site` if the web portal lives on a sibling subdomain
 - grants of a deleted course: when catalog can delete courses (an event for identity)
 
 Done the standard way after all: global prefix, gRPC guard (#36).
