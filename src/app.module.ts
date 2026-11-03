@@ -52,7 +52,6 @@ import { plugins } from './plugins/enabled.js';
     StorageModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService<Env, true>) => ({
-        driver: 'fs',
         location: resolve(config.get('STORAGE_PATH', { infer: true })),
       }),
     }),

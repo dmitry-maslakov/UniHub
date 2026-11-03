@@ -1,47 +1,74 @@
 import type { Readable } from 'node:stream';
 import { Injectable } from '@nestjs/common';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
+import { Ingest, type PortalIngest } from '@app/plugin-sdk';
 import {
-  Ingest,
-  type CourseRecord,
-  type FileRecord,
-  type ItemRecord,
-  type Json,
-  type PortalIngest,
-} from '@app/plugin-sdk';
-import { IngestCourseCommand } from './commands/ingest-course.command.js';
-import { IngestFileContentCommand } from './commands/ingest-file-content.command.js';
-import { IngestFileCommand } from './commands/ingest-file.command.js';
-import { IngestItemCommand } from './commands/ingest-item.command.js';
-import { SaveSyncStateCommand } from './commands/save-sync-state.command.js';
-import { GetSyncStateQuery } from './queries/get-sync-state.query.js';
+  FindFileQuery,
+  SetFileContentCommand,
+  UnknownReferenceError,
+  UpsertFileCommand,
+  UpsertItemCommand,
+  UpsertPortalCourseCommand,
+} from '../../catalog/contracts.js';
+import { PutContentCommand } from '../../storage/contracts.js';
+import { SyncStateRepository, type Json } from '../domain/sync-state.js';
+import { courseRecord, toFileInput, toItemInput } from './records.js';
 
-// what built-in connectors get from the sdk, the gRPC service will do the same
+// What plugins get from the sdk. Validates and maps their records, then hands
+// them to catalog and storage; the gRPC service will do the same.
 @Injectable()
 export class HubIngest extends Ingest {
   constructor(
     private readonly commands: CommandBus,
     private readonly queries: QueryBus,
+    private readonly states: SyncStateRepository,
   ) {
     super();
   }
 
   forPortal(portal: string): PortalIngest {
-    const { commands, queries } = this;
     return {
-      course: (record: CourseRecord) =>
-        commands.execute(new IngestCourseCommand(portal, record)),
-      item: (record: ItemRecord) =>
-        commands.execute(new IngestItemCommand(portal, record)),
-      file: (record: FileRecord) =>
-        commands.execute(new IngestFileCommand(portal, record)),
-      content: (externalId: string, content: Readable) =>
-        commands.execute(
-          new IngestFileContentCommand(portal, externalId, content),
-        ),
-      state: () => queries.execute(new GetSyncStateQuery(portal)),
-      saveState: (state: Json) =>
-        commands.execute(new SaveSyncStateCommand(portal, state)),
+      course: async (record) => {
+        const course = courseRecord.parse(record);
+        const { changed } = await this.commands.execute(
+          new UpsertPortalCourseCommand({ ...course, portal }),
+        );
+        return { changed };
+      },
+      item: async (record) => {
+        const { changed } = await this.commands.execute(
+          new UpsertItemCommand(toItemInput(portal, record)),
+        );
+        return { changed };
+      },
+      file: async (record) => {
+        const { changed } = await this.commands.execute(
+          new UpsertFileCommand(toFileInput(portal, record)),
+        );
+        return { changed };
+      },
+      content: (externalId, content) =>
+        this.content(portal, externalId, content),
+      state: () => this.states.get(portal),
+      saveState: (state) => this.states.save(portal, state as Json),
     };
+  }
+
+  private async content(portal: string, externalId: string, content: Readable) {
+    // check first, so content of an unknown file isn't stored for nothing
+    const file = await this.queries.execute(
+      new FindFileQuery(portal, externalId),
+    );
+    if (!file) {
+      content.destroy();
+      throw new UnknownReferenceError(portal, externalId);
+    }
+    const { hash } = await this.commands.execute(
+      new PutContentCommand(content),
+    );
+    const { changed } = await this.commands.execute(
+      new SetFileContentCommand(file.id, hash),
+    );
+    return { hash, changed };
   }
 }

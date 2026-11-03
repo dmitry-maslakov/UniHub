@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { TransactionHost } from '@nestjs-cls/transactional';
 import type { TransactionalAdapterPrisma } from '@nestjs-cls/transactional-adapter-prisma';
-import type { Json } from '@app/plugin-sdk';
+import type { Json } from '../domain/sync-state.js';
 import type { PrismaService } from '../../prisma/prisma.service.js';
 import { SyncStateRepository } from '../domain/sync-state.js';
 
