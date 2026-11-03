@@ -1,20 +1,3 @@
-generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
-}
-
-datasource db {
-  provider = "postgresql"
-}
-
-model User {
-  id          String       @id @default(uuid())
-  email       String       @unique
-  name        String?
-  createdAt   DateTime     @default(now())
-  enrollments Enrollment[]
-}
-
 model Course {
   id          String         @id @default(uuid())
   slug        String         @unique
@@ -33,13 +16,4 @@ model CourseSource {
   externalId String
 
   @@unique([system, externalId])
-}
-
-model Enrollment {
-  userId   String
-  courseId String
-  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
-
-  @@id([userId, courseId])
 }
