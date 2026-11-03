@@ -4,8 +4,9 @@ import { text } from 'node:stream/consumers';
 import { Injectable, Module } from '@nestjs/common';
 import {
   Aggregator,
-  Connector,
   ContentProcessor,
+  PollConnector,
+  PushConnector,
   ITEM_INGESTED,
   ITEM_REMOVED,
   type ConnectorContext,
@@ -22,7 +23,7 @@ import {
 export const FAKE_PORTAL = 'fake-portal';
 
 // polled by the hub; the schedule is far away, tests ask for a sync instead
-@Connector({ portal: FAKE_PORTAL, mode: 'poll', schedule: '0 0 1 1 *' })
+@PollConnector({ portal: FAKE_PORTAL, schedule: '0 0 1 1 *' })
 @Injectable()
 export class FakePollConnector implements PollsPortal {
   polls = 0;
@@ -47,7 +48,7 @@ export class FakePollConnector implements PollsPortal {
   }
 }
 
-@Connector({ portal: 'fake-push', mode: 'push' })
+@PushConnector({ portal: 'fake-push' })
 @Injectable()
 export class FakePushConnector implements PushesFromPortal {
   started: string[] = [];

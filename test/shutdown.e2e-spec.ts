@@ -5,7 +5,7 @@ import { Queue } from 'bullmq';
 import { Redis } from 'ioredis';
 import {
   Aggregator,
-  Connector,
+  PushConnector,
   ITEM_INGESTED,
   type HandlesMessages,
   type Message,
@@ -29,9 +29,9 @@ class SlowAggregator implements HandlesMessages {
   }
 }
 
-@Connector({ portal: 'shutdown-push', mode: 'push' })
+@PushConnector({ portal: 'shutdown-push' })
 @Injectable()
-class PushConnector implements PushesFromPortal {
+class StoppableConnector implements PushesFromPortal {
   stopped = false;
   start() {}
   stop() {
@@ -39,7 +39,7 @@ class PushConnector implements PushesFromPortal {
   }
 }
 
-@Module({ providers: [SlowAggregator, PushConnector] })
+@Module({ providers: [SlowAggregator, StoppableConnector] })
 class ShutdownPluginsModule {}
 
 describe('shutdown', () => {
@@ -57,7 +57,7 @@ describe('shutdown', () => {
     await vi.waitFor(() => expect(slow.started).toBe(true), {
       timeout: 10_000,
     });
-    const push = app.get(PushConnector);
+    const push = app.get(StoppableConnector);
 
     await app.close();
 

@@ -2,9 +2,9 @@ import { extname } from 'node:path';
 import { Injectable, type OnModuleInit } from '@nestjs/common';
 import { DiscoveryService, type DiscoverableDecorator } from '@nestjs/core';
 import {
-  Aggregator,
-  Connector,
-  ContentProcessor,
+  AggregatorMark,
+  ConnectorMark,
+  ContentProcessorMark,
   TOPICS,
   type AggregatorOptions,
   type ConnectorOptions,
@@ -55,17 +55,17 @@ export class PluginRegistry implements OnModuleInit {
   constructor(private readonly discovery: DiscoveryService) {}
 
   onModuleInit() {
-    this.connectors = this.find<ConnectorOptions, object>(Connector).map(
+    this.connectors = this.find<ConnectorOptions, object>(ConnectorMark).map(
       (c) => ({ ...c, mode: c.options.mode }) as ConnectorPlugin,
     );
     this.processors = this.find<ContentProcessorOptions, ProcessesContent>(
-      ContentProcessor,
+      ContentProcessorMark,
     ).map(({ options, instance }) => ({
       options: { ...options, accepts: options.accepts.map(normalise) },
       instance,
     }));
     this.aggregators = this.find<AggregatorOptions, HandlesMessages>(
-      Aggregator,
+      AggregatorMark,
     );
     this.check();
   }

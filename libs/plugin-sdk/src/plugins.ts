@@ -22,8 +22,6 @@ export type ConnectorOptions =
   | { portal: string; mode: 'poll'; schedule: string }
   | { portal: string; mode: 'push' };
 
-export const Connector = DiscoveryService.createDecorator<ConnectorOptions>();
-
 export interface ConnectorContext {
   // 'shared' for portals everyone sees the same; per-user accounts later
   account: string;
@@ -120,9 +118,6 @@ export interface ContentProcessorOptions {
   accepts: string[];
 }
 
-export const ContentProcessor =
-  DiscoveryService.createDecorator<ContentProcessorOptions>();
-
 export interface ProcessorInput {
   name: string;
   mime: string | null;
@@ -153,8 +148,45 @@ export interface AggregatorOptions {
   topics: Topic[];
 }
 
-export const Aggregator = DiscoveryService.createDecorator<AggregatorOptions>();
-
 export interface HandlesMessages {
   handle(message: Message): Promise<void>;
+}
+
+// ---- decorators
+//
+// Each one only fits a class that implements its kind, so a poll connector
+// without poll() or a push connector without start()/stop() doesn't compile.
+
+// what the hub looks the plugins up by; plugins use the decorators below
+export const ConnectorMark =
+  DiscoveryService.createDecorator<ConnectorOptions>();
+export const ContentProcessorMark =
+  DiscoveryService.createDecorator<ContentProcessorOptions>();
+export const AggregatorMark =
+  DiscoveryService.createDecorator<AggregatorOptions>();
+
+type Class<T> = abstract new (...args: any[]) => T;
+
+export function PollConnector(options: { portal: string; schedule: string }) {
+  return <C extends Class<PollsPortal>>(target: C) => {
+    ConnectorMark({ ...options, mode: 'poll' })(target);
+  };
+}
+
+export function PushConnector(options: { portal: string }) {
+  return <C extends Class<PushesFromPortal>>(target: C) => {
+    ConnectorMark({ ...options, mode: 'push' })(target);
+  };
+}
+
+export function ContentProcessor(options: ContentProcessorOptions) {
+  return <C extends Class<ProcessesContent>>(target: C) => {
+    ContentProcessorMark(options)(target);
+  };
+}
+
+export function Aggregator(options: AggregatorOptions) {
+  return <C extends Class<HandlesMessages>>(target: C) => {
+    AggregatorMark(options)(target);
+  };
 }

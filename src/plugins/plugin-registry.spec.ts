@@ -1,5 +1,9 @@
 import type { DiscoveryService } from '@nestjs/core';
-import { Aggregator, Connector, ContentProcessor } from '@app/plugin-sdk';
+import {
+  AggregatorMark,
+  ConnectorMark,
+  ContentProcessorMark,
+} from '@app/plugin-sdk';
 import { PluginRegistry } from './plugin-registry.js';
 
 interface Fake {
@@ -32,11 +36,11 @@ function registry(...plugins: Fake[]) {
 }
 
 const processor = (name: string, accepts = ['.pdf']): Fake => ({
-  key: ContentProcessor.KEY,
+  key: ContentProcessorMark.KEY,
   options: { name, version: 1, accepts },
 });
 const aggregator = (name: string, topics: string[]): Fake => ({
-  key: Aggregator.KEY,
+  key: AggregatorMark.KEY,
   options: { name, topics },
 });
 
@@ -82,7 +86,7 @@ describe('PluginRegistry', () => {
   it('refuses a poll connector without poll()', () => {
     expect(() =>
       registry({
-        key: Connector.KEY,
+        key: ConnectorMark.KEY,
         options: { portal: 'acs', mode: 'poll', schedule: '* * * * *' },
         instance: { start() {} },
       }),
