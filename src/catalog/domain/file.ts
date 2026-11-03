@@ -27,6 +27,11 @@ export type FileData = Omit<File, 'id' | 'contentHash' | 'contentStale'>;
 export abstract class FileRepository {
   abstract upsert(data: FileData): Promise<Upserted<File>>;
   abstract findById(id: string): Promise<File | null>;
+  // files that have content and aren't removed, by id, after the given one
+  abstract listWithContent(
+    after: string | null,
+    limit: number,
+  ): Promise<File[]>;
   abstract findByExternalId(
     portal: string,
     externalId: string,

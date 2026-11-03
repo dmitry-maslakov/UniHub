@@ -3,6 +3,7 @@ import type { QueryBus } from '@nestjs/cqrs';
 import { FILE_CONTENT_STORED, type ProcessesContent } from '@app/plugin-sdk';
 import { GetFileQuery } from '../../catalog/contracts.js';
 import type { PluginRegistry } from '../../plugins/plugin-registry.js';
+import type { RepresentationRepository } from '../domain/representation.js';
 import type { PluginJob } from '../queues.js';
 import { PluginRunner } from './plugin-runner.js';
 
@@ -14,12 +15,16 @@ const job = (hash: string): PluginJob => ({
   },
 });
 
-function runner(processor: ProcessesContent, contentHash: string) {
+function runner(
+  processor: ProcessesContent,
+  contentHash: string,
+  existing = false,
+) {
   const streams: PassThrough[] = [];
   const registry = {
     runnable: () => ({
       kind: 'processor',
-      plugin: { options: { name: 'pdf' }, instance: processor },
+      plugin: { options: { name: 'pdf', version: 1 }, instance: processor },
     }),
   } as unknown as PluginRegistry;
   const queries = {
@@ -31,7 +36,16 @@ function runner(processor: ProcessesContent, contentHash: string) {
       return stream;
     },
   } as unknown as QueryBus;
-  return { run: new PluginRunner(registry, queries), streams };
+  const saved: unknown[] = [];
+  const representations = {
+    exists: async () => existing,
+    save: async (r: unknown) => void saved.push(r),
+  } as unknown as RepresentationRepository;
+  return {
+    run: new PluginRunner(registry, queries, representations),
+    streams,
+    saved,
+  };
 }
 
 describe('PluginRunner', () => {
@@ -60,5 +74,27 @@ describe('PluginRunner', () => {
 
     expect(streams).toHaveLength(2);
     expect(streams.every((s) => s.destroyed)).toBe(true);
+  });
+
+  it('stores what the processor made, keyed by content and version', async () => {
+    const { run, saved } = runner(
+      { process: async () => ({ parts: ['page 1'] }) },
+      'h',
+    );
+
+    await run.run(job('h'));
+
+    expect(saved).toEqual([
+      { hash: 'h', processor: 'pdf', version: 1, parts: ['page 1'] },
+    ]);
+  });
+
+  it('skips content this processor version already did', async () => {
+    const process = vi.fn();
+    const { run } = runner({ process }, 'h', true);
+
+    await run.run(job('h'));
+
+    expect(process).not.toHaveBeenCalled();
   });
 });

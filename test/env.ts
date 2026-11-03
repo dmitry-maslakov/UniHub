@@ -15,4 +15,6 @@ export const testEnv = {
   // db 15: far from the 0 a developer normally uses, it gets flushed
   REDIS_URL: withPath(process.env.REDIS_URL ?? 'redis://localhost:6379', '/15'),
   STORAGE_PATH: join(tmpdir(), 'unihub-e2e'),
+  // real plugins are tested on their own; e2e use the fakes
+  PLUGINS: '',
 };

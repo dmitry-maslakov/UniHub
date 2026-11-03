@@ -1,6 +1,10 @@
 import { Module, type OnApplicationBootstrap } from '@nestjs/common';
 import { BullModule, BullRegistrar } from '@nestjs/bullmq';
 import { PluginRunner } from './application/plugin-runner.js';
+import { Reconciler } from './application/reconciler.js';
+import { RepresentationRepository } from './domain/representation.js';
+import { PrismaRepresentationRepository } from './infrastructure/prisma-representation.repository.js';
+import { ReconcileSchedule } from './infrastructure/reconcile.schedule.js';
 import { OutboxRetention } from './infrastructure/outbox-retention.js';
 import { PluginsWorker } from './infrastructure/plugins.worker.js';
 import { PLUGINS_QUEUE } from './queues.js';
@@ -22,7 +26,17 @@ const DAY = 24 * 60 * 60;
       },
     }),
   ],
-  providers: [PluginRunner, PluginsWorker, OutboxRetention],
+  providers: [
+    PluginRunner,
+    PluginsWorker,
+    OutboxRetention,
+    Reconciler,
+    ReconcileSchedule,
+    {
+      provide: RepresentationRepository,
+      useClass: PrismaRepresentationRepository,
+    },
+  ],
   // the outbox transport adds jobs to the queue
   exports: [BullModule],
 })
