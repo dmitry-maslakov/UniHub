@@ -3,6 +3,7 @@ import { z } from 'zod';
 const envSchema = z.object({
   DATABASE_URL: z.url(),
   PORT: z.coerce.number().default(3000),
+  REDIS_URL: z.url().default('redis://localhost:6379'),
   STORAGE_PATH: z.string().default('./data/blobs'),
 });
 
