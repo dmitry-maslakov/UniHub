@@ -155,6 +155,24 @@ describe('ingest', () => {
     expect(await blobs()).toBe(before);
   });
 
+  it('refuses text postgres could not store', async () => {
+    await expect(
+      hub.item({ externalId: 'nul', kind: 'post', title: 'a\u0000b', raw: {} }),
+    ).rejects.toBeInstanceOf(InvalidRecordError);
+    await expect(
+      hub.item({ externalId: 'nul', kind: 'post', raw: { body: 'a\u0000b' } }),
+    ).rejects.toBeInstanceOf(InvalidRecordError);
+  });
+
+  it('checks what remove() and saveState() are given', async () => {
+    await expect(
+      hub.remove('course' as 'item', 'post-1'),
+    ).rejects.toBeInstanceOf(InvalidRecordError);
+    await expect(
+      hub.saveState({ when: new Date() } as never),
+    ).rejects.toBeInstanceOf(InvalidRecordError);
+  });
+
   it('keeps the plugin state between runs, per account', async () => {
     expect(await hub.state()).toBeNull();
     await hub.saveState({ cursor: 5 });

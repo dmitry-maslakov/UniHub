@@ -1,6 +1,7 @@
 import type { Readable } from 'node:stream';
 import { Injectable } from '@nestjs/common';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
+import { Outbox } from '@nestjs/outbox';
 import { ZodError } from 'zod';
 import {
   InvalidRecordError,
@@ -10,7 +11,13 @@ import {
 import * as catalog from '../../catalog/contracts.js';
 import { PutContentCommand } from '../../storage/contracts.js';
 import { SyncStateRepository, type Json } from '../domain/sync-state.js';
-import { courseRecord, toFileInput, toItemInput } from './records.js';
+import {
+  courseRecord,
+  removal,
+  syncState,
+  toFileInput,
+  toItemInput,
+} from './records.js';
 
 // errors plugins see are the sdk's, not catalog's or zod's
 async function asPluginErrors<T>(work: () => Promise<T>): Promise<T> {
@@ -35,7 +42,14 @@ export class HubIngest {
     private readonly commands: CommandBus,
     private readonly queries: QueryBus,
     private readonly states: SyncStateRepository,
+    private readonly outbox: Outbox,
   ) {}
+
+  // a change committed a message; wake the relay instead of waiting for its poll
+  private notify<T extends { changed: boolean }>(result: T) {
+    if (result.changed) this.outbox.notify();
+    return result;
+  }
 
   forPortal(portal: string, account = 'shared'): PortalIngest {
     const run = asPluginErrors;
@@ -53,29 +67,37 @@ export class HubIngest {
           const { changed } = await this.commands.execute(
             new catalog.UpsertItemCommand(toItemInput(portal, record)),
           );
-          return { changed };
+          return this.notify({ changed });
         }),
       file: (record) =>
         run(async () => {
           const { changed, needsContent } = await this.commands.execute(
             new catalog.UpsertFileCommand(toFileInput(portal, record)),
           );
-          return { changed, needsContent };
+          return this.notify({ changed, needsContent });
         }),
       content: (externalId, content) =>
-        run(() => this.content(portal, externalId, content)),
-      remove: (kind, externalId) => {
-        // with per-user accounts "can't see it" isn't "gone for everyone"
-        if (account !== 'shared')
-          throw new Error('only shared accounts can remove records');
-        return this.commands.execute(
-          kind === 'item'
-            ? new catalog.RemoveItemCommand(portal, externalId)
-            : new catalog.RemoveFileCommand(portal, externalId),
-        );
-      },
-      state: () => this.states.get(portal, account),
-      saveState: (state) => this.states.save(portal, account, state as Json),
+        run(async () =>
+          this.notify(await this.content(portal, externalId, content)),
+        ),
+      remove: (kind, externalId) =>
+        run(async () => {
+          const r = removal.parse({ kind, externalId });
+          // with per-user accounts "can't see it" isn't "gone for everyone"
+          if (account !== 'shared')
+            throw new Error('only shared accounts can remove records');
+          const result = await this.commands.execute(
+            r.kind === 'item'
+              ? new catalog.RemoveItemCommand(portal, r.externalId)
+              : new catalog.RemoveFileCommand(portal, r.externalId),
+          );
+          return this.notify(result);
+        }),
+      state: () => run(() => this.states.get(portal, account)),
+      saveState: (state) =>
+        run(() =>
+          this.states.save(portal, account, syncState.parse(state) as Json),
+        ),
     };
   }
 

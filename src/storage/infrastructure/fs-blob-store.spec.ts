@@ -77,4 +77,8 @@ describe('FsBlobStore', () => {
     await store.removeStaleTemp(-1);
     expect(await readdir(join(root, 'tmp'))).toEqual([]);
   });
+
+  it('refuses anything that is not a sha256 as a hash', async () => {
+    await expect(store.get('../../etc/passwd')).rejects.toThrow('bad hash');
+  });
 });
