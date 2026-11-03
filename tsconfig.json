@@ -18,6 +18,10 @@
     "skipLibCheck": true,
     "strict": true,
     "strictPropertyInitialization": false,
-    "types": ["vitest/globals", "node"]
+    "types": ["vitest/globals", "node"],
+    "paths": {
+      "@app/plugin-sdk": ["./libs/plugin-sdk/src/index.ts"],
+      "@app/plugin-sdk/*": ["./libs/plugin-sdk/src/*"]
+    }
   }
 }
