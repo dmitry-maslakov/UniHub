@@ -29,9 +29,7 @@ const validTokens = (value: string) => {
 
 export const envSchema = z
   .object({
-    NODE_ENV: z
-      .enum(['development', 'production', 'test'])
-      .default('development'),
+    NODE_ENV: z.string().default('development'),
     DATABASE_URL: z.url(),
     PORT: z.coerce.number().default(3000),
     REDIS_URL: z.url().default('redis://localhost:6379'),
@@ -75,11 +73,11 @@ export const envSchema = z
         path: ['SMTP_URL'],
         message: 'required in production',
       });
-    if (new URL(env.BETTER_AUTH_URL).hostname === 'localhost')
+    if (new URL(env.BETTER_AUTH_URL).protocol !== 'https:')
       ctx.addIssue({
         code: 'custom',
         path: ['BETTER_AUTH_URL'],
-        message: 'must be the public address in production',
+        message: 'must be the public https address in production',
       });
   });
 

@@ -29,6 +29,8 @@ npm run start:dev
 - sign-in by QR code: a new screen asks for a code (device authorization), a signed-in phone approves it
 - session tokens as `Authorization: Bearer`, and API keys for MCP clients
 
+The first admin: `npm run auth:create-admin -- --email you@example.com --password '…'`. After adding a Better Auth plugin, `npm run auth:generate` updates `prisma/schema/identity.prisma`.
+
 Every HTTP route needs a signed-in user unless it says `@AllowAnonymous()`. Admins read every course, other users the ones granted to them (`GrantCourseAccessCommand`).
 
 ## Plugins
