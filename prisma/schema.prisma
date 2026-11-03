@@ -1,0 +1,45 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id          String       @id @default(uuid())
+  email       String       @unique
+  name        String?
+  createdAt   DateTime     @default(now())
+  enrollments Enrollment[]
+}
+
+model Course {
+  id          String         @id @default(uuid())
+  slug        String         @unique
+  name        String
+  sources     CourseSource[]
+  enrollments Enrollment[]
+}
+
+// where the course lives in an external system (canvas course, acs group, teams team...)
+// system is a connector id, not an enum, so adding a connector doesn't need a migration
+model CourseSource {
+  id         String @id @default(uuid())
+  courseId   String
+  course     Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  system     String
+  externalId String
+
+  @@unique([system, externalId])
+}
+
+model Enrollment {
+  userId   String
+  courseId String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@id([userId, courseId])
+}
