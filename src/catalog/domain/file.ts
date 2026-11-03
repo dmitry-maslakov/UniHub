@@ -31,6 +31,7 @@ export type FileData = Omit<File, 'id' | 'contentHash' | Optional> &
 
 export abstract class FileRepository {
   abstract upsert(data: FileData): Promise<Upserted<File>>;
+  abstract findById(id: string): Promise<File | null>;
   abstract findByExternalId(
     portal: string,
     externalId: string,

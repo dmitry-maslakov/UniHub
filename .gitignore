@@ -35,3 +35,6 @@ npm-debug.log*
 
 # file content
 /data
+
+# local redis snapshot
+dump.rdb

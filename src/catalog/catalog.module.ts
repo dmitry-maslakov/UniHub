@@ -3,6 +3,7 @@ import { SetFileContentHandler } from './application/commands/set-file-content.h
 import { UpsertFileHandler } from './application/commands/upsert-file.handler.js';
 import { UpsertItemHandler } from './application/commands/upsert-item.handler.js';
 import { UpsertPortalCourseHandler } from './application/commands/upsert-portal-course.handler.js';
+import { GetFileHandler } from './application/queries/get-file.handler.js';
 import { FileRepository } from './domain/file.js';
 import { ItemRepository } from './domain/item.js';
 import { PortalCourseRepository } from './domain/portal-course.js';
@@ -19,6 +20,7 @@ import { PrismaPortalCourseRepository } from './infrastructure/prisma-portal-cou
     UpsertItemHandler,
     UpsertFileHandler,
     SetFileContentHandler,
+    GetFileHandler,
   ],
 })
 export class CatalogModule {}

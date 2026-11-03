@@ -4,6 +4,8 @@ const envSchema = z.object({
   DATABASE_URL: z.url(),
   PORT: z.coerce.number().default(3000),
   REDIS_URL: z.url().default('redis://localhost:6379'),
+  // built-in plugins to turn on, comma separated
+  PLUGINS: z.string().default(''),
   STORAGE_PATH: z.string().default('./data/blobs'),
 });
 
