@@ -92,8 +92,8 @@ describe('identity', { timeout: 20_000 }, () => {
     });
   });
 
-  it('resets a forgotten password by mail', async () => {
-    await signUp('bo@uni.test');
+  it('resets a forgotten password by mail, signing out everywhere', async () => {
+    const before = await signUp('bo@uni.test');
     await post('/request-password-reset', {
       email: 'bo@uni.test',
       redirectTo: '/reset',
@@ -107,6 +107,25 @@ describe('identity', { timeout: 20_000 }, () => {
     }).expect(200);
 
     await signIn('bo@uni.test', 'battery staple 2');
+    const old = await http()
+      .get('/api/auth/get-session')
+      .set('cookie', before)
+      .expect(200);
+    expect(old.body).toBeNull();
+  });
+
+  it('refuses links to other sites and requests from them', async () => {
+    const cookie = await signUp('ga@uni.test');
+    await post('/request-password-reset', {
+      email: 'ga@uni.test',
+      redirectTo: 'https://evil.test/steal',
+    }).expect(403);
+    await http()
+      .post('/api/auth/api-key/create')
+      .set('origin', 'https://evil.test')
+      .set('cookie', cookie)
+      .send({ name: 'x' })
+      .expect(403);
   });
 
   it('signs a new screen in by QR, approved from a signed-in phone', async () => {

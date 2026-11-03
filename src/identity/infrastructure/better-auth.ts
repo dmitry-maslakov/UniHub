@@ -39,9 +39,14 @@ export function createAuth({
     secret,
     baseURL,
     database: prismaAdapter(prisma, { provider: 'postgresql' }),
+    // Better Auth skips origin checks under NODE_ENV=test; on here, tests see
+    // what production does
+    advanced: { disableOriginCheck: false },
     emailAndPassword: {
       enabled: true,
       requireEmailVerification: true,
+      // a stolen session, or a screen signed in by QR, ends with a reset
+      revokeSessionsOnPasswordReset: true,
       sendResetPassword: async ({ user, url }) =>
         send({
           to: user.email,
@@ -70,8 +75,9 @@ export function createAuth({
       deviceAuthorization({
         validateClient: (clientId) => DEVICE_CLIENTS.includes(clientId),
       }),
-      // for MCP clients; the default limit is 10 requests a day
-      apiKey({ rateLimit: { enabled: false } }),
+      // for MCP clients; the default limit of 10 requests a day is for paid
+      // APIs, an agent reading courses makes many more
+      apiKey({ rateLimit: { timeWindow: 60_000, maxRequests: 600 } }),
     ],
   });
 }
