@@ -32,3 +32,6 @@ npm-debug.log*
 *.tsbuildinfo
 
 /src/generated/prisma
+
+# file content
+/data
