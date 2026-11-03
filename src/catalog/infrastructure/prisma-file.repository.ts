@@ -21,6 +21,7 @@ const toEntity = (row: Row): File => ({
   mime: row.mime,
   sourceUpdatedAt: row.sourceUpdatedAt,
   contentHash: row.contentHash,
+  removedAt: row.removedAt,
 });
 
 @Injectable()
@@ -70,5 +71,19 @@ export class PrismaFileRepository extends FileRepository {
       data: { contentHash: hash },
     });
     return count > 0;
+  }
+
+  async markRemoved(portal: string, externalId: string) {
+    await lockRecord(this.txHost, LOCK.file, portal, externalId);
+    const row = await this.db.findUnique({
+      where: { portal_externalId: { portal, externalId } },
+    });
+    if (!row) return null;
+    if (row.removedAt) return { id: row.id, changed: false };
+    await this.db.update({
+      where: { id: row.id },
+      data: { removedAt: new Date() },
+    });
+    return { id: row.id, changed: true };
   }
 }

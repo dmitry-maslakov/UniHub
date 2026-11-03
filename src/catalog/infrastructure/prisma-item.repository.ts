@@ -18,6 +18,7 @@ const toEntity = (row: Row): Item => ({
   url: row.url,
   publishedAt: row.publishedAt,
   raw: row.raw as Json,
+  removedAt: row.removedAt,
 });
 
 @Injectable()
@@ -32,6 +33,11 @@ export class PrismaItemRepository extends ItemRepository {
 
   private get db() {
     return this.txHost.tx.item;
+  }
+
+  async findById(id: string) {
+    const row = await this.db.findUnique({ where: { id } });
+    return row && toEntity(row);
   }
 
   async findByExternalId(portal: string, externalId: string) {
@@ -52,5 +58,19 @@ export class PrismaItemRepository extends ItemRepository {
       update: async ({ id }) =>
         toEntity(await this.db.update({ where: { id }, data: values })),
     });
+  }
+
+  async markRemoved(portal: string, externalId: string) {
+    await lockRecord(this.txHost, LOCK.item, portal, externalId);
+    const row = await this.db.findUnique({
+      where: { portal_externalId: { portal, externalId } },
+    });
+    if (!row) return null;
+    if (row.removedAt) return { id: row.id, changed: false };
+    await this.db.update({
+      where: { id: row.id },
+      data: { removedAt: new Date() },
+    });
+    return { id: row.id, changed: true };
   }
 }

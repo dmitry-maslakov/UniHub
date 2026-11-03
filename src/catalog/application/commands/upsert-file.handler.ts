@@ -23,10 +23,12 @@ export class UpsertFileHandler implements ICommandHandler<UpsertFileCommand> {
   async execute({ data: { course, item, ...data } }: UpsertFileCommand) {
     const portalCourseId = await resolveId(this.courses, data.portal, course);
     const itemId = await resolveId(this.items, data.portal, item);
+    // sending a removed file again brings it back
     const { entity, previous, changed } = await this.files.upsert({
       ...data,
       portalCourseId,
       itemId,
+      removedAt: null,
     });
     const needsContent =
       entity.contentHash === null ||

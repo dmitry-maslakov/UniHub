@@ -2,7 +2,10 @@ import { Command } from '@nestjs/cqrs';
 import type { FileData } from '../../domain/file.js';
 
 // `course` and `item` are the portal's ids, not ours
-export type FileInput = Omit<FileData, 'portalCourseId' | 'itemId'> & {
+export type FileInput = Omit<
+  FileData,
+  'portalCourseId' | 'itemId' | 'removedAt'
+> & {
   course: string | null;
   item: string | null;
 };

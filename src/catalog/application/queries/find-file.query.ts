@@ -1,5 +1,5 @@
 import { Query } from '@nestjs/cqrs';
-import type { FileDto } from './file.dto.js';
+import type { FileDto } from './dtos.js';
 
 // by the portal's id
 export class FindFileQuery extends Query<FileDto | null> {

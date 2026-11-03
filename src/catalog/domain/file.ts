@@ -15,6 +15,8 @@ export interface File {
   mime: string | null;
   sourceUpdatedAt: Date | null;
   contentHash: string | null;
+  // the portal said it's gone; sending it again clears this
+  removedAt: Date | null;
 }
 
 // contentHash isn't the portal's to set, storage fills it in
@@ -29,4 +31,9 @@ export abstract class FileRepository {
   ): Promise<File | null>;
   // false if the file already had this content
   abstract setContentHash(id: string, hash: string): Promise<boolean>;
+  // null if there is no such file
+  abstract markRemoved(
+    portal: string,
+    externalId: string,
+  ): Promise<{ id: string; changed: boolean } | null>;
 }

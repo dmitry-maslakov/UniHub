@@ -1,6 +1,6 @@
 import { QueryHandler, type IQueryHandler } from '@nestjs/cqrs';
 import { FileRepository } from '../../domain/file.js';
-import { toFileDto } from './file.dto.js';
+import { toFileDto } from './dtos.js';
 import { FindFileQuery } from './find-file.query.js';
 
 @QueryHandler(FindFileQuery)

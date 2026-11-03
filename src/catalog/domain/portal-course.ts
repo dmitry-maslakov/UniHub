@@ -14,6 +14,7 @@ export type PortalCourseData = Omit<PortalCourse, 'id'>;
 
 export abstract class PortalCourseRepository {
   abstract upsert(data: PortalCourseData): Promise<Upserted<PortalCourse>>;
+  abstract findById(id: string): Promise<PortalCourse | null>;
   abstract findByExternalId(
     portal: string,
     externalId: string,
