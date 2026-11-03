@@ -7,4 +7,7 @@ export {
   type ReadableCourses,
 } from './application/queries/readable-courses.query.js';
 export { UnknownUserError } from './domain/errors.js';
-export { CurrentUserId } from './infrastructure/http/current-user-id.js';
+export {
+  CurrentUserId,
+  userIdOf,
+} from './infrastructure/http/current-user-id.js';
