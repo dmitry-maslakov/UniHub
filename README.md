@@ -42,7 +42,11 @@ OpenAPI at `/api/docs`. A signed-in user reads the courses they were given:
 - `GET /api/files/{id}/text?page=2`: one page, slide or section of a text
 - `GET /api/files/{id}/content`: the file itself
 
-Everything goes through `CourseReader` (`src/access`), which MCP will share.
+Everything goes through `CourseReader` (`src/access`), which MCP shares.
+
+## MCP
+
+`/api/mcp` serves the same reads to AI clients over streamable HTTP, as the tools `list_courses`, `list_items`, `list_files` and `read_file` (page by page). A client signs in with an API key (create one at `POST /api/auth/api-key/create`), sent as `X-API-Key` or `Authorization: Bearer`; 600 calls a minute per key.
 
 ## Plugins
 

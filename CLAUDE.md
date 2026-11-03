@@ -25,10 +25,10 @@ Declined:
 
 Put off:
 
-- API key guard for HTTP, per-key throttling, `deferUpdates`, ban check on keys: MCP (#16)
 - helmet with a CSP for `/api/docs`, `@nestjs/throttler`, client IP behind the proxy, Better Auth rate limits in Redis, `trustedOrigins`, gRPC behind TLS: deploy (#17)
 - connector API keys, and moving the "portal both built-in and external" check to key creation (#33)
 - cursor paging for MCP, if agents need it
+- OAuth for MCP clients (claude.ai connectors need it); API keys until then
 - device sign-in: approval screen details and shorter device sessions, with the web portal
 - grants of a deleted course: when catalog can delete courses (an event for identity)
 

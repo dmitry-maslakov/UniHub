@@ -46,7 +46,7 @@ describe('REST API', { timeout: 20_000 }, () => {
       .useValue({ send: async (mail: Mail) => void mails.push(mail) })
       .compile();
     app = moduleRef.createNestApplication(appOptions);
-    configureApp(app);
+    await configureApp(app);
     await app.init();
     const prisma = app.get(PrismaService);
     const commands = app.get(CommandBus);
