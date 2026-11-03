@@ -15,6 +15,15 @@
       "compilerOptions": {
         "tsConfigPath": "libs/plugin-sdk/tsconfig.lib.json"
       }
+    },
+    "plugins/office-text": {
+      "type": "library",
+      "root": "libs/plugins/office-text",
+      "entryFile": "index",
+      "sourceRoot": "libs/plugins/office-text/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/plugins/office-text/tsconfig.lib.json"
+      }
     }
   }
 }
