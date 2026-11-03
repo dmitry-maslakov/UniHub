@@ -30,12 +30,14 @@ describe('production', () => {
       'SMTP_URL',
       'BETTER_AUTH_URL',
     ]);
+    const smtp = { ...env, SMTP_URL: 'smtp://u:p@mail.uni.test:587' };
     expect(
-      envSchema.safeParse({
-        ...env,
-        SMTP_URL: 'smtp://u:p@mail.uni.test:587',
-        BETTER_AUTH_URL: 'https://hub.uni.test',
-      }).success,
+      envSchema.safeParse({ ...smtp, BETTER_AUTH_URL: 'http://hub.uni.test' })
+        .success,
+    ).toBe(false);
+    expect(
+      envSchema.safeParse({ ...smtp, BETTER_AUTH_URL: 'https://hub.uni.test' })
+        .success,
     ).toBe(true);
   });
 });
