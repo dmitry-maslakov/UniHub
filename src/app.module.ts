@@ -77,8 +77,6 @@ import { PluginsModule } from './plugins/plugins.module.js';
     // named limits, applied where a guard picks them (MCP). One instance's
     // memory until the deploy (#17)
     ThrottlerModule.forRoot([
-      // by address, before the key is checked: bad keys cost a lookup each
-      { name: 'mcp-ip', ttl: 60_000, limit: 1200 },
       // by user, however many keys they make
       {
         name: 'mcp',

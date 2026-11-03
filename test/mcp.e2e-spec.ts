@@ -101,13 +101,7 @@ describe('MCP', { timeout: 20_000 }, () => {
 
   it('needs an API key, a session is not enough', async () => {
     await rpc('tools/list', {}, {}).expect(401);
-    // a bad key is counted by address before it's even checked
-    const bad = await rpc(
-      'tools/list',
-      {},
-      { 'x-api-key': 'not-a-key' },
-    ).expect(401);
-    expect(bad.headers['x-ratelimit-limit-mcp-ip']).toBe('1200');
+    await rpc('tools/list', {}, { 'x-api-key': 'not-a-key' }).expect(401);
     // the route exists only behind the guards, under /api
     await http().post('/mcp').expect(404);
     await rpc('tools/list', {}, { cookie }).expect(401);
@@ -120,9 +114,8 @@ describe('MCP', { timeout: 20_000 }, () => {
     expect(
       res.body.result.tools.map((t: { name: string }) => t.name).sort(),
     ).toEqual(['list_courses', 'list_files', 'list_items', 'read_file']);
-    // per user and minute, and per address before the key is checked
+    // per user and minute
     expect(res.headers['x-ratelimit-limit-mcp']).toBe('600');
-    expect(res.headers['x-ratelimit-limit-mcp-ip']).toBe('1200');
   });
 
   it("reads the user's courses, posts and files", async () => {

@@ -19,11 +19,10 @@ const throttleBy = (name: string) => {
 };
 
 // /api/mcp: MCP over streamable HTTP, for API keys. Guards run in the order
-// they're added, and the lower decorator adds first: the limit by address,
-// the key, then the limit by the key's user.
+// they're added, and the lower decorator adds first: the key, then the limit
+// by the key's user.
 @Controller('mcp')
 @ApiExcludeController()
 @UseGuards(throttleBy('mcp'))
 @ApiKeyAuth()
-@UseGuards(throttleBy('mcp-ip'))
 export class McpHttpController extends McpHttpControllerFor(mcpTransport) {}

@@ -25,6 +25,7 @@ Declined:
 
 Put off:
 
+- failed API key attempts limited per address (at the proxy, or counting only failures): each costs a database lookup. Not a limit on all MCP calls per address, which lets anyone lock out everyone behind the same proxy or campus NAT
 - helmet with a CSP for `/api/docs`, an app-wide `@nestjs/throttler` as the first global guard (Better Auth's guard looks up a session on every request, before any controller's limit; it must run only its own named limit, like `throttleBy` in access, or it runs MCP's too), client IP behind the proxy, Better Auth rate limits in Redis, `trustedOrigins`, gRPC behind TLS: deploy (#17)
 - connector API keys, and moving the "portal both built-in and external" check to key creation (#33)
 - cursor paging for MCP, if agents need it
