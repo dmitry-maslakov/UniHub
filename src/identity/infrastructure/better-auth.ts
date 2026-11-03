@@ -2,7 +2,7 @@ import { Logger } from '@nestjs/common';
 import { betterAuth } from 'better-auth';
 import { admin, bearer, deviceAuthorization } from 'better-auth/plugins';
 import { apiKey } from '@better-auth/api-key';
-import { prismaAdapter } from '@better-auth/prisma-adapter';
+import { prismaAdapter } from 'better-auth/adapters/prisma';
 import type { PrismaClient } from '../../generated/prisma/client.js';
 import type { Mail, Mailer } from '../domain/mailer.js';
 

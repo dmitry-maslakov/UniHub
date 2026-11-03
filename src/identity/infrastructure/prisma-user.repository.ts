@@ -17,7 +17,7 @@ export class PrismaUserRepository extends UserRepository {
   async findById(id: string) {
     const row = await this.txHost.tx.user.findUnique({
       where: { id },
-      select: { id: true, role: true },
+      select: { id: true, role: true, banned: true, banExpires: true },
     });
     return (
       row && {
@@ -26,6 +26,8 @@ export class PrismaUserRepository extends UserRepository {
           .split(',')
           .map((r) => r.trim())
           .filter(Boolean),
+        // Better Auth: banned with no expiry is banned for good
+        bannedUntil: row.banned ? (row.banExpires ?? new Date(8.64e15)) : null,
       }
     );
   }

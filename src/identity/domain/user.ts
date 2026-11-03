@@ -2,9 +2,14 @@ export interface User {
   id: string;
   // Better Auth's admin plugin keeps roles comma separated
   roles: string[];
+  // until when the user is banned; null when they aren't
+  bannedUntil: Date | null;
 }
 
 export const isAdmin = (user: User) => user.roles.includes('admin');
+
+export const isBanned = (user: User, now = new Date()) =>
+  user.bannedUntil !== null && user.bannedUntil > now;
 
 // users themselves are Better Auth's; this only reads them
 export abstract class UserRepository {

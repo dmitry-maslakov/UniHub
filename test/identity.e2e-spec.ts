@@ -179,6 +179,13 @@ describe('identity', { timeout: 20_000 }, () => {
       all: true,
     });
 
+    await prisma.user.update({ where: { id: ed.id }, data: { banned: true } });
+    expect(await queries.execute(new ReadableCoursesQuery(ed.id))).toEqual({
+      all: false,
+      courseIds: [],
+    });
+    await prisma.user.update({ where: { id: ed.id }, data: { banned: false } });
+
     expect(
       await commands.execute(new RevokeCourseAccessCommand(ed.id, 'os')),
     ).toEqual({ changed: true });

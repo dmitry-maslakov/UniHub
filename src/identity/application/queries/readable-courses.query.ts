@@ -1,6 +1,7 @@
 import { Query } from '@nestjs/cqrs';
 
-// admins read every course, everyone else the ones granted to them
+// admins read every course, everyone else the ones granted to them, banned
+// users nothing
 export type ReadableCourses =
   { all: true } | { all: false; courseIds: string[] };
 
