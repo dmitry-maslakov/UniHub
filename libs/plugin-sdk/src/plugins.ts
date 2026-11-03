@@ -9,14 +9,21 @@ import type { CourseRecord, FileRecord, ItemRecord, Json } from './records.js';
 // Names (and portals) are unique and can't contain ':'.
 
 // ---- connectors: bring data in from a portal
+//
+// A connector is written for one account; the hub runs it once per account.
+// poll: the hub calls poll() on the connector's schedule, never two runs of
+//       one account at once.
+// push: the connector keeps its own connection (websocket, long poll...); the
+//       hub only calls start() and stop(). Webhooks will come with the first
+//       connector that needs them.
 
-export interface ConnectorOptions {
-  portal: string;
-}
+export type ConnectorOptions =
+  // schedule is a cron pattern, e.g. '*/15 * * * *'
+  | { portal: string; mode: 'poll'; schedule: string }
+  | { portal: string; mode: 'push' };
 
 export const Connector = DiscoveryService.createDecorator<ConnectorOptions>();
 
-// handed to the connector by the hub when the app starts
 export interface ConnectorContext {
   // 'shared' for portals everyone sees the same; per-user accounts later
   account: string;
@@ -24,8 +31,13 @@ export interface ConnectorContext {
   ingest: PortalIngest;
 }
 
-export interface RunsConnector {
+export interface PollsPortal {
+  poll(ctx: ConnectorContext): Promise<void>;
+}
+
+export interface PushesFromPortal {
   start(ctx: ConnectorContext): void | Promise<void>;
+  stop(): void | Promise<void>;
 }
 
 export interface PortalIngest {
@@ -40,7 +52,8 @@ export interface PortalIngest {
     fileExternalId: string,
     content: Readable,
   ): Promise<{ hash: string; changed: boolean }>;
-  // gone from the portal; sending it again brings it back
+  // gone from the portal; sending it again brings it back.
+  // Courses can't be removed yet.
   remove(
     kind: 'item' | 'file',
     externalId: string,
@@ -65,7 +78,7 @@ export interface ItemView {
   id: string;
   portal: string;
   externalId: string;
-  courseId: string | null;
+  portalCourseId: string | null;
   kind: string;
   title: string | null;
   url: string | null;
@@ -78,7 +91,7 @@ export interface FileView {
   id: string;
   portal: string;
   externalId: string;
-  courseId: string | null;
+  portalCourseId: string | null;
   itemId: string | null;
   name: string;
   path: string;
@@ -122,6 +135,12 @@ export interface ProcessorInput {
 export interface Representation {
   parts: string[];
 }
+
+// Processors and aggregators get each message at least once and in no
+// particular order: the same message can come again after a failure, and an
+// item.ingested can arrive after the item.removed that followed it. Handle a
+// message so that doing it twice is harmless, and read the current state
+// through HubReader rather than trusting the message alone.
 
 export interface ProcessesContent {
   process(input: ProcessorInput): Promise<Representation>;

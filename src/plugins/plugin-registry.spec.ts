@@ -1,5 +1,5 @@
 import type { DiscoveryService } from '@nestjs/core';
-import { Aggregator, ContentProcessor } from '@app/plugin-sdk';
+import { Aggregator, Connector, ContentProcessor } from '@app/plugin-sdk';
 import { PluginRegistry } from './plugin-registry.js';
 
 interface Fake {
@@ -7,6 +7,7 @@ interface Fake {
   options: unknown;
   instance?: object;
   singleton?: boolean;
+  transient?: boolean;
 }
 
 // DiscoveryService only matters for what it returns, so it's faked here
@@ -20,6 +21,7 @@ function registry(...plugins: Fake[]) {
           instance: p.instance ?? {},
           options: p.options,
           isDependencyTreeStatic: () => p.singleton ?? true,
+          isTransient: p.transient ?? false,
         })),
     getMetadataByDecorator: (_: unknown, wrapper: { options: unknown }) =>
       wrapper.options,
@@ -69,5 +71,21 @@ describe('PluginRegistry', () => {
     expect(() => registry({ ...processor('pdf'), singleton: false })).toThrow(
       'must be a singleton',
     );
+  });
+
+  it('refuses transient plugins', () => {
+    expect(() => registry({ ...processor('pdf'), transient: true })).toThrow(
+      'must be a singleton',
+    );
+  });
+
+  it('refuses a poll connector without poll()', () => {
+    expect(() =>
+      registry({
+        key: Connector.KEY,
+        options: { portal: 'acs', mode: 'poll', schedule: '* * * * *' },
+        instance: { start() {} },
+      }),
+    ).toThrow('connector acs has no poll()');
   });
 });

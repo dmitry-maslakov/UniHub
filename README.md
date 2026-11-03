@@ -24,7 +24,9 @@ npm run start:dev
 
 A plugin is a Nest module that depends only on `@app/plugin-sdk` (a lint rule checks it):
 
-- `@Connector({ portal })` gets a `PortalIngest` bound to its portal in `start(ctx)` and sends records through it
+- `@Connector({ portal, mode: 'poll', schedule })` — the hub calls `poll(ctx)` on the cron schedule, one run per account at a time
+- `@Connector({ portal, mode: 'push' })` — keeps its own connection; the hub calls `start(ctx)` / `stop()`, only on the instance with `RUN_CONNECTORS=true`
+- either way data goes in only through `ctx.ingest`, bound to the connector's portal and account
 - `@ContentProcessor({ name, version, accepts })` turns file content into text for models
 - `@Aggregator({ name, topics })` reacts to messages (`item.ingested`, `item.removed`, `file.content-stored`, `file.removed`) and reads the rest through `HubReader`
 

@@ -1,4 +1,5 @@
 import { Readable } from 'node:stream';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { text } from 'node:stream/consumers';
 import { Injectable, Module } from '@nestjs/common';
 import {
@@ -10,41 +11,54 @@ import {
   type ConnectorContext,
   type HandlesMessages,
   type Message,
-  type PortalIngest,
+  type PollsPortal,
   type ProcessesContent,
   type ProcessorInput,
-  type RunsConnector,
+  type PushesFromPortal,
 } from '@app/plugin-sdk';
 
 // Plugins the way a real one is written: only @app/plugin-sdk, no hub imports.
 
 export const FAKE_PORTAL = 'fake-portal';
 
-@Connector({ portal: FAKE_PORTAL })
+// polled by the hub; the schedule is far away, tests ask for a sync instead
+@Connector({ portal: FAKE_PORTAL, mode: 'poll', schedule: '0 0 1 1 *' })
 @Injectable()
-export class FakeConnector implements RunsConnector {
-  private hub!: PortalIngest;
+export class FakePollConnector implements PollsPortal {
+  polls = 0;
+  delayMs = 0;
+  ctx?: ConnectorContext;
 
-  start({ ingest }: ConnectorContext) {
-    this.hub = ingest;
-  }
-
-  // a real connector would run this on a schedule
-  async sync() {
-    await this.hub.course({ externalId: 'c1', name: 'Some course' });
-    await this.hub.item({
+  async poll(ctx: ConnectorContext) {
+    this.polls++;
+    this.ctx = ctx;
+    if (this.delayMs) await sleep(this.delayMs);
+    const { ingest } = ctx;
+    await ingest.course({ externalId: 'c1', name: 'Some course' });
+    await ingest.item({
       externalId: 'i1',
       course: 'c1',
       kind: 'post',
       title: 'Notes are up',
       raw: {},
     });
-    await this.hub.file({ externalId: 'f1', course: 'c1', name: 'notes.txt' });
-    await this.hub.content('f1', Readable.from(['page one\fpage two']));
+    await ingest.file({ externalId: 'f1', course: 'c1', name: 'notes.txt' });
+    await ingest.content('f1', Readable.from(['page one\fpage two']));
+  }
+}
+
+@Connector({ portal: 'fake-push', mode: 'push' })
+@Injectable()
+export class FakePushConnector implements PushesFromPortal {
+  started: string[] = [];
+  stopped = 0;
+
+  start(ctx: ConnectorContext) {
+    this.started.push(ctx.account);
   }
 
-  remove(externalId: string) {
-    return this.hub.remove('item', externalId);
+  stop() {
+    this.stopped++;
   }
 }
 
@@ -104,7 +118,8 @@ export class FlakyAggregator implements HandlesMessages {
 
 @Module({
   providers: [
-    FakeConnector,
+    FakePollConnector,
+    FakePushConnector,
     FakeTextProcessor,
     FakePdfProcessor,
     FakeAggregator,

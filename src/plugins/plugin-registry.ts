@@ -10,8 +10,9 @@ import {
   type ConnectorOptions,
   type ContentProcessorOptions,
   type HandlesMessages,
+  type PollsPortal,
   type ProcessesContent,
-  type RunsConnector,
+  type PushesFromPortal,
   type Topic,
 } from '@app/plugin-sdk';
 
@@ -19,6 +20,18 @@ export interface Plugin<O, I> {
   options: O;
   instance: I;
 }
+
+export type ConnectorPlugin =
+  | {
+      mode: 'poll';
+      options: Extract<ConnectorOptions, { mode: 'poll' }>;
+      instance: PollsPortal;
+    }
+  | {
+      mode: 'push';
+      options: Extract<ConnectorOptions, { mode: 'push' }>;
+      instance: PushesFromPortal;
+    };
 
 export type Runnable =
   | {
@@ -35,14 +48,16 @@ const normalise = (type: string) => type.split(';')[0].trim().toLowerCase();
 // so a broken plugin stops the app at startup rather than at its first job.
 @Injectable()
 export class PluginRegistry implements OnModuleInit {
-  connectors: Plugin<ConnectorOptions, RunsConnector>[] = [];
+  connectors: ConnectorPlugin[] = [];
   private processors: Plugin<ContentProcessorOptions, ProcessesContent>[] = [];
   private aggregators: Plugin<AggregatorOptions, HandlesMessages>[] = [];
 
   constructor(private readonly discovery: DiscoveryService) {}
 
   onModuleInit() {
-    this.connectors = this.find<ConnectorOptions, RunsConnector>(Connector);
+    this.connectors = this.find<ConnectorOptions, object>(Connector).map(
+      (c) => ({ ...c, mode: c.options.mode }) as ConnectorPlugin,
+    );
     this.processors = this.find<ContentProcessorOptions, ProcessesContent>(
       ContentProcessor,
     ).map(({ options, instance }) => ({
@@ -53,6 +68,10 @@ export class PluginRegistry implements OnModuleInit {
       Aggregator,
     );
     this.check();
+  }
+
+  connector(portal: string) {
+    return this.connectors.find((c) => c.options.portal === portal);
   }
 
   // by name, for running a queued job
@@ -81,7 +100,12 @@ export class PluginRegistry implements OnModuleInit {
     return this.discovery
       .getProviders({ metadataKey: decorator.KEY })
       .map((wrapper) => {
-        if (!wrapper.isDependencyTreeStatic() || !wrapper.instance)
+        // a transient provider has a placeholder instance whose constructor never ran
+        if (
+          !wrapper.isDependencyTreeStatic() ||
+          wrapper.isTransient ||
+          !wrapper.instance
+        )
           throw new Error(`plugin ${wrapper.name} must be a singleton`);
         return {
           options: this.discovery.getMetadataByDecorator(decorator, wrapper)!,
@@ -107,9 +131,15 @@ export class PluginRegistry implements OnModuleInit {
       if (bad !== undefined) throw new Error(`bad ${what} "${bad}"`);
     }
 
-    for (const { options, instance } of this.connectors)
-      if (typeof instance.start !== 'function')
-        throw new Error(`connector ${options.portal} has no start()`);
+    for (const { mode, options, instance } of this.connectors) {
+      const needs = mode === 'poll' ? ['poll'] : ['start', 'stop'];
+      for (const method of needs)
+        if (
+          typeof (instance as unknown as Record<string, unknown>)[method] !==
+          'function'
+        )
+          throw new Error(`connector ${options.portal} has no ${method}()`);
+    }
 
     for (const { options } of this.aggregators) {
       const unknown = options.topics.find((t) => !TOPICS.includes(t));
