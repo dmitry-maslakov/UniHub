@@ -10,8 +10,7 @@ export interface PortalCourse {
   meta: Json | null;
 }
 
-export type PortalCourseData = Omit<PortalCourse, 'id' | 'url' | 'meta'> &
-  Partial<Pick<PortalCourse, 'url' | 'meta'>>;
+export type PortalCourseData = Omit<PortalCourse, 'id'>;
 
 export abstract class PortalCourseRepository {
   abstract upsert(data: PortalCourseData): Promise<Upserted<PortalCourse>>;

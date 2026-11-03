@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
+import { PluginsModule } from '../plugins/plugins.module.js';
 import { FilesWorker } from './application/files.worker.js';
 import { ItemsWorker } from './application/items.worker.js';
 import { OutboxToQueues } from './infrastructure/outbox-to-queues.js';
@@ -13,6 +14,7 @@ const defaultJobOptions = {
 
 @Module({
   imports: [
+    PluginsModule,
     BullModule.registerQueue(
       { name: FILES_QUEUE, defaultJobOptions },
       { name: ITEMS_QUEUE, defaultJobOptions },

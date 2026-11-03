@@ -1,8 +1,7 @@
 import { ConfigurableModuleBuilder } from '@nestjs/common';
 
-// only a local folder for now, s3/r2 is another flydrive driver
+// only a local folder for now; s3 would be another BlobStore
 export interface StorageOptions {
-  driver: 'fs';
   location: string;
 }
 

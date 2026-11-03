@@ -1,21 +1,26 @@
 import { Injectable } from '@nestjs/common';
 import { TransactionHost } from '@nestjs-cls/transactional';
 import type { TransactionalAdapterPrisma } from '@nestjs-cls/transactional-adapter-prisma';
+import type { PrismaService } from '../../prisma/prisma.service.js';
 import {
   Prisma,
   type PortalCourse as Row,
 } from '../../generated/prisma/client.js';
-import type { PrismaService } from '../../prisma/prisma.service.js';
 import type { Json } from '../domain/changes.js';
 import {
   type PortalCourse,
   type PortalCourseData,
   PortalCourseRepository,
 } from '../domain/portal-course.js';
+import { LOCK, lockRecord } from './lock.js';
 import { upsertTracked } from './upsert-tracked.js';
 
 const toEntity = (row: Row): PortalCourse => ({
-  ...row,
+  id: row.id,
+  portal: row.portal,
+  externalId: row.externalId,
+  name: row.name,
+  url: row.url,
   meta: row.meta as Json | null,
 });
 
@@ -46,6 +51,8 @@ export class PrismaPortalCourseRepository extends PortalCourseRepository {
       meta: data.meta === null ? Prisma.DbNull : data.meta,
     };
     return upsertTracked<PortalCourse>(data, {
+      lock: () =>
+        lockRecord(this.txHost, LOCK.course, data.portal, data.externalId),
       find: () => this.findByExternalId(data.portal, data.externalId),
       create: async () => toEntity(await this.db.create({ data: values })),
       update: async ({ id }) =>

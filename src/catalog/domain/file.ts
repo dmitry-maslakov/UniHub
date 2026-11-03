@@ -8,6 +8,7 @@ export interface File {
   portalCourseId: string | null;
   itemId: string | null;
   name: string;
+  // folder inside the portal, '' for the root
   path: string;
   url: string | null;
   size: number | null;
@@ -16,18 +17,8 @@ export interface File {
   contentHash: string | null;
 }
 
-type Optional =
-  | 'portalCourseId'
-  | 'itemId'
-  | 'path'
-  | 'url'
-  | 'size'
-  | 'mime'
-  | 'sourceUpdatedAt';
-
 // contentHash isn't the portal's to set, storage fills it in
-export type FileData = Omit<File, 'id' | 'contentHash' | Optional> &
-  Partial<Pick<File, Optional>>;
+export type FileData = Omit<File, 'id' | 'contentHash'>;
 
 export abstract class FileRepository {
   abstract upsert(data: FileData): Promise<Upserted<File>>;

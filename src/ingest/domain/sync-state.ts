@@ -1,4 +1,5 @@
-import type { Json } from '@app/plugin-sdk';
+export type Json =
+  string | number | boolean | null | Json[] | { [key: string]: Json };
 
 export abstract class SyncStateRepository {
   abstract get(portal: string): Promise<Json | null>;

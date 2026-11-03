@@ -1,9 +1,8 @@
 // a subject as we know it, portal courses get linked to it
 model Course {
-  id          String       @id @default(uuid())
-  slug        String       @unique
-  name        String
-  enrollments Enrollment[]
+  id   String @id @default(uuid())
+  slug String @unique
+  name String
 }
 
 // a course as it exists in one portal (canvas course, acs group, teams team...).
@@ -53,7 +52,7 @@ model File {
   path            String        @default("")
   url             String?
   // as reported by the portal, may be rounded
-  size            Int?
+  size            BigInt?
   mime            String?
   sourceUpdatedAt DateTime?
   // sha256 of the content once storage has it

@@ -9,23 +9,20 @@ import { fromPrisma, PostgresOutboxStore } from '@nestjs/outbox/postgres';
 import { ClsModule } from 'nestjs-cls';
 import { ClsPluginTransactional } from '@nestjs-cls/transactional';
 import { TransactionalAdapterPrisma } from '@nestjs-cls/transactional-adapter-prisma';
-import { AppController } from './app.controller.js';
-import { AppService } from './app.service.js';
-import { type Env, validateEnv } from './config.js';
+import { type Env, envSchema } from './config.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { PrismaService } from './prisma/prisma.service.js';
-import { RedisConnection } from './redis/redis.connection.js';
-import { RedisModule } from './redis/redis.module.js';
+import { REDIS, RedisModule } from './redis/redis.module.js';
+import type { Redis } from 'ioredis';
 import { CatalogModule } from './catalog/catalog.module.js';
 import { IngestModule } from './ingest/ingest.module.js';
 import { StorageModule } from './storage/storage.module.js';
 import { ProcessingModule } from './processing/processing.module.js';
 import { plugins } from './plugins/enabled.js';
-import { PluginsModule } from './plugins/plugins.module.js';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
+    ConfigModule.forRoot({ isGlobal: true, validationSchema: envSchema }),
     CqrsModule.forRoot(),
     ClsModule.forRoot({
       global: true,
@@ -46,26 +43,22 @@ import { PluginsModule } from './plugins/plugins.module.js';
     }),
     RedisModule,
     BullModule.forRootAsync({
-      inject: [RedisConnection],
-      useFactory: (connection: RedisConnection) => ({ connection }),
+      inject: [REDIS],
+      useFactory: (connection: Redis) => ({ connection }),
     }),
     ScheduleModule.forRoot(),
-    PluginsModule,
     CatalogModule,
     IngestModule,
     StorageModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService<Env, true>) => ({
-        driver: 'fs',
         location: resolve(config.get('STORAGE_PATH', { infer: true })),
       }),
     }),
     ProcessingModule,
     ...plugins,
   ],
-  controllers: [AppController],
   providers: [
-    AppService,
     {
       // outbox messages live in our postgres, in a schema of their own (nest_outbox)
       provide: PostgresOutboxStore,

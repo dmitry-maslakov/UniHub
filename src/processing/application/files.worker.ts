@@ -3,9 +3,9 @@ import { QueryBus } from '@nestjs/cqrs';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import type { Job } from 'bullmq';
 import type { FileContentStored } from '@app/plugin-sdk';
-import { GetFileQuery } from '../../catalog/application/queries/get-file.query.js';
+import { GetFileQuery } from '../../catalog/contracts.js';
 import { PluginRegistry } from '../../plugins/plugin-registry.js';
-import { GetContentQuery } from '../../storage/application/queries/get-content.query.js';
+import { GetContentQuery } from '../../storage/contracts.js';
 import { FILES_QUEUE } from '../queues.js';
 
 // runs the content processors that accept the file, then the aggregators
