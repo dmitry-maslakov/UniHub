@@ -23,9 +23,10 @@ describe('catalog', () => {
     files = app.get(FileRepository);
     close = () => app.close();
 
-    await prisma.file.deleteMany();
-    await prisma.item.deleteMany();
-    await prisma.portalCourse.deleteMany();
+    const where = { portal: 'test' };
+    await prisma.file.deleteMany({ where });
+    await prisma.item.deleteMany({ where });
+    await prisma.portalCourse.deleteMany({ where });
   });
 
   afterAll(() => close());

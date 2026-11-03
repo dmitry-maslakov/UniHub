@@ -39,6 +39,14 @@ export class PrismaFileRepository extends FileRepository {
   }
 
   async setContentHash(id: string, hash: string) {
-    await this.db.update({ where: { id }, data: { contentHash: hash } });
+    // `not` alone would skip rows where contentHash is still null
+    const { count } = await this.db.updateMany({
+      where: {
+        id,
+        OR: [{ contentHash: null }, { contentHash: { not: hash } }],
+      },
+      data: { contentHash: hash },
+    });
+    return count > 0;
   }
 }

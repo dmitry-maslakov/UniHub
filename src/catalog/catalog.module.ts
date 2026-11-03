@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { SetFileContentHandler } from './application/commands/set-file-content.handler.js';
 import { UpsertFileHandler } from './application/commands/upsert-file.handler.js';
 import { UpsertItemHandler } from './application/commands/upsert-item.handler.js';
 import { UpsertPortalCourseHandler } from './application/commands/upsert-portal-course.handler.js';
@@ -17,6 +18,7 @@ import { PrismaPortalCourseRepository } from './infrastructure/prisma-portal-cou
     UpsertPortalCourseHandler,
     UpsertItemHandler,
     UpsertFileHandler,
+    SetFileContentHandler,
   ],
 })
 export class CatalogModule {}

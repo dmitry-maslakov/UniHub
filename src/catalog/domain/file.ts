@@ -35,5 +35,6 @@ export abstract class FileRepository {
     portal: string,
     externalId: string,
   ): Promise<File | null>;
-  abstract setContentHash(id: string, hash: string): Promise<void>;
+  // false if the file already had this content
+  abstract setContentHash(id: string, hash: string): Promise<boolean>;
 }
