@@ -13,9 +13,6 @@ export const grpcOptions = (url: string): GrpcOptions => ({
     // timeout, so one stalled upload would hold up the whole app. A cut upload
     // stores nothing and the connector sends it again.
     // Pings find connections that died without closing (a sleeping laptop).
-    channelOptions: {
-      'grpc.keepalive_time_ms': 60_000,
-      'grpc.keepalive_timeout_ms': 20_000,
-    },
+    keepalive: { keepaliveTimeMs: 60_000, keepaliveTimeoutMs: 20_000 },
   },
 });
