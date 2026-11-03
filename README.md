@@ -86,4 +86,15 @@ docker compose -f deploy/compose.yml run --rm migrate npm run auth:create-admin 
 - give the domain an A record only (or turn on IPv6 in docker): docker forwards IPv6 through its proxy, and every IPv6 client would show up with one address
 - backups: `deploy/backup.sh <folder>` from cron dumps the database and copies new files; keep the folder, and `deploy/.env`, off the server too
 
+Restoring, into an empty stack with the same `deploy/.env`:
+
+```bash
+docker compose -f deploy/compose.yml up -d postgres
+docker compose -f deploy/compose.yml exec -T postgres pg_restore -U unihub -d unihub --no-owner < backups/db-<date>.dump
+docker compose -f deploy/compose.yml create app   # makes the blobs volume
+rsync -a backups/blobs/ "$(docker volume inspect -f '{{ .Mountpoint }}' unihub_blobs)/blobs/"
+chown -R 1000:1000 "$(docker volume inspect -f '{{ .Mountpoint }}' unihub_blobs)"
+docker compose -f deploy/compose.yml up -d
+```
+
 Updating: back up, `git pull`, then `up -d --build` again. The old app keeps running while `migrate` applies the new schema, so a migration only adds until the code that needed the old shape is gone; going back past a migration means restoring a backup.

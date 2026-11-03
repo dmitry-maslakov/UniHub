@@ -2,8 +2,10 @@
 # caddy sets X-Forwarded-For to the client's address itself (it trusts no
 # proxy in front of it), so the app and Better Auth read the real one.
 {$DOMAIN} {
-	# compose checks it from inside; a failure would show internal addresses
-	respond /api/health 404
+	# compose checks it from inside; a failure would show internal addresses.
+	# Any case and trailing slash, the way the app's router matches it
+	@health path_regexp (?i)^/api/health(/.*)?$
+	respond @health 404
 
 	# external connectors: gRPC over TLS, to the app's plain gRPC port
 	@grpc path /unihub.ingest.v1.Ingest/*

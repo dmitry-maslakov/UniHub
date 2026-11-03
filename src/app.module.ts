@@ -75,14 +75,16 @@ import { PluginsModule } from './plugins/plugins.module.js';
       },
     }),
     ScheduleModule.forRoot(),
-    // named limits, applied where a guard picks them (MCP). One instance's
-    // memory until the deploy (#17)
+    // named limits, each route's guard picks its own (throttleBy in access).
+    // One budget per user across all a limit's routes. In one instance's
+    // memory: there is one
     ThrottlerModule.forRoot([
       // REST, per signed-in user
       {
         name: 'api',
         ttl: 60_000,
         limit: 1200,
+        generateKey: (_, tracker, name) => `${name}-${tracker}`,
         getTracker: (req) =>
           (req.user as { id: string } | null | undefined)?.id ?? req.ip,
       },
@@ -91,6 +93,7 @@ import { PluginsModule } from './plugins/plugins.module.js';
         name: 'mcp',
         ttl: 60_000,
         limit: 600,
+        generateKey: (_, tracker, name) => `${name}-${tracker}`,
         // a plain ThrottlerGuard runs every named limit, before sign-in too
         getTracker: (req) =>
           (req.user as { id: string } | null | undefined)?.id ?? req.ip,
