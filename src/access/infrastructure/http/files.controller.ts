@@ -1,34 +1,36 @@
 import {
   Controller,
-  DefaultValuePipe,
   Get,
+  Header,
   NotFoundException,
   Param,
-  ParseIntPipe,
   ParseUUIDPipe,
   Query,
   StreamableFile,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
-  ApiCookieAuth,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiProduces,
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
-import { Session, type UserSession } from '@thallesp/nestjs-better-auth';
+import { create as contentDisposition } from 'content-disposition';
+import { CurrentUserId } from '../../../identity/contracts.js';
 import { CourseReader } from '../../application/course-reader.js';
+import { PageNumber } from './paging.js';
 import { FileDetailsResponse, TextPageResponse } from './responses.js';
 
-// RFC 6266: an ascii fallback plus the real (often non-ascii) name
-const attachment = (name: string) =>
-  `attachment; filename="${name.replace(/[^\x20-\x7e]|["\\]/g, '_')}"; ` +
-  `filename*=UTF-8''${encodeURIComponent(name)}`;
+// the portal's mime type, if it is a plain type/subtype a header can carry
+const TOKEN = "[!#$%&'*+.^_`|~0-9a-z-]+";
+const MIME = new RegExp(`^${TOKEN}/${TOKEN}$`, 'i');
+const contentType = (mime: string | null) => {
+  const type = mime?.split(';')[0].trim();
+  return type && MIME.test(type) ? type : 'application/octet-stream';
+};
 
 @ApiTags('files')
-@ApiCookieAuth()
 @ApiBearerAuth()
 @ApiNotFoundResponse()
 @Controller('api/files')
@@ -38,10 +40,10 @@ export class FilesController {
   @Get(':id')
   @ApiOkResponse({ type: FileDetailsResponse })
   async file(
-    @Session() session: UserSession,
+    @CurrentUserId() userId: string,
     @Param('id', ParseUUIDPipe) id: string,
-  ) {
-    const file = await this.reader.file(session.user.id, id);
+  ): Promise<FileDetailsResponse> {
+    const file = await this.reader.file(userId, id);
     if (!file) throw new NotFoundException();
     return file;
   }
@@ -58,12 +60,12 @@ export class FilesController {
     description: 'which text, the first one by default',
   })
   async text(
-    @Session() session: UserSession,
+    @CurrentUserId() userId: string,
     @Param('id', ParseUUIDPipe) id: string,
-    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @PageNumber() page: number,
     @Query('processor') processor?: string,
-  ) {
-    const text = await this.reader.text(session.user.id, id, page, processor);
+  ): Promise<TextPageResponse> {
+    const text = await this.reader.text(userId, id, page, processor);
     if (!text) throw new NotFoundException();
     return text;
   }
@@ -71,15 +73,17 @@ export class FilesController {
   @Get(':id/content')
   @ApiProduces('application/octet-stream')
   @ApiOkResponse({ description: 'the file as the portal had it' })
+  // the type is the portal's word; a browser must not guess another
+  @Header('X-Content-Type-Options', 'nosniff')
   async content(
-    @Session() session: UserSession,
+    @CurrentUserId() userId: string,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    const file = await this.reader.content(session.user.id, id);
+    const file = await this.reader.content(userId, id);
     if (!file) throw new NotFoundException();
     return new StreamableFile(file.stream, {
-      type: file.mime ?? 'application/octet-stream',
-      disposition: attachment(file.name),
+      type: contentType(file.mime),
+      disposition: contentDisposition(file.name),
     });
   }
 }

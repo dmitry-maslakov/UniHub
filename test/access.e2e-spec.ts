@@ -16,6 +16,8 @@ import { PrismaService } from '../src/prisma/prisma.service.js';
 import { accounts } from './accounts.js';
 
 const PORTAL = 'rest-test';
+const sha256 = (data: Buffer) =>
+  createHash('sha256').update(data).digest('hex');
 
 describe('REST API', { timeout: 20_000 }, () => {
   let app: INestApplication;
@@ -23,10 +25,19 @@ describe('REST API', { timeout: 20_000 }, () => {
   const { http, signUp } = accounts(() => app, mails);
   const get = (path: string, cookie: string) =>
     http().get(path).set('cookie', cookie);
+  const download = (path: string, cookie: string) =>
+    get(path, cookie)
+      .buffer(true)
+      .parse((res, done) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => done(null, Buffer.concat(chunks)));
+      });
 
   let student: string;
   let stranger: string;
-  let fileId: string;
+  let admin: string;
+  const ids: Record<string, string> = {};
   const slides = Buffer.from('%PDF slides about processes');
 
   beforeAll(async () => {
@@ -36,10 +47,13 @@ describe('REST API', { timeout: 20_000 }, () => {
       .compile();
     app = moduleRef.createNestApplication({ bodyParser: false });
     await app.init();
+    const prisma = app.get(PrismaService);
+    const commands = app.get(CommandBus);
 
-    // a course with two portal posts, a removed one and a file with its text
+    // c1 is the student's course, c2 someone else's
     const ingest = app.get(HubIngest).forPortal(PORTAL);
     await ingest.course({ externalId: 'c1', name: 'OS 2026' });
+    await ingest.course({ externalId: 'c2', name: 'Networks' });
     for (const [id, day] of [
       ['old', '2026-10-01'],
       ['new', '2026-10-20'],
@@ -54,42 +68,78 @@ describe('REST API', { timeout: 20_000 }, () => {
         raw: { body: `text of ${id}` },
       });
     await ingest.remove('item', 'gone');
-    await ingest.file({
-      externalId: 'f1',
-      course: 'c1',
-      name: 'Predavanje 1 — procesi.pdf',
-      path: 'lectures',
-    });
-    const { hash } = await ingest.content('f1', Readable.from([slides]));
-    const prisma = app.get(PrismaService);
-    await prisma.representation.create({
-      data: {
-        hash,
-        processor: 'office-text',
-        version: 1,
-        parts: ['page one', 'page two'],
-      },
-    });
-    fileId = (
-      await prisma.file.findUniqueOrThrow({
-        where: { portal_externalId: { portal: PORTAL, externalId: 'f1' } },
-      })
-    ).id;
 
-    const commands = app.get(CommandBus);
+    const files: [string, object, Buffer | null][] = [
+      [
+        'slides',
+        {
+          course: 'c1',
+          name: 'Predavanje 1 — procesi.pdf',
+          path: 'lectures',
+          mime: 'application/pdf',
+        },
+        slides,
+      ],
+      // attached to a post, no course of its own
+      ['homework', { item: 'new', name: 'homework.docx' }, Buffer.from('hw')],
+      ['removed', { course: 'c1', name: 'old.pdf' }, Buffer.from('old')],
+      // the same bytes, in a course the student wasn't given
+      ['copy', { course: 'c2', name: 'copy.pdf' }, slides],
+      ['no-content', { course: 'c1', name: 'notes.pdf' }, null],
+      [
+        'odd',
+        {
+          course: 'c1',
+          name: "O'Brien (1).pdf",
+          mime: 'application/pdf — scan',
+        },
+        Buffer.from('odd'),
+      ],
+    ];
+    for (const [externalId, record, content] of files) {
+      await ingest.file({ externalId, ...record } as never);
+      if (content) await ingest.content(externalId, Readable.from([content]));
+      ids[externalId] = (
+        await prisma.file.findUniqueOrThrow({
+          where: { portal_externalId: { portal: PORTAL, externalId } },
+        })
+      ).id;
+    }
+    await ingest.remove('file', 'removed');
+
+    // two versions of one processor's text and another processor's
+    for (const [processor, version, parts] of [
+      ['office-text', 1, ['page one', 'page two']],
+      ['office-text', 2, ['v2 one', 'v2 two', 'v2 three']],
+      ['zz-ocr', 1, ['ocr text']],
+    ] as const)
+      await prisma.representation.create({
+        data: { hash: sha256(slides), processor, version, parts: [...parts] },
+      });
+
     await commands.execute(
       new CreateCourseCommand('sys', 'Operativni sistemi'),
     );
     await commands.execute(
       new LinkPortalCourseCommand('sys', PORTAL, 'c1', 2026),
     );
+    await commands.execute(new CreateCourseCommand('net', 'Mreže'));
+    await commands.execute(
+      new LinkPortalCourseCommand('net', PORTAL, 'c2', 2026),
+    );
 
     student = await signUp('student@rest.test');
     stranger = await signUp('stranger@rest.test');
-    const { id } = await prisma.user.findUniqueOrThrow({
-      where: { email: 'student@rest.test' },
+    admin = await signUp('admin@rest.test');
+    const user = (email: string) =>
+      prisma.user.findUniqueOrThrow({ where: { email } });
+    await commands.execute(
+      new GrantCourseAccessCommand((await user('student@rest.test')).id, 'sys'),
+    );
+    await prisma.user.update({
+      where: { email: 'admin@rest.test' },
+      data: { role: 'admin' },
     });
-    await commands.execute(new GrantCourseAccessCommand(id, 'sys'));
   });
 
   afterAll(() => app.close());
@@ -115,6 +165,23 @@ describe('REST API', { timeout: 20_000 }, () => {
     ]);
     expect(items.body[0].raw).toEqual({ body: 'text of new' });
 
+    const files = await get('/api/courses/sys/files', student).expect(200);
+    const byName = Object.fromEntries(
+      files.body.map((f: { name: string }) => [f.name, f]),
+    );
+    expect(Object.keys(byName).sort()).toEqual(
+      [
+        "O'Brien (1).pdf",
+        'Predavanje 1 — procesi.pdf',
+        'homework.docx',
+        'notes.pdf',
+      ].sort(),
+    );
+    expect(byName['homework.docx'].itemId).toBe(items.body[0].id);
+    expect(byName['notes.pdf'].hasContent).toBe(false);
+  });
+
+  it('pages lists within bounds', async () => {
     const second = await get(
       '/api/courses/sys/items?offset=1&limit=1',
       student,
@@ -122,62 +189,88 @@ describe('REST API', { timeout: 20_000 }, () => {
     expect(second.body.map((i: { title: string }) => i.title)).toEqual([
       'post old',
     ]);
-    await get('/api/courses/sys/items?limit=500', student).expect(400);
-
-    const files = await get('/api/courses/sys/files', student).expect(200);
-    expect(files.body).toEqual([
-      expect.objectContaining({
-        id: fileId,
-        name: 'Predavanje 1 — procesi.pdf',
-        path: 'lectures',
-        hasContent: true,
-      }),
-    ]);
+    for (const query of [
+      'limit=500',
+      'limit=0',
+      'offset=-1',
+      'offset=1.5',
+      'offset=99999999999999999999',
+    ])
+      await get(`/api/courses/sys/items?${query}`, student).expect(400);
   });
 
-  it('reads a file as text page by page, or downloads it', async () => {
-    const file = await get(`/api/files/${fileId}`, student).expect(200);
+  it('reads a file as text page by page', async () => {
+    const file = await get(`/api/files/${ids.slides}`, student).expect(200);
     expect(file.body.texts).toEqual([
-      { processor: 'office-text', version: 1, pages: 2 },
+      { processor: 'office-text', version: 2, pages: 3 },
+      { processor: 'zz-ocr', version: 1, pages: 1 },
     ]);
 
-    const page = await get(`/api/files/${fileId}/text?page=2`, student).expect(
-      200,
-    );
+    const page = await get(
+      `/api/files/${ids.slides}/text?page=2`,
+      student,
+    ).expect(200);
     expect(page.body).toEqual({
       processor: 'office-text',
-      version: 1,
+      version: 2,
       page: 2,
-      pages: 2,
-      text: 'page two',
+      pages: 3,
+      text: 'v2 two',
     });
-    await get(`/api/files/${fileId}/text?page=3`, student).expect(404);
+    const ocr = await get(
+      `/api/files/${ids.slides}/text?processor=zz-ocr`,
+      student,
+    ).expect(200);
+    expect(ocr.body.text).toBe('ocr text');
 
-    const content = await get(`/api/files/${fileId}/content`, student)
-      .buffer(true)
-      .parse((res, done) => {
-        const chunks: Buffer[] = [];
-        res.on('data', (c: Buffer) => chunks.push(c));
-        res.on('end', () => done(null, Buffer.concat(chunks)));
-      })
-      .expect(200);
-    expect(createHash('sha256').update(content.body).digest('hex')).toBe(
-      createHash('sha256').update(slides).digest('hex'),
-    );
+    await get(`/api/files/${ids.slides}/text?page=4`, student).expect(404);
+    await get(`/api/files/${ids.slides}/text?page=0`, student).expect(400);
+    await get(`/api/files/${ids['no-content']}/text`, student).expect(404);
+  });
+
+  it('downloads a file', async () => {
+    const content = await download(
+      `/api/files/${ids.slides}/content`,
+      student,
+    ).expect(200);
+    expect(sha256(content.body)).toBe(sha256(slides));
+    expect(content.headers['content-type']).toBe('application/pdf');
+    expect(content.headers['x-content-type-options']).toBe('nosniff');
     expect(content.headers['content-disposition']).toContain(
       `filename*=UTF-8''${encodeURIComponent('Predavanje 1 — procesi.pdf')}`,
     );
+
+    // a mime type no header can carry is sent as plain bytes
+    const odd = await download(`/api/files/${ids.odd}/content`, student).expect(
+      200,
+    );
+    expect(odd.headers['content-type']).toBe('application/octet-stream');
+    expect(odd.headers['content-disposition']).toMatch(/^attachment; /);
+
+    await get(`/api/files/${ids['no-content']}/content`, student).expect(404);
   });
 
   it("shows nothing of courses the user wasn't given", async () => {
     expect((await get('/api/courses', stranger).expect(200)).body).toEqual([]);
     await get('/api/courses/sys/items', stranger).expect(404);
     await get('/api/courses/sys/files', stranger).expect(404);
-    await get(`/api/files/${fileId}`, stranger).expect(404);
-    await get(`/api/files/${fileId}/text`, stranger).expect(404);
-    await get(`/api/files/${fileId}/content`, stranger).expect(404);
-    // the same answer as for things that don't exist
+    for (const path of ['', '/text', '/content'])
+      await get(`/api/files/${ids.slides}${path}`, stranger).expect(404);
+
+    // the same bytes in another course don't open that course's file
+    await get(`/api/files/${ids.copy}`, student).expect(404);
+    await get(`/api/files/${ids.copy}/content`, student).expect(404);
+    // removed, or not there at all: the same answer
+    await get(`/api/files/${ids.removed}`, student).expect(404);
     await get('/api/courses/nope/items', student).expect(404);
+  });
+
+  it('lets an admin read every course', async () => {
+    const courses = await get('/api/courses', admin).expect(200);
+    expect(courses.body.map((c: { slug: string }) => c.slug)).toEqual(
+      expect.arrayContaining(['sys', 'net']),
+    );
+    await get(`/api/files/${ids.copy}`, admin).expect(200);
   });
 
   it('describes itself in OpenAPI', () => {

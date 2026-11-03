@@ -10,7 +10,10 @@ import {
   type FileDto,
 } from '../../catalog/contracts.js';
 import { ReadableCoursesQuery } from '../../identity/contracts.js';
-import { ListRepresentationsQuery } from '../../processing/contracts.js';
+import {
+  GetTextPageQuery,
+  ListTextsQuery,
+} from '../../processing/contracts.js';
 import { GetContentQuery } from '../../storage/contracts.js';
 
 export interface Page {
@@ -18,9 +21,20 @@ export interface Page {
   limit: number;
 }
 
+export const MAX_LIMIT = 200;
+// far past any real list, small enough for the database to take
+export const MAX_OFFSET = 1_000_000_000;
+
+// whoever calls, a page stays within bounds
+const bounded = ({ offset, limit }: Page): Page => ({
+  offset: Math.min(MAX_OFFSET, Math.max(0, Math.trunc(offset) || 0)),
+  limit: Math.min(MAX_LIMIT, Math.max(1, Math.trunc(limit) || 1)),
+});
+
 // What a user may read, for every way in (REST, MCP): every method checks
 // the user's courses and returns null for anything they can't see, so a
-// caller can't tell "not yours" from "doesn't exist".
+// caller can't tell "not yours" from "doesn't exist". Admins read every
+// course; a portal course nobody linked to a course isn't readable here.
 @Injectable()
 export class CourseReader {
   constructor(private readonly queries: QueryBus) {}
@@ -65,9 +79,10 @@ export class CourseReader {
       }));
   }
 
-  async items(userId: string, slug: string, { offset, limit }: Page) {
+  async items(userId: string, slug: string, page: Page) {
     const course = await this.readableCourse(userId, slug);
     if (!course) return null;
+    const { offset, limit } = bounded(page);
     const items = await this.queries.execute(
       new ListCourseItemsQuery(course.id, offset, limit),
     );
@@ -82,32 +97,24 @@ export class CourseReader {
     }));
   }
 
-  async files(userId: string, slug: string, { offset, limit }: Page) {
+  async files(userId: string, slug: string, page: Page) {
     const course = await this.readableCourse(userId, slug);
     if (!course) return null;
+    const { offset, limit } = bounded(page);
     const files = await this.queries.execute(
       new ListCourseFilesQuery(course.id, offset, limit),
     );
     return files.map(toFileView);
   }
 
-  // the file and what processors made of it, without the text itself
+  // the file and what processors made of it, without the text
   async file(userId: string, fileId: string) {
     const file = await this.readableFile(userId, fileId);
     if (!file) return null;
     const texts = file.contentHash
-      ? await this.queries.execute(
-          new ListRepresentationsQuery(file.contentHash),
-        )
+      ? await this.queries.execute(new ListTextsQuery(file.contentHash))
       : [];
-    return {
-      ...toFileView(file),
-      texts: texts.map(({ processor, version, parts }) => ({
-        processor,
-        version,
-        pages: parts.length,
-      })),
-    };
+    return { ...toFileView(file), texts };
   }
 
   // one page (slide, section) of the file's text; the first processor's
@@ -115,20 +122,9 @@ export class CourseReader {
   async text(userId: string, fileId: string, page: number, processor?: string) {
     const file = await this.readableFile(userId, fileId);
     if (!file?.contentHash) return null;
-    const texts = await this.queries.execute(
-      new ListRepresentationsQuery(file.contentHash),
+    return this.queries.execute(
+      new GetTextPageQuery(file.contentHash, page, processor),
     );
-    const text = processor
-      ? texts.find((t) => t.processor === processor)
-      : texts[0];
-    if (!text || page < 1 || page > text.parts.length) return null;
-    return {
-      processor: text.processor,
-      version: text.version,
-      page,
-      pages: text.parts.length,
-      text: text.parts[page - 1],
-    };
   }
 
   async content(userId: string, fileId: string) {
@@ -144,6 +140,8 @@ export class CourseReader {
 const toFileView = (f: FileDto) => ({
   id: f.id,
   portal: f.portal,
+  // the post it came with, if any
+  itemId: f.itemId,
   name: f.name,
   path: f.path,
   url: f.url,

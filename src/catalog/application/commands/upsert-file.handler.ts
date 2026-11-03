@@ -23,8 +23,12 @@ export class UpsertFileHandler implements ICommandHandler<UpsertFileCommand> {
 
   @Transactional()
   async execute({ data: { course, item, ...data } }: UpsertFileCommand) {
-    const portalCourseId = await resolveId(this.courses, data.portal, course);
     const itemId = await resolveId(this.items, data.portal, item);
+    // a file attached to a post belongs to the post's course
+    const portalCourseId =
+      course === null && itemId
+        ? ((await this.items.findById(itemId))?.portalCourseId ?? null)
+        : await resolveId(this.courses, data.portal, course);
     // sending a removed file again brings it back
     const { entity, previous, changed } = await this.files.upsert({
       ...data,

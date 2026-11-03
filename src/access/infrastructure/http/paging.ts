@@ -1,27 +1,20 @@
 import {
   applyDecorators,
-  BadRequestException,
-  DefaultValuePipe,
-  ParseIntPipe,
   Query,
+  StandardSchemaValidationPipe,
 } from '@nestjs/common';
 import { ApiQuery } from '@nestjs/swagger';
-import type { Page } from '../../application/course-reader.js';
+import { z } from 'zod';
+import { MAX_LIMIT, MAX_OFFSET } from '../../application/course-reader.js';
 
-export const MAX_LIMIT = 200;
+const int = (min: number, max: number, byDefault: number) => ({
+  schema: z.coerce.number().int().min(min).max(max).default(byDefault),
+  pipes: [StandardSchemaValidationPipe],
+});
 
-export const Offset = () =>
-  Query('offset', new DefaultValuePipe(0), ParseIntPipe);
-export const Limit = () =>
-  Query('limit', new DefaultValuePipe(50), ParseIntPipe);
-
-export function page(offset: number, limit: number): Page {
-  if (offset < 0 || limit < 1 || limit > MAX_LIMIT)
-    throw new BadRequestException(
-      `offset is 0 or more, limit from 1 to ${MAX_LIMIT}`,
-    );
-  return { offset, limit };
-}
+export const Offset = () => Query('offset', int(0, MAX_OFFSET, 0));
+export const Limit = () => Query('limit', int(1, MAX_LIMIT, 50));
+export const PageNumber = () => Query('page', int(1, MAX_OFFSET, 1));
 
 // the two parameters as OpenAPI sees them
 export const Paged = () =>

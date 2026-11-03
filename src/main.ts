@@ -25,7 +25,7 @@ async function bootstrap() {
       app,
       new DocumentBuilder()
         .setTitle('UniHub')
-        .addCookieAuth('better-auth.session_token')
+        // a session token from /api/auth; the browser's cookie works too
         .addBearerAuth()
         .build(),
     ),

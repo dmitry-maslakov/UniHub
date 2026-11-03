@@ -1,18 +1,16 @@
 import { Controller, Get, NotFoundException, Param } from '@nestjs/common';
 import {
   ApiBearerAuth,
-  ApiCookieAuth,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { Session, type UserSession } from '@thallesp/nestjs-better-auth';
+import { CurrentUserId } from '../../../identity/contracts.js';
 import { CourseReader } from '../../application/course-reader.js';
-import { Limit, Offset, page, Paged } from './paging.js';
+import { Limit, Offset, Paged } from './paging.js';
 import { CourseResponse, FileResponse, ItemResponse } from './responses.js';
 
 @ApiTags('courses')
-@ApiCookieAuth()
 @ApiBearerAuth()
 @Controller('api/courses')
 export class CoursesController {
@@ -23,44 +21,36 @@ export class CoursesController {
     type: [CourseResponse],
     description: 'courses you may read',
   })
-  list(@Session() session: UserSession) {
-    return this.reader.courses(session.user.id);
+  list(@CurrentUserId() userId: string): Promise<CourseResponse[]> {
+    return this.reader.courses(userId);
   }
 
   @Get(':slug/items')
   @ApiOkResponse({ type: [ItemResponse], description: 'newest first' })
-  @Paged()
   @ApiNotFoundResponse()
+  @Paged()
   async items(
-    @Session() session: UserSession,
+    @CurrentUserId() userId: string,
     @Param('slug') slug: string,
     @Offset() offset: number,
     @Limit() limit: number,
-  ) {
-    const items = await this.reader.items(
-      session.user.id,
-      slug,
-      page(offset, limit),
-    );
+  ): Promise<ItemResponse[]> {
+    const items = await this.reader.items(userId, slug, { offset, limit });
     if (!items) throw new NotFoundException();
     return items;
   }
 
   @Get(':slug/files')
   @ApiOkResponse({ type: [FileResponse], description: 'by folder and name' })
-  @Paged()
   @ApiNotFoundResponse()
+  @Paged()
   async files(
-    @Session() session: UserSession,
+    @CurrentUserId() userId: string,
     @Param('slug') slug: string,
     @Offset() offset: number,
     @Limit() limit: number,
-  ) {
-    const files = await this.reader.files(
-      session.user.id,
-      slug,
-      page(offset, limit),
-    );
+  ): Promise<FileResponse[]> {
+    const files = await this.reader.files(userId, slug, { offset, limit });
     if (!files) throw new NotFoundException();
     return files;
   }

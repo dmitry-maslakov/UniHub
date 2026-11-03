@@ -34,6 +34,12 @@ export class ItemResponse {
 export class FileResponse {
   @ApiProperty() id!: string;
   @ApiProperty({ example: 'canvas' }) portal!: string;
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'the item (post) it came with',
+  })
+  itemId!: string | null;
   @ApiProperty({ example: 'l5.pdf' }) name!: string;
   @ApiProperty({ description: "folder in the portal, '' for the root" })
   path!: string;
