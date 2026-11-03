@@ -1,8 +1,7 @@
 import { envSchema } from './config.js';
 
-const tokens = (CONNECTOR_TOKENS: string) =>
-  envSchema.safeParse({ DATABASE_URL: 'postgres://h/db', CONNECTOR_TOKENS })
-    .success;
+const tokens = (value: string) =>
+  envSchema.shape.CONNECTOR_TOKENS.safeParse(value).success;
 
 describe('CONNECTOR_TOKENS', () => {
   it('takes portal=token pairs', () => {
@@ -15,5 +14,30 @@ describe('CONNECTOR_TOKENS', () => {
     expect(tokens('acs=short')).toBe(false);
     expect(tokens('ACS=0123456789abcdef')).toBe(false);
     expect(tokens('a=0123456789abcdef,b=0123456789abcdef')).toBe(false);
+  });
+});
+
+describe('production', () => {
+  const env = {
+    NODE_ENV: 'production',
+    DATABASE_URL: 'postgres://h/db',
+    BETTER_AUTH_SECRET: 'x'.repeat(32),
+  };
+
+  it('needs real mail and a public address', () => {
+    const result = envSchema.safeParse(env);
+    expect(result.error?.issues.map((i) => i.path[0])).toEqual([
+      'SMTP_URL',
+      'BETTER_AUTH_URL',
+    ]);
+    const smtp = { ...env, SMTP_URL: 'smtp://u:p@mail.uni.test:587' };
+    expect(
+      envSchema.safeParse({ ...smtp, BETTER_AUTH_URL: 'http://hub.uni.test' })
+        .success,
+    ).toBe(false);
+    expect(
+      envSchema.safeParse({ ...smtp, BETTER_AUTH_URL: 'https://hub.uni.test' })
+        .success,
+    ).toBe(true);
   });
 });

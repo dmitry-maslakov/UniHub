@@ -12,6 +12,10 @@ export { CreateCourseCommand } from './application/commands/create-course.comman
 export { LinkPortalCourseCommand } from './application/commands/link-portal-course.command.js';
 export { UnlinkPortalCourseCommand } from './application/commands/unlink-portal-course.command.js';
 export {
+  FindCourseQuery,
+  type CourseRef,
+} from './application/queries/find-course.query.js';
+export {
   ListCoursesQuery,
   type CourseDto,
 } from './application/queries/list-courses.query.js';
