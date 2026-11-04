@@ -1,8 +1,4 @@
-import type { TransactionHost } from '@nestjs-cls/transactional';
-import type { TransactionalAdapterPrisma } from '@nestjs-cls/transactional-adapter-prisma';
-import type { PrismaService } from '../../prisma/prisma.service.js';
-
-export type TxHost = TransactionHost<TransactionalAdapterPrisma<PrismaService>>;
+import type { PrismaTxHost } from '../../platform/database/prisma.service.js';
 
 export const LOCK = { course: 1, item: 2, file: 3 } as const;
 
@@ -10,7 +6,7 @@ export const LOCK = { course: 1, item: 2, file: 3 } as const;
 // collide on insert, or both emit a change. The lock serialises them until
 // the transaction ends; without a transaction it would do nothing.
 export async function lockRecord(
-  txHost: TxHost,
+  txHost: PrismaTxHost,
   kind: (typeof LOCK)[keyof typeof LOCK],
   portal: string,
   externalId: string,

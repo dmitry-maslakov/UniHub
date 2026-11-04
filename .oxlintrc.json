@@ -445,6 +445,37 @@
       }
     },
     {
+      "files": ["src/platform/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "**/catalog/**",
+                  "!**/catalog/contracts.js",
+                  "**/ingest/**",
+                  "!**/ingest/contracts.js",
+                  "**/storage/**",
+                  "!**/storage/contracts.js",
+                  "**/processing/**",
+                  "!**/processing/contracts.js",
+                  "**/plugins/**",
+                  "!**/plugins/contracts.js",
+                  "**/identity/**",
+                  "!**/identity/contracts.js",
+                  "**/access/**",
+                  "!**/access/contracts.js"
+                ],
+                "message": "the platform uses modules through their contracts.ts"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "files": ["src/*/domain/**"],
       "rules": {
         "no-restricted-imports": [

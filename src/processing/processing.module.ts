@@ -1,14 +1,14 @@
 import { GetTextPageHandler } from './application/queries/get-text-page.handler.js';
 import { ListTextsHandler } from './application/queries/list-texts.handler.js';
-import { Module, type OnApplicationBootstrap } from '@nestjs/common';
-import { BullModule, BullRegistrar } from '@nestjs/bullmq';
+import { Module } from '@nestjs/common';
+import { BullModule } from '@nestjs/bullmq';
 import { TerminusModule } from '@nestjs/terminus';
 import { PluginRunner } from './application/plugin-runner.js';
 import { Reconciler } from './application/reconciler.js';
 import { RepresentationRepository } from './domain/representation.js';
 import { PrismaRepresentationRepository } from './infrastructure/prisma-representation.repository.js';
 import { ReconcileSchedule } from './infrastructure/reconcile.schedule.js';
-import { OutboxRetention } from './infrastructure/outbox-retention.js';
+import { PluginsOutboxTransport } from './infrastructure/plugins-outbox.transport.js';
 import { PluginsWorker } from './infrastructure/plugins.worker.js';
 import { PLUGINS_QUEUE } from './queues.js';
 
@@ -36,7 +36,7 @@ const DAY = 24 * 60 * 60;
     GetTextPageHandler,
     PluginRunner,
     PluginsWorker,
-    OutboxRetention,
+    PluginsOutboxTransport,
     Reconciler,
     ReconcileSchedule,
     {
@@ -44,16 +44,7 @@ const DAY = 24 * 60 * 60;
       useClass: PrismaRepresentationRepository,
     },
   ],
-  // the outbox transport adds jobs to the queue
-  exports: [BullModule],
+  // the outbox publishes to plugins through it (messaging)
+  exports: [PluginsOutboxTransport],
 })
-export class ProcessingModule implements OnApplicationBootstrap {
-  constructor(private readonly registrar: BullRegistrar) {}
-
-  // Workers are registered by hand (manualRegistration in the app module), once
-  // every module is initialised, so no job runs before the plugin registry is
-  // filled.
-  onApplicationBootstrap() {
-    this.registrar.register();
-  }
-}
+export class ProcessingModule {}

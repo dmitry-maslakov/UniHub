@@ -1,8 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { TransactionHost } from '@nestjs-cls/transactional';
-import type { TransactionalAdapterPrisma } from '@nestjs-cls/transactional-adapter-prisma';
+import { InjectTransactionHost } from '@nestjs-cls/transactional';
 import { Prisma } from '../../generated/prisma/client.js';
-import type { PrismaService } from '../../prisma/prisma.service.js';
+import type { PrismaTxHost } from '../../platform/database/prisma.service.js';
 import {
   CourseRepository,
   type Course,
@@ -13,11 +12,7 @@ const toCourse = ({ id, slug, name }: Course): Course => ({ id, slug, name });
 
 @Injectable()
 export class PrismaCourseRepository extends CourseRepository {
-  constructor(
-    private readonly txHost: TransactionHost<
-      TransactionalAdapterPrisma<PrismaService>
-    >,
-  ) {
+  constructor(@InjectTransactionHost() private readonly txHost: PrismaTxHost) {
     super();
   }
 

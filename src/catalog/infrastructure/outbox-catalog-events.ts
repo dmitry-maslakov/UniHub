@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { TransactionHost } from '@nestjs-cls/transactional';
-import type { TransactionalAdapterPrisma } from '@nestjs-cls/transactional-adapter-prisma';
-import type { PrismaService } from '../../prisma/prisma.service.js';
+import { InjectTransactionHost } from '@nestjs-cls/transactional';
+import type { PrismaTxHost } from '../../platform/database/prisma.service.js';
 import { Outbox } from '@nestjs/outbox';
 import {
   CatalogEvents,
@@ -22,9 +21,7 @@ import {
 @Injectable()
 export class OutboxCatalogEvents extends CatalogEvents {
   constructor(
-    private readonly txHost: TransactionHost<
-      TransactionalAdapterPrisma<PrismaService>
-    >,
+    @InjectTransactionHost() private readonly txHost: PrismaTxHost,
     private readonly outbox: Outbox,
   ) {
     super();

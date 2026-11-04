@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { TransactionHost } from '@nestjs-cls/transactional';
-import type { TransactionalAdapterPrisma } from '@nestjs-cls/transactional-adapter-prisma';
-import type { PrismaService } from '../../prisma/prisma.service.js';
+import { InjectTransactionHost } from '@nestjs-cls/transactional';
+import type { PrismaTxHost } from '../../platform/database/prisma.service.js';
 import type { File as Row } from '../../generated/prisma/client.js';
 import { type File, type FileData, FileRepository } from '../domain/file.js';
 import { LOCK, lockRecord } from './lock.js';
@@ -27,11 +26,7 @@ const toEntity = (row: Row): File => ({
 
 @Injectable()
 export class PrismaFileRepository extends FileRepository {
-  constructor(
-    private readonly txHost: TransactionHost<
-      TransactionalAdapterPrisma<PrismaService>
-    >,
-  ) {
+  constructor(@InjectTransactionHost() private readonly txHost: PrismaTxHost) {
     super();
   }
 

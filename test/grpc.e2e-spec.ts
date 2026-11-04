@@ -6,7 +6,7 @@ import * as grpc from '@grpc/grpc-js';
 import * as loader from '@grpc/proto-loader';
 import { AppModule } from '../src/app.module.js';
 import { grpcOptions } from '../src/ingest/contracts.js';
-import { PrismaService } from '../src/prisma/prisma.service.js';
+import { PrismaService } from '../src/platform/database/prisma.service.js';
 
 const url = '127.0.0.1:50999';
 const TOKEN = 'good-test-token-0001';

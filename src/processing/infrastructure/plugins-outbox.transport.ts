@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { QueryBus } from '@nestjs/cqrs';
 import { InjectQueue } from '@nestjs/bullmq';
-import { OutboxTransport, type OutboxMessage } from '@nestjs/outbox';
+import {
+  NonRetryableMessageError,
+  OutboxTransport,
+  type OutboxMessage,
+} from '@nestjs/outbox';
 import type { Queue } from 'bullmq';
 import { FILE_CONTENT_STORED, type Message } from '@app/plugin-sdk';
 import { GetFileQuery } from '../../catalog/contracts.js';
@@ -13,7 +17,7 @@ import { PLUGINS_QUEUE, type PluginJob } from '../queues.js';
 // addBulk (all or none). The job id is message id + plugin, so a message the
 // relay publishes again doesn't queue anything twice.
 @Injectable()
-export class BullMqTransport extends OutboxTransport {
+export class PluginsOutboxTransport extends OutboxTransport {
   constructor(
     @InjectQueue(PLUGINS_QUEUE) private readonly queue: Queue<PluginJob>,
     private readonly registry: PluginRegistry,
@@ -24,8 +28,12 @@ export class BullMqTransport extends OutboxTransport {
 
   async publish(outboxMessage: OutboxMessage) {
     const message = toSdkMessage(outboxMessage.topic, outboxMessage.payload);
+    // a topic nobody maps is a bug, not an outage: dead-lettered (and logged)
+    // at once instead of retried
     if (!message)
-      throw new Error(`no plugin message for ${outboxMessage.topic}`);
+      throw new NonRetryableMessageError(
+        `no plugin message for ${outboxMessage.topic}`,
+      );
 
     const plugins = await this.targets(message);
     if (!plugins.length) return;

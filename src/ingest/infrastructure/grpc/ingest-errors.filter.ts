@@ -15,7 +15,7 @@ import {
 import { throwError } from 'rxjs';
 import { DomainError, type DomainErrorKind } from '@app/kernel';
 import { InvalidRecordError, UnknownReferenceError } from '@app/plugin-sdk';
-import { isConnectionError } from '../../../is-connection-error.js';
+import { isConnectionError } from '../../../platform/errors/is-connection-error.js';
 
 // the hub's own kinds of error, the way HTTP answers them too
 const KINDS: Record<DomainErrorKind, new (message: string) => GrpcException> = {

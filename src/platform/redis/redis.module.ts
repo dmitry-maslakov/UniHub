@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Redis } from 'ioredis';
-import type { Env } from '../config.js';
+import type { Env } from '../../config.js';
 
 export const REDIS = Symbol('REDIS');
 

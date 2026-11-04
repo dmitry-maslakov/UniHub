@@ -1,4 +1,4 @@
-import { Prisma } from './generated/prisma/client.js';
+import { Prisma } from '../../generated/prisma/client.js';
 import { isConnectionError } from './is-connection-error.js';
 
 const prismaError = (code: string) =>

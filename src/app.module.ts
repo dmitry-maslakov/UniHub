@@ -1,25 +1,14 @@
 import { Module } from '@nestjs/common';
-import { APP_FILTER } from '@nestjs/core';
 import { resolve } from 'node:path';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CqrsModule } from '@nestjs/cqrs';
-import { BullModule } from '@nestjs/bullmq';
 import { ScheduleModule } from '@nestjs/schedule';
-import { ThrottlerModule } from '@nestjs/throttler';
-import {
-  OutboxModule,
-  OutboxPublishTimeoutError,
-  OutboxStorage,
-} from '@nestjs/outbox';
-import { fromPrisma, PostgresOutboxStore } from '@nestjs/outbox/postgres';
-import { ClsModule } from 'nestjs-cls';
-import { ClsPluginTransactional } from '@nestjs-cls/transactional';
-import { TransactionalAdapterPrisma } from '@nestjs-cls/transactional-adapter-prisma';
 import { type Env, envSchema } from './config.js';
-import { PrismaModule } from './prisma/prisma.module.js';
-import { PrismaService } from './prisma/prisma.service.js';
-import { REDIS, RedisModule } from './redis/redis.module.js';
-import type { Redis } from 'ioredis';
+import { DatabaseModule } from './platform/database/database.module.js';
+import { ErrorsModule } from './platform/errors/errors.module.js';
+import { MessagingModule } from './platform/messaging/messaging.module.js';
+import { QueuesModule } from './platform/queues/queues.module.js';
+import { RedisModule } from './platform/redis/redis.module.js';
 import { AccessModule } from './access/access.module.js';
 import { HealthModule } from './health/health.module.js';
 import { CatalogModule } from './catalog/catalog.module.js';
@@ -27,80 +16,23 @@ import { IdentityModule } from './identity/identity.module.js';
 import { IngestModule } from './ingest/ingest.module.js';
 import { StorageModule } from './storage/storage.module.js';
 import { ProcessingModule } from './processing/processing.module.js';
-import { BullMqTransport } from './processing/infrastructure/bullmq.transport.js';
-import { routeFor } from './processing/outbox-routes.js';
-import { isConnectionError } from './is-connection-error.js';
 import { plugins } from './plugins/enabled.js';
 import { PluginsModule } from './plugins/plugins.module.js';
-import { DomainErrorFilter } from './platform/errors/domain-error.filter.js';
 
+// The modules the hub is made of; each one configures what it owns.
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validationSchema: envSchema }),
-    // Redis and Prisma come before anything that pulls in BullMQ: global
-    // modules shut down in reverse order, so they close after the workers
+    // Redis and the database come before anything that pulls in BullMQ:
+    // global modules shut down in reverse order, so they close after the
+    // workers
     RedisModule,
-    PrismaModule,
+    DatabaseModule,
+    QueuesModule,
+    MessagingModule,
+    ErrorsModule,
     CqrsModule.forRoot(),
-    ClsModule.forRoot({
-      global: true,
-      middleware: { mount: true },
-      plugins: [
-        new ClsPluginTransactional({
-          imports: [PrismaModule],
-          adapter: new TransactionalAdapterPrisma({
-            prismaInjectionToken: PrismaService,
-          }),
-        }),
-      ],
-    }),
-    BullModule.forRootAsync({
-      inject: [REDIS],
-      useFactory: (connection: Redis) => ({ connection }),
-      extraOptions: { manualRegistration: true },
-    }),
-    OutboxModule.forRoot({
-      transports: { plugins: BullMqTransport },
-      imports: [ProcessingModule],
-      route: (message) => routeFor(message.topic),
-      relay: { pollInterval: '1s' },
-      retry: {
-        // the attempt limit always applies, so it is set high and retryIf
-        // decides: ten tries, or for as long as redis is unreachable (with
-        // maxRetriesPerRequest: null that shows up as a publish timeout)
-        attempts: 10_000,
-        retryIf: (error, attempt) =>
-          attempt < 10 ||
-          error instanceof OutboxPublishTimeoutError ||
-          isConnectionError(error),
-        backoff: { delay: '1s', maxDelay: '1m' },
-      },
-    }),
     ScheduleModule.forRoot(),
-    // named limits, each route's guard picks its own (throttleBy in access).
-    // One budget per user across all a limit's routes. In one instance's
-    // memory: there is one
-    ThrottlerModule.forRoot([
-      // REST, per signed-in user
-      {
-        name: 'api',
-        ttl: 60_000,
-        limit: 1200,
-        generateKey: (_, tracker, name) => `${name}-${tracker}`,
-        getTracker: (req) =>
-          (req.user as { id: string } | null | undefined)?.id ?? req.ip,
-      },
-      // MCP, per user, however many keys they make
-      {
-        name: 'mcp',
-        ttl: 60_000,
-        limit: 600,
-        generateKey: (_, tracker, name) => `${name}-${tracker}`,
-        // a plain ThrottlerGuard runs every named limit, before sign-in too
-        getTracker: (req) =>
-          (req.user as { id: string } | null | undefined)?.id ?? req.ip,
-      },
-    ]),
     PluginsModule,
     CatalogModule,
     IdentityModule,
@@ -115,16 +47,6 @@ import { DomainErrorFilter } from './platform/errors/domain-error.filter.js';
     }),
     ProcessingModule,
     ...plugins,
-  ],
-  providers: [
-    { provide: APP_FILTER, useClass: DomainErrorFilter },
-    {
-      // outbox messages live in our postgres, in a schema of their own (nest_outbox)
-      provide: PostgresOutboxStore,
-      inject: [PrismaService, OutboxStorage],
-      useFactory: (prisma: PrismaService, storage: OutboxStorage) =>
-        new PostgresOutboxStore({ executor: fromPrisma(prisma) }, storage),
-    },
   ],
 })
 export class AppModule {}

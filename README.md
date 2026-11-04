@@ -16,7 +16,8 @@ npm run start:dev
 
 ## Layout
 
-- `src/` — the hub: core modules (`catalog`, `ingest`, `storage`, `processing`)
+- `src/` — the hub: its modules (`catalog`, `ingest`, `storage`, `processing`, `plugins`, `identity`, `access`), each used by the others only through its `contracts.ts`
+- `src/platform/` — what the modules run on: `database` (Prisma, `@Transactional()`), `redis`, `queues` (BullMQ), `messaging` (the outbox), `errors` (one answer per kind of domain error); `app.module.ts` only lists modules
 - `libs/plugin-sdk` — everything a plugin may depend on, plugins never import the core directly
 - `libs/kernel` — what the hub's modules and the sdk share: values that hold the same rules everywhere (`ContentHash`, `MediaType`, `PortalId`, `PluginName`, `Json`) and the kinds of domain error (not found, conflict, invalid)
 - `prisma/schema/` — one schema file per module

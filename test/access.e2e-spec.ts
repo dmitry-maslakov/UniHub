@@ -12,7 +12,7 @@ import {
 import { GrantCourseAccessCommand } from '../src/identity/contracts.js';
 import { Mailer, type Mail } from '../src/identity/domain/mailer.js';
 import { HubIngest } from '../src/ingest/contracts.js';
-import { PrismaService } from '../src/prisma/prisma.service.js';
+import { PrismaService } from '../src/platform/database/prisma.service.js';
 import { accounts } from './accounts.js';
 
 const PORTAL = 'rest-test';

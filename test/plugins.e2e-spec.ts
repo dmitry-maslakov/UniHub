@@ -1,4 +1,5 @@
 import { setTimeout as sleep } from 'node:timers/promises';
+import { NonRetryableMessageError } from '@nestjs/outbox';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { getQueueToken } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
@@ -8,7 +9,7 @@ import { ITEM_CHANGED } from '../src/catalog/contracts.js';
 import { ConnectorHost } from '../src/plugins/connector-host.js';
 import { CONNECTORS_QUEUE } from '../src/plugins/connectors.queue.js';
 import { PluginRegistry } from '../src/plugins/plugin-registry.js';
-import { BullMqTransport } from '../src/processing/infrastructure/bullmq.transport.js';
+import { PluginsOutboxTransport } from '../src/processing/contracts.js';
 import { PLUGINS_QUEUE } from '../src/processing/queues.js';
 import {
   FAKE_PORTAL,
@@ -128,7 +129,7 @@ describe('plugins', { timeout: 20_000 }, () => {
   });
 
   it("doesn't queue a message twice when the relay publishes it again", async () => {
-    const transport = app.get(BullMqTransport, { strict: false });
+    const transport = app.get(PluginsOutboxTransport, { strict: false });
     const message = {
       id: 'same-message',
       topic: ITEM_CHANGED,
@@ -142,6 +143,17 @@ describe('plugins', { timeout: 20_000 }, () => {
       .filter((job) => job.id?.startsWith('same-message__'))
       .map((job) => job.name);
     expect(jobs.sort()).toEqual(['fake-feed', 'flaky-feed']);
+  });
+
+  it('dead-letters a topic nothing maps at once, a bug rather than an outage', async () => {
+    const transport = app.get(PluginsOutboxTransport, { strict: false });
+    await expect(
+      transport.publish({
+        id: 'unknown-topic',
+        topic: 'catalog.nobody-maps-this',
+        payload: {},
+      } as never),
+    ).rejects.toBeInstanceOf(NonRetryableMessageError);
   });
 
   it('finds the plugins by their decorators', () => {

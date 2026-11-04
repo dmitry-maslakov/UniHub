@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuthModule } from '@thallesp/nestjs-better-auth';
 import { parseList, type Env } from '../config.js';
-import { PrismaService } from '../prisma/prisma.service.js';
+import { PrismaService } from '../platform/database/prisma.service.js';
 import { GrantCourseAccessHandler } from './application/commands/grant-course-access.handler.js';
 import { RevokeCourseAccessHandler } from './application/commands/revoke-course-access.handler.js';
 import { ApiKeyUserHandler } from './application/queries/api-key-user.handler.js';
