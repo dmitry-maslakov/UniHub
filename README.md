@@ -25,7 +25,7 @@ npm run start:dev
 
 A module has up to three layers, and a rule is written once, in the one that owns it:
 
-- `domain/` — the rules. Aggregates keep their own record's invariants and record its events (catalog's `PortalFile`, `Item`); rules over several things are functions or classes of their own (`placeFile`, `PluginSet`, `Reader` with `ReadScope` and `Ban`). It also declares the ports the module needs, as abstract classes, and imports nothing but itself and the kernel (a lint rule checks that too)
+- `domain/` — the rules. Aggregates keep their own record's invariants and record its events (catalog's `PortalFile`, `Item`); rules over several things are functions or classes of their own (`placeFile`, `PluginSet`, `Reader` with `ReadScope` and `Ban`). It also declares the ports the module needs, as abstract classes. It may import the kernel and plain libraries (zod, `node:crypto`); a lint rule keeps out other modules, application and infrastructure code, the platform, Prisma, the sdk, and all of Nest but `AggregateRoot` from `@nestjs/cqrs`
 - `application/` — the use cases: load an aggregate, call it, save it in one transaction; or ask other modules over the bus and put their answers together (access's `CourseReader` only orchestrates catalog and identity). No SQL, no queues
 - `infrastructure/` — what the ports are made of: Prisma repositories (a record and its events go to the outbox in the same transaction), queries that read straight into DTOs past the aggregates (`read/`), BullMQ, the file store; and the ways in (HTTP, MCP, gRPC), which only check what comes in against its schema and hand it on
 
