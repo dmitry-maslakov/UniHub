@@ -9,7 +9,7 @@ import {
   ListCoursesQuery,
   type FileDto,
 } from '../../catalog/contracts.js';
-import { ReadableCoursesQuery } from '../../identity/contracts.js';
+import { ReadScopeQuery } from '../../identity/contracts.js';
 import {
   GetTextPageQuery,
   ListTextsQuery,
@@ -45,10 +45,8 @@ export class CourseReader {
   ) {}
 
   private async canRead(userId: string, courseId: string) {
-    const readable = await this.queries.execute(
-      new ReadableCoursesQuery(userId),
-    );
-    return readable.all || readable.courseIds.includes(courseId);
+    const scope = await this.queries.execute(new ReadScopeQuery(userId));
+    return scope.allows(courseId);
   }
 
   private async readableCourse(userId: string, slug: string) {
@@ -74,12 +72,10 @@ export class CourseReader {
   }
 
   async courses(userId: string) {
-    const readable = await this.queries.execute(
-      new ReadableCoursesQuery(userId),
-    );
+    const scope = await this.queries.execute(new ReadScopeQuery(userId));
     const courses = await this.queries.execute(new ListCoursesQuery());
     return courses
-      .filter((c) => readable.all || readable.courseIds.includes(c.id))
+      .filter((c) => scope.allows(c.id))
       .map(({ slug, name, portalCourses }) => ({
         slug,
         name,

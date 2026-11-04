@@ -4,12 +4,12 @@ import {
   UnknownCourseError,
 } from '../../../catalog/contracts.js';
 import { UnknownUserError } from '../../domain/errors.js';
-import type { UserRepository } from '../../domain/user.js';
+import type { ReaderRepository } from '../../domain/reader.js';
 
 // the course's id, after checking both ends exist
 export async function courseOf(
   queries: QueryBus,
-  users: UserRepository,
+  users: ReaderRepository,
   userId: string,
   courseSlug: string,
 ) {

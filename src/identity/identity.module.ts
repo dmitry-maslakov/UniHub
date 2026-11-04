@@ -4,18 +4,18 @@ import { AuthModule } from '@thallesp/nestjs-better-auth';
 import { PrismaService } from '../platform/database/prisma.service.js';
 import { GrantCourseAccessHandler } from './application/commands/grant-course-access.handler.js';
 import { RevokeCourseAccessHandler } from './application/commands/revoke-course-access.handler.js';
-import { ApiKeyUserHandler } from './application/queries/api-key-user.handler.js';
-import { ReadableCoursesHandler } from './application/queries/readable-courses.handler.js';
+import { AuthenticateApiKey } from './application/authenticate-api-key.js';
+import { ReadScopeHandler } from './application/read-scope.handler.js';
 import { ApiKeys } from './domain/api-keys.js';
 import { CourseAccessRepository } from './domain/course-access.js';
 import { Mailer } from './domain/mailer.js';
-import { UserRepository } from './domain/user.js';
+import { ReaderRepository } from './domain/reader.js';
 import { identityConfig } from './identity.config.js';
 import { createAuth } from './infrastructure/better-auth.js';
 import { BetterAuthApiKeys } from './infrastructure/better-auth-api-keys.js';
 import { MailModule } from './infrastructure/mail.module.js';
 import { PrismaCourseAccessRepository } from './infrastructure/prisma-course-access.repository.js';
-import { PrismaUserRepository } from './infrastructure/prisma-user.repository.js';
+import { PrismaReaderRepository } from './infrastructure/prisma-reader.repository.js';
 
 // Users, sign-in and who may read what. Better Auth serves /api/auth/* and
 // guards every HTTP route; a route that needs no user says @AllowAnonymous()
@@ -43,11 +43,13 @@ import { PrismaUserRepository } from './infrastructure/prisma-user.repository.js
   providers: [
     GrantCourseAccessHandler,
     RevokeCourseAccessHandler,
-    ReadableCoursesHandler,
-    ApiKeyUserHandler,
+    ReadScopeHandler,
+    AuthenticateApiKey,
     { provide: ApiKeys, useClass: BetterAuthApiKeys },
-    { provide: UserRepository, useClass: PrismaUserRepository },
+    { provide: ReaderRepository, useClass: PrismaReaderRepository },
     { provide: CourseAccessRepository, useClass: PrismaCourseAccessRepository },
   ],
+  // for ApiKeyGuard, wherever a route says @ApiKeyAuth()
+  exports: [AuthenticateApiKey],
 })
 export class IdentityModule {}

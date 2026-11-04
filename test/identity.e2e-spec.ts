@@ -12,7 +12,7 @@ import {
 } from '../src/catalog/contracts.js';
 import {
   GrantCourseAccessCommand,
-  ReadableCoursesQuery,
+  ReadScopeQuery,
   RevokeCourseAccessCommand,
   UnknownUserError,
 } from '../src/identity/contracts.js';
@@ -235,6 +235,8 @@ describe('identity', { timeout: 20_000 }, () => {
         CourseName.parse('Operativni sistemi'),
       ),
     );
+    const reads = async (userId: string, course = courseId) =>
+      (await queries.execute(new ReadScopeQuery(userId))).allows(course);
 
     expect(
       await commands.execute(new GrantCourseAccessCommand(ed.id, 'os')),
@@ -242,28 +244,18 @@ describe('identity', { timeout: 20_000 }, () => {
     expect(
       await commands.execute(new GrantCourseAccessCommand(ed.id, 'os')),
     ).toEqual({ changed: false });
-    expect(await queries.execute(new ReadableCoursesQuery(ed.id))).toEqual({
-      all: false,
-      courseIds: [courseId],
-    });
-    expect(await queries.execute(new ReadableCoursesQuery(fa.id))).toEqual({
-      all: true,
-    });
+    expect(await reads(ed.id)).toBe(true);
+    expect(await reads(fa.id, 'any')).toBe(true);
+    expect(await reads(ed.id, 'any')).toBe(false);
 
     await prisma.user.update({ where: { id: ed.id }, data: { banned: true } });
-    expect(await queries.execute(new ReadableCoursesQuery(ed.id))).toEqual({
-      all: false,
-      courseIds: [],
-    });
+    expect(await reads(ed.id)).toBe(false);
     await prisma.user.update({ where: { id: ed.id }, data: { banned: false } });
 
     expect(
       await commands.execute(new RevokeCourseAccessCommand(ed.id, 'os')),
     ).toEqual({ changed: true });
-    expect(await queries.execute(new ReadableCoursesQuery(ed.id))).toEqual({
-      all: false,
-      courseIds: [],
-    });
+    expect(await reads(ed.id)).toBe(false);
 
     await expect(
       commands.execute(new GrantCourseAccessCommand(ed.id, 'nope')),

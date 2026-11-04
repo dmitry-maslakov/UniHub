@@ -6,7 +6,7 @@ import { apiKey } from '@better-auth/api-key';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
 import type { PrismaClient } from '../../generated/prisma/client.js';
 import type { Mail, Mailer } from '../domain/mailer.js';
-import { ADMIN_ROLE } from '../domain/user.js';
+import { ADMIN_ROLE } from '../domain/reader.js';
 
 // our own apps that may sign in by QR code (device authorization)
 export const DEVICE_CLIENTS = ['unihub-web', 'unihub-app'];
