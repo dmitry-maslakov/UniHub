@@ -14,6 +14,7 @@ import { DomainError, type DomainErrorKind } from '@app/kernel';
 import { UnknownReferenceError } from '../../../catalog/contracts.js';
 import { isWriteConflict } from '../../../platform/database/write-conflict.js';
 import { isConnectionError } from '../../../platform/errors/is-connection-error.js';
+import { statusDetails } from './status-details.js';
 
 // the hub's own kinds of error, the way HTTP answers them too
 const KINDS: Record<DomainErrorKind, GrpcStatus> = {
@@ -28,8 +29,15 @@ const codeOf = (error: DomainError) =>
     ? GrpcStatus.FAILED_PRECONDITION
     : KINDS[error.kind];
 
+const withReason = (error: DomainError) => {
+  const code = codeOf(error);
+  const { message, reason } = error;
+  return { code, message, metadata: statusDetails(code, message, reason) };
+};
+
 // Errors become statuses a connector can act on: fix the record, send the
-// parent first, retry later, or report a bug.
+// parent first, retry later, or report a bug. Domain errors also say which
+// one it is, in the standard status details.
 @Catch()
 export class IngestErrorsFilter extends BaseRpcExceptionFilter {
   catch(error: unknown, host: ArgumentsHost) {
@@ -44,8 +52,7 @@ export class IngestErrorsFilter extends BaseRpcExceptionFilter {
 
   private toGrpc(error: unknown) {
     if (error instanceof GrpcException) return error.getError();
-    if (error instanceof DomainError)
-      return { code: codeOf(error), message: error.message };
+    if (error instanceof DomainError) return withReason(error);
     if (isWriteConflict(error))
       return new GrpcAbortedException('try again').getError();
     BaseRpcExceptionFilter.logger.error(error);

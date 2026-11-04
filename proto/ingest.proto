@@ -3,6 +3,10 @@
 // Ids are the portal's own, json fields are json text.
 // One sync per portal at a time is the connector's job: with two running,
 // the last SaveState wins.
+// A call the hub refuses carries the standard google.rpc.Status in the
+// grpc-status-details-bin trailer, with a google.rpc.ErrorInfo whose domain
+// is "unihub" and whose reason (FILE_COURSE_MISMATCH, UNKNOWN_REFERENCE...)
+// never changes.
 
 syntax = "proto3";
 

@@ -1,6 +1,7 @@
 import type { ArgumentsHost } from '@nestjs/common';
-import { status } from '@grpc/grpc-js';
+import { status, type Metadata } from '@grpc/grpc-js';
 import { GrpcUnauthenticatedException } from '@nestjs/microservices';
+import { getProtoPath, loadSync } from 'google-proto-files';
 import { firstValueFrom, type Observable } from 'rxjs';
 import {
   ConflictError,
@@ -21,6 +22,7 @@ class TakenError extends ConflictError {
 interface Answer {
   code: number;
   message: string;
+  metadata?: Metadata;
 }
 
 const host = {
@@ -33,6 +35,16 @@ const answerTo = async (error: unknown) => {
   ) as Observable<never>;
   return firstValueFrom(result).catch((e: Answer) => e);
 };
+
+// the trailer as a connector reads it, with Google's own protos
+const rpc = loadSync(getProtoPath('rpc', 'status.proto'));
+rpc.loadSync(getProtoPath('rpc', 'error_details.proto'));
+const Status = rpc.lookupType('google.rpc.Status');
+const details = ({ metadata }: Answer) =>
+  Status.toObject(
+    Status.decode(metadata!.get('grpc-status-details-bin')[0] as Buffer),
+    { json: true },
+  );
 
 describe('IngestErrorsFilter', () => {
   it("answers the hub's kinds of error the way HTTP does", async () => {
@@ -50,6 +62,21 @@ describe('IngestErrorsFilter', () => {
       new UnknownReferenceError(PortalId.parse('acs'), 'c1'),
     );
     expect(answer.code).toBe(status.FAILED_PRECONDITION);
+  });
+
+  it('says which error it is in the standard status details', async () => {
+    const answer = await answerTo(new TakenError('course x already exists'));
+    expect(details(answer)).toEqual({
+      code: status.ALREADY_EXISTS,
+      message: 'course x already exists',
+      details: [
+        {
+          '@type': 'type.googleapis.com/google.rpc.ErrorInfo',
+          reason: 'TAKEN',
+          domain: 'unihub',
+        },
+      ],
+    });
   });
 
   it("keeps gRPC's own answers as they are", async () => {

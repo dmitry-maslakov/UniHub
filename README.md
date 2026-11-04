@@ -63,7 +63,7 @@ A plugin is a Nest module that depends only on `@app/plugin-sdk` (a lint rule ch
 
 - `@PollConnector({ portal, schedule })` — the hub calls `poll(ctx)` on the cron schedule, one run per account at a time
 - `@PushConnector({ portal })` — keeps its own connection; the hub calls `start(ctx)` / `stop()`, only on the instance with `RUN_CONNECTORS=true`
-- either way data goes in only through `ctx.ingest`, bound to the connector's portal and account
+- either way data goes in only through `ctx.ingest`, bound to the connector's portal and account. A record it refuses rejects with `InvalidRecordError` (fix it or skip it) or `UnknownReferenceError` (send what it refers to first), and their `reason` says which rule it broke, the same reasons gRPC connectors get
 - `@ContentProcessor({ name, version, accepts })` turns file content into text for models
 - `@Aggregator({ name, topics })` reacts to messages (`item.ingested`, `item.removed`, `file.content-stored`, `file.removed`) and reads the rest through `HubReader`
 
@@ -74,6 +74,15 @@ Every plugin gets its own queue job per message, so one failing plugin only retr
 ## External connectors
 
 A connector can also run as its own service, in any language, and send data over gRPC (`proto/ingest.proto`). Each one gets a token in `CONNECTOR_TOKENS="portal=token,…"` and sends it as `authorization: Bearer <token>`; the token decides the portal. The hub doesn't schedule these, they sync when they want.
+
+A refused call's status says what to do: `INVALID_ARGUMENT` fix the record or skip it, `FAILED_PRECONDITION` send what it refers to first (a course before its posts), `DATA_LOSS` send the content again, `ABORTED` or `UNAVAILABLE` try again later. When the hub refused it, the `grpc-status-details-bin` trailer also has gRPC's standard `google.rpc.Status` with a `google.rpc.ErrorInfo`: `domain` is `unihub` and `reason` a name that never changes, to switch on instead of the message:
+
+- `INVALID_RECORD`: not the shape the proto describes (a Content stream out of order too), or text and json postgres can't keep
+- `FILE_COURSE_MISMATCH`: a file names a course, and a post in another one
+- `UNKNOWN_REFERENCE`: a course, post or file never sent
+- `CONTENT_TOO_LARGE`: content past `STORAGE_MAX_FILE_MB`
+
+Most gRPC libraries decode the trailer themselves: in Go `status.FromError(err)` and `.Details()`, in Java `StatusProto.fromThrowable()`, in Python `rpc_status.from_call()` from `grpcio-status`. In Node, decode it as `google.rpc.Status` with protobufjs and the `google/rpc` protos of the `google-proto-files` package, as `test/grpc.e2e-spec.ts` does.
 
 The gRPC server starts only when some token is set and listens on `GRPC_URL` without TLS, so keep it on a private network or behind a TLS proxy.
 
