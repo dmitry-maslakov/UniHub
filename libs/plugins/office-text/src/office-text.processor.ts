@@ -1,7 +1,7 @@
-import type { Readable } from 'node:stream';
 import { Injectable } from '@nestjs/common';
 import {
   ContentProcessor,
+  readUpTo,
   type ProcessesContent,
   type ProcessorInput,
 } from '@app/plugin-sdk';
@@ -27,18 +27,6 @@ const SPLIT_BY: Record<string, SplitBy> = {
 // past this a document isn't parsed, it's held in memory twice meanwhile
 export const MAX_BYTES = 100 * 1024 * 1024;
 
-async function read(content: Readable) {
-  const chunks: Buffer[] = [];
-  let size = 0;
-  for await (const chunk of content as AsyncIterable<Buffer>) {
-    size += chunk.length;
-    if (size > MAX_BYTES)
-      throw new Error(`larger than ${MAX_BYTES} bytes, not parsed`);
-    chunks.push(chunk);
-  }
-  return Buffer.concat(chunks, size);
-}
-
 // Text of pdf / pptx / docx / odt / odp, one part per page, slide or
 // section, made of officeparser's chunks.
 @ContentProcessor({
@@ -51,7 +39,9 @@ export class OfficeTextProcessor implements ProcessesContent {
   async process(input: ProcessorInput) {
     // the hub hands over only what's in accepts, so it's one of these
     const splitBy = SPLIT_BY[input.matched];
-    const parsed = await parse(await read(await input.content()), {
+    const data = await readUpTo(await input.content(), MAX_BYTES);
+    if (!data) throw new Error(`larger than ${MAX_BYTES} bytes, not parsed`);
+    const parsed = await parse(data, {
       chunksConfig: {
         strategy: 'document-structure',
         splitBy,

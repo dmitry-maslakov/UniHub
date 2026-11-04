@@ -7,10 +7,10 @@ import {
 
 // Run by parse.ts in a thread of its own. Imports nothing of this repo: in
 // tests node runs it as it is, types stripped.
-const { data, config } = workerData as {
-  data: Uint8Array;
-  config: GeneratorConfig<'chunks'>;
-};
+const {
+  data,
+  config,
+}: { data: Uint8Array; config: GeneratorConfig<'chunks'> } = workerData;
 // attachments taken as OfficeConverter takes them for chunks: a picture's
 // alt text and a chart's text are in the chunks only then
 const ast = await OfficeParser.parseOffice(data, { extractAttachments: true });
