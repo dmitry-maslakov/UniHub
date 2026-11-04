@@ -82,7 +82,7 @@ A refused call's status says what to do: `INVALID_ARGUMENT` fix the record or sk
 - `UNKNOWN_REFERENCE`: a course, post or file never sent
 - `CONTENT_TOO_LARGE`: content past `STORAGE_MAX_FILE_MB`
 
-Most gRPC libraries decode the trailer themselves: in Go `status.FromError(err)` and `.Details()`, in Java `StatusProto.fromThrowable()`, in Python `rpc_status.from_call()` from `grpcio-status`. In Node, decode it as `google.rpc.Status` with protobufjs and the `google/rpc` protos of the `google-proto-files` package, as `test/grpc.e2e-spec.ts` does.
+Most gRPC libraries decode the trailer themselves: in Go `status.FromError(err)` and `.Details()`, in Java `StatusProto.fromThrowable()`, in Python `rpc_status.from_call()` from `grpcio-status`. In Node, decode it as `google.rpc.Status` with protobufjs and Google's `google/rpc` protos (a copy is in `proto/google/rpc`), as `test/grpc.e2e-spec.ts` does.
 
 The gRPC server starts only when some token is set and listens on `GRPC_URL` without TLS, so keep it on a private network or behind a TLS proxy.
 

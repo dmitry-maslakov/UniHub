@@ -1,7 +1,7 @@
 import type { ArgumentsHost } from '@nestjs/common';
 import { status, type Metadata } from '@grpc/grpc-js';
 import { GrpcUnauthenticatedException } from '@nestjs/microservices';
-import { getProtoPath, loadSync } from 'google-proto-files';
+import protobuf from 'protobufjs';
 import { firstValueFrom, type Observable } from 'rxjs';
 import {
   ConflictError,
@@ -37,9 +37,12 @@ const answerTo = async (error: unknown) => {
 };
 
 // the trailer as a connector reads it, with Google's own protos
-const rpc = loadSync(getProtoPath('rpc', 'status.proto'));
-rpc.loadSync(getProtoPath('rpc', 'error_details.proto'));
-const Status = rpc.lookupType('google.rpc.Status');
+const Status = protobuf
+  .loadSync([
+    'proto/google/rpc/status.proto',
+    'proto/google/rpc/error_details.proto',
+  ])
+  .lookupType('google.rpc.Status');
 const details = ({ metadata }: Answer) =>
   Status.toObject(
     Status.decode(metadata!.get('grpc-status-details-bin')[0] as Buffer),

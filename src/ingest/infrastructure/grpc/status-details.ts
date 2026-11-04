@@ -1,10 +1,16 @@
+import { join } from 'node:path';
 import { Metadata } from '@grpc/grpc-js';
-import { getProtoPath, loadSync } from 'google-proto-files';
+import protobuf from 'protobufjs';
 
-// google.rpc's own Status and ErrorInfo, from the protos Google publishes
-const rpc = loadSync(getProtoPath('rpc', 'status.proto'));
-rpc.loadSync(getProtoPath('rpc', 'error_details.proto'));
-const Status = rpc.lookupType('google.rpc.Status');
+// google.rpc's own Status and ErrorInfo, the protos as Google publishes them;
+// protobufjs has the google/protobuf ones they import
+const Status = protobuf
+  .loadSync(
+    ['status.proto', 'error_details.proto'].map((file) =>
+      join(process.cwd(), 'proto/google/rpc', file),
+    ),
+  )
+  .lookupType('google.rpc.Status');
 
 // gRPC's rich error model: the status once more in the
 // grpc-status-details-bin trailer, with an ErrorInfo whose reason a client

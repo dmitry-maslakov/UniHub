@@ -5,7 +5,7 @@ import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import * as grpc from '@grpc/grpc-js';
 import * as loader from '@grpc/proto-loader';
-import { getProtoPath, loadSync } from 'google-proto-files';
+import protobuf from 'protobufjs';
 import { AppModule } from '../src/app.module.js';
 import { grpcOptions } from '../src/ingest/contracts.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
@@ -53,9 +53,12 @@ const sha256 = (data: Buffer) =>
 
 // why a call failed, from the standard status details: google.rpc.Status
 // with an ErrorInfo, decoded with Google's own protos
-const rpc = loadSync(getProtoPath('rpc', 'status.proto'));
-rpc.loadSync(getProtoPath('rpc', 'error_details.proto'));
-const Status = rpc.lookupType('google.rpc.Status');
+const Status = protobuf
+  .loadSync([
+    'proto/google/rpc/status.proto',
+    'proto/google/rpc/error_details.proto',
+  ])
+  .lookupType('google.rpc.Status');
 const reasonOf = async (call: Promise<unknown>) => {
   const error = (await call.catch((e: unknown) => e)) as grpc.ServiceError;
   const [bytes] = error.metadata.get('grpc-status-details-bin');
