@@ -2,6 +2,7 @@ import { GetTextPageHandler } from './application/queries/get-text-page.handler.
 import { ListTextsHandler } from './application/queries/list-texts.handler.js';
 import { Module, type OnApplicationBootstrap } from '@nestjs/common';
 import { BullModule, BullRegistrar } from '@nestjs/bullmq';
+import { TerminusModule } from '@nestjs/terminus';
 import { PluginRunner } from './application/plugin-runner.js';
 import { Reconciler } from './application/reconciler.js';
 import { RepresentationRepository } from './domain/representation.js';
@@ -27,6 +28,8 @@ const DAY = 24 * 60 * 60;
         removeOnFail: { age: 14 * DAY },
       },
     }),
+    // the worker asks whether the database is up before blaming a plugin
+    TerminusModule,
   ],
   providers: [
     ListTextsHandler,

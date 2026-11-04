@@ -1,3 +1,4 @@
+import type { PrismaHealthIndicator } from '@nestjs/terminus';
 import { RateLimitError, type Job, type Queue } from 'bullmq';
 import { FILE_CONTENT_STORED } from '@app/plugin-sdk';
 import type { PrismaService } from '../../prisma/prisma.service.js';
@@ -15,20 +16,23 @@ const job = {
   },
 } as Job<PluginJob>;
 
-function worker(databaseUp: boolean) {
+function worker(database: 'up' | 'down') {
   const runner = {
     run: async () => {
       throw new Error('plugin failed');
     },
   } as unknown as PluginRunner;
-  const prisma = {
-    isReachable: async () => databaseUp,
-  } as unknown as PrismaService;
+  const health = {
+    pingCheck: () => ({
+      withTimeout: async () => ({ database: { status: database } }),
+    }),
+  } as unknown as PrismaHealthIndicator;
   const queue = { rateLimit: vi.fn(async () => {}) };
   return {
     worker: new PluginsWorker(
       runner,
-      prisma,
+      health,
+      {} as PrismaService,
       queue as unknown as Queue<PluginJob>,
     ),
     queue,
@@ -37,13 +41,13 @@ function worker(databaseUp: boolean) {
 
 describe('PluginsWorker', () => {
   it("lets a plugin's own failure spend an attempt", async () => {
-    const { worker: w, queue } = worker(true);
+    const { worker: w, queue } = worker('up');
     await expect(w.process(job)).rejects.toThrow('plugin failed');
     expect(queue.rateLimit).not.toHaveBeenCalled();
   });
 
   it('waits out the database being away without spending an attempt', async () => {
-    const { worker: w, queue } = worker(false);
+    const { worker: w, queue } = worker('down');
     await expect(w.process(job)).rejects.toBeInstanceOf(RateLimitError);
     expect(queue.rateLimit).toHaveBeenCalledWith(OUTAGE_PAUSE_MS);
   });
