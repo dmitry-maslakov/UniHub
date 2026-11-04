@@ -3,8 +3,8 @@ import { Payload } from '@nestjs/microservices';
 import { McpController, McpRawRequest, Tool } from '@rekog/mcp-nest';
 import { z } from 'zod';
 import { userIdOf } from '../../../identity/contracts.js';
-import { DomainErrorFilter } from '../../../platform/errors/domain-error.filter.js';
 import { CourseReader, MAX_LIMIT } from '../../application/course-reader.js';
+import { McpErrorsFilter } from './mcp-errors.filter.js';
 
 // the HTTP request, with the user the key guard put on it
 type Caller = Parameters<typeof userIdOf>[0];
@@ -20,10 +20,9 @@ const json = (value: unknown) => ({
   content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }],
 });
 
-// The same reads as the REST API, through the same CourseReader. Global
-// filters don't reach microservices, MCP's included, so it names its own.
+// The same reads as the REST API, through the same CourseReader
 @McpController()
-@UseFilters(DomainErrorFilter)
+@UseFilters(McpErrorsFilter)
 export class CourseTools {
   constructor(private readonly reader: CourseReader) {}
 
