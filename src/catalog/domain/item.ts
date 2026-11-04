@@ -1,4 +1,5 @@
-import type { Json, Upserted } from './changes.js';
+import type { Json } from '@app/kernel';
+import type { Upserted } from './changes.js';
 
 // anything a portal publishes that isn't a file: posts, announcements, pages...
 export interface Item {

@@ -3,7 +3,7 @@ import { TransactionHost } from '@nestjs-cls/transactional';
 import type { TransactionalAdapterPrisma } from '@nestjs-cls/transactional-adapter-prisma';
 import type { PrismaService } from '../../prisma/prisma.service.js';
 import type { Item as Row } from '../../generated/prisma/client.js';
-import type { Json } from '../domain/changes.js';
+import type { Json } from '@app/kernel';
 import { type Item, type ItemData, ItemRepository } from '../domain/item.js';
 import { LOCK, lockRecord } from './lock.js';
 import { upsertTracked } from './upsert-tracked.js';

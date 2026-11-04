@@ -2,6 +2,7 @@ import type { Readable } from 'node:stream';
 import { Injectable, Logger } from '@nestjs/common';
 import { QueryBus } from '@nestjs/cqrs';
 import { FILE_CONTENT_STORED } from '@app/plugin-sdk';
+import { MediaType } from '@app/kernel';
 import { GetFileQuery } from '../../catalog/contracts.js';
 import { PluginRegistry } from '../../plugins/plugin-registry.js';
 import { GetContentQuery } from '../../storage/contracts.js';
@@ -43,7 +44,8 @@ export class PluginRunner {
     try {
       const result = await found.plugin.instance.process({
         name: file.name,
-        mime: file.mime,
+        // the type the registry matched on, not the portal's spelling of it
+        mime: file.mime && MediaType.parse(file.mime),
         hash,
         content: async () => {
           const stream = await this.queries.execute(new GetContentQuery(hash));

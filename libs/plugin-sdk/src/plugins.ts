@@ -120,6 +120,8 @@ export interface ContentProcessorOptions {
 
 export interface ProcessorInput {
   name: string;
+  // the media type's essence ('application/pdf'), as the hub matched it;
+  // null when the portal gave none or nothing that is one
   mime: string | null;
   hash: string;
   // a fresh stream on every call, closed by the hub after the run

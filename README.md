@@ -18,6 +18,7 @@ npm run start:dev
 
 - `src/` — the hub: core modules (`catalog`, `ingest`, `storage`, `processing`)
 - `libs/plugin-sdk` — everything a plugin may depend on, plugins never import the core directly
+- `libs/kernel` — what the hub's modules and the sdk share: values that hold the same rules everywhere (`ContentHash`, `MediaType`, `PortalId`, `PluginName`, `Json`) and the kinds of domain error (not found, conflict, invalid)
 - `prisma/schema/` — one schema file per module
 
 ## Users

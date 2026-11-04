@@ -15,6 +15,7 @@ import {
   type PushesFromPortal,
   type Topic,
 } from '@app/plugin-sdk';
+import { MediaType, PluginName, PortalId } from '@app/kernel';
 import { ConnectorTokens } from '../ingest/contracts.js';
 
 export interface Plugin<O, I> {
@@ -41,8 +42,10 @@ export type Runnable =
     }
   | { kind: 'aggregator'; plugin: Plugin<AggregatorOptions, HandlesMessages> };
 
-// 'Application/PDF; charset=binary' → 'application/pdf'
-const normalise = (type: string) => type.split(';')[0].trim().toLowerCase();
+// '.PDF' → '.pdf', 'Application/PDF; charset=binary' → 'application/pdf';
+// null for an entry that's neither
+const normalise = (entry: string) =>
+  entry.startsWith('.') ? entry.toLowerCase() : MediaType.parse(entry);
 
 // Everything the enabled plugins provide, found by their sdk decorators.
 // Collected in onModuleInit, when every provider exists, and checked there,
@@ -64,10 +67,17 @@ export class PluginRegistry implements OnModuleInit {
     );
     this.processors = this.find<ContentProcessorOptions, ProcessesContent>(
       ContentProcessorMark,
-    ).map(({ options, instance }) => ({
-      options: { ...options, accepts: options.accepts.map(normalise) },
-      instance,
-    }));
+    ).map(({ options, instance }) => {
+      const accepts = options.accepts.map((entry) => {
+        const accepted = normalise(entry);
+        if (!accepted)
+          throw new Error(
+            `processor ${options.name} accepts "${entry}": neither an extension nor a media type`,
+          );
+        return accepted;
+      });
+      return { options: { ...options, accepts }, instance };
+    });
     this.aggregators = this.find<AggregatorOptions, HandlesMessages>(
       AggregatorMark,
     );
@@ -88,7 +98,7 @@ export class PluginRegistry implements OnModuleInit {
 
   processorsFor(file: { name: string; mime: string | null }) {
     const ext = extname(file.name).toLowerCase();
-    const mime = file.mime && normalise(file.mime);
+    const mime = file.mime && MediaType.parse(file.mime);
     return this.processors.filter(({ options }) =>
       options.accepts.some((a) => a === mime || a === ext),
     );
@@ -119,19 +129,20 @@ export class PluginRegistry implements OnModuleInit {
   }
 
   private check() {
-    // names end up in queue job ids, portals in schedules: unique, no ':'
+    // names end up in queue job ids, portals in schedules: unique, and
+    // valid names (PluginName, PortalId)
     const names = [
       ...this.processors.map((p) => p.options.name),
       ...this.aggregators.map((a) => a.options.name),
     ];
     const portals = this.connectors.map((c) => c.options.portal);
-    for (const [what, list] of [
-      ['plugin name', names],
-      ['connector portal', portals],
+    for (const [what, list, isValid] of [
+      ['plugin name', names, PluginName.isValid],
+      ['connector portal', portals, PortalId.isValid],
     ] as const) {
       const dup = list.find((n, i) => list.indexOf(n) !== i);
       if (dup) throw new Error(`${what} "${dup}" is used twice`);
-      const bad = list.find((n) => !n || n.includes(':'));
+      const bad = list.find((n) => !isValid(n));
       if (bad !== undefined) throw new Error(`bad ${what} "${bad}"`);
     }
 

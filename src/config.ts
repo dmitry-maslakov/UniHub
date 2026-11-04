@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PluginName, PortalId } from '@app/kernel';
 
 // "pdf-text, acs" → ['pdf-text', 'acs']
 export const parseList = (value = '') =>
@@ -22,7 +23,7 @@ const validTokens = (value: string) => {
   return (
     tokens.size === pairs.length &&
     pairs.every(
-      ([portal, token]) => /^[a-z0-9-]+$/.test(portal) && token.length >= 16,
+      ([portal, token]) => PortalId.isValid(portal) && token.length >= 16,
     )
   );
 };
@@ -48,7 +49,7 @@ export const envSchema = z
     PLUGINS: z
       .string()
       .default('')
-      .refine((v) => parseList(v).every((n) => /^[a-z0-9-]+$/.test(n)), {
+      .refine((v) => parseList(v).every(PluginName.isValid), {
         message: 'plugin names are lower-case letters, digits and dashes',
       }),
     // this instance starts push connectors (one instance should)

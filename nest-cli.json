@@ -7,6 +7,15 @@
     "builder": "rspack"
   },
   "projects": {
+    "kernel": {
+      "type": "library",
+      "root": "libs/kernel",
+      "entryFile": "index",
+      "sourceRoot": "libs/kernel/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/kernel/tsconfig.lib.json"
+      }
+    },
     "plugin-sdk": {
       "type": "library",
       "root": "libs/plugin-sdk",

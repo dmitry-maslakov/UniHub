@@ -1,4 +1,5 @@
-import type { Json, Upserted } from './changes.js';
+import type { Json } from '@app/kernel';
+import type { Upserted } from './changes.js';
 
 // a course as it exists in one portal
 export interface PortalCourse {

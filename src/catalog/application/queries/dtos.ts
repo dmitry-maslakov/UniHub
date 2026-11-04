@@ -1,4 +1,4 @@
-import type { Json } from '../../domain/changes.js';
+import type { Json } from '@app/kernel';
 import type { File } from '../../domain/file.js';
 import type { Item } from '../../domain/item.js';
 import type { PortalCourse } from '../../domain/portal-course.js';

@@ -1,8 +1,5 @@
 import { isDeepStrictEqual } from 'node:util';
 
-export type Json =
-  string | number | boolean | null | Json[] | { [key: string]: Json };
-
 export interface Upserted<T> {
   entity: T;
   // what was there before, null for a new record
