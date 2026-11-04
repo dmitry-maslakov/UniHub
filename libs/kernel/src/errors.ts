@@ -12,8 +12,8 @@ export abstract class DomainError extends Error {
   // message is reworded, so UPPER_SNAKE_CASE and never changed
   abstract readonly reason: Uppercase<string>;
 
-  constructor(message: string) {
-    super(message);
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = new.target.name;
   }
 }

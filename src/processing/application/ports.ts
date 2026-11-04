@@ -1,4 +1,9 @@
-import type { ContentHash, MediaType, PluginName } from '@app/kernel';
+import {
+  UnavailableError,
+  type ContentHash,
+  type MediaType,
+  type PluginName,
+} from '@app/kernel';
 import type { TextChunk } from '../domain/chunks.js';
 import type { RepresentationKey } from '../domain/representation.js';
 import type { PluginJob } from './plugin-job.js';
@@ -61,4 +66,6 @@ export abstract class TextIndexQueue {
 }
 
 // the index can't be reached now: worth waiting out, not the job's fault
-export class TextIndexUnavailableError extends Error {}
+export class TextIndexUnavailableError extends UnavailableError {
+  readonly reason = 'SEARCH_INDEX_UNAVAILABLE';
+}

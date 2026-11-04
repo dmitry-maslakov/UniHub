@@ -184,15 +184,19 @@ describe('OpenSearchTextIndex', () => {
     );
   });
 
-  it('takes a node away or stuck for an outage', async () => {
+  it('takes a node away or stuck for an outage, of the unavailable kind the edges answer', async () => {
     const { client, text } = opensearch();
-    client.deleteByQuery.mockRejectedValue(
-      new errors.TimeoutError('Request timed out', {} as never),
-    );
+    const timeout = new errors.TimeoutError('Request timed out', {} as never);
+    client.deleteByQuery.mockRejectedValue(timeout);
 
-    await expect(text.remove(key)).rejects.toBeInstanceOf(
-      TextIndexUnavailableError,
-    );
+    const failed = text.remove(key);
+
+    await expect(failed).rejects.toBeInstanceOf(TextIndexUnavailableError);
+    await expect(failed).rejects.toMatchObject({
+      kind: 'unavailable',
+      reason: 'SEARCH_INDEX_UNAVAILABLE',
+      cause: timeout,
+    });
   });
 
   it('fails a write whose items fail otherwise, saying why, with no manifest', async () => {
