@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import type { Json, PortalId } from '@app/kernel';
 import {
   Prisma,
   type PortalCourse as Row,
@@ -14,14 +13,16 @@ import {
   LOCK,
   PrismaIngestedRepository,
 } from './prisma-ingested.repository.js';
-import { byPortalRef } from './rows.js';
+import { byPortalRef, portalCourseValues } from './rows.js';
 
-const toPortalCourse = (row: Row) =>
-  PortalCourse.restore({
+const toPortalCourse = (row: Row) => {
+  const { portal, meta } = portalCourseValues(row);
+  return PortalCourse.restore({
     id: row.id,
-    ref: { portal: row.portal as PortalId, externalId: row.externalId },
-    props: { name: row.name, url: row.url, meta: row.meta as Json | null },
+    ref: { portal, externalId: row.externalId },
+    props: { name: row.name, url: row.url, meta },
   });
+};
 
 @Injectable()
 export class PrismaPortalCourseRepository

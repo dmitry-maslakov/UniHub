@@ -1,6 +1,5 @@
 import { QueryHandler, type IQueryHandler } from '@nestjs/cqrs';
 import { InjectTransactionHost } from '@nestjs-cls/transactional';
-import type { Json, PortalId } from '@app/kernel';
 import type { Prisma } from '../../../generated/prisma/client.js';
 import type { PrismaTxHost } from '../../../platform/database/prisma.service.js';
 import {
@@ -8,6 +7,7 @@ import {
   ListCourseItemsQuery,
   type ItemDto,
 } from '../../application/queries.js';
+import { itemValues } from '../rows.js';
 
 const select = {
   id: true,
@@ -27,8 +27,7 @@ const toDto = ({
   ...row
 }: Prisma.ItemGetPayload<{ select: typeof select }>): ItemDto => ({
   ...row,
-  portal: row.portal as PortalId,
-  raw: row.raw as Json,
+  ...itemValues(row),
   removed: removedAt !== null,
 });
 
