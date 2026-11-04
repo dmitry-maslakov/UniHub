@@ -22,14 +22,6 @@ async function syncDir(path: string) {
   }
 }
 
-async function sizeOf(path: string) {
-  try {
-    return (await stat(path)).size;
-  } catch {
-    return -1;
-  }
-}
-
 // Content in a local folder under ab/abcdef... A write goes to a temp file in
 // the same folder tree and is renamed into place, so a blob is either
 // complete or not there; a crash leaves only a temp file behind.
@@ -91,7 +83,8 @@ export class FsBlobStore extends BlobStore implements OnModuleInit {
       const hash = ContentHash.parse(hasher.digest('hex'));
       const target = this.pathOf(hash);
       // a blob of the wrong size is left over from something that went wrong
-      if ((await sizeOf(target)) !== size) {
+      const existing = await stat(target).catch(() => undefined);
+      if (existing?.size !== size) {
         await mkdir(dirname(target), { recursive: true });
         await rename(tmp, target);
         await syncDir(dirname(target));
