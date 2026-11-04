@@ -23,6 +23,11 @@ Declined:
 - tests of Better Auth's own device flow cases (deny, expiry, reuse)
 - file-level access: files inherit their course's
 - an app-wide limit per address: a campus behind NAT shares one address, so one script would lock everyone out. Better Auth limits `/api/auth` itself, MCP is limited per user
+- env checked once in `ConfigModule.forRoot({ validationSchema })`: each module's `registerAs` factory checks and shapes its own settings (lists, maps, booleans), which a root check can't hand back to the namespaces
+- `NODE_ENV` in `appConfig`: each namespace is checked on its own, so the rules that hold only in production read it there
+- repositories typed `TransactionHost<TransactionalAdapterPrisma<…>>` instead of `@InjectTransactionHost()`: the `PrismaTxHost` alias leaves DI no class to read, the decorator names it
+- one kind-to-answer table for HTTP and gRPC: each transport answers with its own exceptions
+- `auth:generate` without a valid `.env`: the CLI reads the same checked settings as the app (README: set the secret first)
 
 Put off:
 
@@ -39,5 +44,6 @@ Put off:
 - device sign-in: approval screen details and shorter device sessions, with the web portal
 - helmet's `Cross-Origin-Resource-Policy: same-origin` stops another origin embedding file content (`<img>`, `<iframe>`); `same-site` if the web portal lives on a sibling subdomain
 - grants of a deleted course: when catalog can delete courses (an event for identity)
+- kernel values (`ContentHash`, `MediaType`) in the modules' own signatures, and media types normalised where files come in: with each module's rewrite
 
 Done the standard way after all: global prefix, gRPC guard (#36).
