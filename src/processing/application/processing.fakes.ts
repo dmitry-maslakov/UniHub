@@ -1,7 +1,4 @@
-import { createHash } from 'node:crypto';
-import { PassThrough } from 'node:stream';
-import { ContentHash } from '@app/kernel';
-import { BlobStore } from '../../storage/contracts.js';
+import type { ContentHash } from '@app/kernel';
 import {
   RepresentationRepository,
   type Representation,
@@ -11,10 +8,7 @@ import type { PluginJob } from './plugin-job.js';
 import { FileFacts, PluginJobQueue, type FileFact } from './ports.js';
 
 // In-memory ports for the application's unit tests; plugins come from
-// test/discovered-plugins.ts.
-
-export const sha = (text: string) =>
-  ContentHash.parse(createHash('sha256').update(text).digest('hex'));
+// test/discovered-plugins.ts, content from test/in-memory-blobs.ts.
 
 // catalog's files by id; a removed one is left out
 export class FakeFiles extends FileFacts {
@@ -62,21 +56,5 @@ export class InMemoryRepresentations extends RepresentationRepository {
 
   async save(representation: Representation) {
     this.saved.push(representation);
-  }
-}
-
-// every stream it handed out, to see they were closed
-export class FakeBlobs extends BlobStore {
-  readonly maxBytes = 1024;
-  readonly opened: PassThrough[] = [];
-
-  async put(): Promise<never> {
-    throw new Error('processing only reads content');
-  }
-
-  async get() {
-    const stream = new PassThrough();
-    this.opened.push(stream);
-    return stream;
   }
 }

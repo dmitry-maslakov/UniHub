@@ -1,7 +1,8 @@
 import { Logger } from '@nestjs/common';
 import type { PrismaHealthIndicator } from '@nestjs/terminus';
 import { RateLimitError, type Job, type Queue } from 'bullmq';
-import { ContentHash, PluginName } from '@app/kernel';
+import { PluginName } from '@app/kernel';
+import { sha256 } from '../../../test/sha256.js';
 import type { PrismaService } from '../../platform/database/prisma.service.js';
 import type { DeliverMessage } from '../application/deliver-message.js';
 import type { PluginJob } from '../application/plugin-job.js';
@@ -11,7 +12,7 @@ import { OUTAGE_PAUSE_MS, PluginsWorker } from './plugins.worker.js';
 const data: PluginJob = {
   kind: 'process',
   key: {
-    hash: ContentHash.parse('0'.repeat(64)),
+    hash: sha256('%PDF lecture'),
     processor: PluginName.parse('pdf'),
     version: 1,
   },

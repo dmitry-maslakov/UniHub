@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import {
   mkdir,
   mkdtemp,
@@ -13,11 +12,9 @@ import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { buffer } from 'node:stream/consumers';
 import type { ContentHash } from '@app/kernel';
+import { sha256 } from '../../../test/sha256.js';
 import { ContentTooLargeError } from '../domain/blob-store.js';
 import { FsBlobStore } from './fs-blob-store.js';
-
-const sha256 = (data: Buffer) =>
-  createHash('sha256').update(data).digest('hex') as ContentHash;
 
 describe('FsBlobStore', () => {
   let root: string;

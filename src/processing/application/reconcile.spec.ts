@@ -1,11 +1,11 @@
 import { PluginName } from '@app/kernel';
 import { catalogOf, processor } from '../../../test/discovered-plugins.js';
+import { sha256 } from '../../../test/sha256.js';
 import { Dispatch } from './dispatch.js';
 import {
   FakeFiles,
   FakeQueue,
   InMemoryRepresentations,
-  sha,
 } from './processing.fakes.js';
 import { Reconcile } from './reconcile.js';
 
@@ -16,14 +16,14 @@ describe('Reconcile', () => {
     });
     const files = new FakeFiles(
       new Map([
-        ['a', { name: 'a.pdf', mime: null, hash: sha('a') }],
-        ['b', { name: 'b.pptx', mime: null, hash: sha('b') }],
-        ['c', { name: 'c.txt', mime: null, hash: sha('c') }],
+        ['a', { name: 'a.pdf', mime: null, hash: sha256('a') }],
+        ['b', { name: 'b.pptx', mime: null, hash: sha256('b') }],
+        ['c', { name: 'c.txt', mime: null, hash: sha256('c') }],
       ]),
     );
     const representations = new InMemoryRepresentations();
     await representations.save({
-      hash: sha('b'),
+      hash: sha256('b'),
       processor: PluginName.parse('slides'),
       version: 1,
       parts: [],
@@ -41,7 +41,7 @@ describe('Reconcile', () => {
     expect(queue.requeued).toEqual([
       {
         kind: 'process',
-        key: { hash: sha('a'), processor: 'pdf', version: 1 },
+        key: { hash: sha256('a'), processor: 'pdf', version: 1 },
       },
     ]);
     expect(queue.enqueued).toEqual([]);

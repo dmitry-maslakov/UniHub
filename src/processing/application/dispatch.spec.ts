@@ -12,10 +12,11 @@ import {
 } from '../../../test/discovered-plugins.js';
 import { Dispatch } from './dispatch.js';
 import { jobId } from './plugin-job.js';
-import { FakeFiles, sha } from './processing.fakes.js';
+import { sha256 } from '../../../test/sha256.js';
+import { FakeFiles } from './processing.fakes.js';
 
 const portal = PortalId.parse('canvas');
-const hash = sha('notes');
+const hash = sha256('notes');
 
 const stored = (fileId: string, content = hash): Message => ({
   topic: FILE_CONTENT_STORED,
@@ -69,7 +70,7 @@ describe('Dispatch', () => {
   });
 
   it('queues no processing of content the file holds no more', async () => {
-    const jobs = await dispatch().jobsFor('m1', stored('a', sha('old')));
+    const jobs = await dispatch().jobsFor('m1', stored('a', sha256('old')));
     expect(jobs.map((job) => job.kind)).toEqual(['handle']);
   });
 

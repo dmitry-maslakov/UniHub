@@ -1,16 +1,14 @@
 import type { ProcessesContent, ProcessorInput } from '@app/plugin-sdk';
 import { MediaType, PluginName } from '@app/kernel';
 import { catalogOf, processor } from '../../../test/discovered-plugins.js';
+import { InMemoryBlobs } from '../../../test/in-memory-blobs.js';
+import { sha256 } from '../../../test/sha256.js';
 import type { ProcessJob } from './plugin-job.js';
 import { ProcessContent } from './process-content.js';
-import {
-  FakeBlobs,
-  FakeFiles,
-  InMemoryRepresentations,
-  sha,
-} from './processing.fakes.js';
+import { FakeFiles, InMemoryRepresentations } from './processing.fakes.js';
 
-const hash = sha('lecture');
+const lecture = '%PDF lecture';
+const hash = sha256(lecture);
 const mime = MediaType.parse('application/pdf');
 
 const job = (version = 1): ProcessJob => ({
@@ -24,7 +22,7 @@ function run(
   files: { name: string; hash?: typeof hash }[] = [{ name: 'a.pdf' }],
   version = 1,
 ) {
-  const blobs = new FakeBlobs();
+  const blobs = new InMemoryBlobs({ holding: [lecture] });
   const representations = new InMemoryRepresentations();
   const process = new ProcessContent(
     catalogOf({ processors: [processor('pdf', ['.pdf'], instance, version)] }),
@@ -67,7 +65,7 @@ describe('ProcessContent', () => {
   it('skips content no file holds any more', async () => {
     const process = vi.fn();
     const { process: p } = run({ process }, [
-      { name: 'a.pdf', hash: sha('newer') },
+      { name: 'a.pdf', hash: sha256('newer') },
     ]);
 
     await p.run(job());
@@ -100,7 +98,7 @@ describe('ProcessContent', () => {
     const process = new ProcessContent(
       catalogOf({}),
       new FakeFiles(),
-      new FakeBlobs(),
+      new InMemoryBlobs(),
       representations,
     );
 

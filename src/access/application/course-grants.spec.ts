@@ -1,4 +1,3 @@
-import type { CommandBus } from '@nestjs/cqrs';
 import {
   FindCourseQuery,
   UnknownCourseError,
@@ -7,23 +6,23 @@ import {
   GrantCourseAccessCommand,
   RevokeCourseAccessCommand,
 } from '../../identity/contracts.js';
-import { FakeQueries } from './access.fakes.js';
+import { FakeBus } from '../../../test/fake-bus.js';
 import { CourseGrants } from './course-grants.js';
 
 // catalog has one course, os-id
 function grants() {
-  const queries = new FakeQueries([
+  const queries = new FakeBus([
     [
       FindCourseQuery,
       ({ by }: FindCourseQuery) =>
         'id' in by && by.id === 'os-id' ? { id: 'os-id' } : null,
     ],
   ]);
-  const sent: object[] = [];
-  const commands = {
-    execute: async (command: object) => void sent.push(command),
-  } as unknown as CommandBus;
-  return { sent, grants: new CourseGrants(queries.bus, commands) };
+  const commands = new FakeBus();
+  return {
+    sent: commands.sent,
+    grants: new CourseGrants(queries.queries, commands.commands),
+  };
 }
 
 describe('CourseGrants', () => {
