@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectTransactionHost } from '@nestjs-cls/transactional';
+import type { ContentHash, PluginName } from '@app/kernel';
 import type { PrismaTxHost } from '../../platform/database/prisma.service.js';
 import {
   RepresentationRepository,
@@ -10,6 +11,9 @@ import {
 const byKey = ({ hash, processor, version }: RepresentationKey) => ({
   hash_processor_version: { hash, processor, version },
 });
+
+// newestKeys() reads this many at a time
+const PAGE = 1000;
 
 @Injectable()
 export class PrismaRepresentationRepository extends RepresentationRepository {
@@ -23,6 +27,34 @@ export class PrismaRepresentationRepository extends RepresentationRepository {
       select: { hash: true },
     });
     return row !== null;
+  }
+
+  // newest as texts.read.ts reads it: the highest version
+  async newest(hash: ContentHash, processor: PluginName) {
+    const row = await this.txHost.tx.representation.findFirst({
+      where: { hash, processor },
+      orderBy: { version: 'desc' },
+      select: { version: true, parts: true },
+    });
+    // save() keeps the parts as a list of strings
+    return row && { hash, processor, ...row, parts: row.parts as string[] };
+  }
+
+  // A page at a time, after the last (hash, processor) of the page before.
+  // Keys were checked on the way in, they're read back as them.
+  async *newestKeys() {
+    let after = { hash: '', processor: '' };
+    for (;;) {
+      const page = await this.txHost.tx.$queryRaw<RepresentationKey[]>`
+        SELECT DISTINCT ON (hash, processor) hash, processor, version
+        FROM "Representation"
+        WHERE (hash, processor) > (${after.hash}, ${after.processor})
+        ORDER BY hash, processor, version DESC
+        LIMIT ${PAGE}`;
+      yield* page;
+      if (page.length < PAGE) return;
+      after = page[page.length - 1];
+    }
   }
 
   async save({ parts, ...key }: Representation) {

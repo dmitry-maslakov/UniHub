@@ -1,6 +1,6 @@
 import type { Message } from '@app/plugin-sdk';
 import type { PluginName } from '@app/kernel';
-import type { RepresentationKey } from '../domain/representation.js';
+import { keyId, type RepresentationKey } from '../domain/representation.js';
 
 // What one queue job asks of one plugin, so a failing plugin only retries
 // itself. An aggregator handles a message; a processor makes text of some
@@ -28,4 +28,4 @@ export const pluginOf = (job: PluginJob) =>
 export const jobId = (job: PluginJob) =>
   job.kind === 'handle'
     ? `${job.messageId}__${job.aggregator}`
-    : `${job.key.hash}__${job.key.processor}__${job.key.version}`;
+    : keyId(job.key);
