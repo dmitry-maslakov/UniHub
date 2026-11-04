@@ -6,7 +6,7 @@ See @AGENTS.md as well.
 - issue per change, branch `feat/<issue>-<name>`, commits under the owner's name without AI trailers
 - PR descriptions: `Closes #N` and 2–4 short bullets, no signature
 - every PR gets one independent reviewer with no context but the diff, covering correctness, Nest and library canon, and architecture; agreed fixes go in, then the PR is merged right away. A declined point goes under Declined only if a later review would raise it again
-- connectors for private portals never go into this repo; they run elsewhere and talk gRPC
+- connectors for private portals never go into this repo; they run elsewhere and talk gRPC. Ones for public, documented platforms (Canvas) may, with all that belongs to one school (its address, tokens) in env only and made-up hosts and courses in fixtures
 - a rule is unit-tested where it lives: the domain on its own, a use case on fakes of its ports. e2e specs check the wiring only (README, Tests), so a rule one of them checks belongs in a unit spec
 
 ## Turned down or put off on review, to go through later
