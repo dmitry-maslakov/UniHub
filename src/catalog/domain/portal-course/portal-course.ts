@@ -15,7 +15,7 @@ export interface PortalCourseState extends Ingested {
   props: PortalCourseProps;
 }
 
-// A course as it exists in one portal (a Canvas course, an ACS group, a
+// A course as it exists in one portal (a Canvas course, a Moodle course, a
 // Teams team). Nothing downstream reads them, so a change records no event.
 export class PortalCourse extends CatalogAggregate<PortalCourseState> {
   static create(ref: PortalRef, props: PortalCourseProps) {

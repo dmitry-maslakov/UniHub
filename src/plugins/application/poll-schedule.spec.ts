@@ -11,7 +11,7 @@ describe('PollSchedule', () => {
       replace: async (s: readonly Schedule[]) => void replaced.push(s),
     } as ConnectorSchedules;
     const catalog = catalogOf({
-      polls: [poll('acs'), poll('canvas')],
+      polls: [poll('moodle'), poll('canvas')],
       pushes: [push('teams', { run: async () => {} })],
     });
     const schedule = new PollSchedule(
@@ -25,7 +25,7 @@ describe('PollSchedule', () => {
     expect(
       replaced[0].map(({ connection, pattern }) => [connection.key, pattern]),
     ).toEqual([
-      ['acs__shared', '0 0 1 1 *'],
+      ['moodle__shared', '0 0 1 1 *'],
       ['canvas__shared', '0 0 1 1 *'],
     ]);
   });

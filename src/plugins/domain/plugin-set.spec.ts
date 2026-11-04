@@ -9,7 +9,7 @@ const none = { polls: [], pushes: [], processors: [], aggregators: [] };
 describe('PluginSet', () => {
   it('takes plugins that keep the rules', () => {
     const found = {
-      polls: [of('acs')],
+      polls: [of('moodle')],
       pushes: [of('teams')],
       processors: [named('office-text')],
       aggregators: [named('feed')],
@@ -29,15 +29,15 @@ describe('PluginSet', () => {
   });
 
   it('refuses two connectors of one portal', () => {
-    const found = { ...none, polls: [of('acs')], pushes: [of('acs')] };
+    const found = { ...none, polls: [of('moodle')], pushes: [of('moodle')] };
     expect(() => PluginSet.of(found, [])).toThrow(
-      'connector portal "acs" is used twice',
+      'connector portal "moodle" is used twice',
     );
   });
 
   it('refuses a portal that also has a connector over gRPC', () => {
-    const found = { ...none, pushes: [of('acs')] };
-    expect(() => PluginSet.of(found, [PortalId.parse('acs')])).toThrow(
+    const found = { ...none, pushes: [of('moodle')] };
+    expect(() => PluginSet.of(found, [PortalId.parse('moodle')])).toThrow(
       PortalHasTwoWritersError,
     );
   });

@@ -4,8 +4,8 @@ describe('plugins settings', () => {
   it('turn built-in plugins on by name, none unless set', () => {
     expect(pluginsSettings.parse({}).enabled).toEqual([]);
     expect(
-      pluginsSettings.parse({ PLUGINS: 'office-text, acs' }).enabled,
-    ).toEqual(['office-text', 'acs']);
+      pluginsSettings.parse({ PLUGINS: 'office-text, moodle' }).enabled,
+    ).toEqual(['office-text', 'moodle']);
     expect(pluginsSettings.safeParse({ PLUGINS: 'Office Text' }).success).toBe(
       false,
     );

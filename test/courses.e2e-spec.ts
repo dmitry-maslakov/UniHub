@@ -62,7 +62,7 @@ describe('courses', () => {
     commands = app.get(CommandBus);
     queries = app.get(QueryBus);
 
-    await portalCourse('acs-t', 'arsiit', 'Arhitektura računara SIIT');
+    await portalCourse('moodle-t', 'os-101', 'Operating systems');
     await portalCourse('canvas-t', '1201', 'AR 2025/26');
     await portalCourse('canvas-t', '1388', 'AR 2026/27');
   });
@@ -71,7 +71,7 @@ describe('courses', () => {
 
   it('makes a course of courses from several portals and years', async () => {
     await create('ar', 'Arhitektura računara');
-    await link('ar', 'acs-t', 'arsiit', null);
+    await link('ar', 'moodle-t', 'os-101', null);
     await link('ar', 'canvas-t', '1388', 2026);
     await link('ar', 'canvas-t', '1201', 2025);
 
@@ -80,7 +80,7 @@ describe('courses', () => {
       portalCourses: [
         { portal: 'canvas-t', externalId: '1201', year: 2025 },
         { portal: 'canvas-t', externalId: '1388', year: 2026 },
-        { portal: 'acs-t', externalId: 'arsiit', year: null },
+        { portal: 'moodle-t', externalId: 'os-101', year: null },
       ],
     });
   });

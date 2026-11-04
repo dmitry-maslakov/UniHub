@@ -10,7 +10,7 @@ import {
 } from '@app/plugin-sdk';
 import { NestPluginDiscovery } from './nest-plugin-discovery.js';
 
-@PollConnector({ portal: 'acs', schedule: '*/15 * * * *' })
+@PollConnector({ portal: 'moodle', schedule: '*/15 * * * *' })
 @Injectable()
 class Poller {
   async poll() {}
@@ -56,7 +56,7 @@ describe('NestPluginDiscovery', () => {
     const found = (await discovery(Poller, Pusher, Pdf)).find();
 
     expect(found.polls.map(({ spec }) => spec)).toEqual([
-      { portal: 'acs', schedule: '*/15 * * * *' },
+      { portal: 'moodle', schedule: '*/15 * * * *' },
     ]);
     expect(found.polls[0].instance).toBeInstanceOf(Poller);
     expect(found.pushes[0].instance).toBeInstanceOf(Pusher);

@@ -1,10 +1,10 @@
 # UniHub
 
-Server that pulls study materials, announcements and deadlines from FTN systems (Canvas, ACS, Teams…) into one place.
+A hub for learning materials: connectors bring in courses, posts and files from any portal, processors turn files into readable text, and students and AI agents read it all over REST and MCP.
 
 ## Running locally
 
-Needs Node 22+ and Docker.
+Needs Node 24+ and Docker.
 
 ```bash
 cp .env.example .env   # then set BETTER_AUTH_SECRET

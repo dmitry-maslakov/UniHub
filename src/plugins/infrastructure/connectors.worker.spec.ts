@@ -9,14 +9,14 @@ import type { pluginsConfig } from '../plugins.config.js';
 import { POLL, TICK, type ConnectorJob } from './connectors.queue.js';
 import { ConnectorsWorker } from './connectors.worker.js';
 
-const job = (name: string, portal = 'acs') =>
+const job = (name: string, portal = 'moodle') =>
   ({ name, data: { portal, account: 'shared' } }) as Job<ConnectorJob>;
 
 function worker(polled: (ctx: ConnectorContext) => Promise<void>) {
   const pollNow = vi.fn(async () => {});
   const config = { pollTimeoutMs: 50 } as ConfigType<typeof pluginsConfig>;
   const w = new ConnectorsWorker(
-    catalogOf({ polls: [poll('acs', { poll: polled })] }),
+    catalogOf({ polls: [poll('moodle', { poll: polled })] }),
     new ConnectionDirectory({} as IngestService),
     { pollNow } as unknown as ConnectorSchedules,
     config,
@@ -32,7 +32,7 @@ describe('ConnectorsWorker', () => {
     const { w, pollNow } = worker(async () => {});
     await w.process(job(TICK));
     expect(pollNow).toHaveBeenCalledWith(
-      expect.objectContaining({ key: 'acs__shared' }),
+      expect.objectContaining({ key: 'moodle__shared' }),
     );
   });
 
@@ -44,7 +44,7 @@ describe('ConnectorsWorker', () => {
     await w.process(job(POLL, 'gone'));
 
     expect(seen.map((ctx) => [ctx.connection, ctx.signal.aborted])).toEqual([
-      [{ portal: 'acs', account: 'shared' }, false],
+      [{ portal: 'moodle', account: 'shared' }, false],
     ]);
   });
 

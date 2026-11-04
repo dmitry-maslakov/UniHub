@@ -14,7 +14,7 @@ const names = (plugins: { spec: { name: string } }[]) =>
 
 describe('PluginCatalog', () => {
   const catalog = catalogOf({
-    polls: [poll('acs')],
+    polls: [poll('moodle')],
     pushes: [push('teams', { run: async () => {} })],
     processors: [
       processor('pdf', ['.pdf', 'application/pdf']),
@@ -50,12 +50,12 @@ describe('PluginCatalog', () => {
       'slides',
     );
     expect(catalog.aggregator(PluginName.parse('slides'))).toBeUndefined();
-    expect(catalog.pollConnector(PortalId.parse('acs'))).toBeDefined();
+    expect(catalog.pollConnector(PortalId.parse('moodle'))).toBeDefined();
     expect(catalog.pollConnector(PortalId.parse('teams'))).toBeUndefined();
   });
 
   it('stops the app on plugins that break the rules', () => {
-    expect(() => catalogOf({ polls: [poll('acs')] }, ['acs'])).toThrow(
+    expect(() => catalogOf({ polls: [poll('moodle')] }, ['moodle'])).toThrow(
       PortalHasTwoWritersError,
     );
   });

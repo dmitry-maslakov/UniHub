@@ -62,7 +62,7 @@ describe('IngestErrorsFilter', () => {
 
   it('asks for the parent first when a record refers to an unknown one', async () => {
     const answer = await answerTo(
-      new UnknownReferenceError(PortalId.parse('acs'), 'c1'),
+      new UnknownReferenceError(PortalId.parse('moodle'), 'c1'),
     );
     expect(answer.code).toBe(status.FAILED_PRECONDITION);
   });

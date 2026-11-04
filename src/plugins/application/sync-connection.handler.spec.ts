@@ -9,7 +9,7 @@ import { SyncConnectionHandler } from './sync-connection.handler.js';
 const sync = (portal: string) => {
   const pollNow = vi.fn(async () => {});
   const handler = new SyncConnectionHandler(
-    catalogOf({ polls: [poll('acs')] }),
+    catalogOf({ polls: [poll('moodle')] }),
     { pollNow } as unknown as ConnectorSchedules,
   );
   const connection = Connection.shared(PortalId.parse(portal));
@@ -21,10 +21,10 @@ const sync = (portal: string) => {
 
 describe('SyncConnectionHandler', () => {
   it('polls the connection now', async () => {
-    const { run, pollNow } = sync('acs');
+    const { run, pollNow } = sync('moodle');
     await run;
     expect(pollNow).toHaveBeenCalledWith(
-      expect.objectContaining({ key: 'acs__shared' }),
+      expect.objectContaining({ key: 'moodle__shared' }),
     );
   });
 

@@ -13,13 +13,13 @@ model CourseLink {
   portalCourse   PortalCourse @relation(fields: [portalCourseId], references: [id], onDelete: Cascade)
   courseId       String
   course         Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  // academic year the portal course is for; null when it spans years (acs)
+  // academic year the portal course is for; null when it spans years
   year           Int?
 
   @@index([courseId])
 }
 
-// a course as it exists in one portal (canvas course, acs group, teams team...).
+// a course as it exists in one portal (canvas course, moodle course, teams team...).
 // portal is a plugin id, not an enum, so a new plugin doesn't need a migration
 model PortalCourse {
   id         String      @id @default(uuid())
