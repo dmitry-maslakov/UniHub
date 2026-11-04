@@ -21,7 +21,9 @@ export class CatalogFileFacts extends FileFacts {
 
   async file(id: string) {
     const file = await this.queries.execute(new GetFileQuery(id));
-    return file && factOf(file);
+    // catalog keeps a removed file, marked so
+    if (!file || file.removed) return null;
+    return { ...factOf(file), hash: file.contentHash };
   }
 
   async holding(hash: ContentHash) {

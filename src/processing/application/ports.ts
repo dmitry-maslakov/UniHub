@@ -9,8 +9,10 @@ export interface FileFact {
 
 // catalog's files, as processing needs them
 export abstract class FileFacts {
-  // null once it's gone
-  abstract file(id: string): Promise<FileFact | null>;
+  // with the content it holds now; null once it's removed
+  abstract file(
+    id: string,
+  ): Promise<(FileFact & { hash: ContentHash | null }) | null>;
   // the files that hold this content and aren't removed
   abstract holding(hash: ContentHash): Promise<FileFact[]>;
   // every file that has content and isn't removed

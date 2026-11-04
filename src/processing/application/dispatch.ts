@@ -27,7 +27,11 @@ export class Dispatch {
     if (message.topic !== FILE_CONTENT_STORED) return handle;
     const { fileId, hash } = message.payload;
     const file = await this.files.file(fileId);
-    return file ? [...this.processing({ ...file, hash }), ...handle] : handle;
+    // removed, or given other content, since: processing queued for content
+    // no file may hold would keep its job id for a day, and the same content
+    // stored in another file meanwhile wouldn't be queued
+    if (file?.hash !== hash) return handle;
+    return [...this.processing({ ...file, hash }), ...handle];
   }
 
   processing(file: FileFact & { hash: ContentHash }): ProcessJob[] {

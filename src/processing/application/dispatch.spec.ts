@@ -18,9 +18,9 @@ import {
 const portal = PortalId.parse('canvas');
 const hash = sha('notes');
 
-const stored = (fileId: string): Message => ({
+const stored = (fileId: string, content = hash): Message => ({
   topic: FILE_CONTENT_STORED,
-  payload: { portal, fileId, hash },
+  payload: { portal, fileId, hash: content },
 });
 
 function dispatch() {
@@ -66,6 +66,11 @@ describe('Dispatch', () => {
 
   it('queues no processing for a file that is gone', async () => {
     const jobs = await dispatch().jobsFor('m1', stored('gone'));
+    expect(jobs.map((job) => job.kind)).toEqual(['handle']);
+  });
+
+  it('queues no processing of content the file holds no more', async () => {
+    const jobs = await dispatch().jobsFor('m1', stored('a', sha('old')));
     expect(jobs.map((job) => job.kind)).toEqual(['handle']);
   });
 

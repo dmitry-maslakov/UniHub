@@ -6,6 +6,7 @@ import type { Queue } from 'bullmq';
 import type { PortalIngest } from '@app/plugin-sdk';
 import { AppModule } from '../src/app.module.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
+import { FileFacts } from '../src/processing/application/ports.js';
 import { Reconcile } from '../src/processing/application/reconcile.js';
 import { PLUGINS_QUEUE } from '../src/processing/infrastructure/plugins.queue.js';
 import { FakePluginsModule, FakeTextProcessor } from './fake-plugins.js';
@@ -74,6 +75,16 @@ describe('processing', { timeout: 20_000 }, () => {
       timeout: 10_000,
       interval: 200,
     });
+  });
+
+  it('takes a removed file for gone, as catalog keeps it', async () => {
+    await hub.file({ externalId: 'gone', name: 'gone.txt' });
+    await hub.removeFile('gone');
+    const { id } = await prisma.file.findUniqueOrThrow({
+      where: { portal_externalId: { portal, externalId: 'gone' } },
+    });
+
+    expect(await app.get(FileFacts).file(id)).toBeNull();
   });
 
   it('queues it again once the last reconcile job for it is done', async () => {
