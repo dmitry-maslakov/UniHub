@@ -76,6 +76,8 @@ A connector can also run as its own service, in any language, and send data over
 
 The gRPC server starts only when some token is set and listens on `GRPC_URL` without TLS, so keep it on a private network or behind a TLS proxy.
 
+File content, from either kind of connector, is kept once per sha256 under `STORAGE_PATH`. One file may take up to `STORAGE_MAX_FILE_MB` (1024 MiB by default): past that the upload is refused as an invalid record (`INVALID_ARGUMENT` over gRPC) and nothing of it is kept. A file whose declared size is past it is answered `needsContent: false`, so a connector doesn't send it on every sync; one without a size should not resend refused content until `File` answers `changed` for it.
+
 ## Deploy
 
 `deploy/compose.yml` runs the hub on one server: caddy (TLS from Let's Encrypt) in front of the app, postgres and redis.

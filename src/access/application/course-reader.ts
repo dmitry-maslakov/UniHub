@@ -13,7 +13,7 @@ import {
   GetTextPageQuery,
   ListTextsQuery,
 } from '../../processing/contracts.js';
-import { GetContentQuery } from '../../storage/contracts.js';
+import { BlobStore } from '../../storage/contracts.js';
 import { NotReadableError } from './errors.js';
 
 export interface Page {
@@ -38,7 +38,10 @@ const bounded = ({ offset, limit }: Page): Page => ({
 // here.
 @Injectable()
 export class CourseReader {
-  constructor(private readonly queries: QueryBus) {}
+  constructor(
+    private readonly queries: QueryBus,
+    private readonly blobs: BlobStore,
+  ) {}
 
   private async canRead(userId: string, courseId: string) {
     const readable = await this.queries.execute(
@@ -137,7 +140,7 @@ export class CourseReader {
     const { file, hash } = await this.readableContent(userId, fileId);
     return {
       ...toFileView(file),
-      stream: await this.queries.execute(new GetContentQuery(hash)),
+      stream: await this.blobs.get(hash),
     };
   }
 }

@@ -5,7 +5,7 @@ import { FILE_CONTENT_STORED } from '@app/plugin-sdk';
 import { MediaType } from '@app/kernel';
 import { GetFileQuery } from '../../catalog/contracts.js';
 import { PluginRegistry } from '../../plugins/plugin-registry.js';
-import { GetContentQuery } from '../../storage/contracts.js';
+import { BlobStore } from '../../storage/contracts.js';
 import { RepresentationRepository } from '../domain/representation.js';
 import type { PluginJob } from '../queues.js';
 
@@ -17,6 +17,7 @@ export class PluginRunner {
   constructor(
     private readonly registry: PluginRegistry,
     private readonly queries: QueryBus,
+    private readonly blobs: BlobStore,
     private readonly representations: RepresentationRepository,
   ) {}
 
@@ -31,10 +32,12 @@ export class PluginRunner {
     }
 
     if (message.topic !== FILE_CONTENT_STORED) return;
-    const { fileId, hash } = message.payload;
+    const { fileId } = message.payload;
     const file = await this.queries.execute(new GetFileQuery(fileId));
     // gone, or the job is about content that has been replaced since
-    if (!file || file.removed || file.contentHash !== hash) return;
+    if (!file || file.removed || file.contentHash !== message.payload.hash)
+      return;
+    const hash = file.contentHash;
     // the same content in another file, or a job queued twice
     const { name, version } = found.plugin.options;
     if (await this.representations.exists(hash, name, version)) return;
@@ -48,7 +51,7 @@ export class PluginRunner {
         mime: MediaType.safeParse(file.mime).data ?? null,
         hash,
         content: async () => {
-          const stream = await this.queries.execute(new GetContentQuery(hash));
+          const stream = await this.blobs.get(hash);
           // asked for after the run ended: nobody would close it
           if (done) {
             stream.destroy();

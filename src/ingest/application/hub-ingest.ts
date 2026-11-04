@@ -9,8 +9,8 @@ import {
   type PortalIngest,
 } from '@app/plugin-sdk';
 import * as catalog from '../../catalog/contracts.js';
-import { PutContentCommand } from '../../storage/contracts.js';
-import { ContentHash, InvalidError, PortalId, type Json } from '@app/kernel';
+import { BlobStore } from '../../storage/contracts.js';
+import { InvalidError, PortalId, type Json } from '@app/kernel';
 import { SyncStateRepository } from '../domain/sync-state.js';
 import {
   courseRecord,
@@ -45,6 +45,7 @@ export class HubIngest {
   constructor(
     private readonly commands: CommandBus,
     private readonly queries: QueryBus,
+    private readonly blobs: BlobStore,
     private readonly states: SyncStateRepository,
     private readonly outbox: Outbox,
   ) {}
@@ -76,10 +77,17 @@ export class HubIngest {
         }),
       file: (record) =>
         run(async () => {
+          const file = toFileInput(portal, record);
           const { changed, needsContent } = await this.commands.execute(
-            new catalog.UpsertFileCommand(toFileInput(portal, record)),
+            new catalog.UpsertFileCommand(file),
           );
-          return this.notify({ changed, needsContent });
+          // storage would refuse it, and the connector would send it again
+          // on every sync
+          const tooLarge = (file.size ?? 0) > this.blobs.maxBytes;
+          return this.notify({
+            changed,
+            needsContent: needsContent && !tooLarge,
+          });
         }),
       content: (externalId, content) =>
         run(async () =>
@@ -123,11 +131,9 @@ export class HubIngest {
       content.destroy();
       throw new catalog.UnknownReferenceError(portal, externalId);
     }
-    const { hash } = await this.commands.execute(
-      new PutContentCommand(content),
-    );
+    const { hash } = await this.blobs.put(content);
     const { changed } = await this.commands.execute(
-      new catalog.SetFileContentCommand(ref, ContentHash.parse(hash)),
+      new catalog.SetFileContentCommand(ref, hash),
     );
     return { hash, changed };
   }

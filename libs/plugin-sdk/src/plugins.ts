@@ -41,11 +41,15 @@ export interface PushesFromPortal {
 export interface PortalIngest {
   course(record: CourseRecord): Promise<{ changed: boolean }>;
   item(record: ItemRecord): Promise<{ changed: boolean }>;
-  // needsContent: the hub has no content for it yet, or it may have changed
+  // needsContent: the hub has no content for it yet, or it may have changed.
+  // False for a size past the hub's limit for one file, which content()
+  // would refuse
   file(
     record: FileRecord,
   ): Promise<{ changed: boolean; needsContent: boolean }>;
-  // content of a file already sent with file()
+  // content of a file already sent with file(). Past the hub's limit for one
+  // file it is an InvalidRecordError, and so is every resend: send it again
+  // only once file() answers changed for that file
   content(
     fileExternalId: string,
     content: Readable,

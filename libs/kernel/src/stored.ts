@@ -7,22 +7,19 @@ import type { Json } from './json.js';
 // they are kept in, values that come in compare equal to the same values
 // read back; otherwise a record holding one would change on every resend.
 
-const LONE_SURROGATE = /\p{Cs}/gu;
-const wellFormed = (value: string) => value.replace(LONE_SURROGATE, '\uFFFD');
-
 export const StoredText = z
   .string()
   .refine((v) => !v.includes('\u0000'), { message: 'contains a NUL character' })
-  .overwrite(wellFormed);
+  .overwrite((v) => v.toWellFormed());
 
 const kept = (value: Json): Json => {
-  if (typeof value === 'string') return wellFormed(value);
+  if (typeof value === 'string') return value.toWellFormed();
   // -0 === 0, so this turns -0 into 0
   if (typeof value === 'number') return value === 0 ? 0 : value;
   if (Array.isArray(value)) return value.map(kept);
   if (value !== null && typeof value === 'object')
     return Object.fromEntries(
-      Object.entries(value).map(([k, v]) => [wellFormed(k), kept(v)]),
+      Object.entries(value).map(([k, v]) => [k.toWellFormed(), kept(v)]),
     );
   return value;
 };

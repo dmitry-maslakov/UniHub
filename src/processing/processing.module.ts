@@ -3,6 +3,7 @@ import { ListTextsHandler } from './application/queries/list-texts.handler.js';
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { TerminusModule } from '@nestjs/terminus';
+import { StorageModule } from '../storage/contracts.js';
 import { PluginRunner } from './application/plugin-runner.js';
 import { Reconciler } from './application/reconciler.js';
 import { RepresentationRepository } from './domain/representation.js';
@@ -29,6 +30,7 @@ const DAY = 24 * 60 * 60;
     }),
     // the worker asks whether the database is up before blaming a plugin
     TerminusModule,
+    StorageModule,
   ],
   providers: [
     ListTextsHandler,

@@ -14,7 +14,10 @@ service Ingest {
   rpc Course (CourseRecord) returns (Changed);
   rpc Item (ItemRecord) returns (Changed);
   rpc File (FileRecord) returns (FileResult);
-  // external_id of a file already sent with File, then data, then sha256
+  // external_id of a file already sent with File, then data, then sha256.
+  // Content past the hub's limit for one file is refused with
+  // INVALID_ARGUMENT, and so is every resend: send it again only once File
+  // answers changed for that file
   rpc Content (stream ContentChunk) returns (ContentResult);
   // the portal no longer has it; sending it again brings it back
   rpc RemoveItem (Ref) returns (Changed);
@@ -60,6 +63,8 @@ message FileRecord {
 
 message FileResult {
   bool changed = 1;
+  // the hub has no content for it yet, or it may have changed. False for a
+  // size past the hub's limit for one file: Content would be refused
   bool needs_content = 2;
 }
 
