@@ -13,13 +13,11 @@ import {
   ApiNotFoundResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { StoredText } from '@app/kernel';
 import { ADMIN_ROLE, Roles } from '../../../identity/contracts.js';
 import { CourseGrants } from '../../application/course-grants.js';
+import { recordId } from './requests.js';
 
-// a user's id (Better Auth's) or a course's (catalog's): text postgres can
-// keep, since a NUL would fail the lookup with a 500
-const id = { schema: StoredText.min(1) };
+const id = { schema: recordId };
 
 // Who reads which course, set by admins. A course by the id catalog gave it
 // (POST /api/courses answers it).

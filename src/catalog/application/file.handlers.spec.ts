@@ -132,4 +132,22 @@ describe('file commands', () => {
       { topic: FILE_REMOVED, payload: { portal, fileId: id } },
     ]);
   });
+
+  it('bring a removed file back when it is sent again, its content announced anew', async () => {
+    const { commands, files } = await catalog();
+    const { id } = await commands.execute(new UpsertFileCommand(file()));
+    await commands.execute(new SetFileContentCommand(ref('f1'), hash));
+    await commands.execute(new RemoveFileCommand(ref('f1')));
+    files.events.length = 0;
+
+    expect(await commands.execute(new UpsertFileCommand(file()))).toEqual({
+      id,
+      changed: true,
+      needsContent: false,
+    });
+    expect(files.records.get('canvas:f1')?.removedAt).toBeNull();
+    expect(files.events).toEqual([
+      { topic: FILE_CONTENT_CHANGED, payload: { portal, fileId: id, hash } },
+    ]);
+  });
 });

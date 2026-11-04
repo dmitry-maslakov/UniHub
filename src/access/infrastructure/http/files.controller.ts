@@ -15,20 +15,12 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { create as contentDisposition } from 'content-disposition';
-import { z } from 'zod';
-import { PluginName } from '@app/kernel';
+import type { z } from 'zod';
 import { CurrentUserId } from '../../../identity/contracts.js';
 import { CourseReader } from '../../application/course-reader.js';
-import { textPage } from '../../application/page.js';
 import { Limited } from '../throttle.js';
+import { textQuery } from './requests.js';
 import { FileDetailsResponse, TextPageResponse } from './responses.js';
-
-const textQuery = z.object({
-  page: textPage,
-  processor: PluginName.optional().describe(
-    'which text, the first one by default',
-  ),
-});
 
 @ApiTags('files')
 @ApiBearerAuth()

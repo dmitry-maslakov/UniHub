@@ -89,6 +89,21 @@ describe('IngestService', () => {
     expect(sent).toEqual([]);
   });
 
+  it('takes a date sent as text, and no text or json postgres would refuse', async () => {
+    const { service, sent } = ingest();
+    const post = { externalId: 'p1', kind: 'post', raw: {} };
+    await service.item(shared, { ...post, publishedAt: '2026-10-29T14:12Z' });
+    expect((sent[0] as catalog.UpsertItemCommand).data.publishedAt).toEqual(
+      new Date('2026-10-29T14:12:00Z'),
+    );
+
+    for (const nul of [{ title: 'a\u0000b' }, { raw: { body: 'a\u0000b' } }])
+      await expect(
+        service.item(shared, { ...post, ...nul }),
+      ).rejects.toBeInstanceOf(MalformedRecordError);
+    expect(sent).toHaveLength(1);
+  });
+
   it('wakes the outbox relay only when something changed', async () => {
     const item = { externalId: 'p1', kind: 'post', raw: {} };
     const changed = ingest();
