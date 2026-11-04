@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import { http } from 'msw';
+import { http, HttpResponse } from 'msw';
 import type { MockInstance } from 'vitest';
 import { PortalId } from '@app/plugin-sdk';
 import { CanvasConnector, WARN_BEFORE_MS } from './canvas.connector.js';
@@ -203,15 +203,63 @@ describe('CanvasConnector', () => {
     expect(ingest.removedItems).toEqual(['assignment:901']);
   });
 
-  it('skips a file whose download Canvas refuses, and goes on', async () => {
+  it('skips a file whose download Canvas refuses or fails, and goes on', async () => {
+    for (const status of [404, 422]) {
+      canvas.server.use(
+        http.get(`${CANVAS_URL}/files/3002/download`, () => refusal(status)),
+      );
+      const ingest = new RecordingIngest();
+      await run(ingest);
+      expect([...ingest.contents.keys()]).toEqual(['3001']);
+    }
+
+    const skips = warn.mock.calls
+      .map(([message]) => String(message))
+      .filter((message) => message.startsWith('file 3002'));
+    expect(skips).toEqual([
+      expect.stringContaining('answered 404'),
+      expect.stringContaining('answered 422'),
+    ]);
+  });
+
+  it('skips a course Canvas fails on, goes on, and fails the run at the end', async () => {
+    (canvas.answers['/api/v1/courses'] as object[]).push({
+      id: 103,
+      name: 'Networks',
+      course_code: 'NET-2026',
+      start_at: null,
+      end_at: null,
+    });
+    canvas.answers[`${COURSE}/assignments`] = 400;
+    const ingest = new RecordingIngest();
+
+    await expect(run(ingest)).rejects.toThrow('canvas courses 101 skipped');
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringMatching(/^course 101 skipped: canvas answered 400/),
+    );
+    expect(ingest.courses.has('103')).toBe(true);
+    // course 101's listings as they were, so nothing of it is taken for gone
+    expect(ingest.saved).toEqual({
+      courses: { '103': { items: {}, files: {} } },
+    });
+  });
+
+  it('stops at a token Canvas no longer takes, in the middle of a run too', async () => {
     canvas.server.use(
-      http.get(`${CANVAS_URL}/files/3002/download`, () => refusal(404)),
+      http.get(`${CANVAS_URL}${COURSE}/assignments`, () =>
+        HttpResponse.json(
+          { errors: [{ message: 'Invalid access token.' }] },
+          {
+            status: 401,
+            headers: { 'www-authenticate': 'Bearer realm="canvas-lms"' },
+          },
+        ),
+      ),
     );
     const ingest = new RecordingIngest();
-    await run(ingest);
 
-    expect([...ingest.contents.keys()]).toEqual(['3001']);
-    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/^file 3002/));
+    await expect(run(ingest)).rejects.toBeInstanceOf(TokenRejectedError);
+    expect(ingest.saved).toBeNull();
   });
 
   it('warns two weeks before the token expires', async () => {

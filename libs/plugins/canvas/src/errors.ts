@@ -28,3 +28,8 @@ export const visible = <T>(read: Promise<T>) =>
     if (error instanceof NotVisibleError) return null;
     throw error;
   });
+
+// What Canvas answered that fails one request, not the run: anything but a
+// token it no longer takes, which every request would get.
+export const skippable = (error: unknown): error is CanvasError =>
+  error instanceof CanvasError && !(error instanceof TokenRejectedError);

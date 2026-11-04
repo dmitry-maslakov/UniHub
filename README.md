@@ -113,7 +113,7 @@ What it reads, of the courses you're active in:
 - only what the whole course sees: no announcements for some sections, no assignments for only some students, no group discussions, and no field that says how you stand (read, done, locked, your submission)
 - not discussion replies, quizzes, grades, submissions, the calendar, groups, finished courses, or files linked only from inside a page's text
 
-A record gone from a listing that went through to the end is removed. Nothing is removed for a listing that failed, was cut short or refused, or a tab hidden since. It sends one request at a time, 100 records a page; a throttled or failing request is tried again after 1, 2, 4, 8 and 16 seconds, and each waits 2 seconds while the token's quota is low. That's about ten requests per course an hour, and the files that changed.
+A record gone from a listing that went through to the end is removed. Nothing is removed for a listing that failed, was cut short or refused, or a tab hidden since. A course Canvas fails on (a listing still failing after the retries, a bad request) is skipped for that run and logged, the others go on, and the run is marked failed once they're through; a download it fails on is logged and tried again the next run. It sends one request at a time, 100 records a page; a throttled or failing request is tried again after 1, 2, 4, 8 and 16 seconds, and each waits 2 seconds while the token's quota is low. That's about ten requests per course an hour, and the files that changed.
 
 ## External connectors
 
