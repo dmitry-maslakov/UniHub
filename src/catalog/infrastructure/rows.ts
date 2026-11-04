@@ -21,6 +21,10 @@ export const byPortalRef = ({ portal, externalId }: PortalRef) => ({
 // every ingested row has one; the course listing reads it without the rest
 export const portalOf = (row: { portal: string }) => row.portal as PortalId;
 
+// the content listing reads it without the rest
+export const contentOf = (row: Pick<File, 'contentHash'>) =>
+  row.contentHash as ContentHash | null;
+
 // size is a bigint in the db (files over 2 GB), a number everywhere else
 export const fileValues = (
   row: Pick<File, 'portal' | 'size' | 'mime' | 'contentHash'>,
@@ -28,7 +32,7 @@ export const fileValues = (
   portal: portalOf(row),
   size: row.size === null ? null : Number(row.size),
   mime: row.mime as MediaType | null,
-  contentHash: row.contentHash as ContentHash | null,
+  contentHash: contentOf(row),
 });
 
 export const itemValues = (row: Pick<Item, 'portal' | 'raw'>) => ({

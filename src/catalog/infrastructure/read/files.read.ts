@@ -9,9 +9,10 @@ import {
   ListCourseFilesQuery,
   ListFilesOfContentQuery,
   ListFilesWithContentQuery,
+  ListVisibleContentQuery,
   type FileDto,
 } from '../../application/queries.js';
-import { byPortalRef, fileValues } from '../rows.js';
+import { byPortalRef, contentOf, fileValues } from '../rows.js';
 import { visibleFile } from './visibility.js';
 
 const select = {
@@ -29,6 +30,17 @@ const select = {
   removedAt: true,
 } satisfies Prisma.FileSelect;
 
+// the course a visible file shows in (see visibleFile)
+const withCourse = {
+  portalCourse: { select: { link: { select: { courseId: true } } } },
+} satisfies Prisma.FileSelect;
+
+const byFolderAndName = [
+  { path: 'asc' },
+  { name: 'asc' },
+  { id: 'asc' },
+] satisfies Prisma.FileOrderByWithRelationInput[];
+
 const toDto = ({
   removedAt,
   ...row
@@ -45,7 +57,7 @@ export class ListCourseFilesHandler implements IQueryHandler<ListCourseFilesQuer
   async execute({ courseId, offset, limit }: ListCourseFilesQuery) {
     const rows = await this.txHost.tx.file.findMany({
       where: visibleFile({ courseId }),
-      orderBy: [{ path: 'asc' }, { name: 'asc' }, { id: 'asc' }],
+      orderBy: byFolderAndName,
       skip: offset,
       take: limit,
       select,
@@ -61,15 +73,44 @@ export class GetCourseFileHandler implements IQueryHandler<GetCourseFileQuery> {
   async execute({ fileId }: GetCourseFileQuery) {
     const row = await this.txHost.tx.file.findFirst({
       where: { AND: [{ id: fileId }, visibleFile()] },
-      select: {
-        ...select,
-        portalCourse: { select: { link: { select: { courseId: true } } } },
-      },
+      select: { ...select, ...withCourse },
     });
     const courseId = row?.portalCourse?.link?.courseId;
     if (!row || !courseId) return null;
     const { portalCourse: _, ...file } = row;
     return { ...toDto(file), courseId };
+  }
+}
+
+@QueryHandler(ListVisibleContentQuery)
+export class ListVisibleContentHandler implements IQueryHandler<ListVisibleContentQuery> {
+  constructor(@InjectTransactionHost() private readonly txHost: PrismaTxHost) {}
+
+  async execute({ courseIds }: ListVisibleContentQuery) {
+    const rows = await this.txHost.tx.file.findMany({
+      where: {
+        AND: [
+          visibleFile({ courseId: { in: [...courseIds] } }),
+          { contentHash: { not: null } },
+        ],
+      },
+      orderBy: byFolderAndName,
+      select: {
+        id: true,
+        name: true,
+        path: true,
+        contentHash: true,
+        ...withCourse,
+      },
+    });
+    // the filter leaves only rows with both, which Prisma's types can't tell
+    return rows.flatMap(({ id, name, path, portalCourse, ...row }) => {
+      const courseId = portalCourse?.link?.courseId;
+      const hash = contentOf(row);
+      return courseId && hash
+        ? [{ fileId: id, courseId, hash, name, path }]
+        : [];
+    });
   }
 }
 

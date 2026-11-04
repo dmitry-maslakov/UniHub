@@ -1,8 +1,9 @@
 // What went wrong, in terms every way in can answer: a missing thing, a
-// clash with what's there, or input that can't be taken. Each module's
-// errors extend one of these; the edges (HTTP, MCP, gRPC) map the kind, not
-// the class.
-export type DomainErrorKind = 'not-found' | 'conflict' | 'invalid';
+// clash with what's there, input that can't be taken, or something the hub
+// needs that is away for now (try again later). Each module's errors extend
+// one of these; the edges (HTTP, MCP, gRPC) map the kind, not the class.
+export type DomainErrorKind =
+  'not-found' | 'conflict' | 'invalid' | 'unavailable';
 
 export abstract class DomainError extends Error {
   abstract readonly kind: DomainErrorKind;
@@ -27,6 +28,10 @@ export abstract class ConflictError extends DomainError {
 
 export abstract class InvalidError extends DomainError {
   readonly kind = 'invalid';
+}
+
+export abstract class UnavailableError extends DomainError {
+  readonly kind = 'unavailable';
 }
 
 // a value that isn't what its type says ("content hash", "plugin name")
