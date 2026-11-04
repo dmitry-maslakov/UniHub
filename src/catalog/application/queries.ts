@@ -133,6 +133,13 @@ export class FindFileQuery extends Query<FileDto | null> {
   }
 }
 
+// the files that hold this content and aren't removed
+export class ListFilesOfContentQuery extends Query<FileDto[]> {
+  constructor(public readonly hash: ContentHash) {
+    super();
+  }
+}
+
 // a page of files that have content and aren't removed, by id, after the
 // given one: for walking all of them
 export class ListFilesWithContentQuery extends Query<FileDto[]> {

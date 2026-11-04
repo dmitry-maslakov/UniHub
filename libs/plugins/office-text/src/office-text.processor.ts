@@ -1,13 +1,12 @@
-import { buffer } from 'node:stream/consumers';
+import type { Readable } from 'node:stream';
 import { Injectable } from '@nestjs/common';
-import { OfficeConverter } from 'officeparser';
 import {
   ContentProcessor,
   type ProcessesContent,
   type ProcessorInput,
 } from '@app/plugin-sdk';
-
-type SplitBy = 'page' | 'slide' | 'heading';
+import { parse } from './parse.js';
+import { MAX_SECTION, toParts, type SplitBy } from './parts.js';
 
 // how each kind of document is split into parts, by extension and media type
 const SPLIT_BY: Record<string, SplitBy> = {
@@ -25,39 +24,42 @@ const SPLIT_BY: Record<string, SplitBy> = {
   'application/vnd.oasis.opendocument.text': 'heading',
 };
 
-// Text of pdf / pptx / docx / odt / odp, one part per page, slide or heading,
-// using officeparser's own chunking.
+// past this a document isn't parsed, it's held in memory twice meanwhile
+export const MAX_BYTES = 100 * 1024 * 1024;
+
+async function read(content: Readable) {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of content as AsyncIterable<Buffer>) {
+    size += chunk.length;
+    if (size > MAX_BYTES)
+      throw new Error(`larger than ${MAX_BYTES} bytes, not parsed`);
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks, size);
+}
+
+// Text of pdf / pptx / docx / odt / odp, one part per page, slide or
+// section, made of officeparser's chunks.
 @ContentProcessor({
   name: 'office-text',
-  version: 1,
+  version: 2,
   accepts: Object.keys(SPLIT_BY),
 })
 @Injectable()
 export class OfficeTextProcessor implements ProcessesContent {
   async process(input: ProcessorInput) {
-    const data = await buffer(await input.content());
-    const { value: chunks } = await OfficeConverter.convert(data, 'chunks', {
-      generatorConfig: {
-        chunksConfig: {
-          strategy: 'document-structure',
-          // the hub hands over only what's in accepts, so it's one of these
-          splitBy: SPLIT_BY[input.matched],
-          // keep a page or slide whole, it is the unit a part stands for
-          maxChunkSize: 1_000_000,
-        },
+    // the hub hands over only what's in accepts, so it's one of these
+    const splitBy = SPLIT_BY[input.matched];
+    const parsed = await parse(await read(await input.content()), {
+      chunksConfig: {
+        strategy: 'document-structure',
+        splitBy,
+        // a page or slide is kept whole, it's the unit a part stands for;
+        // a long section comes in chunks a part can end at
+        maxChunkSize: splitBy === 'heading' ? MAX_SECTION : 1_000_000,
       },
     });
-
-    // chunks of one page, slide or section are consecutive
-    const parts: string[] = [];
-    let last: unknown;
-    for (const { text, metadata } of chunks) {
-      const unit =
-        metadata.pageNumber ?? metadata.slideNumber ?? metadata.closestHeading;
-      if (parts.length && unit === last) parts[parts.length - 1] += `\n${text}`;
-      else parts.push(text);
-      last = unit;
-    }
-    return { parts };
+    return { parts: toParts(parsed, splitBy) };
   }
 }

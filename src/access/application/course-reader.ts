@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { QueryBus } from '@nestjs/cqrs';
+import { PluginName } from '@app/kernel';
 import {
   FindCourseQuery,
   GetCourseFileQuery,
@@ -129,8 +130,11 @@ export class CourseReader {
   // unless one is named
   async text(userId: string, fileId: string, page: number, processor?: string) {
     const { hash } = await this.readableContent(userId, fileId);
+    // a name no plugin can have names no text
+    const name = PluginName.optional().safeParse(processor);
+    if (!name.success) throw new NotReadableError('page');
     const text = await this.queries.execute(
-      new GetTextPageQuery(hash, page, processor),
+      new GetTextPageQuery(hash, page, name.data),
     );
     if (!text) throw new NotReadableError('page');
     return text;

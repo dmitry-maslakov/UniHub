@@ -1,10 +1,10 @@
 import type { ConfigType } from '@nestjs/config';
 import type { Job } from 'bullmq';
 import type { ConnectorContext } from '@app/plugin-sdk';
+import { catalogOf, poll } from '../../../test/discovered-plugins.js';
 import type { IngestService } from '../../ingest/contracts.js';
 import { ConnectionDirectory } from '../application/connection-directory.js';
 import type { ConnectorSchedules } from '../application/connector-schedules.js';
-import { catalogOf, poll } from '../application/plugins.fakes.js';
 import type { pluginsConfig } from '../plugins.config.js';
 import { POLL, TICK, type ConnectorJob } from './connectors.queue.js';
 import { ConnectorsWorker } from './connectors.worker.js';

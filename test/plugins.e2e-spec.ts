@@ -17,7 +17,7 @@ import {
 import { PollSchedule } from '../src/plugins/application/poll-schedule.js';
 import { CONNECTORS_QUEUE } from '../src/plugins/infrastructure/connectors.queue.js';
 import { PluginsOutboxTransport } from '../src/processing/contracts.js';
-import { PLUGINS_QUEUE } from '../src/processing/queues.js';
+import { PLUGINS_QUEUE } from '../src/processing/infrastructure/plugins.queue.js';
 import {
   FAKE_PORTAL,
   FakeAggregator,

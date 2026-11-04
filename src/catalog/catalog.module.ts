@@ -36,6 +36,7 @@ import {
   GetCourseFileHandler,
   GetFileHandler,
   ListCourseFilesHandler,
+  ListFilesOfContentHandler,
   ListFilesWithContentHandler,
 } from './infrastructure/read/files.read.js';
 import {
@@ -73,6 +74,7 @@ import {
     GetCourseFileHandler,
     GetFileHandler,
     FindFileHandler,
+    ListFilesOfContentHandler,
     ListFilesWithContentHandler,
   ],
 })

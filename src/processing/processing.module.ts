@@ -1,17 +1,24 @@
-import { GetTextPageHandler } from './application/queries/get-text-page.handler.js';
-import { ListTextsHandler } from './application/queries/list-texts.handler.js';
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { TerminusModule } from '@nestjs/terminus';
 import { PluginsModule } from '../plugins/contracts.js';
 import { StorageModule } from '../storage/contracts.js';
-import { PluginRunner } from './application/plugin-runner.js';
-import { Reconciler } from './application/reconciler.js';
+import { DeliverMessage } from './application/deliver-message.js';
+import { Dispatch } from './application/dispatch.js';
+import { FileFacts, PluginJobQueue } from './application/ports.js';
+import { ProcessContent } from './application/process-content.js';
+import { Reconcile } from './application/reconcile.js';
 import { RepresentationRepository } from './domain/representation.js';
-import { PrismaRepresentationRepository } from './infrastructure/prisma-representation.repository.js';
-import { ReconcileSchedule } from './infrastructure/reconcile.schedule.js';
+import { BullmqPluginJobQueue } from './infrastructure/bullmq-plugin-job-queue.js';
+import { CatalogFileFacts } from './infrastructure/catalog-file-facts.js';
+import { PLUGINS_QUEUE } from './infrastructure/plugins.queue.js';
 import { PluginsWorker } from './infrastructure/plugins.worker.js';
-import { PLUGINS_QUEUE } from './queues.js';
+import { PrismaRepresentationRepository } from './infrastructure/prisma-representation.repository.js';
+import {
+  GetTextPageHandler,
+  ListTextsHandler,
+} from './infrastructure/read/texts.read.js';
+import { ReconcileSchedule } from './infrastructure/reconcile.schedule.js';
 
 const DAY = 24 * 60 * 60;
 
@@ -24,7 +31,8 @@ const DAY = 24 * 60 * 60;
         attempts: 5,
         backoff: { type: 'exponential', delay: 5_000 },
         // a finished job keeps its id for a day, longer than the outbox may
-        // take to publish the same message again
+        // take to publish the same message again; content queued again
+        // meanwhile is mostly done already, the reconciler does the rest
         removeOnComplete: { age: DAY },
         removeOnFail: { age: 14 * DAY },
       },
@@ -37,17 +45,21 @@ const DAY = 24 * 60 * 60;
   providers: [
     ListTextsHandler,
     GetTextPageHandler,
-    PluginRunner,
+    Dispatch,
+    DeliverMessage,
+    ProcessContent,
+    Reconcile,
     PluginsWorker,
-    Reconciler,
     ReconcileSchedule,
     {
       provide: RepresentationRepository,
       useClass: PrismaRepresentationRepository,
     },
+    { provide: FileFacts, useClass: CatalogFileFacts },
+    { provide: PluginJobQueue, useClass: BullmqPluginJobQueue },
   ],
-  // the plugins queue and catalog, for PluginsOutboxTransport: the outbox
-  // makes it, with this module's exports (AppModule wires it into messaging)
-  exports: [BullModule, PluginsModule],
+  // for PluginsOutboxTransport: the outbox makes it, with this module's
+  // exports (AppModule wires it into messaging)
+  exports: [Dispatch, PluginJobQueue],
 })
 export class ProcessingModule {}

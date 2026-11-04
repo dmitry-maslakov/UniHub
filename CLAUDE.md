@@ -44,6 +44,6 @@ Put off:
 - device sign-in: approval screen details and shorter device sessions, with the web portal
 - helmet's `Cross-Origin-Resource-Policy: same-origin` stops another origin embedding file content (`<img>`, `<iframe>`); `same-site` if the web portal lives on a sibling subdomain
 - grants of a deleted course: when catalog can delete courses (an event for identity)
-- kernel values (`ContentHash`, `MediaType`, `PortalId`, `PluginName`) in the modules' own signatures: catalog, storage, ingest, plugins and the sdk have them (ingest normalises media types where files come in), the other modules with their rewrite
+- kernel values (`ContentHash`, `MediaType`, `PortalId`, `PluginName`) in the modules' own signatures: catalog, storage, ingest, plugins, processing and the sdk have them (ingest normalises media types where files come in), identity and access with their rewrite
 
 Done the standard way after all: global prefix, gRPC guard (#36).

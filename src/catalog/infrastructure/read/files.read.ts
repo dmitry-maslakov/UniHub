@@ -7,6 +7,7 @@ import {
   GetCourseFileQuery,
   GetFileQuery,
   ListCourseFilesQuery,
+  ListFilesOfContentQuery,
   ListFilesWithContentQuery,
   type FileDto,
 } from '../../application/queries.js';
@@ -95,6 +96,20 @@ export class FindFileHandler implements IQueryHandler<FindFileQuery> {
       select,
     });
     return row && toDto(row);
+  }
+}
+
+@QueryHandler(ListFilesOfContentQuery)
+export class ListFilesOfContentHandler implements IQueryHandler<ListFilesOfContentQuery> {
+  constructor(@InjectTransactionHost() private readonly txHost: PrismaTxHost) {}
+
+  async execute({ hash }: ListFilesOfContentQuery) {
+    const rows = await this.txHost.tx.file.findMany({
+      where: { contentHash: hash, removedAt: null },
+      orderBy: { id: 'asc' },
+      select,
+    });
+    return rows.map(toDto);
   }
 }
 

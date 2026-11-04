@@ -1,8 +1,8 @@
 import { PortalId } from '@app/kernel';
+import { catalogOf, poll } from '../../../test/discovered-plugins.js';
 import { Connection } from '../../ingest/contracts.js';
 import { NoPollConnectorError } from '../domain/errors.js';
 import type { ConnectorSchedules } from './connector-schedules.js';
-import { catalogOf, poll } from './plugins.fakes.js';
 import { SyncConnectionCommand } from './sync-connection.command.js';
 import { SyncConnectionHandler } from './sync-connection.handler.js';
 

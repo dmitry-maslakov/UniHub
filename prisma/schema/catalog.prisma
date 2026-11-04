@@ -87,4 +87,6 @@ model File {
   // SetNull
   @@index([portalCourseId, path, name])
   @@index([itemId])
+  // processing asks which files hold some content
+  @@index([contentHash])
 }

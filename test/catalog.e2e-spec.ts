@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { Test, type TestingModule } from '@nestjs/testing';
-import { CommandBus } from '@nestjs/cqrs';
+import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { OutboxEvents } from '@nestjs/outbox';
 import {
   TransactionHost,
@@ -12,6 +12,7 @@ import { AppModule } from '../src/app.module.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
 import {
   FILE_CONTENT_CHANGED,
+  ListFilesOfContentQuery,
   MisplacedFileError,
   RemoveFileCommand,
   SetFileContentCommand,
@@ -254,6 +255,20 @@ describe('catalog', () => {
       { timeout: 10_000 },
     );
     subscription.unsubscribe();
+  });
+
+  it('finds the files that hold some content, not the removed ones', async () => {
+    const hash = hashOf('a handout in two posts');
+    for (const externalId of ['handout-a', 'handout-b']) {
+      await commands.execute(new UpsertFileCommand(file({ externalId })));
+      await commands.execute(new SetFileContentCommand(ref(externalId), hash));
+    }
+    await commands.execute(new RemoveFileCommand(ref('handout-b')));
+
+    const files = await app
+      .get(QueryBus)
+      .execute(new ListFilesOfContentQuery(hash));
+    expect(files.map((f) => f.externalId)).toEqual(['handout-a']);
   });
 
   it('stores sizes over 2 GB', async () => {
