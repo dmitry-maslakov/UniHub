@@ -30,6 +30,17 @@ const select = {
   removedAt: true,
 } satisfies Prisma.FileSelect;
 
+// the course a visible file shows in (see visibleFile)
+const withCourse = {
+  portalCourse: { select: { link: { select: { courseId: true } } } },
+} satisfies Prisma.FileSelect;
+
+const byFolderAndName = [
+  { path: 'asc' },
+  { name: 'asc' },
+  { id: 'asc' },
+] satisfies Prisma.FileOrderByWithRelationInput[];
+
 const toDto = ({
   removedAt,
   ...row
@@ -46,7 +57,7 @@ export class ListCourseFilesHandler implements IQueryHandler<ListCourseFilesQuer
   async execute({ courseId, offset, limit }: ListCourseFilesQuery) {
     const rows = await this.txHost.tx.file.findMany({
       where: visibleFile({ courseId }),
-      orderBy: [{ path: 'asc' }, { name: 'asc' }, { id: 'asc' }],
+      orderBy: byFolderAndName,
       skip: offset,
       take: limit,
       select,
@@ -62,10 +73,7 @@ export class GetCourseFileHandler implements IQueryHandler<GetCourseFileQuery> {
   async execute({ fileId }: GetCourseFileQuery) {
     const row = await this.txHost.tx.file.findFirst({
       where: { AND: [{ id: fileId }, visibleFile()] },
-      select: {
-        ...select,
-        portalCourse: { select: { link: { select: { courseId: true } } } },
-      },
+      select: { ...select, ...withCourse },
     });
     const courseId = row?.portalCourse?.link?.courseId;
     if (!row || !courseId) return null;
@@ -86,13 +94,13 @@ export class ListVisibleContentHandler implements IQueryHandler<ListVisibleConte
           { contentHash: { not: null } },
         ],
       },
-      orderBy: [{ path: 'asc' }, { name: 'asc' }, { id: 'asc' }],
+      orderBy: byFolderAndName,
       select: {
         id: true,
         name: true,
         path: true,
         contentHash: true,
-        portalCourse: { select: { link: { select: { courseId: true } } } },
+        ...withCourse,
       },
     });
     // the filter leaves only rows with both, which Prisma's types can't tell
