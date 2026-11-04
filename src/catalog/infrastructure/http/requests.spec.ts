@@ -1,17 +1,13 @@
-import { courseLink, ExternalId, newCourse } from './requests.js';
+import { courseLink, newCourse } from './requests.js';
 
+// what the bodies add to their values (values.spec): their shape and their
+// defaults
 describe('admin requests', () => {
-  it('make a course of a slug and a trimmed name', () => {
+  it('make a course of a slug and a name, both of them', () => {
     expect(
-      newCourse.parse({ slug: 'admin-os', name: ' Operativni sistemi ' }),
+      newCourse.parse({ slug: 'admin-os', name: 'Operativni sistemi' }),
     ).toEqual({ slug: 'admin-os', name: 'Operativni sistemi' });
-    for (const bad of [
-      { slug: 'Not A Slug', name: 'x' },
-      { slug: 'ok', name: '  ' },
-      // postgres can't keep a NUL: refused here, not a 500 from the insert
-      { slug: 'ok', name: 'a\u0000b' },
-      { slug: 'ok' },
-    ])
+    for (const bad of [{ slug: 'ok' }, { name: 'x' }])
       expect(newCourse.safeParse(bad).success).toBe(false);
   });
 
@@ -25,13 +21,6 @@ describe('admin requests', () => {
       course: 'os',
       year: null,
     });
-    for (const bad of [{ course: 'os', year: 1800 }, { year: 2026 }])
-      expect(courseLink.safeParse(bad).success).toBe(false);
-  });
-
-  it('name a portal course by an id postgres can look up', () => {
-    expect(ExternalId.parse('1388')).toBe('1388');
-    for (const bad of ['', 'a\u0000b'])
-      expect(ExternalId.safeParse(bad).success).toBe(false);
+    expect(courseLink.safeParse({ year: 2026 }).success).toBe(false);
   });
 });
