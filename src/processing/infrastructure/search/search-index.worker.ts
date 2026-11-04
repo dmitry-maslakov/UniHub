@@ -5,7 +5,7 @@ import type { Job, Queue } from 'bullmq';
 import { PrismaService } from '../../../platform/database/prisma.service.js';
 import { IndexText } from '../../application/index-text.js';
 import { TextIndexUnavailableError } from '../../application/ports.js';
-import { OUTAGE_PAUSE_MS, PausingWorker } from '../pausing.worker.js';
+import { OUTAGE_PAUSE_MS, PAUSING, PausingWorker } from '../pausing.worker.js';
 import { SEARCH_INDEX_QUEUE, type IndexJob } from './search-index.queue.js';
 
 // a pause in a row past this many (10 min) is logged as an error, and then
@@ -15,11 +15,7 @@ const PAUSES_BEFORE_ERROR = 20;
 // One job at a time: the one node also answers searches, and a reconcile of
 // the whole corpus mustn't flood it. A job that fails while the index or the
 // database is away waits that out.
-@Processor(SEARCH_INDEX_QUEUE, {
-  concurrency: 1,
-  lockDuration: 5 * 60_000,
-  limiter: { max: 1_000, duration: 1_000 },
-})
+@Processor(SEARCH_INDEX_QUEUE, { concurrency: 1, ...PAUSING })
 export class SearchIndexWorker
   extends PausingWorker<IndexJob>
   implements OnModuleDestroy
@@ -35,19 +31,19 @@ export class SearchIndexWorker
     super(health, prisma, queue);
   }
 
-  async process({ data }: Job<IndexJob>) {
-    try {
-      await this.indexText.run(data.key);
-      this.pauses = 0;
-    } catch (err) {
-      const away =
-        err instanceof TextIndexUnavailableError || (await this.databaseAway());
-      if (!away) throw err;
-      const said = `the search index or the database is away (${(err as Error).message}), indexing waits ${OUTAGE_PAUSE_MS / 1000} s`;
-      if (++this.pauses % PAUSES_BEFORE_ERROR === 0) this.logger.error(said);
-      else this.logger.warn(said);
-      return this.pause();
-    }
+  protected async work({ data }: Job<IndexJob>) {
+    await this.indexText.run(data.key);
+    this.pauses = 0;
+  }
+
+  protected async away(err: unknown) {
+    return err instanceof TextIndexUnavailableError || super.away(err);
+  }
+
+  protected outage(err: unknown) {
+    const said = `the search index or the database is away (${(err as Error).message}), indexing waits ${OUTAGE_PAUSE_MS / 1000} s`;
+    if (++this.pauses % PAUSES_BEFORE_ERROR === 0) this.logger.error(said);
+    else this.logger.warn(said);
   }
 
   // Closed before any module shuts down, not where Nest closes workers, which
