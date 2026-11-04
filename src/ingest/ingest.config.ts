@@ -10,7 +10,8 @@ const tokens = list.transform((pairs, ctx) => {
     const at = pair.indexOf('=');
     const portal = at < 0 ? '' : pair.slice(0, at).trim();
     const token = pair.slice(at + 1).trim();
-    if (!PortalId.isValid(portal) || token.length < 16 || byToken.has(token)) {
+    const id = PortalId.safeParse(portal);
+    if (!id.success || token.length < 16 || byToken.has(token)) {
       ctx.addIssue({
         code: 'custom',
         message:
@@ -18,7 +19,7 @@ const tokens = list.transform((pairs, ctx) => {
       });
       return z.NEVER;
     }
-    byToken.set(token, PortalId.parse(portal));
+    byToken.set(token, id.data);
   }
   return byToken as ReadonlyMap<string, PortalId>;
 });

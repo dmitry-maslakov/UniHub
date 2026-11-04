@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
 import { createTransport, type Transporter } from 'nodemailer';
-import { identityConfig } from '../identity.config.js';
+import { mailConfig } from '../mail.config.js';
 import { Mailer, type Mail } from '../domain/mailer.js';
 
 // SMTP when SMTP_URL is set; otherwise mails are only logged, for local runs
@@ -12,9 +12,7 @@ export class NodemailerMailer extends Mailer {
   private readonly from: string;
   private readonly smtp: boolean;
 
-  constructor(
-    @Inject(identityConfig.KEY) { mail }: ConfigType<typeof identityConfig>,
-  ) {
+  constructor(@Inject(mailConfig.KEY) mail: ConfigType<typeof mailConfig>) {
     super();
     this.smtp = mail.smtpUrl !== null;
     this.transport = createTransport(mail.smtpUrl ?? { jsonTransport: true });

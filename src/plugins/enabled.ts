@@ -1,6 +1,6 @@
 import { ConditionalModule } from '@nestjs/config';
 import { OfficeTextModule } from '@app/plugins/office-text';
-import { pluginsSettings } from './plugins.config.js';
+import { pluginsConfig } from './plugins.config.js';
 
 // A built-in plugin is on when its name is listed in PLUGINS ("pdf-text,acs").
 // The hub runs fine with none. ConditionalModule decides from the
@@ -9,8 +9,8 @@ export function plugin(
   name: string,
   module: Parameters<typeof ConditionalModule.registerWhen>[0],
 ) {
-  return ConditionalModule.registerWhen(module, (env) =>
-    pluginsSettings.parse(env).enabled.includes(name),
+  return ConditionalModule.registerWhen(module, () =>
+    pluginsConfig().enabled.some((enabled) => enabled === name),
   );
 }
 

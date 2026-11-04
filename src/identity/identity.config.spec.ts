@@ -5,22 +5,14 @@ const secret = { BETTER_AUTH_SECRET: 'x'.repeat(32) };
 describe('identity settings in production', () => {
   const env = { ...secret, NODE_ENV: 'production' };
 
-  it('need real mail and a public address', () => {
+  it('need the public https address', () => {
     const result = identitySettings.safeParse(env);
     expect(result.error?.issues.map((i) => i.path[0])).toEqual([
-      'SMTP_URL',
       'BETTER_AUTH_URL',
     ]);
-    const smtp = { ...env, SMTP_URL: 'smtp://u:p@mail.uni.test:587' };
     expect(
       identitySettings.safeParse({
-        ...smtp,
-        BETTER_AUTH_URL: 'http://hub.uni.test',
-      }).success,
-    ).toBe(false);
-    expect(
-      identitySettings.safeParse({
-        ...smtp,
+        ...env,
         BETTER_AUTH_URL: 'https://hub.uni.test',
       }).success,
     ).toBe(true);

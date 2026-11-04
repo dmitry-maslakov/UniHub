@@ -30,21 +30,13 @@ export const identitySettings = z
     // Google sign-in is on when both are set
     GOOGLE_CLIENT_ID: z.string().default(''),
     GOOGLE_CLIENT_SECRET: z.string().default(''),
-    // smtp://user:pass@host:587; without it mails are only logged
-    SMTP_URL: z.string().default(''),
-    MAIL_FROM: z.string().default('UniHub <no-reply@localhost>'),
   })
-  // mails carry sign-in links: in production they must really be sent, and
-  // point at the real address
+  // links in mails point at it: in production, the real address
   .superRefine((env, ctx) => {
-    if (env.NODE_ENV !== 'production') return;
-    if (!env.SMTP_URL)
-      ctx.addIssue({
-        code: 'custom',
-        path: ['SMTP_URL'],
-        message: 'required in production',
-      });
-    if (new URL(env.BETTER_AUTH_URL).protocol !== 'https:')
+    if (
+      env.NODE_ENV === 'production' &&
+      new URL(env.BETTER_AUTH_URL).protocol !== 'https:'
+    )
       ctx.addIssue({
         code: 'custom',
         path: ['BETTER_AUTH_URL'],
@@ -62,7 +54,6 @@ export const identitySettings = z
             clientSecret: env.GOOGLE_CLIENT_SECRET,
           }
         : undefined,
-    mail: { smtpUrl: env.SMTP_URL || null, from: env.MAIL_FROM },
   }));
 
 export const identityConfig = settings('identity', identitySettings);
