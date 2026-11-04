@@ -20,8 +20,10 @@ export abstract class FileFacts {
 }
 
 export abstract class PluginJobQueue {
-  // Each job under its id, all or none: the same work queued again is
-  // dropped for as long as the queue keeps the first, done or failed.
+  // Each job under its id: the same work queued again is dropped while it
+  // waits or runs, and after that for as long as the queue keeps the job,
+  // done or failed. So a batch that went in only in part, queued again,
+  // adds what's missing.
   abstract enqueue(jobs: readonly PluginJob[]): Promise<void>;
   // Dropped only while the same work waits or runs, so a job that finished
   // or failed doesn't keep it from being queued again.

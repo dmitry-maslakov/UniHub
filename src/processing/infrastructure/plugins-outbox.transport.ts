@@ -8,9 +8,9 @@ import { Dispatch } from '../application/dispatch.js';
 import { PluginJobQueue } from '../application/ports.js';
 import { toSdkMessage } from '../application/to-sdk-message.js';
 
-// Publishes an outbox message as the plugin jobs it makes, all or none.
-// Their ids come from the message's, so a message the relay publishes again
-// doesn't queue anything twice.
+// Publishes an outbox message as the plugin jobs it makes. Their ids come
+// from the work, so a message the relay publishes again, after a publish
+// that failed partway too, queues only what's missing.
 @Injectable()
 export class PluginsOutboxTransport extends OutboxTransport {
   constructor(

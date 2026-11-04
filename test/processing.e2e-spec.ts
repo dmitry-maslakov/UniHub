@@ -4,9 +4,14 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { getQueueToken } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import type { PortalIngest } from '@app/plugin-sdk';
+import { ContentHash, PluginName } from '@app/kernel';
 import { AppModule } from '../src/app.module.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
-import { FileFacts } from '../src/processing/application/ports.js';
+import type { ProcessJob } from '../src/processing/application/plugin-job.js';
+import {
+  FileFacts,
+  PluginJobQueue,
+} from '../src/processing/application/ports.js';
 import { Reconcile } from '../src/processing/application/reconcile.js';
 import { PLUGINS_QUEUE } from '../src/processing/infrastructure/plugins.queue.js';
 import { FakePluginsModule, FakeTextProcessor } from './fake-plugins.js';
@@ -14,7 +19,9 @@ import { portalIngest } from './ingest.js';
 
 const portal = 'processing-test';
 const text = 'the same notes in two courses';
-const hash = createHash('sha256').update(text).digest('hex');
+const sha = (content: string) =>
+  createHash('sha256').update(content).digest('hex');
+const hash = sha(text);
 
 describe('processing', { timeout: 20_000 }, () => {
   let app: TestingModule;
@@ -85,6 +92,38 @@ describe('processing', { timeout: 20_000 }, () => {
     });
 
     expect(await app.get(FileFacts).file(id)).toBeNull();
+  });
+
+  it('queues the same processing once, whether a message or a reconcile asks first', async () => {
+    const queue = app.get<Queue>(getQueueToken(PLUGINS_QUEUE));
+    const jobs = app.get(PluginJobQueue);
+    const job = (content: string): ProcessJob => ({
+      kind: 'process',
+      key: {
+        hash: ContentHash.parse(sha(content)),
+        processor: PluginName.parse('fake-text'),
+        version: 1,
+      },
+    });
+    const sent = job('sent first');
+    const reconciled = job('reconciled first');
+    const queued = async ({ key }: ProcessJob) =>
+      (await queue.getJobs('wait')).filter(
+        ({ data }) => data.key?.hash === key.hash,
+      ).length;
+
+    // nothing runs before it's counted
+    await queue.pause();
+    try {
+      await jobs.enqueue([sent]);
+      await jobs.requeue(sent);
+      await jobs.requeue(reconciled);
+      await jobs.enqueue([reconciled]);
+
+      expect([await queued(sent), await queued(reconciled)]).toEqual([1, 1]);
+    } finally {
+      await queue.resume();
+    }
   });
 
   it('queues it again once the last reconcile job for it is done', async () => {

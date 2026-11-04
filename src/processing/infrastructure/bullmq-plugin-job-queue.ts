@@ -5,9 +5,11 @@ import { jobId, pluginOf, type PluginJob } from '../application/plugin-job.js';
 import { PluginJobQueue } from '../application/ports.js';
 import { PLUGINS_QUEUE } from './plugins.queue.js';
 
-// Jobs named after their plugin. A job keeps its id for as long as the queue
-// keeps it (processing.module.ts); a job that only deduplicates gives the
-// id up once it's done or failed.
+// Jobs named after their plugin. BullMQ keeps a job's own id and its
+// deduplication id apart: the custom id lasts as long as the queue keeps the
+// job (processing.module.ts), the deduplication one until it's done or
+// failed. enqueue sets both, so neither queues what the other has waiting or
+// running.
 @Injectable()
 export class BullmqPluginJobQueue extends PluginJobQueue {
   constructor(
@@ -17,13 +19,15 @@ export class BullmqPluginJobQueue extends PluginJobQueue {
   }
 
   async enqueue(jobs: readonly PluginJob[]) {
-    // one addBulk is one transaction
     await this.queue.addBulk(
-      jobs.map((job) => ({
-        name: pluginOf(job),
-        data: job,
-        opts: { jobId: jobId(job) },
-      })),
+      jobs.map((job) => {
+        const id = jobId(job);
+        return {
+          name: pluginOf(job),
+          data: job,
+          opts: { jobId: id, deduplication: { id } },
+        };
+      }),
     );
   }
 
