@@ -5,9 +5,7 @@ import {
   HttpStatus,
   Param,
   Put,
-  StandardSchemaValidationPipe,
 } from '@nestjs/common';
-import { CommandBus } from '@nestjs/cqrs';
 import {
   ApiBearerAuth,
   ApiForbiddenResponse,
@@ -15,37 +13,33 @@ import {
   ApiNotFoundResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { Roles } from '@thallesp/nestjs-better-auth';
 import { StoredText } from '@app/kernel';
-import {
-  GrantCourseAccessCommand,
-  RevokeCourseAccessCommand,
-} from '../../application/commands.js';
-import { ADMIN_ROLE } from '../../domain/reader.js';
+import { ADMIN_ROLE, Roles } from '../../../identity/contracts.js';
+import { CourseGrants } from '../../application/course-grants.js';
 
 // a user's id (Better Auth's) or a course's (catalog's): text postgres can
 // keep, since a NUL would fail the lookup with a 500
-const id = { schema: StoredText.min(1), pipes: [StandardSchemaValidationPipe] };
+const id = { schema: StoredText.min(1) };
 
 // Who reads which course, set by admins. A course by the id catalog gave it
-// (POST /api/courses answers it): identity knows no slugs.
+// (POST /api/courses answers it).
 @ApiTags('admin')
 @ApiBearerAuth()
 @ApiForbiddenResponse({ description: 'for admins only' })
-@ApiNotFoundResponse({ description: 'no such user' })
+@ApiNotFoundResponse({ description: 'no such user or course' })
 @Roles([ADMIN_ROLE])
 @Controller('users/:userId/courses/:courseId')
 export class CourseAccessController {
-  constructor(private readonly commands: CommandBus) {}
+  constructor(private readonly grants: CourseGrants) {}
 
   @Put()
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiNoContentResponse({ description: 'the user reads the course' })
-  async grant(
+  grant(
     @Param('userId', id) userId: string,
     @Param('courseId', id) courseId: string,
   ) {
-    await this.commands.execute(new GrantCourseAccessCommand(userId, courseId));
+    return this.grants.grant(userId, courseId);
   }
 
   @Delete()
@@ -53,12 +47,10 @@ export class CourseAccessController {
   @ApiNoContentResponse({
     description: "the user doesn't read it now, unless an admin",
   })
-  async revoke(
+  revoke(
     @Param('userId', id) userId: string,
     @Param('courseId', id) courseId: string,
   ) {
-    await this.commands.execute(
-      new RevokeCourseAccessCommand(userId, courseId),
-    );
+    return this.grants.revoke(userId, courseId);
   }
 }

@@ -85,7 +85,7 @@ export class CourseReader {
 
   private readableCourse(userId: string, slug: Slug) {
     return this.readable(userId, 'course', {
-      query: new FindCourseQuery(slug),
+      query: new FindCourseQuery({ slug }),
       courseOf: ({ id }) => id,
     });
   }

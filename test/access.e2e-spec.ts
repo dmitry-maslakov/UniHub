@@ -16,7 +16,7 @@ import {
 import { GrantCourseAccessCommand } from '../src/identity/contracts.js';
 import { Mailer, type Mail } from '../src/identity/domain/mailer.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
-import { accounts } from './accounts.js';
+import { accounts, ORIGIN } from './accounts.js';
 import { portalIngest } from './ingest.js';
 
 const PORTAL = 'rest-test';
@@ -42,6 +42,10 @@ describe('REST API', { timeout: 20_000 }, () => {
   let stranger: string;
   let admin: string;
   const ids: Record<string, string> = {};
+  const courseIds: Record<string, string> = {};
+  const userId = async (email: string) =>
+    (await app.get(PrismaService).user.findUniqueOrThrow({ where: { email } }))
+      .id;
   const slides = Buffer.from('%PDF slides about processes');
 
   beforeAll(async () => {
@@ -136,7 +140,6 @@ describe('REST API', { timeout: 20_000 }, () => {
         data: { hash: sha256(slides), processor, version, parts: [...parts] },
       });
 
-    const courseIds: Record<string, string> = {};
     for (const [slug, name, externalId] of [
       ['sys', 'Operativni sistemi', 'c1'],
       ['net', 'Mreže', 'c2'],
@@ -156,11 +159,9 @@ describe('REST API', { timeout: 20_000 }, () => {
     student = await signUp('student@rest.test');
     stranger = await signUp('stranger@rest.test');
     admin = await signUp('admin@rest.test');
-    const user = (email: string) =>
-      prisma.user.findUniqueOrThrow({ where: { email } });
     await commands.execute(
       new GrantCourseAccessCommand(
-        (await user('student@rest.test')).id,
+        await userId('student@rest.test'),
         courseIds.sys,
       ),
     );
@@ -313,6 +314,44 @@ describe('REST API', { timeout: 20_000 }, () => {
     await get(`/api/files/${ids.copy}`, admin).expect(200);
   });
 
+  it('lets admins grant and revoke a course that exists', async () => {
+    const reader = await signUp('reader@rest.test');
+    const id = await userId('reader@rest.test');
+    const as = (cookie: string) => ({
+      put: (path: string) =>
+        http().put(path).set('origin', ORIGIN).set('cookie', cookie),
+      delete: (path: string) =>
+        http().delete(path).set('origin', ORIGIN).set('cookie', cookie),
+    });
+    const grant = `/api/users/${id}/courses/${courseIds.net}`;
+    const slugs = async () =>
+      (await get('/api/courses', reader).expect(200)).body.map(
+        (c: { slug: string }) => c.slug,
+      );
+
+    await http().put(grant).expect(401);
+    await as(student).put(grant).expect(403);
+    await as(student).delete(grant).expect(403);
+
+    // twice is once
+    for (let i = 0; i < 2; i++) await as(admin).put(grant).expect(204);
+    expect(await slugs()).toEqual(['net']);
+    for (let i = 0; i < 2; i++) await as(admin).delete(grant).expect(204);
+    expect(await slugs()).toEqual([]);
+
+    // an id no course has, or no user has
+    const unknown = await as(admin)
+      .put(`/api/users/${id}/courses/nope`)
+      .expect(404);
+    expect(unknown.body.message).toBe('unknown course nope');
+    await as(admin).delete(`/api/users/${id}/courses/nope`).expect(404);
+    await as(admin)
+      .put(`/api/users/nobody/courses/${courseIds.net}`)
+      .expect(404);
+    await as(admin).put(`/api/users/${id}/courses/a%00b`).expect(400);
+    expect(await slugs()).toEqual([]);
+  });
+
   it('describes itself in OpenAPI, for anyone', async () => {
     const doc = (await http().get('/api/docs-json').expect(200)).body;
     expect(Object.keys(doc.paths)).toEqual(
@@ -321,6 +360,7 @@ describe('REST API', { timeout: 20_000 }, () => {
         '/api/courses/{slug}/items',
         '/api/files/{id}/text',
         '/api/files/{id}/content',
+        '/api/users/{userId}/courses/{courseId}',
       ]),
     );
     // the page's bounds as the schema has them

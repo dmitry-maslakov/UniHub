@@ -63,8 +63,8 @@ function reader() {
     ],
     [
       FindCourseQuery,
-      ({ slug }: FindCourseQuery) =>
-        [os, net].find((c) => c.slug === slug) ?? null,
+      ({ by }: FindCourseQuery) =>
+        [os, net].find((c) => 'slug' in by && c.slug === by.slug) ?? null,
     ],
     [ListCourseItemsQuery, () => []],
     [ListCourseFilesQuery, () => [files[0]]],

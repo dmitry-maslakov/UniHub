@@ -67,9 +67,9 @@ export interface CourseFileDto extends FileDto {
 
 export class ListCoursesQuery extends Query<CourseDto[]> {}
 
-// by slug
+// by its slug, or by the id catalog gave it
 export class FindCourseQuery extends Query<CourseRef | null> {
-  constructor(public readonly slug: string) {
+  constructor(public readonly by: { slug: string } | { id: string }) {
     super();
   }
 }

@@ -17,8 +17,7 @@ Declined:
 - swagger CLI plugin via `PluginMetadataGenerator`: explicit `@ApiProperty` instead
 - `protoPath` from `import.meta.dirname`: rspack bundles, so it's `process.cwd()`; Docker WORKDIR must be the repo root
 - connector token mapping to (portal, account): env tokens get replaced by API keys (#33), not extended
-- `actorId` in course access commands: the admin check is `@Roles([ADMIN_ROLE])` on the routes that send them (`CourseAccessController`)
-- a grant's course checked to exist: identity uses no other module (catalog uses it), and a grant of an id no course has reads nothing
+- `actorId` in course access commands: the admin check is `@Roles([ADMIN_ROLE])` on the routes that send them (access's `CourseAccessController`)
 - a `source` column on course access (manual vs. from a portal): when per-user accounts come
 - portal courses not linked to a course: nobody reads them through the API, admins included
 - tests of Better Auth's own device flow cases (deny, expiry, reuse)
