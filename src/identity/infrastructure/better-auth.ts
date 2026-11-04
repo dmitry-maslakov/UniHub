@@ -128,7 +128,7 @@ export function createAuth({
       }),
       // for MCP clients. The plugin's limit only resets after a quiet
       // window, so a steadily working agent gets locked out; MCP routes
-      // throttle per key instead (#16)
+      // throttle per user instead
       // a key's last use is written after the answer, not before it.
       // Keys expire; clients can't pick their own expiry, since
       // /api-key/update with expiresIn: null would make a key permanent

@@ -42,9 +42,6 @@ export class ApiKeyGuard implements CanActivate {
   }
 }
 
-// A route anyone may call, signed in or not (health)
-export const Public = () => AllowAnonymous();
-
 // A route for API keys instead of sessions (MCP). The user carries no roles,
 // so @Roles doesn't belong on such a route. The module that has one imports
 // IdentityModule, for the guard's AuthenticateApiKey.

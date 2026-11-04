@@ -6,7 +6,7 @@ import {
   HealthIndicatorService,
   PrismaHealthIndicator,
 } from '@nestjs/terminus';
-import { Public } from '../identity/contracts.js';
+import { AllowAnonymous } from '../identity/contracts.js';
 import type { Redis } from 'ioredis';
 import { PrismaService } from '../platform/database/prisma.service.js';
 import { REDIS } from '../platform/redis/redis.module.js';
@@ -15,7 +15,7 @@ import { REDIS } from '../platform/redis/redis.module.js';
 // health check (caddy doesn't let it out: a failure names internal hosts)
 @Controller('health')
 @ApiExcludeController()
-@Public()
+@AllowAnonymous()
 export class HealthController {
   constructor(
     private readonly health: HealthCheckService,
