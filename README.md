@@ -21,6 +21,7 @@ npm run start:dev
 - `libs/plugin-sdk` — everything a plugin may depend on, plugins never import the core directly
 - `libs/kernel` — what the hub's modules and the sdk share: values that hold the same rules everywhere (`ContentHash`, `MediaType`, `PortalId`, `PluginName`, `Json`) and the kinds of domain error (not found, conflict, invalid)
 - `prisma/schema/` — one schema file per module
+- `npm install` generates the Prisma client and the gRPC types (`src/ingest/infrastructure/grpc/generated`, from `proto/ingest.proto`); neither is committed
 
 ## Users
 

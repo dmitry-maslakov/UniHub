@@ -3,9 +3,9 @@ import type { INestApplication } from '@nestjs/common';
 import { AppModule } from '../src/app.module.js';
 import { appOptions, configureApp } from '../src/app.setup.js';
 import { Mailer, type Mail } from '../src/identity/domain/mailer.js';
-import { HubIngest } from '../src/ingest/contracts.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
 import { accounts, ORIGIN } from './accounts.js';
+import { portalIngest } from './ingest.js';
 
 const PORTAL = 'admin-test';
 
@@ -36,10 +36,10 @@ describe('course admin routes', { timeout: 20_000 }, () => {
     await configureApp(app);
     await app.init();
 
-    await app
-      .get(HubIngest)
-      .forPortal(PORTAL)
-      .course({ externalId: '1388', name: 'OS 2026/27' });
+    await portalIngest(app, PORTAL).course({
+      externalId: '1388',
+      name: 'OS 2026/27',
+    });
     student = as(await signUp('student@admin.test'));
     const adminCookie = await signUp('admin@admin.test');
     await app.get(PrismaService).user.update({

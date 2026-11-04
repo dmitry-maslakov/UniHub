@@ -15,9 +15,9 @@ import {
 } from '../src/catalog/contracts.js';
 import { GrantCourseAccessCommand } from '../src/identity/contracts.js';
 import { Mailer, type Mail } from '../src/identity/domain/mailer.js';
-import { HubIngest } from '../src/ingest/contracts.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
 import { accounts } from './accounts.js';
+import { portalIngest } from './ingest.js';
 
 const PORTAL = 'rest-test';
 const sha256 = (data: Buffer) =>
@@ -56,7 +56,7 @@ describe('REST API', { timeout: 20_000 }, () => {
     const commands = app.get(CommandBus);
 
     // c1 is the student's course, c2 someone else's
-    const ingest = app.get(HubIngest).forPortal(PORTAL);
+    const ingest = portalIngest(app, PORTAL);
     await ingest.course({ externalId: 'c1', name: 'OS 2026' });
     await ingest.course({ externalId: 'c2', name: 'Networks' });
     for (const [id, day] of [
@@ -72,7 +72,7 @@ describe('REST API', { timeout: 20_000 }, () => {
         publishedAt: new Date(day),
         raw: { body: `text of ${id}` },
       });
-    await ingest.remove('item', 'gone');
+    await ingest.removeItem('gone');
     await ingest.item({
       externalId: 'gone-later',
       course: 'c1',
@@ -123,8 +123,8 @@ describe('REST API', { timeout: 20_000 }, () => {
         })
       ).id;
     }
-    await ingest.remove('file', 'removed');
-    await ingest.remove('item', 'gone-later');
+    await ingest.removeFile('removed');
+    await ingest.removeItem('gone-later');
 
     // two versions of one processor's text and another processor's
     for (const [processor, version, parts] of [

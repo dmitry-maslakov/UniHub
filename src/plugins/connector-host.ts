@@ -9,12 +9,13 @@ import type { ConfigType } from '@nestjs/config';
 import { InjectQueue } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import type { ConnectorContext, PushesFromPortal } from '@app/plugin-sdk';
-import { HubIngest } from '../ingest/contracts.js';
 import {
-  CONNECTORS_QUEUE,
-  connectionKey,
-  type ConnectorJob,
-} from './connectors.queue.js';
+  Connection,
+  IngestService,
+  SdkPortalIngest,
+  SHARED_ACCOUNT,
+} from '../ingest/contracts.js';
+import { CONNECTORS_QUEUE, type ConnectorJob } from './connectors.queue.js';
 import { PluginRegistry } from './plugin-registry.js';
 import { pluginsConfig } from './plugins.config.js';
 
@@ -27,7 +28,7 @@ export class ConnectorHost implements OnApplicationBootstrap, OnModuleDestroy {
 
   constructor(
     private readonly registry: PluginRegistry,
-    private readonly ingest: HubIngest,
+    private readonly ingest: IngestService,
     @InjectQueue(CONNECTORS_QUEUE) private readonly queue: Queue<ConnectorJob>,
     @Inject(pluginsConfig.KEY)
     private readonly config: ConfigType<typeof pluginsConfig>,
@@ -35,18 +36,19 @@ export class ConnectorHost implements OnApplicationBootstrap, OnModuleDestroy {
 
   // the one place that knows a portal's accounts; per-user ones come with auth
   accounts(portal: string) {
-    return portal ? ['shared'] : [];
+    return portal ? [SHARED_ACCOUNT] : [];
   }
 
   context(portal: string, account: string): ConnectorContext {
-    return { account, ingest: this.ingest.forPortal(portal, account) };
+    const connection = Connection.of({ portal, account });
+    return { account, ingest: new SdkPortalIngest(this.ingest, connection) };
   }
 
   // also what "sync now" from a client will call
-  async syncNow(portal: string, account = 'shared') {
+  async syncNow(portal: string, account = SHARED_ACCOUNT) {
     const job = { portal, account };
     await this.queue.add('poll', job, {
-      deduplication: { id: connectionKey(job) },
+      deduplication: { id: Connection.of(job).key },
     });
   }
 
@@ -69,9 +71,10 @@ export class ConnectorHost implements OnApplicationBootstrap, OnModuleDestroy {
       if (mode !== 'poll') continue;
       for (const account of this.accounts(options.portal)) {
         const job = { portal: options.portal, account };
-        wanted.add(connectionKey(job));
+        const { key } = Connection.of(job);
+        wanted.add(key);
         await this.queue.upsertJobScheduler(
-          connectionKey(job),
+          key,
           { pattern: options.schedule },
           { name: 'tick', data: job },
         );

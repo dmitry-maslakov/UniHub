@@ -8,6 +8,8 @@ export const grpcOptions = (url: string): GrpcOptions => ({
     package: 'unihub.ingest.v1',
     protoPath: join(process.cwd(), 'proto/ingest.proto'),
     url,
+    // as `npm run proto:generate` has them, so the generated types are what
+    // the handlers get
     loader: { keepCase: false, longs: Number, defaults: false },
     // Shutdown cuts uploads in progress (Nest's default): a graceful one has no
     // timeout, so one stalled upload would hold up the whole app. A cut upload

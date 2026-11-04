@@ -3,6 +3,7 @@ node_modules
 dist
 # generated in the image; a local copy would overwrite it
 src/generated
+src/ingest/infrastructure/grpc/generated
 *.tsbuildinfo
 data
 coverage

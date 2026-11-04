@@ -150,7 +150,7 @@ export class PluginRegistry implements OnModuleInit {
 
     // two writers of one portal would overwrite each other's records and state
     const external = this.tokens.portals();
-    const both = portals.find((p) => external.includes(p));
+    const both = external.find((p) => portals.includes(p));
     if (both)
       throw new Error(`portal "${both}" has a connector and a gRPC token`);
 

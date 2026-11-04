@@ -48,18 +48,16 @@ export interface PortalIngest {
     record: FileRecord,
   ): Promise<{ changed: boolean; needsContent: boolean }>;
   // content of a file already sent with file(). Past the hub's limit for one
-  // file it is an InvalidRecordError, and so is every resend: send it again
-  // only once file() answers changed for that file
+  // file it is an InvalidRecordError (CONTENT_TOO_LARGE), and so is every
+  // resend: send it again only once file() answers changed for that file
   content(
     fileExternalId: string,
     content: Readable,
   ): Promise<{ hash: string; changed: boolean }>;
   // gone from the portal; sending it again brings it back.
   // Courses can't be removed yet.
-  remove(
-    kind: 'item' | 'file',
-    externalId: string,
-  ): Promise<{ changed: boolean }>;
+  removeItem(externalId: string): Promise<{ changed: boolean }>;
+  removeFile(externalId: string): Promise<{ changed: boolean }>;
   // whatever the connector saved on its previous run
   state(): Promise<Json | null>;
   saveState(state: Json): Promise<void>;

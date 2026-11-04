@@ -4,29 +4,32 @@ import {
   GrpcAbortedException,
   GrpcCancelledException,
   GrpcException,
-  GrpcFailedPreconditionException,
-  GrpcAlreadyExistsException,
   GrpcInternalException,
-  GrpcInvalidArgumentException,
-  GrpcNotFoundException,
+  GrpcStatus,
   GrpcUnavailableException,
   RpcException,
 } from '@nestjs/microservices';
 import { throwError } from 'rxjs';
 import { DomainError, type DomainErrorKind } from '@app/kernel';
-import { InvalidRecordError, UnknownReferenceError } from '@app/plugin-sdk';
+import { UnknownReferenceError } from '../../../catalog/contracts.js';
 import { isWriteConflict } from '../../../platform/database/write-conflict.js';
 import { isConnectionError } from '../../../platform/errors/is-connection-error.js';
 
 // the hub's own kinds of error, the way HTTP answers them too
-const KINDS: Record<DomainErrorKind, new (message: string) => GrpcException> = {
-  'not-found': GrpcNotFoundException,
-  conflict: GrpcAlreadyExistsException,
-  invalid: GrpcInvalidArgumentException,
+const KINDS: Record<DomainErrorKind, GrpcStatus> = {
+  'not-found': GrpcStatus.NOT_FOUND,
+  conflict: GrpcStatus.ALREADY_EXISTS,
+  invalid: GrpcStatus.INVALID_ARGUMENT,
 };
 
-// errors become statuses a connector can act on: fix the record, send the
-// parent first, retry later, or report a bug
+// a record that refers to one the connector hasn't sent: send that first
+const codeOf = (error: DomainError) =>
+  error instanceof UnknownReferenceError
+    ? GrpcStatus.FAILED_PRECONDITION
+    : KINDS[error.kind];
+
+// Errors become statuses a connector can act on: fix the record, send the
+// parent first, retry later, or report a bug.
 @Catch()
 export class IngestErrorsFilter extends BaseRpcExceptionFilter {
   catch(error: unknown, host: ArgumentsHost) {
@@ -34,23 +37,21 @@ export class IngestErrorsFilter extends BaseRpcExceptionFilter {
     // the connector went away mid-call; nothing was stored, nothing to log
     const call = host.getArgByIndex<{ cancelled?: boolean } | undefined>(0);
     const grpc = call?.cancelled
-      ? new GrpcCancelledException('cancelled')
+      ? new GrpcCancelledException('cancelled').getError()
       : this.toGrpc(error);
-    return throwError(() => grpc.getError());
+    return throwError(() => grpc);
   }
 
-  private toGrpc(error: unknown): GrpcException {
-    if (error instanceof GrpcException) return error;
-    if (error instanceof InvalidRecordError)
-      return new GrpcInvalidArgumentException(error.message);
-    if (error instanceof UnknownReferenceError)
-      return new GrpcFailedPreconditionException(error.message);
+  private toGrpc(error: unknown) {
+    if (error instanceof GrpcException) return error.getError();
     if (error instanceof DomainError)
-      return new KINDS[error.kind](error.message);
-    if (isWriteConflict(error)) return new GrpcAbortedException('try again');
+      return { code: codeOf(error), message: error.message };
+    if (isWriteConflict(error))
+      return new GrpcAbortedException('try again').getError();
     BaseRpcExceptionFilter.logger.error(error);
-    return isConnectionError(error)
+    const grpc = isConnectionError(error)
       ? new GrpcUnavailableException('try again later')
       : new GrpcInternalException('internal error');
+    return grpc.getError();
   }
 }

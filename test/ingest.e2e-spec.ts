@@ -8,9 +8,9 @@ import {
   type PortalIngest,
 } from '@app/plugin-sdk';
 import { AppModule } from '../src/app.module.js';
-import { HubIngest } from '../src/ingest/contracts.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
 import { testEnv } from './env.js';
+import { portalIngest } from './ingest.js';
 
 const portal = 'ingest-test';
 
@@ -43,7 +43,7 @@ describe('ingest', () => {
   beforeAll(async () => {
     app = await Test.createTestingModule({ imports: [AppModule] }).compile();
     await app.init();
-    hub = app.get(HubIngest).forPortal(portal);
+    hub = portalIngest(app, portal);
     prisma = app.get(PrismaService);
   });
 
@@ -92,8 +92,8 @@ describe('ingest', () => {
       title: 'Lecture 5 is up',
       raw: { guid: 'post-1' },
     };
-    expect(await hub.remove('item', 'post-1')).toEqual({ changed: true });
-    expect(await hub.remove('item', 'post-1')).toEqual({ changed: false });
+    expect(await hub.removeItem('post-1')).toEqual({ changed: true });
+    expect(await hub.removeItem('post-1')).toEqual({ changed: false });
     expect(await hub.item(post)).toEqual({ changed: true });
     const row = await prisma.item.findFirstOrThrow({
       where: { portal, externalId: 'post-1' },
@@ -110,14 +110,16 @@ describe('ingest', () => {
   it("rejects a file of one course on another course's post", async () => {
     await hub.course({ externalId: 'os', name: 'OS' });
     // the sdk's error, so a connector can skip the record and go on
-    await expect(
-      hub.file({
-        externalId: 'file-x',
-        course: 'os',
-        item: 'post-1',
-        name: 'x.pdf',
-      }),
-    ).rejects.toBeInstanceOf(InvalidRecordError);
+    const misplaced = hub.file({
+      externalId: 'file-x',
+      course: 'os',
+      item: 'post-1',
+      name: 'x.pdf',
+    });
+    await expect(misplaced).rejects.toBeInstanceOf(InvalidRecordError);
+    await expect(misplaced).rejects.toMatchObject({
+      reason: 'FILE_COURSE_MISMATCH',
+    });
   });
 
   it("drops fields a record isn't allowed to set", async () => {
@@ -202,20 +204,24 @@ describe('ingest', () => {
     expect(row.raw).toEqual({ score: 0, 'cut \uFFFD here': [0] });
   });
 
-  it('checks what remove() and saveState() are given', async () => {
-    await expect(
-      hub.remove('course' as 'item', 'post-1'),
-    ).rejects.toBeInstanceOf(InvalidRecordError);
+  it('checks what removeItem() and saveState() are given', async () => {
+    await expect(hub.removeItem('')).rejects.toBeInstanceOf(InvalidRecordError);
     await expect(
       hub.saveState({ when: new Date() } as never),
     ).rejects.toBeInstanceOf(InvalidRecordError);
+  });
+
+  it('lets only the shared account remove what everyone sees', async () => {
+    await expect(
+      portalIngest(app, portal, 'someone').removeItem('post-1'),
+    ).rejects.toMatchObject({ reason: 'REMOVAL_NOT_ALLOWED' });
   });
 
   it('keeps the plugin state between runs, per account', async () => {
     expect(await hub.state()).toBeNull();
     await hub.saveState({ cursor: 5 });
     expect(await hub.state()).toEqual({ cursor: 5 });
-    const other = app.get(HubIngest).forPortal(portal, 'someone');
+    const other = portalIngest(app, portal, 'someone');
     expect(await other.state()).toBeNull();
     // a bare null is a state too, as if none was saved
     await hub.saveState(null);

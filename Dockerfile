@@ -3,7 +3,8 @@ FROM node:24-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json prisma.config.ts ./
 COPY prisma ./prisma
-# postinstall generates the prisma client from the schema
+COPY proto ./proto
+# postinstall generates the prisma client and the gRPC types
 RUN npm ci
 COPY . .
 RUN npm run build
