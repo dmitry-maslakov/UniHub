@@ -9,9 +9,10 @@ import {
   ListCourseFilesQuery,
   ListFilesOfContentQuery,
   ListFilesWithContentQuery,
+  ListVisibleContentQuery,
   type FileDto,
 } from '../../application/queries.js';
-import { byPortalRef, fileValues } from '../rows.js';
+import { byPortalRef, contentOf, fileValues } from '../rows.js';
 import { visibleFile } from './visibility.js';
 
 const select = {
@@ -70,6 +71,38 @@ export class GetCourseFileHandler implements IQueryHandler<GetCourseFileQuery> {
     if (!row || !courseId) return null;
     const { portalCourse: _, ...file } = row;
     return { ...toDto(file), courseId };
+  }
+}
+
+@QueryHandler(ListVisibleContentQuery)
+export class ListVisibleContentHandler implements IQueryHandler<ListVisibleContentQuery> {
+  constructor(@InjectTransactionHost() private readonly txHost: PrismaTxHost) {}
+
+  async execute({ courseIds }: ListVisibleContentQuery) {
+    const rows = await this.txHost.tx.file.findMany({
+      where: {
+        AND: [
+          visibleFile({ courseId: { in: [...courseIds] } }),
+          { contentHash: { not: null } },
+        ],
+      },
+      orderBy: [{ path: 'asc' }, { name: 'asc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        name: true,
+        path: true,
+        contentHash: true,
+        portalCourse: { select: { link: { select: { courseId: true } } } },
+      },
+    });
+    // the filter leaves only rows with both, which Prisma's types can't tell
+    return rows.flatMap(({ id, name, path, portalCourse, ...row }) => {
+      const courseId = portalCourse?.link?.courseId;
+      const hash = contentOf(row);
+      return courseId && hash
+        ? [{ fileId: id, courseId, hash, name, path }]
+        : [];
+    });
   }
 }
 

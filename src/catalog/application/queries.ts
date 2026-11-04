@@ -65,6 +65,15 @@ export interface CourseFileDto extends FileDto {
   courseId: string;
 }
 
+// a file a course shows, by its content
+export interface VisibleContentDto {
+  fileId: string;
+  courseId: string;
+  hash: ContentHash;
+  name: string;
+  path: string;
+}
+
 export class ListCoursesQuery extends Query<CourseDto[]> {}
 
 // by its slug, or by the id catalog gave it
@@ -101,6 +110,14 @@ export class ListCourseFilesQuery extends Query<FileDto[]> {
 // a removed post, in a portal course linked to a course. Null otherwise.
 export class GetCourseFileQuery extends Query<CourseFileDto | null> {
   constructor(public readonly fileId: string) {
+    super();
+  }
+}
+
+// the files these courses show (see GetCourseFileQuery) that have content,
+// by folder and name: what search may look through
+export class ListVisibleContentQuery extends Query<VisibleContentDto[]> {
+  constructor(public readonly courseIds: readonly string[]) {
     super();
   }
 }

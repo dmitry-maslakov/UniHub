@@ -6,12 +6,18 @@ import {
 } from '@nestjs-cls/transactional';
 import { PortalId } from '@app/kernel';
 import {
+  CourseName,
+  CreateCourseCommand,
+  LinkPortalCourseCommand,
   ListFilesOfContentQuery,
+  ListVisibleContentQuery,
   RemoveFileCommand,
+  RemoveItemCommand,
   SetFileContentCommand,
   UpsertFileCommand,
   UpsertItemCommand,
   UpsertPortalCourseCommand,
+  Slug,
   type FileInput,
   type ItemInput,
 } from '../src/catalog/contracts.js';
@@ -265,6 +271,78 @@ describe('catalog', { timeout: 20_000 }, () => {
       .get(QueryBus)
       .execute(new ListFilesOfContentQuery(hash));
     expect(files.map((f) => f.externalId)).toEqual(['handout-a']);
+  });
+
+  it('lists the content the given courses show, by folder and name', async () => {
+    // a and b are the courses asked for, c another, d has none
+    const courseIds: Record<string, string> = {};
+    for (const name of ['vis-a', 'vis-b', 'vis-c', 'vis-d'])
+      await commands.execute(
+        new UpsertPortalCourseCommand({
+          portal,
+          externalId: name,
+          name,
+          url: null,
+          meta: null,
+        }),
+      );
+    for (const name of ['vis-a', 'vis-b', 'vis-c']) {
+      ({ id: courseIds[name] } = await commands.execute(
+        new CreateCourseCommand(Slug.parse(name), CourseName.parse(name)),
+      ));
+      await commands.execute(
+        new LinkPortalCourseCommand(Slug.parse(name), ref(name), null),
+      );
+    }
+    for (const externalId of ['vis-post', 'vis-gone'])
+      await commands.execute(
+        new UpsertItemCommand(item({ externalId, course: 'vis-a' })),
+      );
+    const files: [string, Partial<FileInput>, string | null][] = [
+      ['b.pdf', { course: 'vis-a', path: 'lectures' }, '%PDF slides'],
+      ['z.pdf', { course: 'vis-a' }, '%PDF notes'],
+      ['a.pdf', { item: 'vis-post' }, '%PDF slides'],
+      ['answers.pdf', { item: 'vis-gone' }, '%PDF answers'],
+      ['removed.pdf', { course: 'vis-a' }, '%PDF removed'],
+      ['empty.pdf', { course: 'vis-a' }, null],
+      ['copy.pdf', { course: 'vis-b', path: 'x' }, '%PDF slides'],
+      ['other.pdf', { course: 'vis-c' }, '%PDF other'],
+      ['unlinked.pdf', { course: 'vis-d' }, '%PDF unlinked'],
+    ];
+    const ids: Record<string, string> = {};
+    for (const [name, fields, content] of files) {
+      const externalId = `vis-${name}`;
+      ({ id: ids[name] } = await commands.execute(
+        new UpsertFileCommand(file({ ...fields, externalId, name })),
+      ));
+      if (content)
+        await commands.execute(
+          new SetFileContentCommand(ref(externalId), sha256(content)),
+        );
+    }
+    await commands.execute(new RemoveFileCommand(ref('vis-removed.pdf')));
+    await commands.execute(new RemoveItemCommand(ref('vis-gone')));
+
+    const [a, b] = [courseIds['vis-a'], courseIds['vis-b']];
+    const listed = await app
+      .get(QueryBus)
+      .execute(new ListVisibleContentQuery([a, b]));
+    expect(listed.map((f) => [f.name, f.courseId])).toEqual([
+      ['a.pdf', a],
+      ['z.pdf', a],
+      ['b.pdf', a],
+      ['copy.pdf', b],
+    ]);
+    expect(listed[0]).toEqual({
+      fileId: ids['a.pdf'],
+      courseId: a,
+      hash: sha256('%PDF slides'),
+      name: 'a.pdf',
+      path: '',
+    });
+    expect(
+      await app.get(QueryBus).execute(new ListVisibleContentQuery([])),
+    ).toEqual([]);
   });
 
   it('stores content after a sync of the file, not over it', async () => {
