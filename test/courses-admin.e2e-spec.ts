@@ -72,6 +72,8 @@ describe('course admin routes', { timeout: 20_000 }, () => {
     for (const bad of [
       { slug: 'Not A Slug', name: 'x' },
       { slug: 'ok', name: '  ' },
+      // postgres can't keep a NUL: refused here, not a 500 from the insert
+      { slug: 'ok', name: 'a\u0000b' },
       { slug: 'ok' },
     ])
       await admin.post('/api/courses', bad).expect(400);
@@ -111,6 +113,10 @@ describe('course admin routes', { timeout: 20_000 }, () => {
         year: null,
       })
       .expect(400);
+    // nor in a portal course's id
+    const nul = `/api/portal-courses/${PORTAL}/a%00b/course`;
+    await admin.put(nul, { course: 'admin-os', year: null }).expect(400);
+    await admin.delete(nul).expect(400);
   });
 
   it('describes its routes in OpenAPI', async () => {

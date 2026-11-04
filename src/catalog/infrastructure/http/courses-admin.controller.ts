@@ -20,7 +20,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { z } from 'zod';
-import { PortalId } from '@app/kernel';
+import { PortalId, StoredText } from '@app/kernel';
 import { ADMIN_ROLE, Roles } from '../../../identity/contracts.js';
 import {
   CreateCourseCommand,
@@ -35,6 +35,9 @@ const checked = (schema: z.ZodType) => ({
   pipes: [StandardSchemaValidationPipe],
 });
 
+// a portal course's id as its portal has it; text postgres can't keep would
+// fail the lookup with a 500
+const ExternalId = StoredText.min(1);
 const newCourse = z.object({ slug: Slug, name: CourseName });
 const link = z.object({
   course: Slug,
@@ -67,7 +70,7 @@ export class CoursesAdminController {
   @ApiNotFoundResponse({ description: 'no such course or portal course' })
   async link(
     @Param('portal', checked(PortalId)) portal: PortalId,
-    @Param('externalId') externalId: string,
+    @Param('externalId', checked(ExternalId)) externalId: string,
     @Body(checked(link)) { course, year }: z.output<typeof link>,
   ) {
     await this.commands.execute(
@@ -81,7 +84,7 @@ export class CoursesAdminController {
   @ApiNotFoundResponse({ description: 'no such portal course' })
   async unlink(
     @Param('portal', checked(PortalId)) portal: PortalId,
-    @Param('externalId') externalId: string,
+    @Param('externalId', checked(ExternalId)) externalId: string,
   ) {
     await this.commands.execute(
       new UnlinkPortalCourseCommand({ portal, externalId }),

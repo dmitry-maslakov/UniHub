@@ -14,7 +14,8 @@ describe('CourseName', () => {
     expect(CourseName.parse('  Operativni sistemi ')).toBe(
       'Operativni sistemi',
     );
-    for (const bad of ['', '   '])
+    // a NUL postgres refuses: a 400, not a 500 from the insert
+    for (const bad of ['', '   ', 'a\u0000b'])
       expect(CourseName.safeParse(bad).success).toBe(false);
   });
 });

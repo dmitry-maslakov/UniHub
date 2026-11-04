@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { StoredText } from '@app/kernel';
 
 // Values an admin types in, checked once where they come in (zod brands,
 // like the kernel's): a command that takes a Slug can't be handed any string.
@@ -11,7 +12,7 @@ export const Slug = z
 export type Slug = z.output<typeof Slug>;
 
 // a course's name as people read it, never blank
-export const CourseName = z.string().trim().min(1).brand<'CourseName'>();
+export const CourseName = StoredText.trim().min(1).brand<'CourseName'>();
 export type CourseName = z.output<typeof CourseName>;
 
 // the year an academic year starts in: 2026 is 2026/27
