@@ -5,6 +5,7 @@ import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import * as grpc from '@grpc/grpc-js';
 import * as loader from '@grpc/proto-loader';
+import protobuf from 'protobufjs';
 import { AppModule } from '../src/app.module.js';
 import { grpcOptions } from '../src/ingest/contracts.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
@@ -49,6 +50,23 @@ const metadata = (token: string) => {
 
 const sha256 = (data: Buffer) =>
   createHash('sha256').update(data).digest('hex');
+
+// why a call failed, from the standard status details: google.rpc.Status
+// with an ErrorInfo, decoded with Google's own protos
+const Status = protobuf
+  .loadSync([
+    'proto/google/rpc/status.proto',
+    'proto/google/rpc/error_details.proto',
+  ])
+  .lookupType('google.rpc.Status');
+const reasonOf = async (call: Promise<unknown>) => {
+  const error = (await call.catch((e: unknown) => e)) as grpc.ServiceError;
+  const [bytes] = error.metadata.get('grpc-status-details-bin');
+  const status = Status.toObject(Status.decode(bytes as Buffer), {
+    json: true,
+  });
+  return { code: error.code, status };
+};
 
 describe('gRPC ingest', () => {
   let app: INestApplication;
@@ -234,6 +252,9 @@ describe('gRPC ingest', () => {
     await expect(call('SaveState', {})).rejects.toMatchObject({
       code: grpc.status.INVALID_ARGUMENT,
     });
+    // null is a state too: as if none was ever saved
+    expect(await call('SaveState', { json: 'null' })).toEqual({});
+    expect(await call('GetState', {})).toEqual({});
   });
 
   it('answers with statuses a connector can act on', async () => {
@@ -259,9 +280,27 @@ describe('gRPC ingest', () => {
     ).rejects.toMatchObject({ code: grpc.status.FAILED_PRECONDITION });
     // a post's file that names another course than the post's
     await call('Course', { externalId: 'c3', name: 'other' });
-    await expect(
-      call('File', { externalId: 'f5', course: 'c3', item: 'p1', name: 'a' }),
-    ).rejects.toMatchObject({ code: grpc.status.INVALID_ARGUMENT });
+    expect(
+      await reasonOf(
+        call('File', { externalId: 'f5', course: 'c3', item: 'p1', name: 'a' }),
+      ),
+    ).toEqual({
+      code: grpc.status.INVALID_ARGUMENT,
+      status: {
+        code: grpc.status.INVALID_ARGUMENT,
+        message: expect.stringContaining("isn't in course c3"),
+        details: [
+          {
+            '@type': 'type.googleapis.com/google.rpc.ErrorInfo',
+            reason: 'FILE_COURSE_MISMATCH',
+            domain: 'unihub',
+          },
+        ],
+      },
+    });
+    expect(
+      (await reasonOf(sendContent('nope', Buffer.from('bytes')))).status,
+    ).toMatchObject({ details: [{ reason: 'UNKNOWN_REFERENCE' }] });
 
     // the client stream is guarded too
     const { stream, answer } = openContent('wrong-token');

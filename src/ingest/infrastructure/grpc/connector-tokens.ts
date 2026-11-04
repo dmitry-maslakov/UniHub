@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
 import type { Metadata } from '@grpc/grpc-js';
 import { GrpcUnauthenticatedException } from '@nestjs/microservices';
+import type { PortalId } from '@app/kernel';
 import { ingestConfig } from '../../ingest.config.js';
 
 // A connector's token decides its portal, it can't write as another one.
@@ -9,7 +10,7 @@ import { ingestConfig } from '../../ingest.config.js';
 // come with auth.
 @Injectable()
 export class ConnectorTokens {
-  private readonly byToken: ReadonlyMap<string, string>;
+  private readonly byToken: ReadonlyMap<string, PortalId>;
 
   constructor(
     @Inject(ingestConfig.KEY) { tokens }: ConfigType<typeof ingestConfig>,

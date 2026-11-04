@@ -14,9 +14,9 @@ import {
 } from '../src/catalog/contracts.js';
 import { GrantCourseAccessCommand } from '../src/identity/contracts.js';
 import { Mailer, type Mail } from '../src/identity/domain/mailer.js';
-import { HubIngest } from '../src/ingest/contracts.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
 import { accounts } from './accounts.js';
+import { portalIngest } from './ingest.js';
 
 const PORTAL = 'mcp-test';
 
@@ -59,7 +59,7 @@ describe('MCP', { timeout: 20_000 }, () => {
     const prisma = app.get(PrismaService);
     const commands = app.get(CommandBus);
 
-    const ingest = app.get(HubIngest).forPortal(PORTAL);
+    const ingest = portalIngest(app, PORTAL);
     await ingest.course({ externalId: 'c1', name: 'Algorithms 2026' });
     await ingest.item({
       externalId: 'p1',

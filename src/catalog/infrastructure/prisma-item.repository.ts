@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import type { Json } from '@app/kernel';
-import { Prisma, type Item as Row } from '../../generated/prisma/client.js';
+import type { Item as Row } from '../../generated/prisma/client.js';
+import { jsonInput } from '../../platform/database/json-input.js';
 import { Item, type ItemState } from '../domain/item/item.js';
 import type { ItemRepository } from '../domain/item/item.repository.js';
 import type { PortalRef } from '../domain/portal-ref.js';
@@ -27,10 +27,6 @@ const toItem = (row: Row) => {
   });
 };
 
-// a bare null is json too, but Prisma takes it only as JsonNull
-const toJsonInput = (value: Json) =>
-  value === null ? Prisma.JsonNull : (value as Prisma.InputJsonValue);
-
 @Injectable()
 export class PrismaItemRepository
   extends PrismaIngestedRepository<Item>
@@ -56,7 +52,7 @@ export class PrismaItemRepository
       portal: ref.portal,
       externalId: ref.externalId,
       ...props,
-      raw: toJsonInput(props.raw),
+      raw: jsonInput(props.raw),
       portalCourseId,
       removedAt,
     };

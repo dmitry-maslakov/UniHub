@@ -1,36 +1,49 @@
 import { z } from 'zod';
-import { MediaType, StoredJson, StoredText, type PortalId } from '@app/kernel';
-import type { FileInput, ItemInput } from '../../catalog/contracts.js';
+import { MediaType, StoredJson, StoredText } from '@app/kernel';
+import type { CourseRecord, FileRecord, ItemRecord } from '@app/plugin-sdk';
+import type {
+  FileInput,
+  ItemInput,
+  PortalCourseInput,
+  PortalRef,
+} from '../../catalog/contracts.js';
+import type { Connection } from '../domain/connection.js';
+import { MalformedRecordError } from '../domain/errors.js';
 
-// Plugin records are checked here: in-process plugins can pass objects with
-// extra fields, gRPC ones send whatever they like. Unknown keys are dropped,
+// Records are checked here: in-process plugins can pass objects with extra
+// fields, gRPC ones send whatever they like. Unknown keys are dropped,
 // missing optional fields become null, and text and json are taken in the
 // form postgres keeps them, so comparing and writing agree.
-const id = StoredText.min(1);
+
+// every key of the sdk's record and no other, so a field the sdk gains
+// can't be dropped here unnoticed
+type Shape<T> = { [K in keyof Required<T>]: z.ZodType };
+
+const externalId = StoredText.min(1);
 const optional = <T extends z.ZodType>(schema: T) =>
   schema.nullish().transform((v) => v ?? null);
 
-export const courseRecord = z.object({
-  externalId: id,
+const courseRecord = z.object({
+  externalId,
   name: StoredText.min(1),
   url: optional(StoredText),
   meta: optional(StoredJson),
-});
+} satisfies Shape<CourseRecord>);
 
-export const itemRecord = z.object({
-  externalId: id,
-  course: optional(id),
+const itemRecord = z.object({
+  externalId,
+  course: optional(externalId),
   kind: StoredText.min(1),
   title: optional(StoredText),
   url: optional(StoredText),
   publishedAt: optional(z.coerce.date()),
   raw: StoredJson,
-});
+} satisfies Shape<ItemRecord>);
 
-export const fileRecord = z.object({
-  externalId: id,
-  course: optional(id),
-  item: optional(id),
+const fileRecord = z.object({
+  externalId,
+  course: optional(externalId),
+  item: optional(externalId),
   name: StoredText.min(1),
   path: StoredText.nullish().transform((v) => v ?? ''),
   url: optional(StoredText),
@@ -47,20 +60,40 @@ export const fileRecord = z.object({
     (v) => MediaType.safeParse(v).data ?? null,
   ),
   updatedAt: optional(z.coerce.date()),
-});
+} satisfies Shape<FileRecord>);
 
-export const removal = z.object({
-  kind: z.enum(['item', 'file']),
-  externalId: id,
-});
-
-export const syncState = StoredJson;
-
-export function toItemInput(portal: PortalId, record: unknown): ItemInput {
-  return { ...itemRecord.parse(record), portal };
+// what doesn't fit is the sender's to fix, named field by field; an issue
+// with the value as a whole (an id, the state) has no path, so `what` names it
+function parse<T extends z.ZodType>(schema: T, raw: unknown, what: string) {
+  const result = schema.safeParse(raw);
+  if (result.success) return result.data;
+  throw new MalformedRecordError(
+    result.error.issues.map(
+      (i) => `${i.path.length ? i.path.join('.') : what}: ${i.message}`,
+    ),
+  );
 }
 
-export function toFileInput(portal: PortalId, record: unknown): FileInput {
-  const { updatedAt, ...file } = fileRecord.parse(record);
+// a record of this connection's portal, by the portal's id
+export const toRef = ({ portal }: Connection, id: unknown): PortalRef => ({
+  portal,
+  externalId: parse(externalId, id, 'externalId'),
+});
+
+export const toPortalCourseInput = (
+  { portal }: Connection,
+  raw: unknown,
+): PortalCourseInput => ({ ...parse(courseRecord, raw, 'course'), portal });
+
+export const toItemInput = (
+  { portal }: Connection,
+  raw: unknown,
+): ItemInput => ({ ...parse(itemRecord, raw, 'item'), portal });
+
+export function toFileInput({ portal }: Connection, raw: unknown): FileInput {
+  const { updatedAt, ...file } = parse(fileRecord, raw, 'file');
   return { ...file, sourceUpdatedAt: updatedAt, portal };
 }
+
+// whatever json the connector wants back on its next run
+export const toState = (raw: unknown) => parse(StoredJson, raw, 'state');

@@ -115,7 +115,7 @@ describe('plugins', { timeout: 20_000 }, () => {
 
   it('tells aggregators about removed items', async () => {
     const { ingest } = app.get(FakePollConnector).ctx!;
-    expect(await ingest.remove('item', 'i1')).toEqual({ changed: true });
+    expect(await ingest.removeItem('i1')).toEqual({ changed: true });
 
     await vi.waitFor(
       () =>

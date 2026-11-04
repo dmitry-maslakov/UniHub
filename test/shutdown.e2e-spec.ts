@@ -12,9 +12,9 @@ import {
   type PushesFromPortal,
 } from '@app/plugin-sdk';
 import { AppModule } from '../src/app.module.js';
-import { HubIngest } from '../src/ingest/contracts.js';
 import { PLUGINS_QUEUE, type PluginJob } from '../src/processing/queues.js';
 import { testEnv } from './env.js';
+import { portalIngest } from './ingest.js';
 
 const portal = 'shutdown-test';
 
@@ -49,10 +49,11 @@ describe('shutdown', () => {
     }).compile();
     await app.init();
 
-    await app
-      .get(HubIngest)
-      .forPortal(portal)
-      .item({ externalId: 'p', kind: 'post', raw: {} });
+    await portalIngest(app, portal).item({
+      externalId: 'p',
+      kind: 'post',
+      raw: {},
+    });
     const slow = app.get(SlowAggregator);
     await vi.waitFor(() => expect(slow.started).toBe(true), {
       timeout: 10_000,

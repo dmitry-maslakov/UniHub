@@ -32,6 +32,8 @@ npm-debug.log*
 *.tsbuildinfo
 
 /src/generated/prisma
+# gRPC types, generated from proto/ on install
+/src/ingest/infrastructure/grpc/generated
 
 # file content
 /data

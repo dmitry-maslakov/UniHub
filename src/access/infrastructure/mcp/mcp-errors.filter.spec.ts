@@ -3,7 +3,9 @@ import { firstValueFrom, type Observable } from 'rxjs';
 import { NotFoundError } from '@app/kernel';
 import { McpErrorsFilter } from './mcp-errors.filter.js';
 
-class GoneError extends NotFoundError {}
+class GoneError extends NotFoundError {
+  readonly reason = 'GONE';
+}
 
 describe('McpErrorsFilter', () => {
   it('hands the model the message, as a tool error', async () => {

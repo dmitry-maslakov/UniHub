@@ -3,6 +3,8 @@ import type { PortalRef } from './portal-ref.js';
 
 // a plugin referred to something it never sent (an item before its course...)
 export class UnknownReferenceError extends NotFoundError {
+  readonly reason = 'UNKNOWN_REFERENCE';
+
   constructor(
     readonly portal: string,
     readonly externalId: string,
@@ -13,6 +15,8 @@ export class UnknownReferenceError extends NotFoundError {
 
 // a file that names a course, and a post that is in another one
 export class MisplacedFileError extends InvalidError {
+  readonly reason = 'FILE_COURSE_MISMATCH';
+
   constructor(
     readonly course: PortalRef,
     readonly item: PortalRef,
@@ -24,12 +28,16 @@ export class MisplacedFileError extends InvalidError {
 }
 
 export class UnknownCourseError extends NotFoundError {
+  readonly reason = 'UNKNOWN_COURSE';
+
   constructor(readonly slug: string) {
     super(`unknown course ${slug}`);
   }
 }
 
 export class CourseSlugTakenError extends ConflictError {
+  readonly reason = 'COURSE_SLUG_TAKEN';
+
   constructor(readonly slug: string) {
     super(`course ${slug} already exists`);
   }

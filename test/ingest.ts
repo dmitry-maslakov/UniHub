@@ -1,0 +1,18 @@
+import type { INestApplicationContext } from '@nestjs/common';
+import {
+  Connection,
+  IngestService,
+  SdkPortalIngest,
+  SHARED_ACCOUNT,
+} from '../src/ingest/contracts.js';
+
+// what a connector of this portal gets as ctx.ingest
+export const portalIngest = (
+  app: INestApplicationContext,
+  portal: string,
+  account = SHARED_ACCOUNT,
+) =>
+  new SdkPortalIngest(
+    app.get(IngestService),
+    Connection.of({ portal, account }),
+  );
