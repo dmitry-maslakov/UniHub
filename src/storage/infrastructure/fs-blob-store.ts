@@ -37,7 +37,7 @@ async function sizeOf(path: string) {
 export class FsBlobStore extends BlobStore implements OnModuleInit {
   private readonly root: string;
   private readonly tmp: string;
-  private readonly maxBytes: number;
+  readonly maxBytes: number;
 
   constructor(
     @Inject(storageConfig.KEY)

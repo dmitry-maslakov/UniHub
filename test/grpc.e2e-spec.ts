@@ -202,7 +202,19 @@ describe('gRPC ingest', () => {
   });
 
   it('refuses content past STORAGE_MAX_FILE_MB and keeps none of it', async () => {
-    await call('File', { externalId: 'f6', course: 'c1', name: 'talk.mp4' });
+    // a size past it: not asked for, or the connector would send it on every sync
+    expect(
+      await call('File', {
+        externalId: 'f7',
+        course: 'c1',
+        name: 'recording.mp4',
+        size: 3 * 1024 * 1024,
+      }),
+    ).toEqual({ changed: true, needsContent: false });
+    // no size: asked for, and refused when it comes
+    expect(
+      await call('File', { externalId: 'f6', course: 'c1', name: 'talk.mp4' }),
+    ).toEqual({ changed: true, needsContent: true });
     const stored = async () =>
       (await readdir(testEnv.STORAGE_PATH, { recursive: true })).length;
     const before = await stored();

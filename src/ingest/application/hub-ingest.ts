@@ -77,10 +77,17 @@ export class HubIngest {
         }),
       file: (record) =>
         run(async () => {
+          const file = toFileInput(portal, record);
           const { changed, needsContent } = await this.commands.execute(
-            new catalog.UpsertFileCommand(toFileInput(portal, record)),
+            new catalog.UpsertFileCommand(file),
           );
-          return this.notify({ changed, needsContent });
+          // storage would refuse it, and the connector would send it again
+          // on every sync
+          const tooLarge = (file.size ?? 0) > this.blobs.maxBytes;
+          return this.notify({
+            changed,
+            needsContent: needsContent && !tooLarge,
+          });
         }),
       content: (externalId, content) =>
         run(async () =>
