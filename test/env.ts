@@ -8,13 +8,16 @@ const withPath = (url: string, path: string) => {
   return u.toString();
 };
 
-// e2e tests get their own database, redis db and storage folder,
-// so they never touch the developer's data
+// e2e tests get their own database, redis db, storage folder and search
+// indices, so they never touch the developer's data
 export const testEnv = {
   DATABASE_URL: withPath(process.env.DATABASE_URL!, '/unihub_test'),
   // db 15: far from the 0 a developer normally uses, it gets flushed
   REDIS_URL: withPath(process.env.REDIS_URL ?? 'redis://localhost:6379', '/15'),
   STORAGE_PATH: join(tmpdir(), 'unihub-e2e'),
+  OPENSEARCH_URL: process.env.OPENSEARCH_URL ?? 'http://localhost:9200',
+  // still unihub-*: the node creates none of these by itself either
+  OPENSEARCH_INDEX_PREFIX: 'unihub-e2e',
   // small, so a test can go past it; the largest upload in the tests is 1 MB
   STORAGE_MAX_FILE_MB: '2',
   // real plugins are tested on their own; e2e use the fakes

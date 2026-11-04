@@ -36,12 +36,12 @@ A module has up to three layers, and a rule is written once, in the one that own
 
 ```bash
 npm test               # unit specs: no database, a few seconds
-docker compose up -d   # e2e specs need postgres and redis
+docker compose up -d   # e2e specs need postgres, redis and OpenSearch
 npm run test:e2e
 ```
 
 - unit specs (`*.spec.ts`, next to the code) check the rules: the domain on its own, the use cases on in-memory fakes of their ports (`*.fakes.ts` beside them; `test/` has the shared ones: `FakeBus`, `InMemoryBlobs`, `sha256` of real content, plugins as discovery finds them)
-- e2e specs (`test/*.e2e-spec.ts`) check only what fakes can't: how records are written and read back, what the read queries find and in what order, the locks, the outbox rolling back with its transaction, BullMQ's deduplication, gRPC, each route and MCP tool once (and one bad request to each that declares a schema, since nothing else sees it is attached), and the whole pipeline once (`plugins.e2e-spec.ts`). Each boots the app as `main.ts` sets it up (`bootApp()` in `test/app.ts`) on a database, redis db and folder of its own (`test/env.ts`), made anew for every run, and waits for what it waits on (the outbox's events, a job's state), never for a while
+- e2e specs (`test/*.e2e-spec.ts`) check only what fakes can't: how records are written and read back, what the read queries find and in what order, the locks, the outbox rolling back with its transaction, BullMQ's deduplication, gRPC, each route and MCP tool once (and one bad request to each that declares a schema, since nothing else sees it is attached), the whole pipeline once (`plugins.e2e-spec.ts`), and the text index's analyzers, whose rules live in OpenSearch (`search-analysis.e2e-spec.ts`: a word in Cyrillic, in Latin and without diacritics gives the same tokens, on the OpenSearch client alone). The others boot the app as `main.ts` sets it up (`bootApp()` in `test/app.ts`) on a database, redis db, folder and search indices (`unihub-e2e-*`) of their own (`test/env.ts`), made anew for every run, and wait for what they wait on (the outbox's events, a job's state), never for a while
 
 ## Users
 
