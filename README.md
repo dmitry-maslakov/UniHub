@@ -8,11 +8,13 @@ Needs Node 24+ and Docker.
 
 ```bash
 cp .env.example .env   # then set BETTER_AUTH_SECRET
-docker compose up -d
+docker compose up -d   # postgres, redis and OpenSearch
 npm install
 npx prisma migrate dev
 npm run start:dev
 ```
+
+OpenSearch needs `vm.max_map_count` of at least 262144, which Docker Desktop has; on Linux, `sudo sysctl -w vm.max_map_count=262144`.
 
 ## Layout
 
