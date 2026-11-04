@@ -1,5 +1,5 @@
-import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
+import { settings } from '@app/plugin-sdk';
 
 export const canvasSettings = z
   .object({
@@ -18,12 +18,5 @@ export const canvasSettings = z
     userAgent: env.CANVAS_USER_AGENT,
   }));
 
-// read once the plugin is on; a bad setting stops the app, by its name
-export const canvasConfig = registerAs('canvas', () => {
-  const result = canvasSettings.safeParse(process.env);
-  if (!result.success)
-    throw new Error(
-      `invalid canvas settings\n${z.prettifyError(result.error)}`,
-    );
-  return result.data;
-});
+// read once the plugin is on
+export const canvasConfig = settings('canvas', canvasSettings);
