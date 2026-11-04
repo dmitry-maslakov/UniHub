@@ -1,24 +1,25 @@
 import {
+  Inject,
   Injectable,
   type OnApplicationShutdown,
   type OnModuleInit,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import type { ConfigType } from '@nestjs/config';
 import type { TransactionHost } from '@nestjs-cls/transactional';
 import type { TransactionalAdapterPrisma } from '@nestjs-cls/transactional-adapter-prisma';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../../generated/prisma/client.js';
+import { databaseConfig } from './database.config.js';
 
 @Injectable()
 export class PrismaService
   extends PrismaClient
   implements OnModuleInit, OnApplicationShutdown
 {
-  constructor(config: ConfigService) {
-    const adapter = new PrismaPg({
-      connectionString: config.getOrThrow<string>('DATABASE_URL'),
-    });
-    super({ adapter });
+  constructor(
+    @Inject(databaseConfig.KEY) { url }: ConfigType<typeof databaseConfig>,
+  ) {
+    super({ adapter: new PrismaPg({ connectionString: url }) });
   }
 
   async onModuleInit() {

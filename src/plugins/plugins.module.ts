@@ -1,6 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { DiscoveryModule } from '@nestjs/core';
 import { BullModule } from '@nestjs/bullmq';
+import { ConfigModule } from '@nestjs/config';
 import { HubReader } from '@app/plugin-sdk';
 import { IngestModule } from '../ingest/contracts.js';
 import { ConnectorHost } from './connector-host.js';
@@ -8,11 +9,13 @@ import { ConnectorsWorker } from './connectors.worker.js';
 import { CONNECTORS_QUEUE } from './connectors.queue.js';
 import { CoreHubReader } from './core-hub-reader.js';
 import { PluginRegistry } from './plugin-registry.js';
+import { pluginsConfig } from './plugins.config.js';
 
 // global because plugins inject HubReader and can't import hub modules
 @Global()
 @Module({
   imports: [
+    ConfigModule.forFeature(pluginsConfig),
     DiscoveryModule,
     IngestModule,
     BullModule.registerQueue({
