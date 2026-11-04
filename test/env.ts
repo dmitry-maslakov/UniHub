@@ -20,6 +20,8 @@ export const testEnv = {
   // real plugins are tested on their own; e2e use the fakes
   PLUGINS: '',
   CONNECTOR_TOKENS: 'grpc-test=good-test-token-0001',
+  // gRPC starts with the app, as in production, away from a developer's own
+  GRPC_URL: '127.0.0.1:50999',
   BETTER_AUTH_SECRET: 'e2e-secret-e2e-secret-e2e-secret-e2e',
   // mails are only logged; tests read them from the mailer
   SMTP_URL: '',

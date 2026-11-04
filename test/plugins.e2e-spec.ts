@@ -1,12 +1,11 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 import { Outbox, OutboxDeadLetters } from '@nestjs/outbox';
 import { CommandBus } from '@nestjs/cqrs';
-import { Test, type TestingModule } from '@nestjs/testing';
+import type { INestApplication } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import { HubReader, ITEM_INGESTED, ITEM_REMOVED } from '@app/plugin-sdk';
 import { PortalId } from '@app/kernel';
-import { AppModule } from '../src/app.module.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
 import { ITEM_CHANGED } from '../src/catalog/contracts.js';
 import { Connection } from '../src/ingest/contracts.js';
@@ -18,6 +17,7 @@ import { PollSchedule } from '../src/plugins/application/poll-schedule.js';
 import { CONNECTORS_QUEUE } from '../src/plugins/infrastructure/connectors.queue.js';
 import { PluginsOutboxTransport } from '../src/processing/contracts.js';
 import { PLUGINS_QUEUE } from '../src/processing/infrastructure/plugins.queue.js';
+import { bootApp } from './app.js';
 import {
   FAKE_PORTAL,
   FakeAggregator,
@@ -36,14 +36,11 @@ const forFakePortal = <T extends { payload: { portal: string } }>(
 ) => messages.filter((m) => m.payload.portal === FAKE_PORTAL);
 
 describe('plugins', { timeout: 20_000 }, () => {
-  let app: TestingModule;
+  let app: INestApplication;
   let itemId: string;
 
   beforeAll(async () => {
-    app = await Test.createTestingModule({
-      imports: [AppModule, FakePluginsModule],
-    }).compile();
-    await app.init();
+    app = await bootApp({ imports: [FakePluginsModule] });
   });
 
   afterAll(() => app.close());

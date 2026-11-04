@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { Test, type TestingModule } from '@nestjs/testing';
+import type { INestApplication } from '@nestjs/common';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { OutboxEvents } from '@nestjs/outbox';
 import {
@@ -8,7 +8,6 @@ import {
   TransactionNotActiveError,
 } from '@nestjs-cls/transactional';
 import { ContentHash, PortalId } from '@app/kernel';
-import { AppModule } from '../src/app.module.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
 import {
   FILE_CONTENT_CHANGED,
@@ -23,6 +22,7 @@ import {
   type FileInput,
   type ItemInput,
 } from '../src/catalog/contracts.js';
+import { bootApp } from './app.js';
 import { PortalFileRepository } from '../src/catalog/domain/portal-file/portal-file.repository.js';
 
 const portal = PortalId.parse('catalog-test');
@@ -57,13 +57,12 @@ const file = (fields: Partial<FileInput> = {}): FileInput => ({
 });
 
 describe('catalog', () => {
-  let app: TestingModule;
+  let app: INestApplication;
   let commands: CommandBus;
   let prisma: PrismaService;
 
   beforeAll(async () => {
-    app = await Test.createTestingModule({ imports: [AppModule] }).compile();
-    await app.init();
+    app = await bootApp();
     commands = app.get(CommandBus);
     prisma = app.get(PrismaService);
   });

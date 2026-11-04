@@ -2,7 +2,6 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { aborted } from 'node:util';
 import { Injectable, Module } from '@nestjs/common';
 import { CommandBus } from '@nestjs/cqrs';
-import { Test } from '@nestjs/testing';
 import { Queue } from 'bullmq';
 import { Redis } from 'ioredis';
 import {
@@ -17,11 +16,11 @@ import {
   type PushesFromPortal,
 } from '@app/plugin-sdk';
 import { PortalId } from '@app/kernel';
-import { AppModule } from '../src/app.module.js';
 import { Connection } from '../src/ingest/contracts.js';
 import { SyncConnectionCommand } from '../src/plugins/contracts.js';
 import type { PluginJob } from '../src/processing/application/plugin-job.js';
 import { PLUGINS_QUEUE } from '../src/processing/infrastructure/plugins.queue.js';
+import { bootApp } from './app.js';
 import { testEnv } from './env.js';
 import { portalIngest } from './ingest.js';
 
@@ -68,10 +67,7 @@ class ShutdownPluginsModule {}
 
 describe('shutdown', () => {
   it('lets a running job finish and stops connectors', async () => {
-    const app = await Test.createTestingModule({
-      imports: [AppModule, ShutdownPluginsModule],
-    }).compile();
-    await app.init();
+    const app = await bootApp({ imports: [ShutdownPluginsModule] });
 
     await app
       .get(CommandBus)

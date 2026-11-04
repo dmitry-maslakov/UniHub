@@ -1,21 +1,21 @@
 import { readdir } from 'node:fs/promises';
 import { Readable } from 'node:stream';
-import { Test, type TestingModule } from '@nestjs/testing';
+import type { INestApplication } from '@nestjs/common';
 import {
   InvalidRecordError,
   UnknownReferenceError,
   type ItemRecord,
   type PortalIngest,
 } from '@app/plugin-sdk';
-import { AppModule } from '../src/app.module.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
+import { bootApp } from './app.js';
 import { testEnv } from './env.js';
 import { portalIngest } from './ingest.js';
 
 const portal = 'ingest-test';
 
 describe('ingest', () => {
-  let app: TestingModule;
+  let app: INestApplication;
   let hub: PortalIngest;
   let prisma: PrismaService;
 
@@ -41,8 +41,7 @@ describe('ingest', () => {
   }
 
   beforeAll(async () => {
-    app = await Test.createTestingModule({ imports: [AppModule] }).compile();
-    await app.init();
+    app = await bootApp();
     hub = portalIngest(app, portal);
     prisma = app.get(PrismaService);
   });

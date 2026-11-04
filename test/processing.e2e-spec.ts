@@ -1,11 +1,10 @@
 import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
-import { Test, type TestingModule } from '@nestjs/testing';
+import type { INestApplication } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import type { PortalIngest } from '@app/plugin-sdk';
 import { ContentHash, PluginName } from '@app/kernel';
-import { AppModule } from '../src/app.module.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
 import type { ProcessJob } from '../src/processing/application/plugin-job.js';
 import {
@@ -14,6 +13,7 @@ import {
 } from '../src/processing/application/ports.js';
 import { Reconcile } from '../src/processing/application/reconcile.js';
 import { PLUGINS_QUEUE } from '../src/processing/infrastructure/plugins.queue.js';
+import { bootApp } from './app.js';
 import { FakePluginsModule, FakeTextProcessor } from './fake-plugins.js';
 import { portalIngest } from './ingest.js';
 
@@ -24,7 +24,7 @@ const sha = (content: string) =>
 const hash = sha(text);
 
 describe('processing', { timeout: 20_000 }, () => {
-  let app: TestingModule;
+  let app: INestApplication;
   let hub: PortalIngest;
   let prisma: PrismaService;
 
@@ -36,10 +36,7 @@ describe('processing', { timeout: 20_000 }, () => {
     });
 
   beforeAll(async () => {
-    app = await Test.createTestingModule({
-      imports: [AppModule, FakePluginsModule],
-    }).compile();
-    await app.init();
+    app = await bootApp({ imports: [FakePluginsModule] });
     hub = portalIngest(app, portal);
     prisma = app.get(PrismaService);
   });

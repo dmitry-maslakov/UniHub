@@ -1,7 +1,6 @@
-import { Test, type TestingModule } from '@nestjs/testing';
+import type { INestApplication } from '@nestjs/common';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { PortalId } from '@app/kernel';
-import { AppModule } from '../src/app.module.js';
 import {
   AcademicYear,
   CourseName,
@@ -16,13 +15,14 @@ import {
   UpsertPortalCourseCommand,
 } from '../src/catalog/contracts.js';
 
+import { bootApp } from './app.js';
 const ref = (portal: string, externalId: string) => ({
   portal: PortalId.parse(portal),
   externalId,
 });
 
 describe('courses', () => {
-  let app: TestingModule;
+  let app: INestApplication;
   let commands: CommandBus;
   let queries: QueryBus;
 
@@ -58,8 +58,7 @@ describe('courses', () => {
     );
 
   beforeAll(async () => {
-    app = await Test.createTestingModule({ imports: [AppModule] }).compile();
-    await app.init();
+    app = await bootApp();
     commands = app.get(CommandBus);
     queries = app.get(QueryBus);
 

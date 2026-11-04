@@ -1,17 +1,14 @@
 import { createHash } from 'node:crypto';
 import { readdir } from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import * as grpc from '@grpc/grpc-js';
 import * as loader from '@grpc/proto-loader';
 import protobuf from 'protobufjs';
-import { AppModule } from '../src/app.module.js';
-import { grpcOptions } from '../src/ingest/contracts.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
+import { bootApp } from './app.js';
 import { testEnv } from './env.js';
 
-const url = '127.0.0.1:50999';
 const TOKEN = 'good-test-token-0001';
 const PORTAL = 'grpc-test';
 
@@ -37,7 +34,7 @@ function connect(): Client {
     };
   };
   return new proto.unihub.ingest.v1.Ingest(
-    url,
+    testEnv.GRPC_URL,
     grpc.credentials.createInsecure(),
   );
 }
@@ -110,13 +107,7 @@ describe('gRPC ingest', () => {
     });
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
-    app = moduleRef.createNestApplication();
-    app.connectMicroservice(grpcOptions(url));
-    await app.startAllMicroservices();
-    await app.init();
+    app = await bootApp();
     prisma = app.get(PrismaService);
     client = connect();
   });

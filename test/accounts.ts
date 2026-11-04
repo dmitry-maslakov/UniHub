@@ -1,11 +1,14 @@
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
+import { ADMIN_ROLE } from '../src/identity/contracts.js';
 import type { Mail } from '../src/identity/domain/mailer.js';
+import { PrismaService } from '../src/platform/database/prisma.service.js';
 
 export const ORIGIN = 'http://localhost:3000';
 
 // Signs people up the way a browser would, reading their mail from `mails`
-// (the test's stand-in for the Mailer).
+// (the test's stand-in for the Mailer); what only an admin could do to a
+// user (a role, a ban) is set in the database.
 export function accounts(app: () => INestApplication, mails: Mail[]) {
   const http = () => request(app().getHttpServer());
   const post = (path: string, body: object, cookie = '') =>
@@ -38,5 +41,13 @@ export function accounts(app: () => INestApplication, mails: Mail[]) {
       .expect(302);
     return signIn(email, password);
   };
-  return { http, post, linkTo, signIn, signUp };
+  const users = () => app().get(PrismaService).user;
+  const userId = async (email: string) =>
+    (await users().findUniqueOrThrow({ where: { email } })).id;
+  const makeAdmin = (email: string) =>
+    users().update({ where: { email }, data: { role: ADMIN_ROLE } });
+  // banned for good, or no more
+  const ban = (email: string, banned = true) =>
+    users().update({ where: { email }, data: { banned } });
+  return { http, post, linkTo, signIn, signUp, userId, makeAdmin, ban };
 }

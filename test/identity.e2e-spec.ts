@@ -1,9 +1,6 @@
-import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { AuthService } from '@thallesp/nestjs-better-auth';
-import { AppModule } from '../src/app.module.js';
-import { appOptions, configureApp } from '../src/app.setup.js';
 import {
   CourseName,
   CreateCourseCommand,
@@ -16,7 +13,8 @@ import {
   UnknownUserError,
 } from '../src/identity/contracts.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
-import { Mailer, type Mail } from '../src/identity/domain/mailer.js';
+import type { Mail } from '../src/identity/domain/mailer.js';
+import { bootApp } from './app.js';
 import { accounts, ORIGIN } from './accounts.js';
 
 describe('identity', { timeout: 20_000 }, () => {
@@ -32,13 +30,7 @@ describe('identity', { timeout: 20_000 }, () => {
       .send(body);
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
-      .overrideProvider(Mailer)
-      .useValue({ send: async (mail: Mail) => void mails.push(mail) })
-      .compile();
-    app = moduleRef.createNestApplication(appOptions);
-    await configureApp(app);
-    await app.init();
+    app = await bootApp({ mails });
   });
 
   afterAll(() => app.close());

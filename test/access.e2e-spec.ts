@@ -1,10 +1,7 @@
 import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
-import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import { CommandBus } from '@nestjs/cqrs';
-import { AppModule } from '../src/app.module.js';
-import { appOptions, configureApp } from '../src/app.setup.js';
 import { PortalId } from '@app/kernel';
 import {
   AcademicYear,
@@ -14,8 +11,9 @@ import {
   Slug,
 } from '../src/catalog/contracts.js';
 import { GrantCourseAccessCommand } from '../src/identity/contracts.js';
-import { Mailer, type Mail } from '../src/identity/domain/mailer.js';
+import type { Mail } from '../src/identity/domain/mailer.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
+import { bootApp } from './app.js';
 import { accounts, ORIGIN } from './accounts.js';
 import { portalIngest } from './ingest.js';
 
@@ -49,13 +47,7 @@ describe('REST API', { timeout: 20_000 }, () => {
   const slides = Buffer.from('%PDF slides about processes');
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
-      .overrideProvider(Mailer)
-      .useValue({ send: async (mail: Mail) => void mails.push(mail) })
-      .compile();
-    app = moduleRef.createNestApplication(appOptions);
-    await configureApp(app);
-    await app.init();
+    app = await bootApp({ mails });
     const prisma = app.get(PrismaService);
     const commands = app.get(CommandBus);
 
