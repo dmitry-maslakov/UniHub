@@ -6,8 +6,8 @@ import type { Queue } from 'bullmq';
 import type { PortalIngest } from '@app/plugin-sdk';
 import { AppModule } from '../src/app.module.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
-import { Reconciler } from '../src/processing/application/reconciler.js';
-import { PLUGINS_QUEUE } from '../src/processing/queues.js';
+import { Reconcile } from '../src/processing/application/reconcile.js';
+import { PLUGINS_QUEUE } from '../src/processing/infrastructure/plugins.queue.js';
 import { FakePluginsModule, FakeTextProcessor } from './fake-plugins.js';
 import { portalIngest } from './ingest.js';
 
@@ -69,7 +69,7 @@ describe('processing', { timeout: 20_000 }, () => {
       },
     });
 
-    expect(await app.get(Reconciler).run()).toBeGreaterThanOrEqual(1);
+    expect(await app.get(Reconcile).run()).toBeGreaterThanOrEqual(1);
     await vi.waitFor(async () => expect(await stored()).not.toBeNull(), {
       timeout: 10_000,
       interval: 200,
@@ -85,7 +85,7 @@ describe('processing', { timeout: 20_000 }, () => {
     await vi.waitFor(
       async () =>
         expect(
-          await queue.getDeduplicationJobId(`reconcile__${hash}__fake-text__1`),
+          await queue.getDeduplicationJobId(`${hash}__fake-text__1`),
         ).toBeNull(),
       { timeout: 10_000, interval: 100 },
     );
@@ -95,7 +95,7 @@ describe('processing', { timeout: 20_000 }, () => {
       },
     });
 
-    await app.get(Reconciler).run();
+    await app.get(Reconcile).run();
     await vi.waitFor(async () => expect(await stored()).not.toBeNull(), {
       timeout: 10_000,
       interval: 200,

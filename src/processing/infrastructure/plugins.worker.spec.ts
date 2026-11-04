@@ -1,32 +1,30 @@
 import type { PrismaHealthIndicator } from '@nestjs/terminus';
 import { RateLimitError, type Job, type Queue } from 'bullmq';
-import { FILE_CONTENT_STORED } from '@app/plugin-sdk';
-import { ContentHash, PluginName, PortalId } from '@app/kernel';
+import { ContentHash, PluginName } from '@app/kernel';
 import type { PrismaService } from '../../platform/database/prisma.service.js';
-import type { PluginRunner } from '../application/plugin-runner.js';
-import type { PluginJob } from '../queues.js';
+import type { DeliverMessage } from '../application/deliver-message.js';
+import type { PluginJob } from '../application/plugin-job.js';
+import type { ProcessContent } from '../application/process-content.js';
 import { OUTAGE_PAUSE_MS, PluginsWorker } from './plugins.worker.js';
 
-const job = {
-  data: {
-    plugin: PluginName.parse('pdf'),
-    message: {
-      topic: FILE_CONTENT_STORED,
-      payload: {
-        portal: PortalId.parse('p'),
-        fileId: 'f1',
-        hash: ContentHash.parse('0'.repeat(64)),
-      },
-    },
+const data: PluginJob = {
+  kind: 'process',
+  key: {
+    hash: ContentHash.parse('0'.repeat(64)),
+    processor: PluginName.parse('pdf'),
+    version: 1,
   },
-} as Job<PluginJob>;
+};
+
+const job = (fields: Partial<Job> = {}) =>
+  ({ id: 'job-1', data, ...fields }) as Job<PluginJob>;
 
 function worker(database: 'up' | 'down') {
-  const runner = {
+  const processContent = {
     run: async () => {
       throw new Error('plugin failed');
     },
-  } as unknown as PluginRunner;
+  } as unknown as ProcessContent;
   const health = {
     pingCheck: () => ({
       withTimeout: async () => ({ database: { status: database } }),
@@ -35,7 +33,8 @@ function worker(database: 'up' | 'down') {
   const queue = { rateLimit: vi.fn(async () => {}) };
   return {
     worker: new PluginsWorker(
-      runner,
+      {} as DeliverMessage,
+      processContent,
       health,
       {} as PrismaService,
       queue as unknown as Queue<PluginJob>,
@@ -47,13 +46,13 @@ function worker(database: 'up' | 'down') {
 describe('PluginsWorker', () => {
   it("lets a plugin's own failure spend an attempt", async () => {
     const { worker: w, queue } = worker('up');
-    await expect(w.process(job)).rejects.toThrow('plugin failed');
+    await expect(w.process(job())).rejects.toThrow('plugin failed');
     expect(queue.rateLimit).not.toHaveBeenCalled();
   });
 
   it('waits out the database being away without spending an attempt', async () => {
     const { worker: w, queue } = worker('down');
-    await expect(w.process(job)).rejects.toBeInstanceOf(RateLimitError);
+    await expect(w.process(job())).rejects.toBeInstanceOf(RateLimitError);
     expect(queue.rateLimit).toHaveBeenCalledWith(OUTAGE_PAUSE_MS);
   });
 });

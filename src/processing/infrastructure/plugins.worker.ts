@@ -8,8 +8,10 @@ import {
 import { PrismaHealthIndicator } from '@nestjs/terminus';
 import { RateLimitError, type Job, type Queue } from 'bullmq';
 import { PrismaService } from '../../platform/database/prisma.service.js';
-import { PluginRunner } from '../application/plugin-runner.js';
-import { PLUGINS_QUEUE, type PluginJob } from '../queues.js';
+import { DeliverMessage } from '../application/deliver-message.js';
+import { pluginOf, type PluginJob } from '../application/plugin-job.js';
+import { ProcessContent } from '../application/process-content.js';
+import { PLUGINS_QUEUE } from './plugins.queue.js';
 
 // A job that fails while the database is away isn't the plugin's failure:
 // the queue pauses, and the job goes back to wait without spending an
@@ -18,9 +20,10 @@ import { PLUGINS_QUEUE, type PluginJob } from '../queues.js';
 // errors, and one flaky site mustn't pause every plugin.
 export const OUTAGE_PAUSE_MS = 30_000;
 
-// a big pdf can take a while; the lock must outlast it or the job runs twice.
-// BullMQ only honours queue.rateLimit() on a queue with a limiter; this one
-// is far above what four at a time get through, it's there for the pause
+// A processor that keeps the event loop busy stops the lock being renewed;
+// the lock must outlast that or the job runs twice. BullMQ only honours
+// queue.rateLimit() on a queue with a limiter; this one is far above what
+// four at a time get through, it's there for the pause
 @Processor(PLUGINS_QUEUE, {
   concurrency: 4,
   lockDuration: 5 * 60_000,
@@ -30,7 +33,8 @@ export class PluginsWorker extends WorkerHost {
   private readonly logger = new Logger(PluginsWorker.name);
 
   constructor(
-    private readonly runner: PluginRunner,
+    private readonly deliver: DeliverMessage,
+    private readonly processContent: ProcessContent,
     private readonly health: PrismaHealthIndicator,
     private readonly prisma: PrismaService,
     @InjectQueue(PLUGINS_QUEUE) private readonly queue: Queue<PluginJob>,
@@ -38,9 +42,11 @@ export class PluginsWorker extends WorkerHost {
     super();
   }
 
-  async process(job: Job<PluginJob>) {
+  async process({ data }: Job<PluginJob>) {
     try {
-      return await this.runner.run(job.data);
+      return await (data.kind === 'handle'
+        ? this.deliver.run(data)
+        : this.processContent.run(data));
     } catch (err) {
       const { database } = await this.health
         .pingCheck('database', this.prisma)
@@ -58,7 +64,7 @@ export class PluginsWorker extends WorkerHost {
   failed(job: Job<PluginJob> | undefined, error: Error) {
     if (job && job.attemptsMade >= (job.opts.attempts ?? 1))
       this.logger.error(
-        `${job.data.plugin} gave up on ${job.data.message.topic} (job ${job.id})`,
+        `${pluginOf(job.data)} gave up on job ${job.id}`,
         error.stack,
       );
   }

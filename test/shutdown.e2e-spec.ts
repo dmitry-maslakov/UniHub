@@ -20,7 +20,8 @@ import { PortalId } from '@app/kernel';
 import { AppModule } from '../src/app.module.js';
 import { Connection } from '../src/ingest/contracts.js';
 import { SyncConnectionCommand } from '../src/plugins/contracts.js';
-import { PLUGINS_QUEUE, type PluginJob } from '../src/processing/queues.js';
+import type { PluginJob } from '../src/processing/application/plugin-job.js';
+import { PLUGINS_QUEUE } from '../src/processing/infrastructure/plugins.queue.js';
 import { testEnv } from './env.js';
 import { portalIngest } from './ingest.js';
 
@@ -103,9 +104,10 @@ describe('shutdown', () => {
     const redis = new Redis(testEnv.REDIS_URL, { maxRetriesPerRequest: null });
     const queue = new Queue<PluginJob>(PLUGINS_QUEUE, { connection: redis });
     const jobs = (await queue.getJobs()).filter(
-      (job) =>
-        job.data.plugin === 'slow-feed' &&
-        job.data.message.payload.portal === portal,
+      ({ data }) =>
+        data.kind === 'handle' &&
+        data.aggregator === 'slow-feed' &&
+        data.message.payload.portal === portal,
     );
     expect(await Promise.all(jobs.map((job) => job.getState()))).toEqual([
       'completed',

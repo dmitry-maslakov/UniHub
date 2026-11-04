@@ -1,36 +1,21 @@
-export interface Representation {
-  hash: string;
-  processor: string;
+import type { ContentHash, PluginName } from '@app/kernel';
+
+// What a processor made of some content. Kept by the content, so a file
+// shared by several courses is processed once, and by the processor's
+// version, so a new version does it again.
+export interface RepresentationKey {
+  hash: ContentHash;
+  processor: PluginName;
   version: number;
+}
+
+export interface Representation extends RepresentationKey {
   // pages, slides or sections, the way the source is split
   parts: string[];
 }
 
-export interface TextInfo {
-  processor: string;
-  version: number;
-  pages: number;
-}
-
-export interface TextPage extends TextInfo {
-  page: number;
-  text: string;
-}
-
 export abstract class RepresentationRepository {
-  abstract exists(
-    hash: string,
-    processor: string,
-    version: number,
-  ): Promise<boolean>;
-  // what each processor made, its newest version, without the text
-  abstract texts(hash: string): Promise<TextInfo[]>;
-  // one part of the newest version; the first processor's unless one is named
-  abstract page(
-    hash: string,
-    page: number,
-    processor?: string,
-  ): Promise<TextPage | null>;
+  abstract exists(key: RepresentationKey): Promise<boolean>;
   // saving the same one again is harmless
   abstract save(representation: Representation): Promise<void>;
 }
