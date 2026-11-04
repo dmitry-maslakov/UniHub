@@ -1,5 +1,6 @@
 import { ConditionalModule } from '@nestjs/config';
 import { OfficeTextModule } from '@app/plugins/office-text';
+import { PlainTextModule } from '@app/plugins/plain-text';
 import { pluginsConfig } from './plugins.config.js';
 
 // A built-in plugin is on when its name is listed in PLUGINS ("office-text,moodle").
@@ -15,4 +16,7 @@ export function plugin(
 }
 
 // built-in plugins, each turned on by its name
-export const plugins = [plugin('office-text', OfficeTextModule)];
+export const plugins = [
+  plugin('office-text', OfficeTextModule),
+  plugin('plain-text', PlainTextModule),
+];

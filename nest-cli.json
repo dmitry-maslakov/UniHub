@@ -33,6 +33,15 @@
       "compilerOptions": {
         "tsConfigPath": "libs/plugins/office-text/tsconfig.lib.json"
       }
+    },
+    "plugins/plain-text": {
+      "type": "library",
+      "root": "libs/plugins/plain-text",
+      "entryFile": "index",
+      "sourceRoot": "libs/plugins/plain-text/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/plugins/plain-text/tsconfig.lib.json"
+      }
     }
   }
 }

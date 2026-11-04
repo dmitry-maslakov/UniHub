@@ -16,6 +16,7 @@
     "rootDir": ".",
     "incremental": true,
     "skipLibCheck": true,
+    "rewriteRelativeImportExtensions": true,
     "strict": true,
     "strictPropertyInitialization": false,
     "types": [
@@ -40,6 +41,12 @@
       ],
       "@app/plugins/office-text/*": [
         "./libs/plugins/office-text/src/*"
+      ],
+      "@app/plugins/plain-text": [
+        "./libs/plugins/plain-text/src/index.ts"
+      ],
+      "@app/plugins/plain-text/*": [
+        "./libs/plugins/plain-text/src/*"
       ]
     }
   }
