@@ -9,6 +9,9 @@ import type { Mail, Mailer } from '../domain/mailer.js';
 // our own apps that may sign in by QR code (device authorization)
 export const DEVICE_CLIENTS = ['unihub-web', 'unihub-app'];
 
+// 90 days; the plugin reads it in seconds, whatever its docs say
+export const API_KEY_LIFETIME_SECONDS = 90 * 24 * 60 * 60;
+
 export interface AuthDeps {
   prisma: PrismaClient;
   mailer: Mailer;
@@ -57,8 +60,13 @@ export function createAuth({
     emailAndPassword: {
       enabled: true,
       requireEmailVerification: true,
-      // a stolen session, or a screen signed in by QR, ends with a reset
+      // a stolen session, or a screen signed in by QR, ends with a reset;
+      // so do the API keys it may have made (they're ours to drop: a key
+      // never needs a session to work)
       revokeSessionsOnPasswordReset: true,
+      onPasswordReset: async ({ user }) => {
+        await prisma.apikey.deleteMany({ where: { referenceId: user.id } });
+      },
       sendResetPassword: async ({ user, url }) =>
         send({
           to: user.email,
@@ -90,8 +98,17 @@ export function createAuth({
       // for MCP clients. The plugin's limit only resets after a quiet
       // window, so a steadily working agent gets locked out; MCP routes
       // throttle per key instead (#16)
-      // a key's last use is written after the answer, not before it
-      apiKey({ rateLimit: { enabled: false }, deferUpdates: true }),
+      // a key's last use is written after the answer, not before it.
+      // Keys expire; clients can't pick their own expiry, since
+      // /api-key/update with expiresIn: null would make a key permanent
+      apiKey({
+        rateLimit: { enabled: false },
+        deferUpdates: true,
+        keyExpiration: {
+          defaultExpiresIn: API_KEY_LIFETIME_SECONDS,
+          disableCustomExpiresTime: true,
+        },
+      }),
     ],
   });
 }

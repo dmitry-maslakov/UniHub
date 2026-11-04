@@ -64,6 +64,9 @@ describe('identity', { timeout: 20_000 }, () => {
 
   it('resets a forgotten password by mail, signing out everywhere', async () => {
     const before = await signUp('bo@uni.test');
+    const { key } = (
+      await post('/api-key/create', { name: 'agent' }, before).expect(200)
+    ).body as { key: string };
     await post('/request-password-reset', {
       email: 'bo@uni.test',
       redirectTo: '/reset',
@@ -82,6 +85,11 @@ describe('identity', { timeout: 20_000 }, () => {
       .set('cookie', before)
       .expect(200);
     expect(old.body).toBeNull();
+    // a key made from the old session goes with it
+    const { valid } = await app
+      .get(AuthService)
+      .api.verifyApiKey({ body: { key } });
+    expect(valid).toBe(false);
   });
 
   it('refuses links to other sites and requests from them', async () => {
@@ -136,6 +144,29 @@ describe('identity', { timeout: 20_000 }, () => {
       .api.verifyApiKey({ body: { key: created.body.key } });
     expect(valid).toBe(true);
     expect(key?.referenceId).toBe(created.body.referenceId);
+  });
+
+  it('gives keys that expire in 90 days, which clients cannot change', async () => {
+    const cookie = await signUp('dj@uni.test');
+    const created = await post('/api-key/create', { name: 'x' }, cookie).expect(
+      200,
+    );
+    const left = new Date(created.body.expiresAt).getTime() - Date.now();
+    const day = 24 * 60 * 60 * 1000;
+    expect(left).toBeGreaterThan(89 * day);
+    expect(left).toBeLessThanOrEqual(90 * day);
+
+    await post(
+      '/api-key/create',
+      { name: 'forever', expiresIn: 3650 * 24 * 60 * 60 },
+      cookie,
+    ).expect(400);
+    // null would mean "never expires"
+    await post(
+      '/api-key/update',
+      { keyId: created.body.id, expiresIn: null },
+      cookie,
+    ).expect(400);
   });
 
   it('lets a user read the courses granted to them, an admin every course', async () => {
