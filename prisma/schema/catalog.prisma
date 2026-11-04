@@ -54,6 +54,8 @@ model Item {
   files          File[]
 
   @@unique([portal, externalId])
+  // postgres doesn't index foreign keys: course listings and cascades
+  @@index([portalCourseId])
 }
 
 model File {
@@ -80,4 +82,7 @@ model File {
   updatedAt       DateTime      @updatedAt
 
   @@unique([portal, externalId])
+  // course listings and cascades; a post's attachments and SetNull
+  @@index([portalCourseId])
+  @@index([itemId])
 }
