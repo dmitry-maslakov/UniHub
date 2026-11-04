@@ -72,12 +72,12 @@ describe('OpenSearchTextIndex', () => {
       [200, 200, 50],
     );
     expect(client.bulk.mock.calls[0][0].body.slice(0, 2)).toEqual([
-      { index: { _id: `${key.hash}:office-text:2:1:0` } },
+      { index: { _id: `${key.hash}__office-text__2__1__0` } },
       { ...key, page: 1, chunk: 0, text: 'page 1' },
     ]);
     expect(client.index).toHaveBeenCalledWith({
       index,
-      id: `${key.hash}:office-text:2`,
+      id: `${key.hash}__office-text__2`,
       body: { ...key, chunks: 450 },
       refresh: 'wait_for',
     });

@@ -8,7 +8,10 @@ import { PluginName } from '@app/kernel';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
 import { OPENSEARCH } from '../src/platform/search/opensearch.module.js';
 import { ReconcileIndex } from '../src/processing/application/reconcile-index.js';
-import { RepresentationRepository } from '../src/processing/domain/representation.js';
+import {
+  keyId,
+  RepresentationRepository,
+} from '../src/processing/domain/representation.js';
 import { SEARCH_INDEX_QUEUE } from '../src/processing/infrastructure/search/search-index.queue.js';
 import {
   GENERATION,
@@ -27,19 +30,17 @@ import { sha256 } from './sha256.js';
 
 const portal = 'search-index-test';
 const index = indexName(testEnv.OPENSEARCH_INDEX_PREFIX);
-// what fake-text (version 1) makes of content: a part per form feed
-const text = (content: string, version = 1) => ({
+// what fake-text (version 1) makes of content: a part per form feed, and
+// what fake-pdf does
+const text = (content: string, version = 1, processor = 'fake-text') => ({
   hash: sha256(content),
-  processor: PluginName.parse('fake-text'),
+  processor: PluginName.parse(processor),
   version,
 });
 // the ids of a text's manifest and of its chunks, one per page
-const ids = (
-  { hash, processor, version }: ReturnType<typeof text>,
-  pages: number,
-) => {
-  const id = `${hash}:${processor}:${version}`;
-  return [id, ...Array.from({ length: pages }, (_, i) => `${id}:${i + 1}:0`)];
+const ids = (key: ReturnType<typeof text>, pages: number) => {
+  const id = keyId(key);
+  return [id, ...Array.from({ length: pages }, (_, i) => `${id}__${i + 1}__0`)];
 };
 
 const byId = (a: string, b: string) => a.localeCompare(b);
@@ -117,7 +118,7 @@ describe('search index', { timeout: 60_000 }, () => {
   it('writes the manifest alone for content a processor found no text in', async () => {
     await upload('scan.pdf', scan);
 
-    await indexed(sha256(scan), [`${sha256(scan)}:fake-pdf:1`]);
+    await indexed(sha256(scan), ids(text(scan, 1, 'fake-pdf'), 0));
   });
 
   it('reads the newest version of each text from postgres', async () => {
@@ -147,7 +148,7 @@ describe('search index', { timeout: 60_000 }, () => {
     expect(await app.get(ReconcileIndex).run()).toBeGreaterThanOrEqual(3);
 
     await indexed(sha256(notes), ids(text(notes, 2), 1));
-    await indexed(sha256(scan), [`${sha256(scan)}:fake-pdf:1`]);
+    await indexed(sha256(scan), ids(text(scan, 1, 'fake-pdf'), 0));
     await indexed(sha256(book), []);
   });
 
