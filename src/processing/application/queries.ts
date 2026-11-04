@@ -1,6 +1,5 @@
 import { Query } from '@nestjs/cqrs';
 import type { ContentHash, PluginName } from '@app/kernel';
-import type { Snippet } from './ports.js';
 
 // What other modules read of processing: the texts straight from the
 // database (infrastructure/read), and a search over them in the index
@@ -37,9 +36,17 @@ export class GetTextPageQuery extends Query<TextPage | null> {
   }
 }
 
+// A fragment of a chunk's text and where in it the query's words are:
+// UTF-16 offsets into `text` (the chunk as indexed, NFC), each [start, end).
+// Plain text: whatever HTML the source had comes as it was.
+export interface Snippet {
+  text: string;
+  highlights: [start: number, end: number][];
+}
+
 export interface TextHit {
   hash: ContentHash;
-  // best first, each page once
+  // best first, each page once, by its best chunk (at most 3)
   pages: {
     processor: PluginName;
     version: number;

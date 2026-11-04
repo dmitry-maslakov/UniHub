@@ -16,17 +16,12 @@ import {
 } from './opensearch-errors.js';
 import {
   chunkDocs,
-  contentHits,
   manifest,
   manifestKeys,
   versionsOf,
 } from './text-index.documents.js';
-import {
-  GENERATION,
-  indexBody,
-  indexName,
-  keywordBody,
-} from './text-index.mapping.js';
+import { GENERATION, indexBody, indexName } from './text-index.mapping.js';
+import { contentHits, keywordBody } from './text-index.search.js';
 
 // documents per bulk request
 const BULK = 200;
@@ -101,12 +96,18 @@ export class OpenSearchTextIndex extends TextIndex {
     } while (after);
   }
 
+  // Not after making sure of the index, which waits the client's 30 s on a
+  // stuck node (twice): a search finds the index gone by itself, answered at
+  // once, and only then makes it. One of another mapping is for the writes
+  // to refuse.
   async search(query: TextQuery) {
-    const { body } = await this.onIndex(() =>
-      this.client.search(
-        { index: this.index, body: keywordBody(query) },
-        { requestTimeout: SEARCH_TIMEOUT_MS },
-      ),
+    const { body } = await this.onIndex(
+      () =>
+        this.client.search(
+          { index: this.index, body: keywordBody(query) },
+          { requestTimeout: SEARCH_TIMEOUT_MS },
+        ),
+      { first: false },
     );
     return contentHits(body.hits.hits);
   }
@@ -137,11 +138,12 @@ export class OpenSearchTextIndex extends TextIndex {
     return this.ensured;
   }
 
-  private onIndex<T>(op: () => Promise<T>) {
+  // the index made sure of `first`, or only once op finds it gone
+  private onIndex<T>(op: () => Promise<T>, { first = true } = {}) {
     return this.translating(() =>
       pRetry(
-        async () => {
-          await this.ready();
+        async (attempt) => {
+          if (first || attempt > 1) await this.ready();
           return op();
         },
         {

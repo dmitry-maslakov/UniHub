@@ -1,8 +1,12 @@
+import { HIGHLIGHT } from '../../domain/chunks.js';
 import { snippetOf } from './snippet.js';
+
+// as OpenSearch marks a match
+const m = (match: string) => `${HIGHLIGHT.open}${match}${HIGHLIGHT.close}`;
 
 describe('snippetOf', () => {
   it('takes the tags out and says where they were', () => {
-    expect(snippetOf('a \uE000semafor\uE001 b \uE000mreža\uE001')).toEqual({
+    expect(snippetOf(`a ${m('semafor')} b ${m('mreža')}`)).toEqual({
       text: 'a semafor b mreža',
       highlights: [
         [2, 9],
@@ -12,9 +16,7 @@ describe('snippetOf', () => {
   });
 
   it('joins highlights that touch, keeping apart those that do not', () => {
-    expect(
-      snippetOf('\uE000camel\uE001\uE000Case\uE001 \uE000x\uE001'),
-    ).toEqual({
+    expect(snippetOf(`${m('camel')}${m('Case')} ${m('x')}`)).toEqual({
       text: 'camelCase x',
       highlights: [
         [0, 9],
@@ -31,14 +33,14 @@ describe('snippetOf', () => {
   });
 
   it('leaves HTML as it came, to be shown as text', () => {
-    expect(snippetOf('<script>\uE000alert\uE001(1)</script>')).toEqual({
+    expect(snippetOf(`<script>${m('alert')}(1)</script>`)).toEqual({
       text: '<script>alert(1)</script>',
       highlights: [[8, 13]],
     });
   });
 
   it('counts in UTF-16 units, past astral characters too', () => {
-    const { text, highlights } = snippetOf('😀 𝑥 \uE000čas\uE001');
+    const { text, highlights } = snippetOf(`😀 𝑥 ${m('čas')}`);
 
     expect(highlights).toEqual([[6, 9]]);
     expect(text.slice(...highlights[0])).toBe('čas');

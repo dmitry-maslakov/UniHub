@@ -12,10 +12,10 @@ import {
   PluginJobQueue,
   TextIndex,
   TextIndexQueue,
-  type ContentHit,
   type FileFact,
   type TextQuery,
 } from './ports.js';
+import type { TextHit } from './queries.js';
 
 // In-memory ports for the application's unit tests; plugins come from
 // test/discovered-plugins.ts, content from test/in-memory-blobs.ts.
@@ -98,7 +98,7 @@ export class InMemoryTextIndex extends TextIndex {
   >();
   readonly calls: string[] = [];
   readonly searched: TextQuery[] = [];
-  hits: ContentHit[] = [];
+  hits: TextHit[] = [];
 
   async ensure() {
     this.calls.push('ensure');

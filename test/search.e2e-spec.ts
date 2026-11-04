@@ -18,9 +18,9 @@ import { portalIngest } from './ingest.js';
 import { sha256 } from './sha256.js';
 
 // What OpenSearch makes of SearchTextsQuery: the query's body, its collapse
-// and highlight, and how the answer is read back. Which hits it keeps and
-// how the pages are shown is checked on fakes (SearchTexts), the body's
-// parts on its own (text-index.mapping.spec.ts).
+// and highlight, and how the answer is read back. Which pages are shown of
+// the chunks it answers, and the body's parts, are checked on their own
+// (text-index.search.spec.ts), the rest of the query on fakes (SearchTexts).
 
 const portal = 'search-test';
 const index = indexName(testEnv.OPENSEARCH_INDEX_PREFIX);

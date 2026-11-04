@@ -7,7 +7,6 @@ import { OpenSearchModule } from '../../../platform/search/opensearch.module.js'
 import { IndexText } from '../../application/index-text.js';
 import { TextIndex, TextIndexQueue } from '../../application/ports.js';
 import { ReconcileIndex } from '../../application/reconcile-index.js';
-import { SearchTexts } from '../../application/search-texts.js';
 import { RepresentationRepository } from '../../domain/representation.js';
 import { PrismaRepresentationRepository } from '../prisma-representation.repository.js';
 import { BullmqTextIndexQueue } from './bullmq-text-index-queue.js';
@@ -18,9 +17,8 @@ import { SearchIndexWorker } from './search-index.worker.js';
 
 const DAY = 24 * 60 * 60;
 
-// The processors' texts in OpenSearch, kept in step with postgres, and
-// SearchTextsQuery over them. Imported only when search is on
-// (processing.module.ts).
+// The processors' texts in OpenSearch, kept in step with postgres. Imported
+// only when search is on (processing.module.ts).
 @Module({
   imports: [
     ConfigModule.forFeature(opensearchConfig),
@@ -50,10 +48,10 @@ const DAY = 24 * 60 * 60;
     { provide: TextIndexQueue, useClass: BullmqTextIndexQueue },
     IndexText,
     ReconcileIndex,
-    SearchTexts,
     SearchIndexWorker,
     ReconcileIndexSchedule,
   ],
-  exports: [TextIndexQueue],
+  // to ProcessContent and SearchTexts, which do without them when it's off
+  exports: [TextIndex, TextIndexQueue],
 })
 export class TextSearchModule {}

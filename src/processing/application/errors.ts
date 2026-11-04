@@ -10,3 +10,13 @@ export class SearchUnavailableError extends UnavailableError {
     super('search is unavailable, try again later', options);
   }
 }
+
+// The hub runs without a search index (no OPENSEARCH_URL): no use trying
+// again until it's set up with one.
+export class SearchOffError extends UnavailableError {
+  readonly reason = 'SEARCH_OFF';
+
+  constructor() {
+    super('search is off on this hub');
+  }
+}

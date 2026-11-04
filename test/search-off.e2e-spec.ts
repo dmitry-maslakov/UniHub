@@ -1,8 +1,10 @@
 import { Readable } from 'node:stream';
 import type { INestApplication } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
+import { QueryBus } from '@nestjs/cqrs';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
 import { TextIndexQueue } from '../src/processing/application/ports.js';
+import { SearchTextsQuery } from '../src/processing/contracts.js';
 import { SEARCH_INDEX_QUEUE } from '../src/processing/infrastructure/search/search-index.queue.js';
 import { testEnv } from './env.js';
 import { FakePluginsModule } from './fake-plugins.js';
@@ -45,5 +47,14 @@ describe('search off', { timeout: 20_000 }, () => {
         ).not.toBeNull(),
       { timeout: 10_000, interval: 200 },
     );
+  });
+
+  // its handler is processing's, there with search off too
+  it('tells a search that search is off', async () => {
+    await expect(
+      app
+        .get(QueryBus)
+        .execute(new SearchTextsQuery('semafor', [sha256('a')], 10)),
+    ).rejects.toMatchObject({ kind: 'unavailable', reason: 'SEARCH_OFF' });
   });
 });

@@ -9,6 +9,7 @@ import { Dispatch } from './application/dispatch.js';
 import { FileFacts, PluginJobQueue } from './application/ports.js';
 import { ProcessContent } from './application/process-content.js';
 import { Reconcile } from './application/reconcile.js';
+import { SearchTexts } from './application/search-texts.js';
 import { RepresentationRepository } from './domain/representation.js';
 import { BullmqPluginJobQueue } from './infrastructure/bullmq-plugin-job-queue.js';
 import { CatalogFileFacts } from './infrastructure/catalog-file-facts.js';
@@ -43,9 +44,10 @@ const DAY = 24 * 60 * 60;
     TerminusModule,
     StorageModule,
     PluginsModule,
-    // Search is on with OPENSEARCH_URL; without it nothing is indexed and
-    // ProcessContent queues nothing. The function form: a string one would
-    // load the module when the variable isn't set.
+    // Search is on with OPENSEARCH_URL; without it nothing is indexed,
+    // ProcessContent queues nothing and SearchTexts answers it's off. The
+    // function form: a string one would load the module when the variable
+    // isn't set.
     ConditionalModule.registerWhen(TextSearchModule, (env) =>
       Boolean(env.OPENSEARCH_URL),
     ),
@@ -53,6 +55,7 @@ const DAY = 24 * 60 * 60;
   providers: [
     ListTextsHandler,
     GetTextPageHandler,
+    SearchTexts,
     Dispatch,
     DeliverMessage,
     ProcessContent,

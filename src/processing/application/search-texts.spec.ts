@@ -1,31 +1,25 @@
 import { PluginName, type ContentHash } from '@app/kernel';
 import { sha256 } from '../../../test/sha256.js';
-import { SearchUnavailableError } from './errors.js';
-import type { ContentHit, PageHit } from './ports.js';
+import { SearchOffError, SearchUnavailableError } from './errors.js';
 import { TextIndexUnavailableError } from './ports.js';
 import { InMemoryTextIndex } from './processing.fakes.js';
-import { SearchTextsQuery } from './queries.js';
+import { SearchTextsQuery, type TextHit } from './queries.js';
 import { SearchTexts } from './search-texts.js';
 
 const lecture = sha256('%PDF lecture');
 const notes = sha256('notes');
-const officeText = PluginName.parse('office-text');
-const plainText = PluginName.parse('plain-text');
 
-const page = (page: number, chunk = 0, processor = officeText): PageHit => ({
-  processor,
-  version: 2,
-  page,
-  chunk,
-  snippet: { text: `page ${page}, chunk ${chunk}`, highlights: [[0, 4]] },
-});
-const hit = (hash: ContentHash, ...pages: PageHit[]): ContentHit => ({
+const hit = (hash: ContentHash, ...pages: number[]): TextHit => ({
   hash,
-  score: 1,
-  pages,
+  pages: pages.map((page) => ({
+    processor: PluginName.parse('office-text'),
+    version: 2,
+    page,
+    snippet: { text: `page ${page}`, highlights: [[0, 4]] },
+  })),
 });
 
-function searching(...hits: ContentHit[]) {
+function searching(...hits: TextHit[]) {
   const index = new InMemoryTextIndex();
   index.hits = hits;
   return { index, search: new SearchTexts(index) };
@@ -33,7 +27,7 @@ function searching(...hits: ContentHit[]) {
 
 describe('SearchTexts', () => {
   it('answers none among no contents, without asking the index', async () => {
-    const { index, search } = searching(hit(lecture, page(1)));
+    const { index, search } = searching(hit(lecture, 1));
 
     expect(
       await search.execute(new SearchTextsQuery('semafor', [], 10)),
@@ -51,30 +45,15 @@ describe('SearchTexts', () => {
     expect(index.searched[0].hashes).toBe(hashes);
   });
 
-  it('answers the contents in the index order, each page once by its best chunk', async () => {
-    const { search } = searching(
-      hit(notes, page(4)),
-      hit(lecture, page(3, 1), page(1), page(3, 0), page(3, 0, plainText)),
-    );
+  it('answers the contents as the index found them', async () => {
+    const hits = [hit(notes, 4), hit(lecture, 3, 1)];
+    const { search } = searching(...hits);
 
-    const found = await search.execute(
-      new SearchTextsQuery('semafor', [lecture, notes], 10),
-    );
-
-    // as the index has them, but for the chunk
-    const shown = ({ processor, version, page, snippet }: PageHit) => ({
-      processor,
-      version,
-      page,
-      snippet,
-    });
-    expect(found).toEqual([
-      { hash: notes, pages: [shown(page(4))] },
-      {
-        hash: lecture,
-        pages: [page(3, 1), page(1), page(3, 0, plainText)].map(shown),
-      },
-    ]);
+    expect(
+      await search.execute(
+        new SearchTextsQuery('semafor', [lecture, notes], 10),
+      ),
+    ).toEqual(hits);
   });
 
   it('answers an index away or stuck as search being unavailable', async () => {
@@ -91,6 +70,21 @@ describe('SearchTexts', () => {
       message: 'search is unavailable, try again later',
       cause: away,
     });
+  });
+
+  it('answers search being off without an index, whatever it is asked', async () => {
+    const search = new SearchTexts();
+
+    for (const hashes of [[notes], []]) {
+      const failed = search.execute(
+        new SearchTextsQuery('semafor', hashes, 10),
+      );
+      await expect(failed).rejects.toBeInstanceOf(SearchOffError);
+      await expect(failed).rejects.toMatchObject({
+        kind: 'unavailable',
+        reason: 'SEARCH_OFF',
+      });
+    }
   });
 
   it('lets any other failure through as it came', async () => {

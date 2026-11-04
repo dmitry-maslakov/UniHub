@@ -2,15 +2,10 @@ import { errors, type Client } from '@opensearch-project/opensearch';
 import { PluginName } from '@app/kernel';
 import { sha256 } from '../../../../test/sha256.js';
 import { TextIndexUnavailableError } from '../../application/ports.js';
-import { chunksOf } from '../../domain/chunks.js';
+import { chunksOf, HIGHLIGHT } from '../../domain/chunks.js';
 import { OpenSearchTextIndex } from './opensearch-text-index.js';
-import { CLOSE, OPEN } from './snippet.js';
-import {
-  GENERATION,
-  indexBody,
-  indexName,
-  keywordBody,
-} from './text-index.mapping.js';
+import { GENERATION, indexBody, indexName } from './text-index.mapping.js';
+import { keywordBody } from './text-index.search.js';
 
 const index = indexName('unihub');
 const key = {
@@ -314,28 +309,27 @@ describe('OpenSearchTextIndex', () => {
     expect(client.indices.create).toHaveBeenCalledTimes(2);
   });
 
-  it('searches within 5 s, a hit per content read back with its best chunks', async () => {
+  it('searches within 5 s, a hit per content read back as its best pages', async () => {
     const { client, text } = opensearch();
-    const long = 'x'.repeat(500);
-    const chunk = (page: number, chunk: number, text: string) => ({
-      _source: { ...key, page, chunk, text },
-    });
+    const { open, close } = HIGHLIGHT;
     client.search.mockResolvedValueOnce({
       body: {
         hits: {
           hits: [
             {
-              ...chunk(3, 1, 'a semafor'),
-              _score: 2.5,
+              _source: { hash: key.hash },
               inner_hits: {
                 pages: {
                   hits: {
                     hits: [
                       {
-                        ...chunk(3, 1, 'a semafor'),
-                        highlight: { text: [`a ${OPEN}semafor${CLOSE}`] },
+                        _source: {
+                          processor: key.processor,
+                          version: 2,
+                          page: 3,
+                        },
+                        highlight: { text: [`a ${open}semafor${close}`] },
                       },
-                      chunk(1, 0, long),
                     ],
                   },
                 },
@@ -352,28 +346,29 @@ describe('OpenSearchTextIndex', () => {
       { index, body: keywordBody(query) },
       { requestTimeout: 5_000 },
     );
-    const at = { processor: key.processor, version: 2 };
     expect(hits).toEqual([
       {
         hash: key.hash,
-        score: 2.5,
         pages: [
           {
-            ...at,
+            processor: key.processor,
+            version: 2,
             page: 3,
-            chunk: 1,
             snippet: { text: 'a semafor', highlights: [[2, 9]] },
-          },
-          // no fragment: the chunk's start
-          {
-            ...at,
-            page: 1,
-            chunk: 0,
-            snippet: { text: long.slice(0, 400), highlights: [] },
           },
         ],
       },
     ]);
+  });
+
+  // making sure of it would wait the client's 30 s on a stuck node
+  it('searches without making sure of the index first', async () => {
+    const { client, text } = opensearch();
+    client.indices.create.mockReturnValue(new Promise(() => {}));
+    client.search.mockResolvedValueOnce(none);
+
+    expect(await text.search(query)).toEqual([]);
+    expect(client.indices.create).not.toHaveBeenCalled();
   });
 
   it('takes a search stuck past its time for an outage', async () => {
@@ -394,7 +389,7 @@ describe('OpenSearchTextIndex', () => {
       .mockResolvedValueOnce(none);
 
     expect(await text.search(query)).toEqual([]);
-    expect(client.indices.create).toHaveBeenCalledTimes(2);
+    expect(client.indices.create).toHaveBeenCalledTimes(1);
     expect(client.search).toHaveBeenCalledTimes(2);
   });
 

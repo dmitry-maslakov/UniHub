@@ -4,11 +4,11 @@
 // load this file without one. AppModule imports it from its own file.
 // for AppModule, which hands it to the outbox
 export { PluginsOutboxTransport } from './infrastructure/plugins-outbox.transport.js';
-export type { Snippet } from './application/ports.js';
 export {
   GetTextPageQuery,
   ListTextsQuery,
   SearchTextsQuery,
+  type Snippet,
   type TextHit,
   type TextInfo,
   type TextPage,
