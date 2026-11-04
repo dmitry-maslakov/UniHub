@@ -71,13 +71,16 @@ describe('PlainTextProcessor', () => {
     ).toEqual({ parts: [] });
   });
 
-  it('leaves minified code out, unread', async () => {
-    const content = vi.fn(() => Readable.from(['$.fn={}']));
-    expect(await processor.process(input('jquery.min.js', content))).toEqual({
-      parts: [],
-    });
-    expect(content).not.toHaveBeenCalled();
-  });
+  it.each(['jquery.min.js', 'bootstrap.min.css'])(
+    'leaves minified code out, unread: %s',
+    async (name) => {
+      const content = vi.fn(() => Readable.from(['a{b:c}']));
+      expect(await processor.process(input(name, content))).toEqual({
+        parts: [],
+      });
+      expect(content).not.toHaveBeenCalled();
+    },
+  );
 
   it('skips a file too large, before reading all of it', async () => {
     const mib = Buffer.alloc(1024 * 1024, 'a');

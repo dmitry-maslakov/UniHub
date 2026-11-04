@@ -16,9 +16,9 @@ export const MAX_NOTEBOOK_BYTES = 64 * 1024 * 1024;
 // a file past these ends its own thread, and the hub goes on
 const HEAP_MB = 512;
 const TIMEOUT_MS = 60_000;
-// a library's minified code (jquery.min.js) would turn up in every course
-// whose projects have it
-const MINIFIED = /\.min\.m?js$/i;
+// a library's minified code (jquery.min.js, bootstrap.min.css) would turn up
+// in every course whose projects have it
+const MINIFIED = /\.min\.(m?js|css)$/i;
 
 // Text of source code, plain text, markdown, notebooks and data files: a
 // part per section of markdown and notebooks, whole lines up to 10,000
