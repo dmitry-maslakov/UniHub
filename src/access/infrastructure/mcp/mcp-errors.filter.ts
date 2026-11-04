@@ -1,4 +1,4 @@
-import { Catch } from '@nestjs/common';
+import { Catch, Logger, type ArgumentsHost } from '@nestjs/common';
 import { McpExceptionFilter } from '@rekog/mcp-nest';
 import { DomainError } from '@app/kernel';
 
@@ -9,4 +9,12 @@ import { DomainError } from '@app/kernel';
 // themselves: global filters reach the MCP microservice only through
 // inheritAppConfig, which would also bring Better Auth's global guard.
 @Catch(DomainError)
-export class McpErrorsFilter extends McpExceptionFilter {}
+export class McpErrorsFilter extends McpExceptionFilter {
+  private readonly logger = new Logger(McpErrorsFilter.name);
+
+  catch(error: DomainError, host: ArgumentsHost) {
+    // the hub failing, not the call: mcp-nest logs no tool error
+    if (error.kind === 'unavailable') this.logger.error(error);
+    return super.catch(error, host);
+  }
+}

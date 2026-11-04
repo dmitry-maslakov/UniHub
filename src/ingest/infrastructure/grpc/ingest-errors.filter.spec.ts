@@ -1,4 +1,4 @@
-import type { ArgumentsHost } from '@nestjs/common';
+import { Logger, type ArgumentsHost } from '@nestjs/common';
 import { status, type Metadata } from '@grpc/grpc-js';
 import { GrpcUnauthenticatedException } from '@nestjs/microservices';
 import protobuf from 'protobufjs';
@@ -54,6 +54,10 @@ const details = ({ metadata }: Answer) =>
   );
 
 describe('IngestErrorsFilter', () => {
+  // quiet, and read by the test of what gets logged
+  const log = vi.spyOn(Logger.prototype, 'error').mockReturnValue();
+  beforeEach(() => log.mockClear());
+
   it("answers the hub's kinds of error the way HTTP does", async () => {
     expect((await answerTo(new GoneError('x'))).code).toBe(status.NOT_FOUND);
     expect((await answerTo(new TakenError('x'))).code).toBe(
@@ -63,6 +67,13 @@ describe('IngestErrorsFilter', () => {
       (await answerTo(new InvalidValueError('content hash', 'x'))).code,
     ).toBe(status.INVALID_ARGUMENT);
     expect((await answerTo(new AwayError('x'))).code).toBe(status.UNAVAILABLE);
+  });
+
+  it('logs the kind that means the hub is failing, and no other', async () => {
+    const away = new AwayError('x');
+    await answerTo(new GoneError('x'));
+    await answerTo(away);
+    expect(log.mock.calls).toEqual([[away]]);
   });
 
   it('asks for the parent first when a record refers to an unknown one', async () => {

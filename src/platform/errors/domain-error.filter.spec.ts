@@ -1,4 +1,4 @@
-import type { ArgumentsHost, HttpServer } from '@nestjs/common';
+import { Logger, type ArgumentsHost, type HttpServer } from '@nestjs/common';
 import {
   ConflictError,
   InvalidValueError,
@@ -34,6 +34,10 @@ function http(error: DomainError) {
 }
 
 describe('DomainErrorFilter', () => {
+  // quiet, and read by the test of what gets logged
+  const log = vi.spyOn(Logger.prototype, 'error').mockReturnValue();
+  beforeEach(() => log.mockClear());
+
   it('answers each kind as Nest answers its status', () => {
     expect(http(new GoneError('course not found'))).toEqual({
       status: 404,
@@ -46,5 +50,12 @@ describe('DomainErrorFilter', () => {
     expect(http(new TakenError('taken')).status).toBe(409);
     expect(http(new InvalidValueError('course slug', 'A B')).status).toBe(400);
     expect(http(new AwayError('try again later')).status).toBe(503);
+  });
+
+  it('logs the kind that means the hub is failing, and no other', () => {
+    const away = new AwayError('try again later');
+    http(new GoneError('course not found'));
+    http(away);
+    expect(log.mock.calls).toEqual([[away]]);
   });
 });

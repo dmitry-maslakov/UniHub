@@ -53,7 +53,12 @@ export class IngestErrorsFilter extends BaseRpcExceptionFilter {
 
   private toGrpc(error: unknown) {
     if (error instanceof GrpcException) return error.getError();
-    if (error instanceof DomainError) return withReason(error);
+    if (error instanceof DomainError) {
+      // the hub failing, logged like the outages below that it doesn't name
+      if (error.kind === 'unavailable')
+        BaseRpcExceptionFilter.logger.error(error);
+      return withReason(error);
+    }
     if (isWriteConflict(error))
       return new GrpcAbortedException('try again').getError();
     BaseRpcExceptionFilter.logger.error(error);
