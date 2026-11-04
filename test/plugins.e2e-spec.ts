@@ -9,7 +9,7 @@ import { PrismaService } from '../src/platform/database/prisma.service.js';
 import { ITEM_CHANGED } from '../src/catalog/contracts.js';
 import { ConnectorHost } from '../src/plugins/connector-host.js';
 import { CONNECTORS_QUEUE } from '../src/plugins/connectors.queue.js';
-import { PluginRegistry } from '../src/plugins/plugin-registry.js';
+import { PluginCatalog } from '../src/plugins/contracts.js';
 import { PluginsOutboxTransport } from '../src/processing/contracts.js';
 import { PLUGINS_QUEUE } from '../src/processing/queues.js';
 import {
@@ -167,14 +167,16 @@ describe('plugins', { timeout: 20_000 }, () => {
   });
 
   it('finds the plugins by their decorators', () => {
-    const registry = app.get(PluginRegistry);
-    expect(registry.connectors.map((c) => c.options.portal)).toEqual(
-      expect.arrayContaining([FAKE_PORTAL, 'fake-push']),
-    );
+    const catalog = app.get(PluginCatalog);
     expect(
-      registry
+      [...catalog.pollConnectors, ...catalog.pushConnectors].map(
+        (c) => c.spec.portal,
+      ),
+    ).toEqual(expect.arrayContaining([FAKE_PORTAL, 'fake-push']));
+    expect(
+      catalog
         .processorsFor({ name: 'slides.PDF', mime: null })
-        .map((p) => p.options.name),
-    ).toEqual(['fake-pdf']);
+        .map(({ processor, matched }) => [processor.spec.name, matched]),
+    ).toEqual([['fake-pdf', '.pdf']]);
   });
 });

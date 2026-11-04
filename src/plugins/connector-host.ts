@@ -15,8 +15,8 @@ import {
   SdkPortalIngest,
   SHARED_ACCOUNT,
 } from '../ingest/contracts.js';
+import { PluginCatalog } from './application/plugin-catalog.js';
 import { CONNECTORS_QUEUE, type ConnectorJob } from './connectors.queue.js';
-import { PluginRegistry } from './plugin-registry.js';
 import { pluginsConfig } from './plugins.config.js';
 
 // Runs connectors: schedules poll connectors, starts and stops push ones.
@@ -27,7 +27,7 @@ export class ConnectorHost implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly started: PushesFromPortal[] = [];
 
   constructor(
-    private readonly registry: PluginRegistry,
+    private readonly catalog: PluginCatalog,
     private readonly ingest: IngestService,
     @InjectQueue(CONNECTORS_QUEUE) private readonly queue: Queue<ConnectorJob>,
     @Inject(pluginsConfig.KEY)
@@ -67,15 +67,14 @@ export class ConnectorHost implements OnApplicationBootstrap, OnModuleDestroy {
 
   async schedulePolls() {
     const wanted = new Set<string>();
-    for (const { mode, options } of this.registry.connectors) {
-      if (mode !== 'poll') continue;
-      for (const account of this.accounts(options.portal)) {
-        const job = { portal: options.portal, account };
+    for (const { spec } of this.catalog.pollConnectors) {
+      for (const account of this.accounts(spec.portal)) {
+        const job = { portal: spec.portal, account };
         const { key } = Connection.of(job);
         wanted.add(key);
         await this.queue.upsertJobScheduler(
           key,
-          { pattern: options.schedule },
+          { pattern: spec.schedule },
           { name: 'tick', data: job },
         );
       }
@@ -87,17 +86,17 @@ export class ConnectorHost implements OnApplicationBootstrap, OnModuleDestroy {
   }
 
   private startPushes() {
-    for (const connector of this.registry.connectors) {
-      if (connector.mode !== 'push') continue;
-      const { portal } = connector.options;
-      for (const account of this.accounts(portal)) {
-        const { instance } = connector;
+    for (const { spec, instance } of this.catalog.pushConnectors) {
+      for (const account of this.accounts(spec.portal)) {
         this.started.push(instance);
         // not awaited: a slow or broken connector mustn't hold up the app
         Promise.resolve()
-          .then(() => instance.start(this.context(portal, account)))
+          .then(() => instance.start(this.context(spec.portal, account)))
           .catch((err: Error) =>
-            this.logger.error(`connector ${portal} failed to start`, err.stack),
+            this.logger.error(
+              `connector ${spec.portal} failed to start`,
+              err.stack,
+            ),
           );
       }
     }

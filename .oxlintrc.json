@@ -223,7 +223,6 @@
                   "!**/storage/contracts.js",
                   "**/plugins/**",
                   "!**/plugins/contracts.js",
-                  "!**/plugins/plugin-registry.js",
                   "**/identity/**",
                   "!**/identity/contracts.js",
                   "**/access/**",
@@ -253,7 +252,6 @@
                   "!**/storage/contracts.js",
                   "**/plugins/**",
                   "!**/plugins/contracts.js",
-                  "!**/plugins/plugin-registry.js",
                   "**/identity/**",
                   "!**/identity/contracts.js",
                   "**/access/**",
@@ -546,6 +544,26 @@
               {
                 "group": ["**/src/**"],
                 "message": "the sdk and plugins never import the hub"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["libs/plugins/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/src/**"],
+                "message": "the sdk and plugins never import the hub"
+              },
+              {
+                "group": ["@app/plugin-sdk/*"],
+                "message": "plugins use the sdk's index; host.ts is the hub's side of it"
               }
             ]
           }

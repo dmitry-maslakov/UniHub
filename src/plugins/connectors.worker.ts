@@ -1,9 +1,10 @@
 import { Logger } from '@nestjs/common';
 import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import type { Job } from 'bullmq';
+import { PortalId } from '@app/kernel';
+import { PluginCatalog } from './application/plugin-catalog.js';
 import { ConnectorHost } from './connector-host.js';
 import { CONNECTORS_QUEUE, type ConnectorJob } from './connectors.queue.js';
-import { PluginRegistry } from './plugin-registry.js';
 
 @Processor(CONNECTORS_QUEUE, { concurrency: 4 })
 export class ConnectorsWorker extends WorkerHost {
@@ -11,7 +12,7 @@ export class ConnectorsWorker extends WorkerHost {
 
   constructor(
     private readonly host: ConnectorHost,
-    private readonly registry: PluginRegistry,
+    private readonly catalog: PluginCatalog,
   ) {
     super();
   }
@@ -20,9 +21,9 @@ export class ConnectorsWorker extends WorkerHost {
     const { portal, account } = job.data;
     if (job.name === 'tick') return this.host.syncNow(portal, account);
 
-    const connector = this.registry.connector(portal);
+    const connector = this.catalog.pollConnector(PortalId.parse(portal));
     // turned off since the job was queued
-    if (connector?.mode !== 'poll') return;
+    if (!connector) return;
     await connector.instance.poll(this.host.context(portal, account));
   }
 

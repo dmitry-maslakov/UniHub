@@ -1,5 +1,5 @@
 import type { QueryBus } from '@nestjs/cqrs';
-import type { BlobStore } from '../storage/contracts.js';
+import type { BlobStore } from '../../../storage/contracts.js';
 import { CoreHubReader } from './core-hub-reader.js';
 
 describe('CoreHubReader', () => {

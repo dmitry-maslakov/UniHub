@@ -40,10 +40,3 @@ export const ITEM_INGESTED = 'item.ingested' satisfies Topic;
 export const ITEM_REMOVED = 'item.removed' satisfies Topic;
 export const FILE_CONTENT_STORED = 'file.content-stored' satisfies Topic;
 export const FILE_REMOVED = 'file.removed' satisfies Topic;
-
-export const TOPICS: readonly Topic[] = [
-  ITEM_INGESTED,
-  ITEM_REMOVED,
-  FILE_CONTENT_STORED,
-  FILE_REMOVED,
-];

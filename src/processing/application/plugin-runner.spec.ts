@@ -1,14 +1,15 @@
 import { PassThrough } from 'node:stream';
 import type { QueryBus } from '@nestjs/cqrs';
 import { FILE_CONTENT_STORED, type ProcessesContent } from '@app/plugin-sdk';
-import type { PluginRegistry } from '../../plugins/plugin-registry.js';
+import { PluginName } from '@app/kernel';
+import type { PluginCatalog } from '../../plugins/contracts.js';
 import type { BlobStore } from '../../storage/contracts.js';
 import type { RepresentationRepository } from '../domain/representation.js';
 import type { PluginJob } from '../queues.js';
 import { PluginRunner } from './plugin-runner.js';
 
 const job = (hash: string): PluginJob => ({
-  plugin: 'pdf',
+  plugin: PluginName.parse('pdf'),
   message: {
     topic: FILE_CONTENT_STORED,
     payload: { portal: 'p', fileId: 'f1', hash },
@@ -22,12 +23,13 @@ function runner(
   mime: string | null = null,
 ) {
   const streams: PassThrough[] = [];
-  const registry = {
-    runnable: () => ({
-      kind: 'processor',
-      plugin: { options: { name: 'pdf', version: 1 }, instance: processor },
+  const plugins = {
+    aggregator: () => undefined,
+    processor: () => ({
+      spec: { name: 'pdf', version: 1 },
+      instance: processor,
     }),
-  } as unknown as PluginRegistry;
+  } as unknown as PluginCatalog;
   // GetFileQuery, the only query it sends
   const queries = {
     execute: async () => ({ name: 'a.pdf', mime, contentHash, removed: false }),
@@ -45,7 +47,7 @@ function runner(
     save: async (r: unknown) => void saved.push(r),
   } as unknown as RepresentationRepository;
   return {
-    run: new PluginRunner(registry, queries, blobs, representations),
+    run: new PluginRunner(plugins, queries, blobs, representations),
     streams,
     saved,
   };
@@ -92,7 +94,7 @@ describe('PluginRunner', () => {
     ]);
   });
 
-  it('hands a processor the media type the registry matched on', async () => {
+  it('hands a processor the media type the catalog matched on', async () => {
     const seen: (string | null)[] = [];
     const { run } = runner(
       {

@@ -18,7 +18,7 @@ export class QueuesModule implements OnApplicationBootstrap {
   constructor(private readonly registrar: BullRegistrar) {}
 
   // Workers are registered by hand, once every module is initialised, so no
-  // job runs before the plugin registry is filled.
+  // job runs before the plugins are found.
   onApplicationBootstrap() {
     this.registrar.register();
   }

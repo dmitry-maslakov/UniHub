@@ -1,13 +1,14 @@
+import type { ConnectorContext } from './connectors.js';
 import {
   Aggregator,
   ContentProcessor,
   PollConnector,
   PushConnector,
-  type ConnectorContext,
-} from './plugins.js';
+} from './decorators.js';
 
 // These are checked by tsc (npm run typecheck): every @ts-expect-error must
-// stay an error, otherwise the decorators stopped guarding plugin classes.
+// stay an error, otherwise the decorators stopped guarding plugin classes,
+// and the hub doesn't check again at runtime.
 describe('plugin decorators', () => {
   it('fit only classes that implement their kind', () => {
     // @ts-expect-error a poll connector needs poll()
@@ -30,6 +31,12 @@ describe('plugin decorators', () => {
     @Aggregator({ name: 'd', topics: ['item.ingested'] })
     class AggregatorWithoutHandle {}
 
+    // @ts-expect-error a topic that doesn't exist
+    @Aggregator({ name: 'f', topics: ['course.ingested'] })
+    class UnknownTopic {
+      async handle() {}
+    }
+
     @PollConnector({ portal: 'e', schedule: '* * * * *' })
     class Fine {
       async poll(ctx: ConnectorContext) {
@@ -42,7 +49,8 @@ describe('plugin decorators', () => {
       PushWithoutStop,
       ProcessorWithoutProcess,
       AggregatorWithoutHandle,
+      UnknownTopic,
       Fine,
-    ]).toHaveLength(5);
+    ]).toHaveLength(6);
   });
 });

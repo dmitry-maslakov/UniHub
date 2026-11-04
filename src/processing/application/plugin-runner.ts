@@ -4,7 +4,7 @@ import { QueryBus } from '@nestjs/cqrs';
 import { FILE_CONTENT_STORED } from '@app/plugin-sdk';
 import { MediaType } from '@app/kernel';
 import { GetFileQuery } from '../../catalog/contracts.js';
-import { PluginRegistry } from '../../plugins/plugin-registry.js';
+import { PluginCatalog } from '../../plugins/contracts.js';
 import { BlobStore } from '../../storage/contracts.js';
 import { RepresentationRepository } from '../domain/representation.js';
 import type { PluginJob } from '../queues.js';
@@ -15,23 +15,19 @@ export class PluginRunner {
   private readonly logger = new Logger(PluginRunner.name);
 
   constructor(
-    private readonly registry: PluginRegistry,
+    private readonly plugins: PluginCatalog,
     private readonly queries: QueryBus,
     private readonly blobs: BlobStore,
     private readonly representations: RepresentationRepository,
   ) {}
 
   async run({ plugin, message }: PluginJob) {
-    const found = this.registry.runnable(plugin);
+    const aggregator = this.plugins.aggregator(plugin);
+    if (aggregator) return aggregator.instance.handle(message);
+    const processor = this.plugins.processor(plugin);
     // turned off since the job was queued
-    if (!found) return;
+    if (!processor || message.topic !== FILE_CONTENT_STORED) return;
 
-    if (found.kind === 'aggregator') {
-      await found.plugin.instance.handle(message);
-      return;
-    }
-
-    if (message.topic !== FILE_CONTENT_STORED) return;
     const { fileId } = message.payload;
     const file = await this.queries.execute(new GetFileQuery(fileId));
     // gone, or the job is about content that has been replaced since
@@ -39,15 +35,15 @@ export class PluginRunner {
       return;
     const hash = file.contentHash;
     // the same content in another file, or a job queued twice
-    const { name, version } = found.plugin.options;
+    const { name, version } = processor.spec;
     if (await this.representations.exists(hash, name, version)) return;
 
     const opened: Readable[] = [];
     let done = false;
     try {
-      const result = await found.plugin.instance.process({
+      const result = await processor.instance.process({
         name: file.name,
-        // the type the registry matched on, not the portal's spelling of it
+        // the type the catalog matched on, not the portal's spelling of it
         mime: MediaType.safeParse(file.mime).data ?? null,
         hash,
         content: async () => {
