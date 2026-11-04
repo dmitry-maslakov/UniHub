@@ -19,8 +19,7 @@ class Poller {
 @PushConnector({ portal: 'teams' })
 @Injectable()
 class Pusher {
-  start() {}
-  stop() {}
+  async run() {}
 }
 
 @ContentProcessor({ name: 'pdf', version: 2, accepts: ['.PDF'] })

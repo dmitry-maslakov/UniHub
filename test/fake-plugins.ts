@@ -1,6 +1,7 @@
 import { Readable } from 'node:stream';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { text } from 'node:stream/consumers';
+import { aborted } from 'node:util';
 import { Injectable, Module } from '@nestjs/common';
 import {
   Aggregator,
@@ -51,15 +52,11 @@ export class FakePollConnector implements PollsPortal {
 @PushConnector({ portal: 'fake-push' })
 @Injectable()
 export class FakePushConnector implements PushesFromPortal {
-  started: string[] = [];
-  stopped = 0;
+  running: string[] = [];
 
-  start(ctx: ConnectorContext) {
-    this.started.push(ctx.account);
-  }
-
-  stop() {
-    this.stopped++;
+  async run(ctx: ConnectorContext) {
+    this.running.push(ctx.connection.account);
+    await aborted(ctx.signal, this);
   }
 }
 

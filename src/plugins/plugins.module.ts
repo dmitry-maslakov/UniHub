@@ -3,11 +3,16 @@ import { DiscoveryModule } from '@nestjs/core';
 import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule } from '@nestjs/config';
 import { IngestModule } from '../ingest/contracts.js';
+import { ConnectionDirectory } from './application/connection-directory.js';
+import { ConnectorSchedules } from './application/connector-schedules.js';
 import { PluginCatalog } from './application/plugin-catalog.js';
 import { PluginDiscovery } from './application/plugin-discovery.js';
-import { ConnectorHost } from './connector-host.js';
-import { ConnectorsWorker } from './connectors.worker.js';
-import { CONNECTORS_QUEUE } from './connectors.queue.js';
+import { PollSchedule } from './application/poll-schedule.js';
+import { PushConnections } from './application/push-connections.js';
+import { SyncConnectionHandler } from './application/sync-connection.handler.js';
+import { BullmqConnectorSchedules } from './infrastructure/bullmq-connector-schedules.js';
+import { CONNECTORS_QUEUE } from './infrastructure/connectors.queue.js';
+import { ConnectorsWorker } from './infrastructure/connectors.worker.js';
 import { NestPluginDiscovery } from './infrastructure/nest-plugin-discovery.js';
 import { HubReaderModule } from './infrastructure/sdk/hub-reader.module.js';
 import { pluginsConfig } from './plugins.config.js';
@@ -32,9 +37,13 @@ import { pluginsConfig } from './plugins.config.js';
   providers: [
     PluginCatalog,
     { provide: PluginDiscovery, useClass: NestPluginDiscovery },
-    ConnectorHost,
+    ConnectionDirectory,
+    PollSchedule,
+    PushConnections,
+    SyncConnectionHandler,
+    { provide: ConnectorSchedules, useClass: BullmqConnectorSchedules },
     ConnectorsWorker,
   ],
-  exports: [PluginCatalog, ConnectorHost],
+  exports: [PluginCatalog],
 })
 export class PluginsModule {}

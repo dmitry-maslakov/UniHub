@@ -22,8 +22,8 @@ import type {
 // digits and dashes. Connectors outside the repo talk to the hub over gRPC.
 //
 // Each decorator only fits a class that implements its kind, so a poll
-// connector without poll() or a push connector without start()/stop()
-// doesn't compile.
+// connector without poll() or a push connector without run() doesn't
+// compile.
 
 type Class<T> = abstract new (...args: any[]) => T;
 

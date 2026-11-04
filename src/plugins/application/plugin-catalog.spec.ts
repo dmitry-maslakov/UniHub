@@ -15,7 +15,7 @@ const names = (plugins: { spec: { name: string } }[]) =>
 describe('PluginCatalog', () => {
   const catalog = catalogOf({
     polls: [poll('acs')],
-    pushes: [push('teams', { start() {}, stop() {} })],
+    pushes: [push('teams', { run: async () => {} })],
     processors: [
       processor('pdf', ['.pdf', 'application/pdf']),
       processor('slides', ['.pptx', '.pdf']),

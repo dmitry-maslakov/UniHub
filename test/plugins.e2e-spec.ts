@@ -1,15 +1,21 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 import { Outbox, OutboxDeadLetters } from '@nestjs/outbox';
+import { CommandBus } from '@nestjs/cqrs';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { getQueueToken } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import { HubReader, ITEM_INGESTED, ITEM_REMOVED } from '@app/plugin-sdk';
+import { PortalId } from '@app/kernel';
 import { AppModule } from '../src/app.module.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
 import { ITEM_CHANGED } from '../src/catalog/contracts.js';
-import { ConnectorHost } from '../src/plugins/connector-host.js';
-import { CONNECTORS_QUEUE } from '../src/plugins/connectors.queue.js';
-import { PluginCatalog } from '../src/plugins/contracts.js';
+import { Connection } from '../src/ingest/contracts.js';
+import {
+  PluginCatalog,
+  SyncConnectionCommand,
+} from '../src/plugins/contracts.js';
+import { PollSchedule } from '../src/plugins/application/poll-schedule.js';
+import { CONNECTORS_QUEUE } from '../src/plugins/infrastructure/connectors.queue.js';
 import { PluginsOutboxTransport } from '../src/processing/contracts.js';
 import { PLUGINS_QUEUE } from '../src/processing/queues.js';
 import {
@@ -42,8 +48,18 @@ describe('plugins', { timeout: 20_000 }, () => {
 
   afterAll(() => app.close());
 
+  // what "sync now" from a client sends
+  const syncNow = () =>
+    app
+      .get(CommandBus)
+      .execute(
+        new SyncConnectionCommand(
+          Connection.shared(PortalId.parse(FAKE_PORTAL)),
+        ),
+      );
+
   it('polls a connector and runs the result through processors and aggregators', async () => {
-    await app.get(ConnectorHost).syncNow(FAKE_PORTAL);
+    await syncNow();
 
     const feed = app.get(FakeAggregator);
     await vi.waitFor(
@@ -55,7 +71,10 @@ describe('plugins', { timeout: 20_000 }, () => {
       },
       { timeout: 10_000, interval: 200 },
     );
-    expect(app.get(FakePollConnector).ctx?.account).toBe('shared');
+    expect(app.get(FakePollConnector).ctx?.connection).toEqual({
+      portal: FAKE_PORTAL,
+      account: 'shared',
+    });
     expect(app.get(FakePdfProcessor).seen).not.toContain('notes.txt');
     itemId = (feed.received.at(-1)!.payload as { itemId: string }).itemId;
   });
@@ -65,10 +84,9 @@ describe('plugins', { timeout: 20_000 }, () => {
     const before = connector.polls;
     connector.delayMs = 1_000;
 
-    const host = app.get(ConnectorHost);
-    await host.syncNow(FAKE_PORTAL);
-    await host.syncNow(FAKE_PORTAL);
-    await host.syncNow(FAKE_PORTAL);
+    await syncNow();
+    await syncNow();
+    await syncNow();
     await sleep(2_500);
 
     connector.delayMs = 0;
@@ -79,16 +97,16 @@ describe('plugins', { timeout: 20_000 }, () => {
     const queue = app.get<Queue>(getQueueToken(CONNECTORS_QUEUE));
     await queue.upsertJobScheduler('gone__shared', { pattern: '0 0 1 1 *' });
 
-    await app.get(ConnectorHost).schedulePolls();
+    await app.get(PollSchedule).apply();
 
     const keys = (await queue.getJobSchedulers()).map((s) => s.key);
     expect(keys).toContain(`${FAKE_PORTAL}__shared`);
     expect(keys).not.toContain('gone__shared');
   });
 
-  it('starts push connectors', async () => {
+  it('runs push connectors, once per connection', async () => {
     await vi.waitFor(() =>
-      expect(app.get(FakePushConnector).started).toEqual(['shared']),
+      expect(app.get(FakePushConnector).running).toEqual(['shared']),
     );
   });
 

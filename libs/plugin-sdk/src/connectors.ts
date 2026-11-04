@@ -1,13 +1,13 @@
 import type { Readable } from 'node:stream';
-import type { CourseRecord, FileRecord, ItemRecord, Json } from './records.js';
+import type { ContentHash, Json, PortalId } from '@app/kernel';
+import type { CourseRecord, FileRecord, ItemRecord } from './records.js';
 
 // Connectors bring data in from a portal. One is written for one account;
 // the hub runs it once per account.
 // poll: the hub calls poll() on the connector's schedule, never two runs of
 //       one account at once.
-// push: the connector keeps its own connection (websocket, long poll...); the
-//       hub only calls start() and stop(). Webhooks will come with the first
-//       connector that needs them.
+// push: the connector keeps its own connection (websocket, long poll...) in
+//       run(). Webhooks will come with the first connector that needs them.
 
 export interface PollConnectorOptions {
   portal: string;
@@ -20,10 +20,15 @@ export interface PushConnectorOptions {
 }
 
 export interface ConnectorContext {
-  // 'shared' for portals everyone sees the same; per-user accounts later
-  account: string;
-  // bound to the connector's portal and account
+  // account is 'shared' for portals everyone sees the same; per-user later
+  connection: { portal: PortalId; account: string };
+  // bound to that connection
   ingest: PortalIngest;
+  // Aborts when the hub wants the run over: a poll past the hub's time for
+  // one, or whose job another instance has taken over; the app shutting
+  // down. Pass it to fetch() and the like, and stop soon after it aborts:
+  // the hub lets go of a run that doesn't.
+  signal: AbortSignal;
 }
 
 export interface PollsPortal {
@@ -31,8 +36,10 @@ export interface PollsPortal {
 }
 
 export interface PushesFromPortal {
-  start(ctx: ConnectorContext): void | Promise<void>;
-  stop(): void | Promise<void>;
+  // Runs until ctx.signal aborts, the connection kept up meanwhile. Ending
+  // before that, or failing, is taken for a lost connection: the hub runs it
+  // again, waiting longer each time.
+  run(ctx: ConnectorContext): Promise<void>;
 }
 
 export interface PortalIngest {
@@ -50,7 +57,7 @@ export interface PortalIngest {
   content(
     fileExternalId: string,
     content: Readable,
-  ): Promise<{ hash: string; changed: boolean }>;
+  ): Promise<{ hash: ContentHash; changed: boolean }>;
   // gone from the portal; sending it again brings it back.
   // Courses can't be removed yet.
   removeItem(externalId: string): Promise<{ changed: boolean }>;

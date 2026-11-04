@@ -14,13 +14,14 @@ describe('plugin decorators', () => {
     // @ts-expect-error a poll connector needs poll()
     @PollConnector({ portal: 'a', schedule: '* * * * *' })
     class PollWithoutPoll {
-      start() {}
+      async run() {}
     }
 
-    // @ts-expect-error a push connector needs start() and stop()
+    // @ts-expect-error a push connector needs run(), start() is gone
     @PushConnector({ portal: 'b' })
-    class PushWithoutStop {
+    class PushWithStart {
       start() {}
+      stop() {}
     }
 
     // @ts-expect-error a processor needs process()
@@ -46,7 +47,7 @@ describe('plugin decorators', () => {
 
     expect([
       PollWithoutPoll,
-      PushWithoutStop,
+      PushWithStart,
       ProcessorWithoutProcess,
       AggregatorWithoutHandle,
       UnknownTopic,
