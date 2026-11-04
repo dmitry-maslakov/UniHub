@@ -1,5 +1,5 @@
 import type { Readable } from 'node:stream';
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import type { ContentHash } from '@app/kernel';
 import { PluginCatalog } from '../../plugins/contracts.js';
 import { BlobStore } from '../../storage/contracts.js';
@@ -8,12 +8,12 @@ import {
   RepresentationRepository,
 } from '../domain/representation.js';
 import type { ProcessJob } from './plugin-job.js';
-import { FileFacts, type FileFact } from './ports.js';
+import { FileFacts, TextIndexQueue, type FileFact } from './ports.js';
 
 // Runs one processor on some content and stores what it made. What's stored
 // is the content's, whichever file holds it, so it's worth making while
 // some file that isn't removed holds it and the processor still takes that
-// file.
+// file. With search on, the text then goes to the search index.
 @Injectable()
 export class ProcessContent {
   private readonly logger = new Logger(ProcessContent.name);
@@ -23,6 +23,8 @@ export class ProcessContent {
     private readonly files: FileFacts,
     private readonly blobs: BlobStore,
     private readonly representations: RepresentationRepository,
+    // none when search is off
+    @Optional() private readonly textIndex?: TextIndexQueue,
   ) {}
 
   async run({ key: { hash, processor: name } }: ProcessJob) {
@@ -32,8 +34,10 @@ export class ProcessContent {
     const { spec, instance } = processor;
     // queued before a deploy brought another version: the running one does it
     const key = { hash, processor: name, version: spec.version };
-    // the same content in another file, or queued twice
-    if (await this.representations.exists(key)) return;
+    // the same content in another file, or queued twice; queued for the
+    // index again in case a try before saved it and failed to (deduplicated)
+    if (await this.representations.exists(key))
+      return this.textIndex?.enqueue(key);
     const file = await this.takenFile(hash, (f) => spec.match(f));
     // replaced or removed since, or renamed to what the processor doesn't take
     if (!file) return;
@@ -42,6 +46,7 @@ export class ProcessContent {
       instance.process({ ...file, hash, content }),
     );
     await this.representations.save(representation(key, parts));
+    await this.textIndex?.enqueue(key);
     this.logger.log(`${name}: ${file.name}, ${parts.length} parts`);
   }
 

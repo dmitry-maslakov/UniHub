@@ -5,7 +5,11 @@ import { InMemoryBlobs } from '../../../test/in-memory-blobs.js';
 import { sha256 } from '../../../test/sha256.js';
 import type { ProcessJob } from './plugin-job.js';
 import { ProcessContent } from './process-content.js';
-import { FakeFiles, InMemoryRepresentations } from './processing.fakes.js';
+import {
+  FakeFiles,
+  FakeTextIndexQueue,
+  InMemoryRepresentations,
+} from './processing.fakes.js';
 
 const lecture = '%PDF lecture';
 const hash = sha256(lecture);
@@ -24,6 +28,7 @@ function run(
 ) {
   const blobs = new InMemoryBlobs({ holding: [lecture] });
   const representations = new InMemoryRepresentations();
+  const textIndex = new FakeTextIndexQueue();
   const process = new ProcessContent(
     catalogOf({ processors: [processor('pdf', ['.pdf'], instance, version)] }),
     new FakeFiles(
@@ -31,8 +36,9 @@ function run(
     ),
     blobs,
     representations,
+    textIndex,
   );
-  return { process, blobs, saved: representations.saved };
+  return { process, blobs, saved: representations.saved, textIndex };
 }
 
 const parts = (...texts: string[]): ProcessesContent => ({
@@ -91,6 +97,37 @@ describe('ProcessContent', () => {
     await process.run(job());
 
     expect(saved).toHaveLength(1);
+  });
+
+  it('queues what it stored for the search index', async () => {
+    const { process, textIndex } = run(parts('text'));
+
+    await process.run(job());
+
+    expect(textIndex.enqueued).toEqual([job().key]);
+  });
+
+  it('queues it again for content already done, in case that was lost', async () => {
+    const { process, textIndex } = run(parts('text'));
+
+    await process.run(job());
+    await process.run(job());
+
+    expect(textIndex.enqueued).toEqual([job().key, job().key]);
+  });
+
+  it('stores the same with search off, without the queue', async () => {
+    const representations = new InMemoryRepresentations();
+    const process = new ProcessContent(
+      catalogOf({ processors: [processor('pdf', ['.pdf'], parts('text'))] }),
+      new FakeFiles(new Map([['f0', { name: 'a.pdf', mime, hash }]])),
+      new InMemoryBlobs({ holding: [lecture] }),
+      representations,
+    );
+
+    await process.run(job());
+
+    expect(representations.saved).toHaveLength(1);
   });
 
   it('skips a processor turned off since the job was queued', async () => {
