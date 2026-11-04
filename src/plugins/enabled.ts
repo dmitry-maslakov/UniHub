@@ -1,4 +1,5 @@
 import { ConditionalModule } from '@nestjs/config';
+import { CanvasModule } from '@app/plugins/canvas';
 import { OfficeTextModule } from '@app/plugins/office-text';
 import { PlainTextModule } from '@app/plugins/plain-text';
 import { pluginsConfig } from './plugins.config.js';
@@ -17,6 +18,7 @@ export function plugin(
 
 // built-in plugins, each turned on by its name
 export const plugins = [
+  plugin('canvas', CanvasModule),
   plugin('office-text', OfficeTextModule),
   plugin('plain-text', PlainTextModule),
 ];

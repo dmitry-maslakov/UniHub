@@ -42,6 +42,15 @@
       "compilerOptions": {
         "tsConfigPath": "libs/plugins/plain-text/tsconfig.lib.json"
       }
+    },
+    "plugins/canvas": {
+      "type": "library",
+      "root": "libs/plugins/canvas",
+      "entryFile": "index",
+      "sourceRoot": "libs/plugins/canvas/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/plugins/canvas/tsconfig.lib.json"
+      }
     }
   }
 }

@@ -1,0 +1,286 @@
+{
+  "/api/v1/users/self/tokens/1~abc": {
+    "id": 31,
+    "purpose": "UniHub",
+    "created_at": "2026-09-01T08:00:00Z",
+    "expires_at": "2026-12-30T08:00:00Z",
+    "token_hint": "1~abc"
+  },
+  "/api/v1/courses": [
+    {
+      "id": 101,
+      "name": "my OS",
+      "original_name": "Operating Systems",
+      "course_code": "OS-2026",
+      "workflow_state": "available",
+      "start_at": "2026-10-01T00:00:00Z",
+      "end_at": null,
+      "enrollment_term_id": 7,
+      "term": {
+        "id": 7,
+        "name": "Fall 2026",
+        "start_at": "2026-09-28T00:00:00Z",
+        "end_at": "2027-01-31T00:00:00Z"
+      },
+      "enrollments": [{ "type": "student", "enrollment_state": "active" }]
+    },
+    { "id": 102, "access_restricted_by_date": true }
+  ],
+  "/api/v1/courses/101/tabs": [
+    { "id": "home", "label": "Home", "type": "internal", "position": 1 },
+    {
+      "id": "announcements",
+      "label": "Announcements",
+      "type": "internal",
+      "position": 2
+    },
+    { "id": "modules", "label": "Modules", "type": "internal", "position": 3 },
+    { "id": "pages", "label": "Pages", "type": "internal", "position": 4 },
+    { "id": "files", "label": "Files", "type": "internal", "position": 5 }
+  ],
+  "/api/v1/courses/101/modules": [
+    {
+      "id": 501,
+      "name": "Week 1: processes",
+      "position": 1,
+      "unlock_at": null,
+      "require_sequential_progress": false,
+      "published": true,
+      "items_count": 5,
+      "state": "started",
+      "completed_at": null,
+      "items": [
+        {
+          "id": 9001,
+          "module_id": 501,
+          "position": 1,
+          "title": "Readings",
+          "type": "SubHeader",
+          "indent": 0
+        },
+        {
+          "id": 9002,
+          "module_id": 501,
+          "position": 2,
+          "title": "Syllabus",
+          "type": "Page",
+          "page_url": "syllabus",
+          "html_url": "https://canvas.example.edu/courses/101/modules/items/9002",
+          "url": "https://canvas.example.edu/api/v1/courses/101/pages/syllabus",
+          "completion_requirement": { "type": "must_view", "completed": true },
+          "content_details": { "locked_for_user": false }
+        },
+        {
+          "id": 9003,
+          "module_id": 501,
+          "position": 3,
+          "title": "Lecture 1",
+          "type": "File",
+          "content_id": 3001,
+          "html_url": "https://canvas.example.edu/courses/101/modules/items/9003",
+          "url": "https://canvas.example.edu/api/v1/courses/101/files/3001",
+          "content_details": { "locked_for_user": false }
+        },
+        {
+          "id": 9004,
+          "module_id": 501,
+          "position": 4,
+          "title": "Scheduling, illustrated",
+          "type": "ExternalUrl",
+          "external_url": "https://example.org/scheduling",
+          "html_url": "https://canvas.example.edu/courses/101/modules/items/9004"
+        },
+        {
+          "id": 9005,
+          "module_id": 501,
+          "position": 5,
+          "title": "Lab 1",
+          "type": "Page",
+          "page_url": "lab-1",
+          "html_url": "https://canvas.example.edu/courses/101/modules/items/9005",
+          "url": "https://canvas.example.edu/api/v1/courses/101/pages/lab-1",
+          "content_details": { "locked_for_user": false }
+        }
+      ]
+    }
+  ],
+  "/api/v1/courses/101/discussion_topics": [
+    {
+      "id": 701,
+      "title": "Welcome",
+      "message": "<p>The schedule is attached.</p>",
+      "html_url": "https://canvas.example.edu/courses/101/discussion_topics/701",
+      "posted_at": "2026-10-01T09:00:00Z",
+      "is_announcement": true,
+      "is_section_specific": false,
+      "user_name": "A. Teacher",
+      "read_state": "unread",
+      "unread_count": 0,
+      "subscribed": true,
+      "permissions": { "attach": false, "reply": true },
+      "locked_for_user": false,
+      "attachments": [
+        {
+          "id": 3002,
+          "display_name": "schedule.pdf",
+          "filename": "schedule.pdf",
+          "folder_id": 3,
+          "content-type": "application/pdf",
+          "url": "https://canvas.example.edu/files/3002/download?download_frd=1&verifier=vvv3002",
+          "size": 14,
+          "created_at": "2026-10-01T08:55:00Z",
+          "updated_at": "2026-10-01T08:55:00Z",
+          "modified_at": "2026-10-01T08:55:00Z",
+          "locked_for_user": false
+        }
+      ]
+    },
+    {
+      "id": 702,
+      "title": "Group B moves to room 3",
+      "message": "<p>Only for group B.</p>",
+      "html_url": "https://canvas.example.edu/courses/101/discussion_topics/702",
+      "posted_at": "2026-10-02T09:00:00Z",
+      "is_announcement": true,
+      "is_section_specific": true,
+      "attachments": []
+    }
+  ],
+  "/api/v1/courses/101/pages": [
+    {
+      "page_id": 801,
+      "url": "syllabus",
+      "title": "Syllabus",
+      "body": "<p>Lectures on Mondays.</p>",
+      "html_url": "https://canvas.example.edu/courses/101/pages/syllabus",
+      "created_at": "2026-09-30T10:00:00Z",
+      "updated_at": "2026-09-30T10:00:00Z",
+      "published": true,
+      "front_page": false,
+      "locked_for_user": false
+    }
+  ],
+  "/api/v1/courses/101/pages/syllabus": {
+    "page_id": 801,
+    "url": "syllabus",
+    "title": "Syllabus",
+    "body": "<p>Lectures on Mondays.</p>",
+    "html_url": "https://canvas.example.edu/courses/101/pages/syllabus",
+    "created_at": "2026-09-30T10:00:00Z",
+    "updated_at": "2026-09-30T10:00:00Z",
+    "published": true,
+    "front_page": false,
+    "locked_for_user": false
+  },
+  "/api/v1/courses/101/pages/lab-1": {
+    "page_id": 802,
+    "url": "lab-1",
+    "title": "Lab 1",
+    "body": "<p>Write a shell.</p>",
+    "html_url": "https://canvas.example.edu/courses/101/pages/lab-1",
+    "created_at": "2026-10-01T10:00:00Z",
+    "updated_at": "2026-10-01T10:00:00Z",
+    "published": true,
+    "front_page": false,
+    "locked_for_user": false
+  },
+  "/api/v1/courses/101/assignments": [
+    {
+      "id": 901,
+      "name": "Homework 1",
+      "description": "<p>Fork a process.</p>",
+      "due_at": "2026-10-15T21:59:00Z",
+      "unlock_at": null,
+      "lock_at": null,
+      "points_possible": 10,
+      "submission_types": ["online_upload"],
+      "html_url": "https://canvas.example.edu/courses/101/assignments/901",
+      "only_visible_to_overrides": false,
+      "visible_to_everyone": true,
+      "locked_for_user": false,
+      "has_submitted_submissions": true
+    },
+    {
+      "id": 902,
+      "name": "Make-up homework",
+      "html_url": "https://canvas.example.edu/courses/101/assignments/902",
+      "only_visible_to_overrides": true,
+      "visible_to_everyone": false
+    }
+  ],
+  "/api/v1/courses/101/folders": [
+    {
+      "id": 1,
+      "name": "course files",
+      "full_name": "course files",
+      "parent_folder_id": null
+    },
+    {
+      "id": 2,
+      "name": "Lectures",
+      "full_name": "course files/Lectures",
+      "parent_folder_id": 1
+    },
+    {
+      "id": 3,
+      "name": "unfiled",
+      "full_name": "course files/unfiled",
+      "parent_folder_id": 1
+    }
+  ],
+  "/api/v1/courses/101/files": [
+    {
+      "id": 3001,
+      "display_name": "lecture-1.pdf",
+      "filename": "lecture-1.pdf",
+      "folder_id": 2,
+      "content-type": "application/pdf",
+      "url": "https://canvas.example.edu/files/3001/download?download_frd=1&verifier=vvv3001",
+      "size": 16,
+      "created_at": "2026-09-30T12:00:00Z",
+      "updated_at": "2026-10-02T12:00:00Z",
+      "modified_at": "2026-09-30T12:00:00Z",
+      "locked_for_user": false
+    },
+    {
+      "id": 3002,
+      "display_name": "schedule.pdf",
+      "filename": "schedule.pdf",
+      "folder_id": 3,
+      "content-type": "application/pdf",
+      "url": "https://canvas.example.edu/files/3002/download?download_frd=1&verifier=vvv3002",
+      "size": 14,
+      "created_at": "2026-10-01T08:55:00Z",
+      "updated_at": "2026-10-01T08:55:00Z",
+      "modified_at": "2026-10-01T08:55:00Z",
+      "locked_for_user": false
+    },
+    {
+      "id": 3003,
+      "display_name": "exam-solutions.pdf",
+      "filename": "exam-solutions.pdf",
+      "folder_id": 2,
+      "content-type": "application/pdf",
+      "url": "",
+      "size": 20,
+      "created_at": "2026-10-01T12:00:00Z",
+      "updated_at": "2026-10-01T12:00:00Z",
+      "modified_at": "2026-10-01T12:00:00Z",
+      "locked_for_user": true,
+      "lock_explanation": "This file is locked until Jan 20 at 9am."
+    }
+  ],
+  "/api/v1/courses/101/files/3001": {
+    "id": 3001,
+    "display_name": "lecture-1.pdf",
+    "filename": "lecture-1.pdf",
+    "folder_id": 2,
+    "content-type": "application/pdf",
+    "url": "https://canvas.example.edu/files/3001/download?download_frd=1&verifier=vvv3001",
+    "size": 16,
+    "created_at": "2026-09-30T12:00:00Z",
+    "updated_at": "2026-10-02T12:00:00Z",
+    "modified_at": "2026-09-30T12:00:00Z",
+    "locked_for_user": false
+  }
+}

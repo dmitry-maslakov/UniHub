@@ -36,6 +36,12 @@
       "@app/plugin-sdk/*": [
         "./libs/plugin-sdk/src/*"
       ],
+      "@app/plugins/canvas": [
+        "./libs/plugins/canvas/src/index.ts"
+      ],
+      "@app/plugins/canvas/*": [
+        "./libs/plugins/canvas/src/*"
+      ],
       "@app/plugins/office-text": [
         "./libs/plugins/office-text/src/index.ts"
       ],
