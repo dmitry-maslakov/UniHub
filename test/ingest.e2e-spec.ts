@@ -9,7 +9,7 @@ import {
 } from '@app/plugin-sdk';
 import { AppModule } from '../src/app.module.js';
 import { HubIngest } from '../src/ingest/contracts.js';
-import { PrismaService } from '../src/prisma/prisma.service.js';
+import { PrismaService } from '../src/platform/database/prisma.service.js';
 import { testEnv } from './env.js';
 
 const portal = 'ingest-test';

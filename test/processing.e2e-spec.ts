@@ -6,7 +6,7 @@ import type { Queue } from 'bullmq';
 import type { PortalIngest } from '@app/plugin-sdk';
 import { AppModule } from '../src/app.module.js';
 import { HubIngest } from '../src/ingest/contracts.js';
-import { PrismaService } from '../src/prisma/prisma.service.js';
+import { PrismaService } from '../src/platform/database/prisma.service.js';
 import { Reconciler } from '../src/processing/application/reconciler.js';
 import { PLUGINS_QUEUE } from '../src/processing/queues.js';
 import { FakePluginsModule, FakeTextProcessor } from './fake-plugins.js';

@@ -8,8 +8,8 @@ import {
 } from '@nestjs/terminus';
 import { Public } from '../identity/contracts.js';
 import type { Redis } from 'ioredis';
-import { PrismaService } from '../prisma/prisma.service.js';
-import { REDIS } from '../redis/redis.module.js';
+import { PrismaService } from '../platform/database/prisma.service.js';
+import { REDIS } from '../platform/redis/redis.module.js';
 
 // /api/health: up when the database and redis answer; for the container's
 // health check (caddy doesn't let it out: a failure names internal hosts)

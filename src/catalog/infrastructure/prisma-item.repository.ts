@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { TransactionHost } from '@nestjs-cls/transactional';
-import type { TransactionalAdapterPrisma } from '@nestjs-cls/transactional-adapter-prisma';
-import type { PrismaService } from '../../prisma/prisma.service.js';
+import { InjectTransactionHost } from '@nestjs-cls/transactional';
+import type { PrismaTxHost } from '../../platform/database/prisma.service.js';
 import type { Item as Row } from '../../generated/prisma/client.js';
 import type { Json } from '@app/kernel';
 import { type Item, type ItemData, ItemRepository } from '../domain/item.js';
@@ -23,11 +22,7 @@ const toEntity = (row: Row): Item => ({
 
 @Injectable()
 export class PrismaItemRepository extends ItemRepository {
-  constructor(
-    private readonly txHost: TransactionHost<
-      TransactionalAdapterPrisma<PrismaService>
-    >,
-  ) {
+  constructor(@InjectTransactionHost() private readonly txHost: PrismaTxHost) {
     super();
   }
 

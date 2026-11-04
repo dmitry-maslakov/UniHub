@@ -14,7 +14,7 @@ import {
   RevokeCourseAccessCommand,
   UnknownUserError,
 } from '../src/identity/contracts.js';
-import { PrismaService } from '../src/prisma/prisma.service.js';
+import { PrismaService } from '../src/platform/database/prisma.service.js';
 import { Mailer, type Mail } from '../src/identity/domain/mailer.js';
 import { accounts } from './accounts.js';
 

@@ -1,17 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { TransactionHost } from '@nestjs-cls/transactional';
-import type { TransactionalAdapterPrisma } from '@nestjs-cls/transactional-adapter-prisma';
+import { InjectTransactionHost } from '@nestjs-cls/transactional';
 import type { Json } from '@app/kernel';
-import type { PrismaService } from '../../prisma/prisma.service.js';
+import type { PrismaTxHost } from '../../platform/database/prisma.service.js';
 import { SyncStateRepository } from '../domain/sync-state.js';
 
 @Injectable()
 export class PrismaSyncStateRepository extends SyncStateRepository {
-  constructor(
-    private readonly txHost: TransactionHost<
-      TransactionalAdapterPrisma<PrismaService>
-    >,
-  ) {
+  constructor(@InjectTransactionHost() private readonly txHost: PrismaTxHost) {
     super();
   }
 

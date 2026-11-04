@@ -15,7 +15,8 @@ import {
 import { throwError } from 'rxjs';
 import { DomainError, type DomainErrorKind } from '@app/kernel';
 import { InvalidRecordError, UnknownReferenceError } from '@app/plugin-sdk';
-import { isConnectionError } from '../../../is-connection-error.js';
+import { isWriteConflict } from '../../../platform/database/write-conflict.js';
+import { isConnectionError } from '../../../platform/errors/is-connection-error.js';
 
 // the hub's own kinds of error, the way HTTP answers them too
 const KINDS: Record<DomainErrorKind, new (message: string) => GrpcException> = {
@@ -46,9 +47,7 @@ export class IngestErrorsFilter extends BaseRpcExceptionFilter {
       return new GrpcFailedPreconditionException(error.message);
     if (error instanceof DomainError)
       return new KINDS[error.kind](error.message);
-    // prisma: a write conflict or deadlock, worth retrying
-    if ((error as { code?: unknown }).code === 'P2034')
-      return new GrpcAbortedException('try again');
+    if (isWriteConflict(error)) return new GrpcAbortedException('try again');
     BaseRpcExceptionFilter.logger.error(error);
     return isConnectionError(error)
       ? new GrpcUnavailableException('try again later')

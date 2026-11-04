@@ -7,7 +7,7 @@ import {
 } from '@nestjs/bullmq';
 import { PrismaHealthIndicator } from '@nestjs/terminus';
 import { RateLimitError, type Job, type Queue } from 'bullmq';
-import { PrismaService } from '../../prisma/prisma.service.js';
+import { PrismaService } from '../../platform/database/prisma.service.js';
 import { PluginRunner } from '../application/plugin-runner.js';
 import { PLUGINS_QUEUE, type PluginJob } from '../queues.js';
 

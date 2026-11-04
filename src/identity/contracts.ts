@@ -10,5 +10,6 @@ export { UnknownUserError } from './domain/errors.js';
 export { ApiKeyAuth, Public } from './infrastructure/http/api-key.guard.js';
 export {
   CurrentUserId,
+  signedInUserId,
   userIdOf,
 } from './infrastructure/http/current-user-id.js';

@@ -4,8 +4,10 @@ import {
   type OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { TransactionHost } from '@nestjs-cls/transactional';
+import type { TransactionalAdapterPrisma } from '@nestjs-cls/transactional-adapter-prisma';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '../generated/prisma/client.js';
+import { PrismaClient } from '../../generated/prisma/client.js';
 
 @Injectable()
 export class PrismaService
@@ -29,3 +31,10 @@ export class PrismaService
     await this.$disconnect();
   }
 }
+
+// What repositories write through: the transaction of the current unit of
+// work, or the client outside one. Inject it with @InjectTransactionHost():
+// a type alias carries no runtime type for Nest to inject by.
+export type PrismaTxHost = TransactionHost<
+  TransactionalAdapterPrisma<PrismaService>
+>;

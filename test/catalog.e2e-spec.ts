@@ -4,7 +4,7 @@ import { CommandBus } from '@nestjs/cqrs';
 import { OutboxEvents } from '@nestjs/outbox';
 import { TransactionHost } from '@nestjs-cls/transactional';
 import { AppModule } from '../src/app.module.js';
-import { PrismaService } from '../src/prisma/prisma.service.js';
+import { PrismaService } from '../src/platform/database/prisma.service.js';
 import {
   FILE_CONTENT_CHANGED,
   RemoveFileCommand,
