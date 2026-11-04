@@ -78,13 +78,15 @@ describe('processing', { timeout: 20_000 }, () => {
 
   it('queues it again once the last reconcile job for it is done', async () => {
     // that job is kept in redis for a day; it mustn't block the next run.
-    // Done means finished in redis too, not just its result saved
+    // Done means finished in redis too, not just its result saved: its
+    // deduplication ends then (other spec files share the queue, so not
+    // "no jobs left")
     const queue = app.get<Queue>(getQueueToken(PLUGINS_QUEUE));
     await vi.waitFor(
       async () =>
         expect(
-          await queue.getJobCounts('active', 'waiting', 'delayed'),
-        ).toEqual({ active: 0, waiting: 0, delayed: 0 }),
+          await queue.getDeduplicationJobId(`reconcile__${hash}__fake-text__1`),
+        ).toBeNull(),
       { timeout: 10_000, interval: 100 },
     );
     await prisma.representation.delete({
