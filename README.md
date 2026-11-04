@@ -102,8 +102,8 @@ Each aggregator gets a queue job of its own per message, each processor one per 
 With `OPENSEARCH_URL` set, the texts also go into an OpenSearch index (`<OPENSEARCH_INDEX_PREFIX>-texts-g1-bm25`), its analyzers taking a word in Cyrillic, in Latin and without diacritics alike:
 
 - each page is cut into chunks of up to 1200 characters, at a paragraph, line or word break, its letters composed (NFC)
-- a `search-index` queue, one job at a time, writes the newest version of each text the processors store: its chunks, then a manifest that says the text is in whole, then it drops the older versions. While OpenSearch or the database is away, or OpenSearch's disk is past its flood stage, the queue waits 30 s at a time without spending attempts, and logs it as an error every 10 minutes it goes on
-- a reconcile at startup (tried again every 30 s while OpenSearch is still starting, for 10 minutes) and every hour queues what the index lacks and what it still holds of older or removed texts
+- a `search-index` queue, one job at a time, writes the newest version of each text the processors store: its chunks, then a manifest that says the text is in whole, then it drops its other versions, a newer one postgres lost too. While OpenSearch or the database is away, or OpenSearch's disk is past its flood stage, the queue waits 30 s at a time without spending attempts, and logs it as an error every 10 minutes it goes on
+- a reconcile at startup (tried again every 30 s while OpenSearch is still starting, for 10 minutes) and every hour queues what the index lacks and what it still holds of other versions or removed texts
 - the index is made of postgres alone and needs no backup: one lost or deleted is made again by the next write and filled by the next reconcile. The `g1` in its name is its generation, raised when its mapping or the chunks change; the new one fills next to the old, which is then deleted by hand (`curl -X DELETE localhost:9200/unihub-texts-g1-bm25`)
 
 Without `OPENSEARCH_URL` none of this is loaded, and processing runs as it did.

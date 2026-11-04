@@ -102,7 +102,7 @@ export class InMemoryTextIndex extends TextIndex {
   async put(key: RepresentationKey, chunks: readonly TextChunk[]) {
     this.calls.push('put');
     for (const [id, text] of this.texts)
-      if (of(key, text.key) && text.key.version < key.version)
+      if (of(key, text.key) && text.key.version !== key.version)
         this.texts.delete(id);
     this.texts.set(keyId(key), { key, chunks });
   }

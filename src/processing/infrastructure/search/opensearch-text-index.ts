@@ -147,13 +147,13 @@ export class OpenSearchTextIndex extends TextIndex {
 
   private drop(
     of: { hash: ContentHash; processor: PluginName },
-    below?: number,
+    except?: number,
   ) {
     return this.client.deleteByQuery({
       index: this.index,
       refresh: true,
       conflicts: 'proceed',
-      body: { query: versionsOf(of, below) },
+      body: { query: versionsOf(of, except) },
     });
   }
 }

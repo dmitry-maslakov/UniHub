@@ -63,7 +63,7 @@ function opensearch() {
 }
 
 describe('OpenSearchTextIndex', () => {
-  it('writes the chunks 200 at a time, then the manifest, then drops older versions', async () => {
+  it('writes the chunks 200 at a time, then the manifest, then drops the other versions', async () => {
     const { client, text } = opensearch();
 
     await text.put(key, pages(450));
@@ -91,8 +91,8 @@ describe('OpenSearchTextIndex', () => {
             filter: [
               { term: { hash: key.hash } },
               { term: { processor: key.processor } },
-              { range: { version: { lt: 2 } } },
             ],
+            must_not: [{ term: { version: 2 } }],
           },
         },
       },

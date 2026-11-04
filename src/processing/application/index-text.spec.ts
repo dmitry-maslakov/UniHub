@@ -65,6 +65,17 @@ describe('IndexText', () => {
     ]);
   });
 
+  it('takes out a newer version postgres no longer has', async () => {
+    const { index, indexText } = await indexing(text(1, ['restored']));
+    await index.put({ hash, processor, version: 2 }, chunksOf(['lost']));
+
+    await indexText.run({ hash, processor, version: 2 });
+
+    expect([...index.texts.values()]).toEqual([
+      { key: { hash, processor, version: 1 }, chunks: chunksOf(['restored']) },
+    ]);
+  });
+
   it('takes out a text postgres no longer has', async () => {
     const { index, indexText } = await indexing();
     await index.put({ hash, processor, version: 1 }, chunksOf(['gone']));

@@ -37,8 +37,8 @@ export abstract class PluginJobQueue {
 export abstract class TextIndex {
   // creates the index if it's missing; asks the server every time
   abstract ensure(): Promise<void>;
-  // writes the chunks, then the manifest, then drops the older versions of
-  // (hash, processor)
+  // writes the chunks, then the manifest, then drops the other versions of
+  // (hash, processor), newer ones too
   abstract put(
     key: RepresentationKey,
     chunks: readonly TextChunk[],

@@ -32,17 +32,18 @@ export const manifest = (key: RepresentationKey, chunks: number) => ({
   body: { ...fieldsOf(key), chunks },
 });
 
-// the documents of every version of a text, or of those below one
+// The documents of every version of a text, or of all but one: newer ones
+// too, as postgres may have lost them (restored from before a processor's
+// bump, the processor rolled back with it).
 export const versionsOf = (
   { hash, processor }: { hash: ContentHash; processor: PluginName },
-  below?: number,
+  except?: number,
 ): Types.Common_QueryDsl.QueryContainer => ({
   bool: {
-    filter: [
-      { term: { hash } },
-      { term: { processor } },
-      ...(below === undefined ? [] : [{ range: { version: { lt: below } } }]),
-    ],
+    filter: [{ term: { hash } }, { term: { processor } }],
+    ...(except !== undefined && {
+      must_not: [{ term: { version: except } }],
+    }),
   },
 });
 
