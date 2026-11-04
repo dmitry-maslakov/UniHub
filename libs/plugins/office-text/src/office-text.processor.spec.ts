@@ -39,6 +39,12 @@ describe('OfficeTextProcessor', () => {
     });
   });
 
+  it('keeps a page without text at the end', async () => {
+    expect(await processor.process(fixture('blank-end.pdf'))).toEqual({
+      parts: ['Caches', 'Summary', ''],
+    });
+  });
+
   it('splits a deck by slide', async () => {
     const { parts } = await processor.process(fixture('slides.pptx'));
     expect(parts).toHaveLength(2);

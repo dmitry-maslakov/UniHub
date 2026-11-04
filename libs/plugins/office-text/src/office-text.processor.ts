@@ -51,17 +51,15 @@ export class OfficeTextProcessor implements ProcessesContent {
   async process(input: ProcessorInput) {
     // the hub hands over only what's in accepts, so it's one of these
     const splitBy = SPLIT_BY[input.matched];
-    const chunks = await parse(await read(await input.content()), {
-      generatorConfig: {
-        chunksConfig: {
-          strategy: 'document-structure',
-          splitBy,
-          // a page or slide is kept whole, it's the unit a part stands for;
-          // a long section comes in chunks a part can end at
-          maxChunkSize: splitBy === 'heading' ? MAX_SECTION : 1_000_000,
-        },
+    const parsed = await parse(await read(await input.content()), {
+      chunksConfig: {
+        strategy: 'document-structure',
+        splitBy,
+        // a page or slide is kept whole, it's the unit a part stands for;
+        // a long section comes in chunks a part can end at
+        maxChunkSize: splitBy === 'heading' ? MAX_SECTION : 1_000_000,
       },
     });
-    return { parts: toParts(chunks, splitBy) };
+    return { parts: toParts(parsed, splitBy) };
   }
 }
