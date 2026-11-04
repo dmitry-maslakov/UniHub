@@ -1,11 +1,14 @@
 import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { Test, type TestingModule } from '@nestjs/testing';
+import { getQueueToken } from '@nestjs/bullmq';
+import type { Queue } from 'bullmq';
 import type { PortalIngest } from '@app/plugin-sdk';
 import { AppModule } from '../src/app.module.js';
 import { HubIngest } from '../src/ingest/contracts.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 import { Reconciler } from '../src/processing/application/reconciler.js';
+import { PLUGINS_QUEUE } from '../src/processing/queues.js';
 import { FakePluginsModule, FakeTextProcessor } from './fake-plugins.js';
 
 const portal = 'processing-test';
@@ -67,6 +70,32 @@ describe('processing', { timeout: 20_000 }, () => {
     });
 
     expect(await app.get(Reconciler).run()).toBeGreaterThanOrEqual(1);
+    await vi.waitFor(async () => expect(await stored()).not.toBeNull(), {
+      timeout: 10_000,
+      interval: 200,
+    });
+  });
+
+  it('queues it again once the last reconcile job for it is done', async () => {
+    // that job is kept in redis for a day; it mustn't block the next run.
+    // Done means finished in redis too, not just its result saved: its
+    // deduplication ends then (other spec files share the queue, so not
+    // "no jobs left")
+    const queue = app.get<Queue>(getQueueToken(PLUGINS_QUEUE));
+    await vi.waitFor(
+      async () =>
+        expect(
+          await queue.getDeduplicationJobId(`reconcile__${hash}__fake-text__1`),
+        ).toBeNull(),
+      { timeout: 10_000, interval: 100 },
+    );
+    await prisma.representation.delete({
+      where: {
+        hash_processor_version: { hash, processor: 'fake-text', version: 1 },
+      },
+    });
+
+    await app.get(Reconciler).run();
     await vi.waitFor(async () => expect(await stored()).not.toBeNull(), {
       timeout: 10_000,
       interval: 200,

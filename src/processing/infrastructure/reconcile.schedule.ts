@@ -7,7 +7,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { Reconciler } from '../application/reconciler.js';
 
 // on start (a deploy may bring a new processor version) and once a day;
-// several instances doing it at once only queue the same job ids
+// several instances doing it at once queue each job once (deduplicated)
 @Injectable()
 export class ReconcileSchedule implements OnApplicationBootstrap {
   private readonly logger = new Logger(ReconcileSchedule.name);
