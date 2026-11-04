@@ -59,9 +59,10 @@ export abstract class TextIndex {
 
 // a job per key, which indexes the newest version of its (hash, processor)
 export abstract class TextIndexQueue {
-  // under the key's id, as PluginJobQueue.enqueue
+  // dropped while the same key waits or runs, and after that for as long as
+  // the queue keeps its job
   abstract enqueue(key: RepresentationKey): Promise<void>;
-  // dropped only while the same key waits or runs, as PluginJobQueue.requeue
+  // dropped only while the same key waits or runs
   abstract requeue(key: RepresentationKey): Promise<void>;
 }
 

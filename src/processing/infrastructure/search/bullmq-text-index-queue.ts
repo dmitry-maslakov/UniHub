@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
+import { again, once } from '../../../platform/queues/job-ids.js';
 import { TextIndexQueue } from '../../application/ports.js';
 import { keyId, type RepresentationKey } from '../../domain/representation.js';
 import {
@@ -9,8 +10,6 @@ import {
   type IndexJob,
 } from './search-index.queue.js';
 
-// Ids as BullmqPluginJobQueue gives them: enqueue sets the job's own id and
-// its deduplication id, requeue only the deduplication one.
 @Injectable()
 export class BullmqTextIndexQueue extends TextIndexQueue {
   constructor(
@@ -20,11 +19,10 @@ export class BullmqTextIndexQueue extends TextIndexQueue {
   }
 
   async enqueue(key: RepresentationKey) {
-    const id = keyId(key);
-    await this.queue.add(INDEX, { key }, { jobId: id, deduplication: { id } });
+    await this.queue.add(INDEX, { key }, once(keyId(key)));
   }
 
   async requeue(key: RepresentationKey) {
-    await this.queue.add(INDEX, { key }, { deduplication: { id: keyId(key) } });
+    await this.queue.add(INDEX, { key }, again(keyId(key)));
   }
 }
