@@ -7,7 +7,7 @@ import { mcpTransport } from './mcp.strategy.js';
 
 // /api/mcp: MCP over streamable HTTP, for API keys. Guards run in the order
 // they're added, and the lower decorator adds first: the key, then the limit
-// by the key's user.
+// by the key's user. What the request may carry is McpRequestMiddleware's.
 @Controller('mcp')
 @ApiExcludeController()
 @UseGuards(throttleBy('mcp'))

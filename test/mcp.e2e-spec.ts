@@ -109,6 +109,32 @@ describe('MCP', { timeout: 20_000 }, () => {
     await rpc('tools/list', {}, { authorization: `Bearer ${key}` }).expect(200);
   });
 
+  it('turns away a body that is not JSON before anything reads it', async () => {
+    // the transport would read it whole, without a limit, and only then
+    // answer 415; here not even the key gets looked up
+    for (const auth of [{ 'x-api-key': key }, {}])
+      await http()
+        .post('/api/mcp')
+        .set(auth)
+        .set('content-type', 'text/plain')
+        .send('x'.repeat(10_000))
+        .expect(415);
+  });
+
+  it('takes one JSON-RPC message per request, no batches', async () => {
+    // a batch would pass as one call against the limit
+    const message = { jsonrpc: '2.0', method: 'tools/list', params: {} };
+    await http()
+      .post('/api/mcp')
+      .set('accept', 'application/json, text/event-stream')
+      .set('x-api-key', key)
+      .send([
+        { ...message, id: ++id },
+        { ...message, id: ++id },
+      ])
+      .expect(400);
+  });
+
   it('lists its tools', async () => {
     const res = await rpc('tools/list', {}).expect(200);
     expect(
