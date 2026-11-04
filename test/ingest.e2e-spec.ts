@@ -107,6 +107,19 @@ describe('ingest', () => {
     ).rejects.toBeInstanceOf(InvalidRecordError);
   });
 
+  it("rejects a file of one course on another course's post", async () => {
+    await hub.course({ externalId: 'os', name: 'OS' });
+    // the sdk's error, so a connector can skip the record and go on
+    await expect(
+      hub.file({
+        externalId: 'file-x',
+        course: 'os',
+        item: 'post-1',
+        name: 'x.pdf',
+      }),
+    ).rejects.toBeInstanceOf(InvalidRecordError);
+  });
+
   it("drops fields a record isn't allowed to set", async () => {
     const record = {
       externalId: 'post-sneaky',

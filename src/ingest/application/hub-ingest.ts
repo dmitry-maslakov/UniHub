@@ -10,7 +10,7 @@ import {
 } from '@app/plugin-sdk';
 import * as catalog from '../../catalog/contracts.js';
 import { PutContentCommand } from '../../storage/contracts.js';
-import { ContentHash, PortalId, type Json } from '@app/kernel';
+import { ContentHash, InvalidError, PortalId, type Json } from '@app/kernel';
 import { SyncStateRepository } from '../domain/sync-state.js';
 import {
   courseRecord,
@@ -20,7 +20,8 @@ import {
   toItemInput,
 } from './records.js';
 
-// errors plugins see are the sdk's, not catalog's or zod's
+// errors plugins see are the sdk's, not catalog's or zod's. Whatever a
+// module refuses as invalid is a record the plugin should fix or skip
 async function asPluginErrors<T>(work: () => Promise<T>): Promise<T> {
   try {
     return await work();
@@ -31,6 +32,8 @@ async function asPluginErrors<T>(work: () => Promise<T>): Promise<T> {
       throw new InvalidRecordError(
         err.issues.map((i) => `${i.path.join('.')}: ${i.message}`),
       );
+    if (err instanceof InvalidError)
+      throw new InvalidRecordError([err.message]);
     throw err;
   }
 }
