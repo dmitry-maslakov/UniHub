@@ -10,7 +10,8 @@ import { indexBody } from '../src/processing/infrastructure/search/text-index.ma
 
 // The analyzers' rules live in OpenSearch, so they're checked there, through
 // the fields the mapping gives them: however a student spells a word, it
-// meets the text's spelling. Text goes in NFC, as the app sends it.
+// meets the text's spelling. They fold precomposed letters only, so they get
+// NFC text here, as they will from the code that writes and queries the index.
 describe('text index analyzers', () => {
   let module: TestingModule;
   let opensearch: Client;
@@ -33,7 +34,7 @@ describe('text index analyzers', () => {
   const tokens = async (field: string, text: string) => {
     const { body } = await opensearch.indices.analyze({
       index,
-      body: { field, text: text.normalize('NFC') },
+      body: { field, text },
     });
     return body.tokens!.map(({ token }) => token);
   };
@@ -46,9 +47,8 @@ describe('text index analyzers', () => {
       ['љубав', 'ljubav', 'ǉubav', 'LJUBAV'],
       ['њега', 'njega', 'ǌega'],
       ['конјункција', 'konjunkcija'],
-      // decomposed, as some PDFs give it
-      ['čas', 'čas', 'час', 'cas'],
-      ['Čačak', 'Чачак', 'Cacak'],
+      ['čas', 'час', 'cas'],
+      ['Čačak', 'Чачак', 'Cacak'],
     ])('takes %s as its other spellings', async (word, ...others) => {
       const expected = await tokens(field, word);
       expect(expected).toHaveLength(1);

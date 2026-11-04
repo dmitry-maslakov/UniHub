@@ -4,10 +4,11 @@ import type { API, Types } from '@opensearch-project/opensearch';
 // so the new index is filled anew from Postgres next to the old one.
 export const GENERATION = 1;
 
-// The same folding in every analyzer, on text the app has made NFC, so that
-// Cyrillic, Latin and Latin without č ć š ž đ give the same tokens. Stock
-// lowercase and asciifolding stand in for ICU, which the stock image lacks;
-// dj → d makes Đorđe and Djordje one.
+// The same folding in every analyzer, so that Cyrillic, Latin and Latin
+// without č ć š ž đ give the same tokens. Stock lowercase and asciifolding
+// stand in for ICU, which the stock image lacks, and fold precomposed letters
+// only: the code that writes and queries the index is to make text NFC (some
+// PDFs give č as c and a caron). dj → d makes Đorđe and Djordje one.
 const fold = [
   'lowercase',
   'serbian_normalization',
