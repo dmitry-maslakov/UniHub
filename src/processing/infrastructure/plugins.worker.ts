@@ -60,12 +60,21 @@ export class PluginsWorker extends WorkerHost {
     }
   }
 
+  // BullMQ sets finishedOn only on a job that won't run again: out of
+  // attempts, or failed for good by stalling too often
   @OnWorkerEvent('failed')
   failed(job: Job<PluginJob> | undefined, error: Error) {
-    if (job && job.attemptsMade >= (job.opts.attempts ?? 1))
+    if (job?.finishedOn)
       this.logger.error(
         `${pluginOf(job.data)} gave up on job ${job.id}`,
         error.stack,
       );
+  }
+
+  // its worker went away, or held the event loop past the lock; it runs
+  // again, or fails if it stalled before
+  @OnWorkerEvent('stalled')
+  stalled(jobId: string) {
+    this.logger.warn(`plugin job ${jobId} stalled`);
   }
 }
