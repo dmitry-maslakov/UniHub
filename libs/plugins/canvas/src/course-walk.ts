@@ -13,6 +13,7 @@ import type {
 import { CourseFiles, type FoundFile } from './course-files.js';
 import { visible } from './errors.js';
 import type { Listings } from './listings.js';
+import { linked, readEach } from './module-links.js';
 import {
   announcementRecord,
   assignmentRecord,
@@ -28,18 +29,6 @@ export interface CourseContent {
   // the sources that went through to the end, with what they had
   listings: Listings;
 }
-
-// what the modules link to of one type, each once
-const linked = <K extends 'page_url' | 'content_id'>(
-  items: ModuleItem[],
-  type: string,
-  key: K,
-) =>
-  new Set(
-    items
-      .filter((item) => item.type === type)
-      .map((item) => item[key] as NonNullable<ModuleItem[K]>),
-  );
 
 // One course as the token's user sees it. A hidden tab only keeps the
 // pages or the files from being listed (canvas-lms checks it there and
@@ -131,14 +120,11 @@ export class CourseWalk {
     );
     if (listed) this.listings.items.pages = [...ids.values()];
     if (!fromModules) return;
-    const linkedIds: string[] = [];
-    for (const name of linked(fromModules, 'Page', 'page_url')) {
-      const id = ids.get(name) ?? (await this.page(name));
-      // one refused: the modules' pages aren't all there this run
-      if (!id) return;
-      linkedIds.push(id);
-    }
-    this.listings.items['module-pages'] = linkedIds;
+    const linkedIds = await readEach(
+      linked(fromModules, 'Page', 'page_url'),
+      async (name) => ids.get(name) ?? (await this.page(name)),
+    );
+    if (linkedIds) this.listings.items['module-pages'] = linkedIds;
   }
 
   private async page(name: string) {
@@ -164,15 +150,16 @@ export class CourseWalk {
   private async courseFiles(tab: boolean, fromModules: ModuleItem[] | null) {
     if (tab) await this.fileListing();
     if (!fromModules) return;
-    const linkedIds: string[] = [];
-    for (const id of linked(fromModules, 'File', 'content_id')) {
-      const file =
-        this.files.get(id) ??
-        (await visible(this.api.get<CanvasFile>(`${this.path}/files/${id}`)));
-      if (!file) return;
-      linkedIds.push(this.files.add(file));
-    }
-    this.listings.files['module-files'] = linkedIds;
+    const linkedIds = await readEach(
+      linked(fromModules, 'File', 'content_id'),
+      async (id) => {
+        const file =
+          this.files.get(id) ??
+          (await visible(this.api.get<CanvasFile>(`${this.path}/files/${id}`)));
+        return file && this.files.add(file);
+      },
+    );
+    if (linkedIds) this.listings.files['module-files'] = linkedIds;
   }
 
   // the folders give the files their paths

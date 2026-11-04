@@ -6,6 +6,7 @@ import { CanvasConnector, WARN_BEFORE_MS } from './canvas.connector.js';
 import { CANVAS_URL, FakeCanvas, refusal, TOKEN } from './canvas.fakes.js';
 import { TokenRejectedError } from './errors.js';
 import { RecordingIngest } from './ingest.fakes.js';
+import { SyncState } from './listings.js';
 
 const canvas = new FakeCanvas().listen();
 const COURSE = '/api/v1/courses/101';
@@ -136,6 +137,21 @@ describe('CanvasConnector', () => {
       expect.arrayContaining(['page:801', 'page:802']),
     );
     expect([...ingest.files.keys()].sort()).toEqual(['3001', '3002']);
+  });
+
+  it('reads on past a page or a file a module links to that is refused', async () => {
+    canvas.answers[`${COURSE}/tabs`] = [{ id: 'modules' }];
+    canvas.answers[`${COURSE}/pages/syllabus`] = 403;
+    canvas.answers[`${COURSE}/files/3001`] = 404;
+    const ingest = new RecordingIngest();
+    await run(ingest);
+
+    expect(ingest.items.has('page:801')).toBe(false);
+    expect(ingest.items.has('page:802')).toBe(true);
+    // not all there this run: what these sources had stays
+    const { items, files } = SyncState.parse(ingest.saved).courses['101'];
+    expect(items).not.toHaveProperty('module-pages');
+    expect(files).not.toHaveProperty('module-files');
   });
 
   it('removes what a listing that went through no longer has', async () => {
