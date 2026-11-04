@@ -7,7 +7,8 @@ import type { PrismaService } from '../../platform/database/prisma.service.js';
 import type { DeliverMessage } from '../application/deliver-message.js';
 import type { PluginJob } from '../application/plugin-job.js';
 import type { ProcessContent } from '../application/process-content.js';
-import { OUTAGE_PAUSE_MS, PluginsWorker } from './plugins.worker.js';
+import { OUTAGE_PAUSE_MS } from './pausing.worker.js';
+import { PluginsWorker } from './plugins.worker.js';
 
 const data: PluginJob = {
   kind: 'process',

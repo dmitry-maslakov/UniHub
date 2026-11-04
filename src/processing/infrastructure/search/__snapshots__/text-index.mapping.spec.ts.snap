@@ -2,6 +2,7 @@
 
 exports[`text index mapping > changes with its generation only 1`] = `
 {
+  "CHUNK_CHARS": 1200,
   "GENERATION": 1,
   "body": {
     "mappings": {

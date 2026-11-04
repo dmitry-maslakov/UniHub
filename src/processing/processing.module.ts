@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
+import { ConditionalModule } from '@nestjs/config';
 import { TerminusModule } from '@nestjs/terminus';
 import { PluginsModule } from '../plugins/contracts.js';
 import { StorageModule } from '../storage/contracts.js';
@@ -19,6 +20,7 @@ import {
   ListTextsHandler,
 } from './infrastructure/read/texts.read.js';
 import { ReconcileSchedule } from './infrastructure/reconcile.schedule.js';
+import { TextSearchModule } from './infrastructure/search/text-search.module.js';
 
 const DAY = 24 * 60 * 60;
 
@@ -41,6 +43,12 @@ const DAY = 24 * 60 * 60;
     TerminusModule,
     StorageModule,
     PluginsModule,
+    // Search is on with OPENSEARCH_URL; without it nothing is indexed and
+    // ProcessContent queues nothing. The function form: a string one would
+    // load the module when the variable isn't set.
+    ConditionalModule.registerWhen(TextSearchModule, (env) =>
+      Boolean(env.OPENSEARCH_URL),
+    ),
   ],
   providers: [
     ListTextsHandler,

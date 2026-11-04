@@ -41,7 +41,7 @@ npm run test:e2e
 ```
 
 - unit specs (`*.spec.ts`, next to the code) check the rules: the domain on its own, the use cases on in-memory fakes of their ports (`*.fakes.ts` beside them; `test/` has the shared ones: `FakeBus`, `InMemoryBlobs`, `sha256` of real content, plugins as discovery finds them)
-- e2e specs (`test/*.e2e-spec.ts`) check only what fakes can't: how records are written and read back, what the read queries find and in what order, the locks, the outbox rolling back with its transaction, BullMQ's deduplication, gRPC, each route and MCP tool once (and one bad request to each that declares a schema, since nothing else sees it is attached), the whole pipeline once (`plugins.e2e-spec.ts`), and the text index's analyzers, whose rules live in OpenSearch (`search-analysis.e2e-spec.ts`: a word in Cyrillic, in Latin and without diacritics gives the same tokens, on the OpenSearch client alone). The others boot the app as `main.ts` sets it up (`bootApp()` in `test/app.ts`) on a database, redis db, folder and search indices (`unihub-e2e-*`) of their own (`test/env.ts`), made anew for every run, and wait for what they wait on (the outbox's events, a job's state), never for a while
+- e2e specs (`test/*.e2e-spec.ts`) check only what fakes can't: how records are written and read back, what the read queries find and in what order, the locks, the outbox rolling back with its transaction, BullMQ's deduplication, gRPC, each route and MCP tool once (and one bad request to each that declares a schema, since nothing else sees it is attached), the whole pipeline once (`plugins.e2e-spec.ts`), the search index's writes and their repair (`search-index.e2e-spec.ts`), the app with search off (`search-off.e2e-spec.ts`), and the text index's analyzers, whose rules live in OpenSearch (`search-analysis.e2e-spec.ts`: a word in Cyrillic, in Latin and without diacritics gives the same tokens, on the OpenSearch client alone). The others boot the app as `main.ts` sets it up (`bootApp()` in `test/app.ts`) on a database, redis db, folder and search indices (`unihub-e2e-*`) of their own (`test/env.ts`), made anew for every run, and wait for what they wait on (the outbox's events, a job's state), never for a while
 
 ## Users
 
@@ -96,6 +96,17 @@ Built-in processors, each parsing in a worker thread of its own with 512 MB of h
 The two take different formats. A file they both match, an `.html` a portal calls `text/plain`, has a text of each, and a page asked for without a processor is office-text's. Results are stored per content hash and processor version, and a reconcile at startup and every day queues whatever is missing.
 
 Each aggregator gets a queue job of its own per message, each processor one per content it takes, so one failing plugin only retries itself; a job that gives up for good is logged. Built-in plugins are listed in `src/plugins/enabled.ts` and turned on by name in `PLUGINS`; `test/fake-plugins.ts` shows one of each.
+
+### Search index
+
+With `OPENSEARCH_URL` set, the texts also go into an OpenSearch index (`<OPENSEARCH_INDEX_PREFIX>-texts-g1-bm25`), its analyzers taking a word in Cyrillic, in Latin and without diacritics alike:
+
+- each page is cut into chunks of up to 1200 characters, at a paragraph, line or word break, its letters composed (NFC)
+- a `search-index` queue, one job at a time, writes the newest version of each text the processors store: its chunks, then a manifest that says the text is in whole, then it drops its other versions, a newer one postgres lost too. While OpenSearch or the database is away, or OpenSearch's disk is past its flood stage, the queue waits 30 s at a time without spending attempts, and logs it as an error every 10 minutes it goes on
+- a reconcile at startup (tried again every 30 s while OpenSearch is still starting, for 10 minutes) and every hour queues what the index lacks and what it still holds of other versions or removed texts
+- the index is made of postgres alone and needs no backup: one lost or deleted is made again by the next write and filled by the next reconcile. The `g1` in its name is its generation, raised when its mapping or the chunks change; the new one fills next to the old, which is then deleted by hand (`curl -X DELETE localhost:9200/unihub-texts-g1-bm25`)
+
+Without `OPENSEARCH_URL` none of this is loaded, and processing runs as it did.
 
 ### Canvas
 

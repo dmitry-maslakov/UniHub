@@ -9,6 +9,10 @@ export interface RepresentationKey {
   version: number;
 }
 
+// the key as one string, for ids: the same work has the same one
+export const keyId = ({ hash, processor, version }: RepresentationKey) =>
+  `${hash}__${processor}__${version}`;
+
 export interface Representation extends RepresentationKey {
   // pages, slides or sections, the way the source is split
   parts: string[];
@@ -27,6 +31,13 @@ export const representation = (
 
 export abstract class RepresentationRepository {
   abstract exists(key: RepresentationKey): Promise<boolean>;
+  // the newest version a processor made of this content; null if none
+  abstract newest(
+    hash: ContentHash,
+    processor: PluginName,
+  ): Promise<Representation | null>;
+  // the newest version of every (hash, processor), for ReconcileIndex
+  abstract newestKeys(): AsyncIterable<RepresentationKey>;
   // saving the same one again is harmless
   abstract save(representation: Representation): Promise<void>;
 }
