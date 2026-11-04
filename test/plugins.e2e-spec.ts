@@ -1,4 +1,3 @@
-import { setTimeout as sleep } from 'node:timers/promises';
 import { Outbox, OutboxDeadLetters } from '@nestjs/outbox';
 import { CommandBus } from '@nestjs/cqrs';
 import type { INestApplication } from '@nestjs/common';
@@ -14,7 +13,11 @@ import {
   SyncConnectionCommand,
 } from '../src/plugins/contracts.js';
 import { PollSchedule } from '../src/plugins/application/poll-schedule.js';
-import { CONNECTORS_QUEUE } from '../src/plugins/infrastructure/connectors.queue.js';
+import {
+  CONNECTORS_QUEUE,
+  POLL,
+  type ConnectorJob,
+} from '../src/plugins/infrastructure/connectors.queue.js';
 import { PluginsOutboxTransport } from '../src/processing/contracts.js';
 import { PLUGINS_QUEUE } from '../src/processing/infrastructure/plugins.queue.js';
 import { bootApp } from './app.js';
@@ -55,6 +58,8 @@ describe('plugins', { timeout: 20_000 }, () => {
         ),
       );
 
+  // the whole pipeline, once: a poll's records through catalog and the
+  // outbox to the plugins' queue, a processor and an aggregator
   it('polls a connector and runs the result through processors and aggregators', async () => {
     await syncNow();
 
@@ -78,15 +83,31 @@ describe('plugins', { timeout: 20_000 }, () => {
 
   it('never runs two polls of one connection at once', async () => {
     const connector = app.get(FakePollConnector);
+    const queue = app.get<Queue<ConnectorJob>>(getQueueToken(CONNECTORS_QUEUE));
     const before = connector.polls;
-    connector.delayMs = 1_000;
+    const held = Promise.withResolvers<void>();
+    connector.hold = held.promise;
 
     await syncNow();
+    await vi.waitFor(() => expect(connector.polls).toBe(before + 1));
+    const running = await queue.getDeduplicationJobId(`${FAKE_PORTAL}__shared`);
+    // asked for again while it runs: the same poll, nothing queued after it
     await syncNow();
     await syncNow();
-    await sleep(2_500);
+    expect(await queue.getDeduplicationJobId(`${FAKE_PORTAL}__shared`)).toBe(
+      running,
+    );
+    expect(
+      (await queue.getJobs(['wait', 'delayed', 'prioritized'])).filter(
+        ({ name, data }) => name === POLL && data.portal === FAKE_PORTAL,
+      ),
+    ).toEqual([]);
 
-    connector.delayMs = 0;
+    connector.hold = Promise.resolve();
+    held.resolve();
+    await vi.waitFor(async () =>
+      expect(await queue.getJobState(running!)).toBe('completed'),
+    );
     expect(connector.polls).toBe(before + 1);
   });
 

@@ -1,16 +1,13 @@
-import { readdir } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import type { INestApplication } from '@nestjs/common';
-import {
-  InvalidRecordError,
-  UnknownReferenceError,
-  type ItemRecord,
-  type PortalIngest,
-} from '@app/plugin-sdk';
+import type { PortalIngest } from '@app/plugin-sdk';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
 import { bootApp } from './app.js';
-import { testEnv } from './env.js';
 import { portalIngest } from './ingest.js';
+import { sha256 } from './sha256.js';
+
+// What an in-process plugin sends, through to postgres and back. Which
+// records are refused is checked on fakes (IngestService, SdkPortalIngest).
 
 const portal = 'ingest-test';
 
@@ -28,6 +25,7 @@ describe('ingest', () => {
         course: 'ar',
         kind: 'post',
         title: 'Lecture 5 is up',
+        publishedAt: new Date('2026-10-29T14:12:00Z'),
         raw: { guid: 'post-1' },
       }),
       await hub.file({
@@ -48,39 +46,19 @@ describe('ingest', () => {
 
   afterAll(() => app.close());
 
-  it('stores what a plugin sends', async () => {
-    const results = await sync('slides v1');
-    expect(results.every((r) => r.changed)).toBe(true);
+  it('stores what a plugin sends, and reads the same back on its next run', async () => {
+    expect((await sync('%PDF slides v1')).every((r) => r.changed)).toBe(true);
+    expect((await sync('%PDF slides v1')).map((r) => r.changed)).toEqual([
+      false,
+      false,
+      false,
+      false,
+    ]);
 
+    const [, , , content] = await sync('%PDF slides v2');
+    expect(content).toEqual({ hash: sha256('%PDF slides v2'), changed: true });
     const file = await prisma.file.findFirstOrThrow({ where: { portal } });
-    expect(file.contentHash).toMatch(/^[0-9a-f]{64}$/);
-  });
-
-  it('reports nothing changed when the plugin resends the same data', async () => {
-    const results = await sync('slides v1');
-    expect(results.map((r) => r.changed)).toEqual([false, false, false, false]);
-  });
-
-  it('notices new content of the same file', async () => {
-    const [, , , content] = await sync('slides v2');
-    expect(content.changed).toBe(true);
-  });
-
-  it('asks for content only when the file needs it', async () => {
-    const file = {
-      externalId: 'file-1',
-      course: 'ar',
-      item: 'post-1',
-      name: 'lecture-5.pdf',
-    };
-    expect(await hub.file(file)).toEqual({
-      changed: false,
-      needsContent: false,
-    });
-    expect(await hub.file({ ...file, externalId: 'file-2' })).toEqual({
-      changed: true,
-      needsContent: true,
-    });
+    expect(file.contentHash).toBe(sha256('%PDF slides v2'));
   });
 
   it('removes an item and brings it back when it is sent again', async () => {
@@ -98,84 +76,6 @@ describe('ingest', () => {
       where: { portal, externalId: 'post-1' },
     });
     expect(row.removedAt).toBeNull();
-  });
-
-  it('rejects a record that is missing required fields', async () => {
-    await expect(
-      hub.item({ externalId: 'post-x' } as unknown as ItemRecord),
-    ).rejects.toBeInstanceOf(InvalidRecordError);
-  });
-
-  it("rejects a file of one course on another course's post", async () => {
-    await hub.course({ externalId: 'os', name: 'OS' });
-    // the sdk's error, so a connector can skip the record and go on
-    const misplaced = hub.file({
-      externalId: 'file-x',
-      course: 'os',
-      item: 'post-1',
-      name: 'x.pdf',
-    });
-    await expect(misplaced).rejects.toBeInstanceOf(InvalidRecordError);
-    await expect(misplaced).rejects.toMatchObject({
-      reason: 'FILE_COURSE_MISMATCH',
-    });
-  });
-
-  it("drops fields a record isn't allowed to set", async () => {
-    const record = {
-      externalId: 'post-sneaky',
-      kind: 'post',
-      raw: {},
-      portal: 'someone-else',
-      id: 'chosen-id',
-      extra: true,
-    } as unknown as ItemRecord;
-
-    await hub.item(record);
-
-    const row = await prisma.item.findFirstOrThrow({
-      where: { externalId: 'post-sneaky' },
-    });
-    expect(row.portal).toBe(portal);
-    expect(row.id).not.toBe('chosen-id');
-  });
-
-  it('accepts dates sent as strings and keeps them stable', async () => {
-    const record = {
-      externalId: 'post-dated',
-      kind: 'post',
-      publishedAt: '2026-10-29T14:12:00Z',
-      raw: {},
-    } as unknown as ItemRecord;
-
-    await hub.item(record);
-    const again = await hub.item(record);
-
-    expect(again.changed).toBe(false);
-    const row = await prisma.item.findFirstOrThrow({
-      where: { externalId: 'post-dated' },
-    });
-    expect(row.publishedAt).toEqual(new Date('2026-10-29T14:12:00Z'));
-  });
-
-  it("doesn't store content of a file it was never told about", async () => {
-    const blobs = async () =>
-      (await readdir(testEnv.STORAGE_PATH, { recursive: true })).length;
-    const before = await blobs();
-
-    await expect(
-      hub.content('nope', Readable.from(['whatever'])),
-    ).rejects.toBeInstanceOf(UnknownReferenceError);
-    expect(await blobs()).toBe(before);
-  });
-
-  it('refuses text postgres could not store', async () => {
-    await expect(
-      hub.item({ externalId: 'nul', kind: 'post', title: 'a\u0000b', raw: {} }),
-    ).rejects.toBeInstanceOf(InvalidRecordError);
-    await expect(
-      hub.item({ externalId: 'nul', kind: 'post', raw: { body: 'a\u0000b' } }),
-    ).rejects.toBeInstanceOf(InvalidRecordError);
   });
 
   it('takes -0 and lone surrogates as postgres keeps them', async () => {
@@ -199,21 +99,8 @@ describe('ingest', () => {
     const row = await prisma.item.findFirstOrThrow({
       where: { portal, externalId: 'post-odd' },
     });
-    expect(row.title).toBe('half an emoji \uFFFD');
-    expect(row.raw).toEqual({ score: 0, 'cut \uFFFD here': [0] });
-  });
-
-  it('checks what removeItem() and saveState() are given', async () => {
-    await expect(hub.removeItem('')).rejects.toBeInstanceOf(InvalidRecordError);
-    await expect(
-      hub.saveState({ when: new Date() } as never),
-    ).rejects.toBeInstanceOf(InvalidRecordError);
-  });
-
-  it('lets only the shared account remove what everyone sees', async () => {
-    await expect(
-      portalIngest(app, portal, 'someone').removeItem('post-1'),
-    ).rejects.toMatchObject({ reason: 'REMOVAL_NOT_ALLOWED' });
+    expect(row.title).toBe('half an emoji �');
+    expect(row.raw).toEqual({ score: 0, 'cut � here': [0] });
   });
 
   it('keeps the plugin state between runs, per account', async () => {

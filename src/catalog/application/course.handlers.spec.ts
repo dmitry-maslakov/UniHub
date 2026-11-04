@@ -78,16 +78,19 @@ describe('course commands', () => {
     ).rejects.toBeInstanceOf(UnknownReferenceError);
   });
 
-  it('unlink a portal course, saying whether it was linked', async () => {
+  it('unlink a portal course, saying whether it was linked, and no unknown one', async () => {
     const { commands, create } = await catalog();
     await create('ar');
     await commands.execute(
       new LinkPortalCourseCommand(Slug.parse('ar'), portalCourse, year),
     );
 
-    const unlink = () =>
-      commands.execute(new UnlinkPortalCourseCommand(portalCourse));
+    const unlink = (externalId = portalCourse.externalId) =>
+      commands.execute(
+        new UnlinkPortalCourseCommand({ ...portalCourse, externalId }),
+      );
     expect(await unlink()).toEqual({ changed: true });
     expect(await unlink()).toEqual({ changed: false });
+    await expect(unlink('nope')).rejects.toBeInstanceOf(UnknownReferenceError);
   });
 });

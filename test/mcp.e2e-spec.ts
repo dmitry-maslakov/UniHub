@@ -16,12 +16,16 @@ import { bootApp } from './app.js';
 import { accounts } from './accounts.js';
 import { portalIngest } from './ingest.js';
 
+// Each tool once, behind the API key, the request checks and the limit.
+// What a request may hold is checked on its schema and on
+// McpRequestMiddleware, who reads what on fakes (CourseReader).
+
 const PORTAL = 'mcp-test';
 
 describe('MCP', { timeout: 20_000 }, () => {
   let app: INestApplication;
   const mails: Mail[] = [];
-  const { http, post, signUp } = accounts(() => app, mails);
+  const { http, post, signUp, userId, ban } = accounts(() => app, mails);
   let key: string;
   let cookie: string;
   let fileId: string;
@@ -90,10 +94,9 @@ describe('MCP', { timeout: 20_000 }, () => {
     );
 
     cookie = await signUp('agent@mcp.test');
-    const { id: userId } = await prisma.user.findUniqueOrThrow({
-      where: { email: 'agent@mcp.test' },
-    });
-    await commands.execute(new GrantCourseAccessCommand(userId, courseId));
+    await commands.execute(
+      new GrantCourseAccessCommand(await userId('agent@mcp.test'), courseId),
+    );
     key = (
       await post('/api-key/create', { name: 'claude' }, cookie).expect(200)
     ).body.key;
@@ -121,20 +124,6 @@ describe('MCP', { timeout: 20_000 }, () => {
         .set('content-type', 'text/plain')
         .send('x'.repeat(10_000))
         .expect(415);
-  });
-
-  it('takes one JSON-RPC message per request, no batches', async () => {
-    // a batch would pass as one call against the limit
-    const message = { jsonrpc: '2.0', method: 'tools/list', params: {} };
-    await http()
-      .post('/api/mcp')
-      .set('accept', 'application/json, text/event-stream')
-      .set('x-api-key', key)
-      .send([
-        { ...message, id: ++id },
-        { ...message, id: ++id },
-      ])
-      .expect(400);
   });
 
   it('lists its tools', async () => {
@@ -175,32 +164,16 @@ describe('MCP', { timeout: 20_000 }, () => {
     expect(missing.isError).toBe(true);
     expect(missing.content[0].text).toContain('course not found');
 
-    const past = await call('read_file', { file: fileId, page: 3 });
-    expect(past.isError).toBe(true);
-
-    // past what postgres takes, or not a page or a course at all
-    for (const [tool, args] of [
-      ['read_file', { file: fileId, page: 1e12 }],
-      ['list_items', { course: 'alg', limit: 500 }],
-      ['list_files', { course: 'Not A Slug' }],
-    ] as const) {
-      const invalid = await call(tool, args);
-      expect(invalid.isError).toBe(true);
-      expect(invalid.content[0].text).toContain('Invalid parameters');
-    }
+    // a tool's parameters are checked by its schema
+    const invalid = await call('list_items', { course: 'alg', limit: 500 });
+    expect(invalid.isError).toBe(true);
+    expect(invalid.content[0].text).toContain('Invalid parameters');
   });
 
   it("stops a banned user's key", async () => {
-    const prisma = app.get(PrismaService);
-    await prisma.user.update({
-      where: { email: 'agent@mcp.test' },
-      data: { banned: true },
-    });
+    await ban('agent@mcp.test');
     await rpc('tools/list', {}).expect(401);
-    await prisma.user.update({
-      where: { email: 'agent@mcp.test' },
-      data: { banned: false },
-    });
+    await ban('agent@mcp.test', false);
   });
 
   it('counts calls per user, whatever key they come with', async () => {
@@ -215,19 +188,5 @@ describe('MCP', { timeout: 20_000 }, () => {
       );
     const first = await left(key);
     expect(await left(second)).toBe(first - 1);
-  });
-
-  it("doesn't let another user's key read the course", async () => {
-    const other = await signUp('other@mcp.test');
-    const otherKey = (
-      await post('/api-key/create', { name: 'x' }, other).expect(200)
-    ).body.key;
-    const res = await rpc(
-      'tools/call',
-      { name: 'list_items', arguments: { course: 'alg' } },
-      { 'x-api-key': otherKey },
-    ).expect(200);
-    expect(res.body.result.isError).toBe(true);
-    expect(res.body.result.content[0].text).toContain('course not found');
   });
 });
