@@ -19,6 +19,29 @@ services:
     volumes:
       - redisdata:/data
 
+  # search; no security plugin: never on the network
+  opensearch:
+    image: opensearchproject/opensearch:3.9.0
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: 'true'
+      DISABLE_INSTALL_DEMO_CONFIG: 'true'
+      OPENSEARCH_JAVA_OPTS: -Xms1g -Xmx1g
+      # a lost index fails the write instead of coming back with a dynamic mapping
+      action.auto_create_index: '-unihub-*,+*'
+    ulimits:
+      nofile: { soft: 65536, hard: 65536 }
+      memlock: { soft: -1, hard: -1 }
+    ports:
+      - '127.0.0.1:9200:9200'
+    volumes:
+      - osdata:/usr/share/opensearch/data
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -fsS "http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=1s"']
+      interval: 5s
+      retries: 40
+
 volumes:
   pgdata:
   redisdata:
+  osdata:

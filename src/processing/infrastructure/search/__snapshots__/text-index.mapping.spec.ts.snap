@@ -1,0 +1,202 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`text index mapping > changes with its generation only 1`] = `
+{
+  "GENERATION": 1,
+  "body": {
+    "mappings": {
+      "_meta": {
+        "generation": 1,
+      },
+      "dynamic": "strict",
+      "properties": {
+        "chunk": {
+          "type": "integer",
+        },
+        "chunks": {
+          "type": "integer",
+        },
+        "hash": {
+          "type": "keyword",
+        },
+        "page": {
+          "type": "integer",
+        },
+        "processor": {
+          "type": "keyword",
+        },
+        "text": {
+          "analyzer": "uh_fold",
+          "fields": {
+            "code": {
+              "analyzer": "uh_code_index",
+              "search_analyzer": "uh_code_search",
+              "type": "text",
+            },
+            "en": {
+              "analyzer": "uh_en",
+              "type": "text",
+            },
+            "sr": {
+              "analyzer": "uh_sr",
+              "type": "text",
+            },
+          },
+          "type": "text",
+        },
+        "version": {
+          "type": "integer",
+        },
+      },
+    },
+    "settings": {
+      "analysis": {
+        "analyzer": {
+          "uh_code_index": {
+            "filter": [
+              "uh_code_split",
+              "uh_code_acronym",
+              "lowercase",
+              "serbian_normalization",
+              "asciifolding",
+              "uh_dj_to_d",
+              "remove_duplicates",
+              "flatten_graph",
+            ],
+            "tokenizer": "code_tokenizer",
+            "type": "custom",
+          },
+          "uh_code_search": {
+            "filter": [
+              "uh_code_split",
+              "lowercase",
+              "serbian_normalization",
+              "asciifolding",
+              "uh_dj_to_d",
+            ],
+            "tokenizer": "code_tokenizer",
+            "type": "custom",
+          },
+          "uh_en": {
+            "filter": [
+              "uh_en_possessive",
+              "lowercase",
+              "serbian_normalization",
+              "asciifolding",
+              "uh_dj_to_d",
+              "uh_en_stop",
+              "uh_en_stem",
+            ],
+            "tokenizer": "standard",
+            "type": "custom",
+          },
+          "uh_fold": {
+            "filter": [
+              "lowercase",
+              "serbian_normalization",
+              "asciifolding",
+              "uh_dj_to_d",
+            ],
+            "tokenizer": "standard",
+            "type": "custom",
+          },
+          "uh_sr": {
+            "filter": [
+              "lowercase",
+              "serbian_normalization",
+              "asciifolding",
+              "uh_dj_to_d",
+              "uh_sr_stem",
+            ],
+            "tokenizer": "standard",
+            "type": "custom",
+          },
+        },
+        "filter": {
+          "uh_code_acronym": {
+            "patterns": [
+              "(\\p{Lu}+)(?=\\p{Lu}\\p{Ll})",
+              "(?<=\\p{Lu})(\\p{Lu}\\p{Ll}+)",
+            ],
+            "preserve_original": true,
+            "type": "pattern_capture",
+          },
+          "uh_code_split": {
+            "adjust_offsets": true,
+            "catenate_all": false,
+            "catenate_numbers": false,
+            "catenate_words": false,
+            "generate_number_parts": true,
+            "generate_word_parts": true,
+            "preserve_original": true,
+            "split_on_case_change": true,
+            "split_on_numerics": false,
+            "stem_english_possessive": false,
+            "type": "word_delimiter_graph",
+          },
+          "uh_dj_to_d": {
+            "all": true,
+            "pattern": "dj",
+            "replacement": "d",
+            "type": "pattern_replace",
+          },
+          "uh_en_possessive": {
+            "language": "possessive_english",
+            "type": "stemmer",
+          },
+          "uh_en_stem": {
+            "language": "english",
+            "type": "stemmer",
+          },
+          "uh_en_stop": {
+            "stopwords": "_english_",
+            "type": "stop",
+          },
+          "uh_sr_stem": {
+            "language": "serbian",
+            "type": "stemmer",
+          },
+        },
+        "tokenizer": {
+          "code_tokenizer": {
+            "max_token_length": 255,
+            "tokenize_on_chars": [
+              "whitespace",
+              "(",
+              ")",
+              "[",
+              "]",
+              "{",
+              "}",
+              "<",
+              ">",
+              ",",
+              ";",
+              """,
+              "'",
+              "\`",
+              "=",
+              "+",
+              "*",
+              "!",
+              "?",
+              "&",
+              "|",
+              "^",
+              "%",
+              "~",
+              "\\",
+            ],
+            "type": "char_group",
+          },
+        },
+      },
+      "index": {
+        "highlight.max_analyzed_offset": 1000000,
+        "number_of_replicas": 0,
+        "number_of_shards": 1,
+      },
+    },
+  },
+}
+`;

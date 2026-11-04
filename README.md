@@ -8,16 +8,18 @@ Needs Node 24+ and Docker.
 
 ```bash
 cp .env.example .env   # then set BETTER_AUTH_SECRET
-docker compose up -d
+docker compose up -d   # postgres, redis and OpenSearch
 npm install
 npx prisma migrate dev
 npm run start:dev
 ```
 
+OpenSearch needs `vm.max_map_count` of at least 262144, which Docker Desktop has; on Linux, `sudo sysctl -w vm.max_map_count=262144`.
+
 ## Layout
 
 - `src/` — the hub: its modules (`catalog`, `ingest`, `storage`, `processing`, `plugins`, `identity`, `access`), each used by the others only through its `contracts.ts` (a lint rule checks it)
-- `src/platform/` — what the modules run on: `database` (Prisma, `@Transactional()`), `redis`, `queues` (BullMQ), `messaging` (the outbox; `AppModule` names its transports), `errors` (one answer per kind of domain error), `validation` (a route's schemas); `app.module.ts` lists the modules and wires them into the platform, `app.setup.ts` sets the app up (HTTP, MCP and gRPC) for `main.ts` and the e2e tests alike
+- `src/platform/` — what the modules run on: `database` (Prisma, `@Transactional()`), `redis`, `queues` (BullMQ), `messaging` (the outbox; `AppModule` names its transports), `errors` (one answer per kind of domain error), `validation` (a route's schemas), `search` (the OpenSearch client); `app.module.ts` lists the modules and wires them into the platform, `app.setup.ts` sets the app up (HTTP, MCP and gRPC) for `main.ts` and the e2e tests alike
 - `libs/plugin-sdk` — everything a plugin may depend on, plugins never import the core directly; its `host.ts` is the hub's side (how it finds plugins), which plugins can't import
 - `libs/plugins/` — the built-in plugins (`canvas`, `office-text`, `plain-text`), each on the sdk alone. A worker thread's file is run by node as it is in the tests, types stripped, so it and what it imports name each other's `.ts` (`rewriteRelativeImportExtensions` lets tsc take that)
 - `libs/kernel` — what the hub's modules and the sdk share: values that hold the same rules everywhere (`ContentHash`, `MediaType`, `PortalId`, `PluginName`, `Json`) and the kinds of domain error (not found, conflict, invalid)
@@ -34,12 +36,12 @@ A module has up to three layers, and a rule is written once, in the one that own
 
 ```bash
 npm test               # unit specs: no database, a few seconds
-docker compose up -d   # e2e specs need postgres and redis
+docker compose up -d   # e2e specs need postgres, redis and OpenSearch
 npm run test:e2e
 ```
 
 - unit specs (`*.spec.ts`, next to the code) check the rules: the domain on its own, the use cases on in-memory fakes of their ports (`*.fakes.ts` beside them; `test/` has the shared ones: `FakeBus`, `InMemoryBlobs`, `sha256` of real content, plugins as discovery finds them)
-- e2e specs (`test/*.e2e-spec.ts`) check only what fakes can't: how records are written and read back, what the read queries find and in what order, the locks, the outbox rolling back with its transaction, BullMQ's deduplication, gRPC, each route and MCP tool once (and one bad request to each that declares a schema, since nothing else sees it is attached), and the whole pipeline once (`plugins.e2e-spec.ts`). Each boots the app as `main.ts` sets it up (`bootApp()` in `test/app.ts`) on a database, redis db and folder of its own (`test/env.ts`), made anew for every run, and waits for what it waits on (the outbox's events, a job's state), never for a while
+- e2e specs (`test/*.e2e-spec.ts`) check only what fakes can't: how records are written and read back, what the read queries find and in what order, the locks, the outbox rolling back with its transaction, BullMQ's deduplication, gRPC, each route and MCP tool once (and one bad request to each that declares a schema, since nothing else sees it is attached), the whole pipeline once (`plugins.e2e-spec.ts`), and the text index's analyzers, whose rules live in OpenSearch (`search-analysis.e2e-spec.ts`: a word in Cyrillic, in Latin and without diacritics gives the same tokens, on the OpenSearch client alone). The others boot the app as `main.ts` sets it up (`bootApp()` in `test/app.ts`) on a database, redis db, folder and search indices (`unihub-e2e-*`) of their own (`test/env.ts`), made anew for every run, and wait for what they wait on (the outbox's events, a job's state), never for a while
 
 ## Users
 
