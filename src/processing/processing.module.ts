@@ -31,7 +31,8 @@ const DAY = 24 * 60 * 60;
         attempts: 5,
         backoff: { type: 'exponential', delay: 5_000 },
         // a finished job keeps its id for a day, longer than the outbox may
-        // take to publish the same message again
+        // take to publish the same message again; content queued again
+        // meanwhile is mostly done already, the reconciler does the rest
         removeOnComplete: { age: DAY },
         removeOnFail: { age: 14 * DAY },
       },
