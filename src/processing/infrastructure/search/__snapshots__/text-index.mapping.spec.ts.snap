@@ -6,9 +6,7 @@ exports[`text index mapping > changes with its generation only 1`] = `
   "body": {
     "mappings": {
       "_meta": {
-        "dimensions": null,
         "generation": 1,
-        "model": null,
       },
       "dynamic": "strict",
       "properties": {

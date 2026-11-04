@@ -109,7 +109,7 @@ export const indexBody = () =>
     },
     mappings: {
       dynamic: 'strict',
-      _meta: { generation: GENERATION, model: null, dimensions: null },
+      _meta: { generation: GENERATION },
       properties: {
         hash: { type: 'keyword' },
         processor: { type: 'keyword' },
