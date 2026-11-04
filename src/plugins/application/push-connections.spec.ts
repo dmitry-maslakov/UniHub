@@ -1,4 +1,5 @@
 import { once } from 'node:events';
+import { setTimeout } from 'node:timers/promises';
 import type { ConfigType } from '@nestjs/config';
 import type { ConnectorContext, PushesFromPortal } from '@app/plugin-sdk';
 import type { IngestService } from '../../ingest/contracts.js';
@@ -6,6 +7,12 @@ import type { pluginsConfig } from '../plugins.config.js';
 import { ConnectionDirectory } from './connection-directory.js';
 import { catalogOf, push } from './plugins.fakes.js';
 import { PushConnections } from './push-connections.js';
+
+// to see the restart waits asked for without sitting through them
+vi.mock('node:timers/promises', async (original) => {
+  const timers = await original<typeof import('node:timers/promises')>();
+  return { ...timers, setTimeout: vi.fn(timers.setTimeout) };
+});
 
 const config: ConfigType<typeof pluginsConfig> = {
   enabled: [],
@@ -32,6 +39,8 @@ function connections(
 }
 
 describe('PushConnections', () => {
+  afterEach(() => vi.useRealTimers());
+
   it('runs each connector for its connection until stopped', async () => {
     const seen: ConnectorContext[] = [];
     const running = connections({
@@ -74,6 +83,32 @@ describe('PushConnections', () => {
     await vi.waitFor(() => expect(runs).toBe(3));
     await running.onModuleDestroy();
     expect(runs).toBe(3);
+  });
+
+  it('waits a second again once a run stayed up past the longest wait', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const wait = vi.mocked(setTimeout).mockClear();
+    for (let i = 0; i < 3; i++) wait.mockImplementationOnce(async () => {});
+    let runs = 0;
+    const running = connections(
+      {
+        teams: {
+          run: async (ctx) => {
+            runs++;
+            if (runs === 3) vi.advanceTimersByTime(60_001);
+            if (runs === 4) await untilStopped(ctx);
+          },
+        },
+      },
+      { ...config, restartMaxMs: 60_000 },
+    );
+
+    running.onApplicationBootstrap();
+    await vi.waitFor(() => expect(runs).toBe(4));
+    const waits = wait.mock.calls.map(([ms]) => ms);
+    await running.onModuleDestroy();
+
+    expect(waits).toEqual([1_000, 2_000, 1_000]);
   });
 
   it('stops them all at once, not waiting past its time for any', async () => {

@@ -22,8 +22,8 @@ interface Running {
 
 // Push connectors keep their connections, so one instance runs them (the one
 // with RUN_CONNECTORS), each connection in a run of its own. A run that ends
-// or fails is started again, a little later each time; at shutdown they're
-// all stopped at once, each given its time.
+// or fails is started again, a little later each time it ends soon again; at
+// shutdown they're all stopped at once, each given its time.
 @Injectable()
 export class PushConnections
   implements OnApplicationBootstrap, OnModuleDestroy
@@ -60,7 +60,10 @@ export class PushConnections
     connection: Connection,
     signal: AbortSignal,
   ) {
-    for (let runs = 0; !signal.aborted; runs++) {
+    // counts the runs in a row that ended soon: one that stayed up past the
+    // longest wait was a working connection, so it starts over at a second
+    for (let failing = 0; !signal.aborted; failing++) {
+      const started = Date.now();
       try {
         await connector.run(this.directory.context(connection, signal));
       } catch (err) {
@@ -68,8 +71,9 @@ export class PushConnections
           this.logger.error(`${connection.key} failed`, (err as Error).stack);
       }
       if (signal.aborted) return;
+      if (Date.now() - started > this.config.restartMaxMs) failing = 0;
       const wait = Math.min(
-        FIRST_RESTART_MS * 2 ** runs,
+        FIRST_RESTART_MS * 2 ** failing,
         this.config.restartMaxMs,
       );
       this.logger.warn(

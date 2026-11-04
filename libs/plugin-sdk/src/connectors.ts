@@ -39,7 +39,7 @@ export interface PollsPortal {
 export interface PushesFromPortal {
   // Runs until ctx.signal aborts, the connection kept up meanwhile. Ending
   // before that, or failing, is taken for a lost connection: the hub runs it
-  // again, waiting longer each time.
+  // again, waiting longer each time it ends soon after starting.
   run(ctx: ConnectorContext): Promise<void>;
 }
 

@@ -17,7 +17,8 @@ export const pluginsSettings = z
     // how long shutdown waits for a push connector to stop
     CONNECTOR_STOP_SECONDS: duration.default(10),
     // a push connector that ended or failed runs again after a second, then
-    // twice as long each time, up to this
+    // twice as long each time it ends soon again, up to this; one that ran
+    // longer than this starts over at a second
     CONNECTOR_RESTART_MAX_SECONDS: duration.default(60),
   })
   .transform((env) => ({
