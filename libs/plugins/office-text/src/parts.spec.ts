@@ -1,4 +1,5 @@
-import { MAX_SECTION, toParts } from './parts.js';
+import { MAX_PART } from '@app/plugin-sdk';
+import { toParts } from './parts.js';
 
 const page = (pageNumber: number, text: string) => ({
   text,
@@ -67,7 +68,7 @@ describe('toParts', () => {
   });
 
   it('goes on with a long section in the next part', () => {
-    const half = 'x'.repeat(MAX_SECTION / 2);
+    const half = 'x'.repeat(MAX_PART / 2);
     expect(
       toParts(
         headed(under('A', half), under('A', half), under('A', 'end')),

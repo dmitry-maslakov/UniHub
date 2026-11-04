@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import {
   ContentProcessor,
   firstMessage,
+  MAX_PART,
   readUpTo,
   type ProcessesContent,
   type ProcessorInput,
@@ -21,7 +22,7 @@ const TIMEOUT_MS = 60_000;
 const MINIFIED = /\.min\.(m?js|css)$/i;
 
 // Text of source code, plain text, markdown, notebooks and data files: a
-// part per section of markdown and notebooks, whole lines up to 10,000
+// part per section of markdown and notebooks, whole lines up to MAX_PART
 // characters of everything else.
 @ContentProcessor({
   name: 'plain-text',
@@ -39,7 +40,7 @@ export class PlainTextProcessor implements ProcessesContent {
     if (!data) return { parts: [] };
     const parts = await firstMessage<string[]>(
       new Worker(new URL('./parse.worker.ts', import.meta.url), {
-        workerData: { data, kind },
+        workerData: { data, kind, max: MAX_PART },
         resourceLimits: { maxOldGenerationSizeMb: HEAP_MB },
       }),
       TIMEOUT_MS,

@@ -1,13 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { Readable } from 'node:stream';
-import { ContentHash, type ProcessorInput } from '@app/plugin-sdk';
+import { ContentHash, MAX_PART, type ProcessorInput } from '@app/plugin-sdk';
 import {
   MAX_BYTES,
   MAX_NOTEBOOK_BYTES,
   PlainTextProcessor,
 } from './plain-text.processor.js';
-import { MAX_PART } from './split.js';
 
 // as the hub hands it over: matched by its extension
 const input = (

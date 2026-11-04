@@ -1,10 +1,7 @@
 import type { OfficeChunk } from 'officeparser';
+import { MAX_PART } from '@app/plugin-sdk';
 
 export type SplitBy = 'page' | 'slide' | 'heading';
-
-// past this many characters a section goes on in the next part, so one
-// without headings (a whole document, at times) isn't read in one go
-export const MAX_SECTION = 10_000;
 
 type Chunk = Pick<OfficeChunk, 'text' | 'metadata'>;
 
@@ -17,7 +14,8 @@ export interface Parsed {
 
 // officeparser's chunks as parts. Part n of a pdf or a deck is page or slide
 // n, empty where it has no text, so the numbers a reader is told match the
-// document's. Sections follow each other, a long one cut where a chunk ends.
+// document's. Sections follow each other, a long one cut where a chunk ends:
+// one without headings is a whole document at times.
 export const toParts = ({ chunks, units }: Parsed, by: SplitBy) =>
   by === 'heading' ? sections(chunks) : numbered(chunks, units);
 
@@ -45,7 +43,7 @@ function sections(chunks: readonly Chunk[]) {
     const fits =
       last >= 0 &&
       metadata.closestHeading === heading &&
-      parts[last].length + text.length < MAX_SECTION;
+      parts[last].length + text.length < MAX_PART;
     if (fits) parts[last] += `\n${text}`;
     else parts.push(text);
     heading = metadata.closestHeading;

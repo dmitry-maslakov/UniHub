@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import {
   ContentProcessor,
+  MAX_PART,
   readUpTo,
   type ProcessesContent,
   type ProcessorInput,
 } from '@app/plugin-sdk';
 import { parse } from './parse.js';
-import { MAX_SECTION, toParts, type SplitBy } from './parts.js';
+import { toParts, type SplitBy } from './parts.js';
 
 // how each kind of document is split into parts, by extension and media type
 const SPLIT_BY: Record<string, SplitBy> = {
@@ -62,7 +63,7 @@ export class OfficeTextProcessor implements ProcessesContent {
         splitBy,
         // a page or slide is kept whole, it's the unit a part stands for;
         // a long section comes in chunks a part can end at
-        maxChunkSize: splitBy === 'heading' ? MAX_SECTION : 1_000_000,
+        maxChunkSize: splitBy === 'heading' ? MAX_PART : 1_000_000,
       },
     });
     return { parts: toParts(parsed, splitBy) };
