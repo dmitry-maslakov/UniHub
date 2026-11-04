@@ -23,6 +23,7 @@ service Ingest {
   rpc RemoveItem (Ref) returns (Changed);
   rpc RemoveFile (Ref) returns (Changed);
   rpc GetState (Empty) returns (State);
+  // "null" saves null: GetState answers as if none was ever saved
   rpc SaveState (State) returns (Empty);
 }
 

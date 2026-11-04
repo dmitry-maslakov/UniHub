@@ -234,6 +234,9 @@ describe('gRPC ingest', () => {
     await expect(call('SaveState', {})).rejects.toMatchObject({
       code: grpc.status.INVALID_ARGUMENT,
     });
+    // null is a state too: as if none was ever saved
+    expect(await call('SaveState', { json: 'null' })).toEqual({});
+    expect(await call('GetState', {})).toEqual({});
   });
 
   it('answers with statuses a connector can act on', async () => {

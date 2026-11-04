@@ -217,5 +217,8 @@ describe('ingest', () => {
     expect(await hub.state()).toEqual({ cursor: 5 });
     const other = app.get(HubIngest).forPortal(portal, 'someone');
     expect(await other.state()).toBeNull();
+    // a bare null is a state too, as if none was saved
+    await hub.saveState(null);
+    expect(await hub.state()).toBeNull();
   });
 });
