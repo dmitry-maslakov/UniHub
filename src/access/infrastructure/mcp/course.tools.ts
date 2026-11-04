@@ -1,9 +1,10 @@
-import { RpcException } from '@nestjs/microservices';
+import { UseFilters } from '@nestjs/common';
 import { Payload } from '@nestjs/microservices';
 import { McpController, McpRawRequest, Tool } from '@rekog/mcp-nest';
 import { z } from 'zod';
 import { userIdOf } from '../../../identity/contracts.js';
 import { CourseReader, MAX_LIMIT } from '../../application/course-reader.js';
+import { McpErrorsFilter } from './mcp-errors.filter.js';
 
 // the HTTP request, with the user the key guard put on it
 type Caller = Parameters<typeof userIdOf>[0];
@@ -18,13 +19,10 @@ const readOnly = { readOnlyHint: true, openWorldHint: false };
 const json = (value: unknown) => ({
   content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }],
 });
-const found = <T>(value: T | null, what: string) => {
-  if (value === null) throw new RpcException(`${what} not found`);
-  return value;
-};
 
-// The same reads as the REST API, through the same CourseReader.
+// The same reads as the REST API, through the same CourseReader
 @McpController()
+@UseFilters(McpErrorsFilter)
 export class CourseTools {
   constructor(private readonly reader: CourseReader) {}
 
@@ -62,7 +60,7 @@ export class CourseTools {
       offset,
       limit,
     });
-    return json(found(items, 'course'));
+    return json(items);
   }
 
   @Tool({
@@ -88,7 +86,7 @@ export class CourseTools {
       offset,
       limit,
     });
-    return json(found(files, 'course'));
+    return json(files);
   }
 
   @Tool({
@@ -105,10 +103,7 @@ export class CourseTools {
     @Payload() { file, page }: { file: string; page: number },
     @McpRawRequest() req: Caller,
   ) {
-    const text = found(
-      await this.reader.text(userIdOf(req), file, page),
-      'page',
-    );
+    const text = await this.reader.text(userIdOf(req), file, page);
     return {
       content: [
         {

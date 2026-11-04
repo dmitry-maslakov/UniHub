@@ -94,7 +94,7 @@ describe('courses', () => {
     ).rejects.toBeInstanceOf(CourseSlugTakenError);
     await expect(
       commands.execute(new CreateCourseCommand('Not A Slug', 'x')),
-    ).rejects.toThrow('bad course slug');
+    ).rejects.toThrow('invalid course slug');
     await expect(
       commands.execute(
         new LinkPortalCourseCommand('nope', 'acs-t', 'arsiit', null),

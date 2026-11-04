@@ -16,6 +16,7 @@ import {
   ListTextsQuery,
 } from '../../processing/contracts.js';
 import { GetContentQuery } from '../../storage/contracts.js';
+import { NotReadableError } from './errors.js';
 
 export interface Page {
   offset: number;
@@ -33,9 +34,10 @@ const bounded = ({ offset, limit }: Page): Page => ({
 });
 
 // What a user may read, for every way in (REST, MCP): every method checks
-// the user's courses and returns null for anything they can't see, so a
-// caller can't tell "not yours" from "doesn't exist". Admins read every
-// course; a portal course nobody linked to a course isn't readable here.
+// the user's courses and throws NotReadableError for anything they can't
+// see, so a caller can't tell "not yours" from "doesn't exist". Admins read
+// every course; a portal course nobody linked to a course isn't readable
+// here.
 @Injectable()
 export class CourseReader {
   constructor(private readonly queries: QueryBus) {}
@@ -49,22 +51,33 @@ export class CourseReader {
 
   private async readableCourse(userId: string, slug: string) {
     const course = await this.queries.execute(new FindCourseQuery(slug));
-    return course && (await this.canRead(userId, course.id)) ? course : null;
+    if (course && (await this.canRead(userId, course.id))) return course;
+    throw new NotReadableError('course');
   }
 
   // a file of a course the user may read, not removed, nor attached to a
   // removed post
   private async readableFile(userId: string, fileId: string) {
     const file = await this.queries.execute(new GetFileQuery(fileId));
-    if (!file || file.removed || !file.portalCourseId) return null;
+    if (!file || file.removed || !file.portalCourseId)
+      throw new NotReadableError('file');
     if (file.itemId) {
       const item = await this.queries.execute(new GetItemQuery(file.itemId));
-      if (!item || item.removed) return null;
+      if (!item || item.removed) throw new NotReadableError('file');
     }
     const courseId = await this.queries.execute(
       new CourseOfQuery(file.portalCourseId),
     );
-    return courseId && (await this.canRead(userId, courseId)) ? file : null;
+    if (courseId && (await this.canRead(userId, courseId))) return file;
+    throw new NotReadableError('file');
+  }
+
+  // what the file's content is stored under; a file without content yet
+  // has nothing to read
+  private async readableContent(userId: string, fileId: string) {
+    const file = await this.readableFile(userId, fileId);
+    if (!file.contentHash) throw new NotReadableError('file');
+    return { file, hash: file.contentHash };
   }
 
   async courses(userId: string) {
@@ -87,7 +100,6 @@ export class CourseReader {
 
   async items(userId: string, slug: string, page: Page) {
     const course = await this.readableCourse(userId, slug);
-    if (!course) return null;
     const { offset, limit } = bounded(page);
     const items = await this.queries.execute(
       new ListCourseItemsQuery(course.id, offset, limit),
@@ -105,7 +117,6 @@ export class CourseReader {
 
   async files(userId: string, slug: string, page: Page) {
     const course = await this.readableCourse(userId, slug);
-    if (!course) return null;
     const { offset, limit } = bounded(page);
     const files = await this.queries.execute(
       new ListCourseFilesQuery(course.id, offset, limit),
@@ -116,7 +127,6 @@ export class CourseReader {
   // the file and what processors made of it, without the text
   async file(userId: string, fileId: string) {
     const file = await this.readableFile(userId, fileId);
-    if (!file) return null;
     const texts = file.contentHash
       ? await this.queries.execute(new ListTextsQuery(file.contentHash))
       : [];
@@ -126,19 +136,19 @@ export class CourseReader {
   // one page (slide, section) of the file's text; the first processor's
   // unless one is named
   async text(userId: string, fileId: string, page: number, processor?: string) {
-    const file = await this.readableFile(userId, fileId);
-    if (!file?.contentHash) return null;
-    return this.queries.execute(
-      new GetTextPageQuery(file.contentHash, page, processor),
+    const { hash } = await this.readableContent(userId, fileId);
+    const text = await this.queries.execute(
+      new GetTextPageQuery(hash, page, processor),
     );
+    if (!text) throw new NotReadableError('page');
+    return text;
   }
 
   async content(userId: string, fileId: string) {
-    const file = await this.readableFile(userId, fileId);
-    if (!file?.contentHash) return null;
+    const { file, hash } = await this.readableContent(userId, fileId);
     return {
       ...toFileView(file),
-      stream: await this.queries.execute(new GetContentQuery(file.contentHash)),
+      stream: await this.queries.execute(new GetContentQuery(hash)),
     };
   }
 }
