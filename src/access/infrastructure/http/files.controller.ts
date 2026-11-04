@@ -2,7 +2,6 @@ import {
   Controller,
   Get,
   Header,
-  NotFoundException,
   Param,
   ParseUUIDPipe,
   Query,
@@ -43,13 +42,11 @@ export class FilesController {
 
   @Get(':id')
   @ApiOkResponse({ type: FileDetailsResponse })
-  async file(
+  file(
     @CurrentUserId() userId: string,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<FileDetailsResponse> {
-    const file = await this.reader.file(userId, id);
-    if (!file) throw new NotFoundException();
-    return file;
+    return this.reader.file(userId, id);
   }
 
   @Get(':id/text')
@@ -63,15 +60,13 @@ export class FilesController {
     required: false,
     description: 'which text, the first one by default',
   })
-  async text(
+  text(
     @CurrentUserId() userId: string,
     @Param('id', ParseUUIDPipe) id: string,
     @PageNumber() page: number,
     @Query('processor') processor?: string,
   ): Promise<TextPageResponse> {
-    const text = await this.reader.text(userId, id, page, processor);
-    if (!text) throw new NotFoundException();
-    return text;
+    return this.reader.text(userId, id, page, processor);
   }
 
   @Get(':id/content')
@@ -84,7 +79,6 @@ export class FilesController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     const file = await this.reader.content(userId, id);
-    if (!file) throw new NotFoundException();
     return new StreamableFile(file.stream, {
       type: contentType(file.mime),
       disposition: contentDisposition(file.name),

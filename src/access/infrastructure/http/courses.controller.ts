@@ -1,10 +1,4 @@
-import {
-  Controller,
-  Get,
-  NotFoundException,
-  Param,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Param, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiNotFoundResponse,
@@ -38,29 +32,25 @@ export class CoursesController {
   @ApiOkResponse({ type: [ItemResponse], description: 'newest first' })
   @ApiNotFoundResponse()
   @Paged()
-  async items(
+  items(
     @CurrentUserId() userId: string,
     @Param('slug') slug: string,
     @Offset() offset: number,
     @Limit() limit: number,
   ): Promise<ItemResponse[]> {
-    const items = await this.reader.items(userId, slug, { offset, limit });
-    if (!items) throw new NotFoundException();
-    return items;
+    return this.reader.items(userId, slug, { offset, limit });
   }
 
   @Get(':slug/files')
   @ApiOkResponse({ type: [FileResponse], description: 'by folder and name' })
   @ApiNotFoundResponse()
   @Paged()
-  async files(
+  files(
     @CurrentUserId() userId: string,
     @Param('slug') slug: string,
     @Offset() offset: number,
     @Limit() limit: number,
   ): Promise<FileResponse[]> {
-    const files = await this.reader.files(userId, slug, { offset, limit });
-    if (!files) throw new NotFoundException();
-    return files;
+    return this.reader.files(userId, slug, { offset, limit });
   }
 }

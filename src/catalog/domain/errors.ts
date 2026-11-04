@@ -1,24 +1,23 @@
+import { ConflictError, NotFoundError } from '@app/kernel';
+
 // a plugin referred to something it never sent (an item before its course...)
-export class UnknownReferenceError extends Error {
+export class UnknownReferenceError extends NotFoundError {
   constructor(
     readonly portal: string,
     readonly externalId: string,
   ) {
     super(`${portal}: unknown reference ${externalId}`);
-    this.name = 'UnknownReferenceError';
   }
 }
 
-export class UnknownCourseError extends Error {
+export class UnknownCourseError extends NotFoundError {
   constructor(readonly slug: string) {
     super(`unknown course ${slug}`);
-    this.name = 'UnknownCourseError';
   }
 }
 
-export class CourseSlugTakenError extends Error {
+export class CourseSlugTakenError extends ConflictError {
   constructor(readonly slug: string) {
     super(`course ${slug} already exists`);
-    this.name = 'CourseSlugTakenError';
   }
 }

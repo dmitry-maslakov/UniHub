@@ -1,4 +1,5 @@
 import { CommandHandler, type ICommandHandler } from '@nestjs/cqrs';
+import { InvalidValueError } from '@app/kernel';
 import { Transactional } from '@nestjs-cls/transactional';
 import { CourseRepository } from '../../domain/course.js';
 import { UnknownCourseError } from '../../domain/errors.js';
@@ -24,7 +25,7 @@ export class LinkPortalCourseHandler implements ICommandHandler<LinkPortalCourse
       year !== null &&
       !(Number.isInteger(year) && year > 1900 && year < 3000)
     )
-      throw new Error(`bad year: ${year}`);
+      throw new InvalidValueError('academic year', String(year));
     const course = await this.courses.findBySlug(courseSlug);
     if (!course) throw new UnknownCourseError(courseSlug);
     const portalCourseId = (await resolveId(

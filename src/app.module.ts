@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_FILTER } from '@nestjs/core';
 import { resolve } from 'node:path';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CqrsModule } from '@nestjs/cqrs';
@@ -31,6 +32,7 @@ import { routeFor } from './processing/outbox-routes.js';
 import { isConnectionError } from './is-connection-error.js';
 import { plugins } from './plugins/enabled.js';
 import { PluginsModule } from './plugins/plugins.module.js';
+import { DomainErrorFilter } from './platform/errors/domain-error.filter.js';
 
 @Module({
   imports: [
@@ -115,6 +117,7 @@ import { PluginsModule } from './plugins/plugins.module.js';
     ...plugins,
   ],
   providers: [
+    { provide: APP_FILTER, useClass: DomainErrorFilter },
     {
       // outbox messages live in our postgres, in a schema of their own (nest_outbox)
       provide: PostgresOutboxStore,

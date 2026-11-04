@@ -5,14 +5,24 @@ import {
   GrpcCancelledException,
   GrpcException,
   GrpcFailedPreconditionException,
+  GrpcAlreadyExistsException,
   GrpcInternalException,
   GrpcInvalidArgumentException,
+  GrpcNotFoundException,
   GrpcUnavailableException,
   RpcException,
 } from '@nestjs/microservices';
 import { throwError } from 'rxjs';
+import { DomainError, type DomainErrorKind } from '@app/kernel';
 import { InvalidRecordError, UnknownReferenceError } from '@app/plugin-sdk';
 import { isConnectionError } from '../../../is-connection-error.js';
+
+// the hub's own kinds of error, the way HTTP answers them too
+const KINDS: Record<DomainErrorKind, new (message: string) => GrpcException> = {
+  'not-found': GrpcNotFoundException,
+  conflict: GrpcAlreadyExistsException,
+  invalid: GrpcInvalidArgumentException,
+};
 
 // errors become statuses a connector can act on: fix the record, send the
 // parent first, retry later, or report a bug
@@ -34,6 +44,8 @@ export class IngestErrorsFilter extends BaseRpcExceptionFilter {
       return new GrpcInvalidArgumentException(error.message);
     if (error instanceof UnknownReferenceError)
       return new GrpcFailedPreconditionException(error.message);
+    if (error instanceof DomainError)
+      return new KINDS[error.kind](error.message);
     // prisma: a write conflict or deadlock, worth retrying
     if ((error as { code?: unknown }).code === 'P2034')
       return new GrpcAbortedException('try again');
