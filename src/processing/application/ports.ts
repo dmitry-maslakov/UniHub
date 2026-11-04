@@ -37,6 +37,37 @@ export abstract class PluginJobQueue {
   abstract requeue(job: PluginJob): Promise<void>;
 }
 
+// A fragment of a chunk's text and where in it the query's words are:
+// UTF-16 offsets into `text` (the chunk as indexed, NFC), each [start, end).
+// Plain text: whatever HTML the source had comes as it was.
+export interface Snippet {
+  text: string;
+  highlights: [start: number, end: number][];
+}
+
+export interface PageHit {
+  processor: PluginName;
+  version: number;
+  page: number;
+  chunk: number;
+  snippet: Snippet;
+}
+
+// one content: its best chunks first (at most 3)
+export interface ContentHit {
+  hash: ContentHash;
+  score: number;
+  pages: PageHit[];
+}
+
+// words to look for (NFC, as the chunks are), among these contents only
+export interface TextQuery {
+  text: string;
+  hashes: readonly ContentHash[];
+  // contents, at most
+  size: number;
+}
+
 // The processors' texts in the search index. Made of postgres alone, so
 // ReconcileIndex can build it again from nothing.
 export abstract class TextIndex {
@@ -55,6 +86,8 @@ export abstract class TextIndex {
   }): Promise<void>;
   // the representations indexed in full (those with a manifest)
   abstract keys(): AsyncIterable<RepresentationKey>;
+  // the contents whose texts match, best first
+  abstract search(query: TextQuery): Promise<ContentHit[]>;
 }
 
 // a job per key, which indexes the newest version of its (hash, processor)

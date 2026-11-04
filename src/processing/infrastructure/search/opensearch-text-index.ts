@@ -5,7 +5,7 @@ import pRetry from 'p-retry';
 import type { ContentHash, PluginName } from '@app/kernel';
 import { opensearchConfig } from '../../../platform/search/opensearch.config.js';
 import { OPENSEARCH } from '../../../platform/search/opensearch.module.js';
-import { TextIndex } from '../../application/ports.js';
+import { TextIndex, type TextQuery } from '../../application/ports.js';
 import type { TextChunk } from '../../domain/chunks.js';
 import type { RepresentationKey } from '../../domain/representation.js';
 import {
@@ -16,14 +16,23 @@ import {
 } from './opensearch-errors.js';
 import {
   chunkDocs,
+  contentHits,
   manifest,
   manifestKeys,
   versionsOf,
 } from './text-index.documents.js';
-import { GENERATION, indexBody, indexName } from './text-index.mapping.js';
+import {
+  GENERATION,
+  indexBody,
+  indexName,
+  keywordBody,
+} from './text-index.mapping.js';
 
 // documents per bulk request
 const BULK = 200;
+// Someone waits on a search: one stuck past this is an outage, not a wait
+// of the client's 30 s, which writes keep.
+const SEARCH_TIMEOUT_MS = 5_000;
 
 // what keys() reads of a composite aggregation: put() wrote the keys, they're
 // read back as them
@@ -90,6 +99,16 @@ export class OpenSearchTextIndex extends TextIndex {
       yield* page.buckets.map(({ key }) => key);
       after = page.after_key;
     } while (after);
+  }
+
+  async search(query: TextQuery) {
+    const { body } = await this.onIndex(() =>
+      this.client.search(
+        { index: this.index, body: keywordBody(query) },
+        { requestTimeout: SEARCH_TIMEOUT_MS },
+      ),
+    );
+    return contentHits(body.hits.hits);
   }
 
   // the index with this generation's mapping, made if missing

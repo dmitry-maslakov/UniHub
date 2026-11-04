@@ -1,4 +1,6 @@
 import type { API, Types } from '@opensearch-project/opensearch';
+import type { TextQuery } from '../../application/ports.js';
+import { CLOSE, OPEN } from './snippet.js';
 
 // Part of the index's name: raised with any change to its settings, its
 // mapping or the chunker (chunks.ts), so the new index is filled anew from
@@ -139,3 +141,58 @@ export const indexBody = () =>
       },
     },
   }) satisfies API.Indices_Create_RequestBody;
+
+// a snippet's length: of the highlighted fragment, or of the chunk's start
+// where nothing in it is
+export const SNIPPET_CHARS = 400;
+// every analysis of the text above: exact forms, stems, identifiers
+const FIELDS = ['text', 'text.sr', 'text.en', 'text.code'];
+const SOURCE = ['hash', 'processor', 'version', 'page', 'chunk', 'text'];
+
+// A hit per content, its best chunks inside, each with a fragment
+// highlighted by whichever analysis matched.
+const collapse: Types.Core_Search.FieldCollapse = {
+  field: 'hash',
+  inner_hits: {
+    name: 'pages',
+    size: 3,
+    _source: SOURCE,
+    highlight: {
+      type: 'unified',
+      encoder: 'default',
+      pre_tags: [OPEN],
+      post_tags: [CLOSE],
+      // chunks are far shorter, but one past the index's
+      // highlight.max_analyzed_offset would fail the whole search
+      max_analyzer_offset: 1_000_000,
+      fields: {
+        text: {
+          matched_fields: FIELDS,
+          fragment_size: SNIPPET_CHARS,
+          number_of_fragments: 1,
+          no_match_size: SNIPPET_CHARS,
+        },
+      },
+    },
+  },
+};
+
+// BM25 over the chunks of these contents only. The hashes filter the query
+// itself, as knn will need too: a post_filter would cut its k nearest down
+// afterwards, to few or none. Past 65,536 of them (index.max_terms_count)
+// OpenSearch refuses the query with a 400 that says so, which goes up as it
+// came.
+export const keywordBody = ({ text, hashes, size }: TextQuery) =>
+  ({
+    size,
+    _source: SOURCE,
+    query: {
+      bool: {
+        must: {
+          multi_match: { query: text, type: 'most_fields', fields: FIELDS },
+        },
+        filter: { terms: { hash: hashes } },
+      },
+    },
+    collapse,
+  }) satisfies API.Search_RequestBody;
