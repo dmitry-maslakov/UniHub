@@ -1,5 +1,4 @@
 import { Readable } from 'node:stream';
-import { setTimeout as sleep } from 'node:timers/promises';
 import { text } from 'node:stream/consumers';
 import { aborted } from 'node:util';
 import { Injectable, Module } from '@nestjs/common';
@@ -28,13 +27,14 @@ export const FAKE_PORTAL = 'fake-portal';
 @Injectable()
 export class FakePollConnector implements PollsPortal {
   polls = 0;
-  delayMs = 0;
   ctx?: ConnectorContext;
+  // a test holds a poll here until it lets go
+  hold = Promise.resolve();
 
   async poll(ctx: ConnectorContext) {
     this.polls++;
     this.ctx = ctx;
-    if (this.delayMs) await sleep(this.delayMs);
+    await this.hold;
     const { ingest } = ctx;
     await ingest.course({ externalId: 'c1', name: 'Some course' });
     await ingest.item({

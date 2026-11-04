@@ -1,12 +1,10 @@
-import { createHash } from 'node:crypto';
 import { text } from 'node:stream/consumers';
 import { GrpcDataLossException } from '@nestjs/microservices';
+import { sha256 } from '../../../../test/sha256.js';
 import { MalformedRecordError } from '../../domain/errors.js';
 import { verifiedContent } from './content-stream.js';
 import type { ContentChunk__Output } from './generated/unihub/ingest/v1/ContentChunk.js';
 
-const sha256 = (data: string) =>
-  createHash('sha256').update(data).digest('hex');
 const data = (piece: string) => ({ data: Buffer.from(piece) });
 
 // the messages of one Content call, then the bytes it hands on

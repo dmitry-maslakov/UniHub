@@ -5,6 +5,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { mcp } from './access/contracts.js';
 import { appConfig } from './app.config.js';
+import { connectIngest } from './ingest/contracts.js';
 
 // How the HTTP app is set up, shared by main.ts and the e2e apps so they
 // can't drift apart.
@@ -12,8 +13,8 @@ import { appConfig } from './app.config.js';
 // Better Auth reads raw request bodies; the auth module parses the rest
 export const appOptions: NestApplicationOptions = { bodyParser: false };
 
-// Connect other microservices (gRPC) first: this starts them all, as it must
-// before the app listens.
+// The microservices (MCP, gRPC) all start here, as they must before the app
+// listens.
 export async function configureApp(app: INestApplication) {
   const { trustProxy } = app.get<ConfigType<typeof appConfig>>(appConfig.KEY);
   // behind caddy, the client's address comes from X-Forwarded-For
@@ -37,5 +38,6 @@ export async function configureApp(app: INestApplication) {
   // a guarded controller in access (/api/mcp)
   mcp.setHttpAdapter(app.getHttpAdapter());
   app.connectMicroservice({ strategy: mcp });
+  connectIngest(app);
   await app.startAllMicroservices();
 }

@@ -1,11 +1,10 @@
-import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
-import { buffer } from 'node:stream/consumers';
-import type { CommandBus, QueryBus } from '@nestjs/cqrs';
 import type { Outbox } from '@nestjs/outbox';
-import { ContentHash, PortalId, type Json } from '@app/kernel';
+import { PortalId, type Json } from '@app/kernel';
+import { FakeBus } from '../../../test/fake-bus.js';
+import { InMemoryBlobs } from '../../../test/in-memory-blobs.js';
+import { sha256 } from '../../../test/sha256.js';
 import * as catalog from '../../catalog/contracts.js';
-import { BlobStore } from '../../storage/contracts.js';
 import { Connection } from '../domain/connection.js';
 import {
   MalformedRecordError,
@@ -17,24 +16,6 @@ import { IngestService } from './ingest.service.js';
 const portal = PortalId.parse('canvas');
 const shared = Connection.shared(portal);
 const someone = Connection.of({ portal, account: 'someone' });
-const sha256 = (data: string) =>
-  createHash('sha256').update(data).digest('hex');
-
-// storage that keeps what it was given, up to 100 bytes
-class FakeBlobs extends BlobStore {
-  readonly maxBytes = 100;
-  readonly stored: string[] = [];
-
-  async put(content: Readable) {
-    const data = (await buffer(content)).toString();
-    this.stored.push(data);
-    return { hash: ContentHash.parse(sha256(data)), size: data.length };
-  }
-
-  get(): Promise<Readable> {
-    throw new Error('not read here');
-  }
-}
 
 class FakeStates extends SyncStateRepository {
   private readonly byKey = new Map<string, Json>();
@@ -50,28 +31,30 @@ class FakeStates extends SyncStateRepository {
 
 // catalog answers every command with `changed`, and knows the files `known` names
 function ingest({ changed = true, known = ['f1'] } = {}) {
-  const sent: object[] = [];
-  const commands = {
-    execute: async (command: object) => {
-      sent.push(command);
-      return { id: 'id', changed, needsContent: true };
-    },
-  };
-  const queries = {
-    execute: async ({ file }: catalog.FindFileQuery) =>
-      known.includes(file.externalId) ? { id: 'id' } : null,
-  };
-  const blobs = new FakeBlobs();
+  const commands = new FakeBus([
+    [Object, () => ({ id: 'id', changed, needsContent: true })],
+  ]);
+  const queries = new FakeBus([
+    [
+      catalog.FindFileQuery,
+      ({ file }: catalog.FindFileQuery) =>
+        known.includes(file.externalId) ? { id: 'id' } : null,
+    ],
+  ]);
+  // storage keeps up to 100 bytes of a file
+  const blobs = new InMemoryBlobs({ maxBytes: 100 });
   const outbox = { notify: vi.fn() };
   const service = new IngestService(
-    commands as unknown as CommandBus,
-    queries as unknown as QueryBus,
+    commands.commands,
+    queries.queries,
     blobs,
     new FakeStates(),
     outbox as unknown as Outbox,
   );
-  return { service, sent, blobs, outbox };
+  return { service, sent: commands.sent, blobs, outbox };
 }
+
+const stored = (blobs: InMemoryBlobs) => [...blobs.stored.values()].map(String);
 
 describe('IngestService', () => {
   it("hands catalog a record as the connection's portal, nothing it may not set", async () => {
@@ -106,6 +89,21 @@ describe('IngestService', () => {
     expect(sent).toEqual([]);
   });
 
+  it('takes a date sent as text, and no text or json postgres would refuse', async () => {
+    const { service, sent } = ingest();
+    const post = { externalId: 'p1', kind: 'post', raw: {} };
+    await service.item(shared, { ...post, publishedAt: '2026-10-29T14:12Z' });
+    expect((sent[0] as catalog.UpsertItemCommand).data.publishedAt).toEqual(
+      new Date('2026-10-29T14:12:00Z'),
+    );
+
+    for (const nul of [{ title: 'a\u0000b' }, { raw: { body: 'a\u0000b' } }])
+      await expect(
+        service.item(shared, { ...post, ...nul }),
+      ).rejects.toBeInstanceOf(MalformedRecordError);
+    expect(sent).toHaveLength(1);
+  });
+
   it('wakes the outbox relay only when something changed', async () => {
     const item = { externalId: 'p1', kind: 'post', raw: {} };
     const changed = ingest();
@@ -136,10 +134,11 @@ describe('IngestService', () => {
 
   it('stores content of a file catalog knows, and tells catalog its hash', async () => {
     const { service, sent, blobs } = ingest();
-    const answer = await service.content(shared, 'f1', Readable.from(['v1']));
-    const hash = ContentHash.parse(sha256('v1'));
+    const slides = '%PDF slides';
+    const answer = await service.content(shared, 'f1', Readable.from([slides]));
+    const hash = sha256(slides);
     expect(answer).toEqual({ hash, changed: true });
-    expect(blobs.stored).toEqual(['v1']);
+    expect(stored(blobs)).toEqual([slides]);
     expect(sent).toEqual([
       new catalog.SetFileContentCommand({ portal, externalId: 'f1' }, hash),
     ]);
@@ -147,12 +146,12 @@ describe('IngestService', () => {
 
   it("doesn't read content of a file it was never told about", async () => {
     const { service, blobs } = ingest();
-    const content = Readable.from(['v1']);
+    const content = Readable.from(['%PDF slides']);
     await expect(service.content(shared, 'nope', content)).rejects.toThrow(
       catalog.UnknownReferenceError,
     );
     expect(content.destroyed).toBe(true);
-    expect(blobs.stored).toEqual([]);
+    expect(stored(blobs)).toEqual([]);
   });
 
   it('removes records only for the shared account', async () => {

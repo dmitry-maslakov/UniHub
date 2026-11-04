@@ -1,8 +1,9 @@
-import { ContentHash, PluginName } from '@app/kernel';
+import { PluginName } from '@app/kernel';
+import { sha256 } from '../../../test/sha256.js';
 import { representation } from './representation.js';
 
 const key = {
-  hash: ContentHash.parse('ab'.repeat(32)),
+  hash: sha256('%PDF lecture'),
   processor: PluginName.parse('office-text'),
   version: 2,
 };

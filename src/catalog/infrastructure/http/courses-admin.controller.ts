@@ -18,29 +18,18 @@ import {
   ApiNotFoundResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { z } from 'zod';
-import { PortalId, StoredText } from '@app/kernel';
+import type { z } from 'zod';
+import { PortalId } from '@app/kernel';
 import { ADMIN_ROLE, Roles } from '../../../identity/contracts.js';
 import {
   CreateCourseCommand,
   LinkPortalCourseCommand,
   UnlinkPortalCourseCommand,
 } from '../../application/commands.js';
-import { AcademicYear, CourseName, Slug } from '../../domain/values.js';
-
-// a portal course's id as its portal has it; text postgres can't keep would
-// fail the lookup with a 500
-const ExternalId = StoredText.min(1);
-const newCourse = z.object({ slug: Slug, name: CourseName });
-const link = z.object({
-  course: Slug,
-  // none for a portal course that spans years
-  year: AcademicYear.nullable().default(null),
-});
+import { courseLink, ExternalId, newCourse } from './requests.js';
 
 // What admins set up: courses, and which portal courses each is made of.
-// A portal course is named the way its portal names it. Each value is checked
-// against its own rules (ValidationModule): a bad one is a 400, never a command.
+// A portal course is named the way its portal names it.
 @ApiTags('admin')
 @ApiBearerAuth()
 @ApiForbiddenResponse({ description: 'for admins only' })
@@ -65,7 +54,7 @@ export class CoursesAdminController {
   async link(
     @Param('portal', { schema: PortalId }) portal: PortalId,
     @Param('externalId', { schema: ExternalId }) externalId: string,
-    @Body({ schema: link }) { course, year }: z.output<typeof link>,
+    @Body({ schema: courseLink }) { course, year }: z.output<typeof courseLink>,
   ) {
     await this.commands.execute(
       new LinkPortalCourseCommand(course, { portal, externalId }, year),

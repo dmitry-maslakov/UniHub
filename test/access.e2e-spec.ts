@@ -1,10 +1,6 @@
-import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
-import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import { CommandBus } from '@nestjs/cqrs';
-import { AppModule } from '../src/app.module.js';
-import { appOptions, configureApp } from '../src/app.setup.js';
 import { PortalId } from '@app/kernel';
 import {
   AcademicYear,
@@ -14,19 +10,24 @@ import {
   Slug,
 } from '../src/catalog/contracts.js';
 import { GrantCourseAccessCommand } from '../src/identity/contracts.js';
-import { Mailer, type Mail } from '../src/identity/domain/mailer.js';
+import type { Mail } from '../src/identity/domain/mailer.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
+import { bootApp } from './app.js';
 import { accounts, ORIGIN } from './accounts.js';
 import { portalIngest } from './ingest.js';
+import { sha256 } from './sha256.js';
+
+// Each REST route once, and what only the queries decide: which files a
+// course shows, in what order, a page at a time. Who reads what is checked
+// on fakes (CourseReader), what a request may hold on its schemas; a route
+// declares which schema it takes, so one bad request each shows it is there.
 
 const PORTAL = 'rest-test';
-const sha256 = (data: Buffer) =>
-  createHash('sha256').update(data).digest('hex');
 
 describe('REST API', { timeout: 20_000 }, () => {
   let app: INestApplication;
   const mails: Mail[] = [];
-  const { http, signUp } = accounts(() => app, mails);
+  const { http, signUp, userId, makeAdmin } = accounts(() => app, mails);
   const get = (path: string, cookie: string) =>
     http().get(path).set('cookie', cookie);
   const download = (path: string, cookie: string) =>
@@ -43,19 +44,10 @@ describe('REST API', { timeout: 20_000 }, () => {
   let admin: string;
   const ids: Record<string, string> = {};
   const courseIds: Record<string, string> = {};
-  const userId = async (email: string) =>
-    (await app.get(PrismaService).user.findUniqueOrThrow({ where: { email } }))
-      .id;
   const slides = Buffer.from('%PDF slides about processes');
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
-      .overrideProvider(Mailer)
-      .useValue({ send: async (mail: Mail) => void mails.push(mail) })
-      .compile();
-    app = moduleRef.createNestApplication(appOptions);
-    await configureApp(app);
-    await app.init();
+    app = await bootApp({ mails });
     const prisma = app.get(PrismaService);
     const commands = app.get(CommandBus);
 
@@ -100,11 +92,15 @@ describe('REST API', { timeout: 20_000 }, () => {
       [
         'solutions',
         { item: 'gone-later', name: 'solutions.pdf' },
-        Buffer.from('ans'),
+        Buffer.from('%PDF answers'),
       ],
       // attached to a post, no course of its own
-      ['homework', { item: 'new', name: 'homework.docx' }, Buffer.from('hw')],
-      ['removed', { course: 'c1', name: 'old.pdf' }, Buffer.from('old')],
+      [
+        'homework',
+        { item: 'new', name: 'homework.docx' },
+        Buffer.from('PK homework'),
+      ],
+      ['removed', { course: 'c1', name: 'old.pdf' }, Buffer.from('%PDF old')],
       // the same bytes, in a course the student wasn't given
       ['copy', { course: 'c2', name: 'copy.pdf' }, slides],
       ['no-content', { course: 'c1', name: 'notes.pdf' }, null],
@@ -115,7 +111,7 @@ describe('REST API', { timeout: 20_000 }, () => {
           name: "O'Brien (1).pdf",
           mime: 'application/pdf — scan',
         },
-        Buffer.from('odd'),
+        Buffer.from('%PDF scan'),
       ],
     ];
     for (const [externalId, record, content] of files) {
@@ -165,10 +161,7 @@ describe('REST API', { timeout: 20_000 }, () => {
         courseIds.sys,
       ),
     );
-    await prisma.user.update({
-      where: { email: 'admin@rest.test' },
-      data: { role: 'admin' },
-    });
+    await makeAdmin('admin@rest.test');
   });
 
   afterAll(() => app.close());
@@ -189,6 +182,7 @@ describe('REST API', { timeout: 20_000 }, () => {
       },
     ]);
 
+    // newest first, the removed one left out
     const items = await get('/api/courses/sys/items', student).expect(200);
     expect(items.body.map((i: { title: string }) => i.title)).toEqual([
       'post new',
@@ -196,6 +190,7 @@ describe('REST API', { timeout: 20_000 }, () => {
     ]);
     expect(items.body[0].raw).toEqual({ body: 'text of new' });
 
+    // neither a removed file nor the attachment of a removed post
     const files = await get('/api/courses/sys/files', student).expect(200);
     const byName = Object.fromEntries(
       files.body.map((f: { name: string }) => [f.name, f]),
@@ -212,7 +207,7 @@ describe('REST API', { timeout: 20_000 }, () => {
     expect(byName['notes.pdf'].hasContent).toBe(false);
   });
 
-  it('pages lists within bounds', async () => {
+  it('pages lists', async () => {
     const second = await get(
       '/api/courses/sys/items?offset=1&limit=1',
       student,
@@ -220,19 +215,20 @@ describe('REST API', { timeout: 20_000 }, () => {
     expect(second.body.map((i: { title: string }) => i.title)).toEqual([
       'post old',
     ]);
-    for (const query of [
-      'limit=500',
-      'limit=0',
-      'offset=-1',
-      'offset=1.5',
-      'offset=99999999999999999999',
-      'limit=1&limit=2',
+  });
+
+  it('checks a request against the schema its route takes', async () => {
+    for (const path of [
+      '/api/courses/sys/items?limit=500',
+      '/api/courses/Not%20A%20Slug/files',
+      `/api/files/${ids.slides}/text?page=0`,
     ])
-      await get(`/api/courses/sys/items?${query}`, student).expect(400);
+      await get(path, student).expect(400);
   });
 
   it('reads a file as text page by page', async () => {
     const file = await get(`/api/files/${ids.slides}`, student).expect(200);
+    // each processor's last version
     expect(file.body.texts).toEqual([
       { processor: 'office-text', version: 2, pages: 3 },
       { processor: 'zz-ocr', version: 1, pages: 1 },
@@ -254,16 +250,6 @@ describe('REST API', { timeout: 20_000 }, () => {
       student,
     ).expect(200);
     expect(ocr.body.text).toBe('ocr text');
-
-    await get(`/api/files/${ids.slides}/text?page=4`, student).expect(404);
-    await get(`/api/files/${ids.slides}/text?page=0`, student).expect(400);
-    for (const query of [
-      'page=99999999999',
-      'processor=a&processor=b',
-      'processor=Not%20One',
-    ])
-      await get(`/api/files/${ids.slides}/text?${query}`, student).expect(400);
-    await get(`/api/files/${ids['no-content']}/text`, student).expect(404);
   });
 
   it('downloads a file', async () => {
@@ -284,26 +270,16 @@ describe('REST API', { timeout: 20_000 }, () => {
     );
     expect(odd.headers['content-type']).toBe('application/octet-stream');
     expect(odd.headers['content-disposition']).toMatch(/^attachment; /);
-
-    await get(`/api/files/${ids['no-content']}/content`, student).expect(404);
   });
 
-  it("shows nothing of courses the user wasn't given", async () => {
-    expect((await get('/api/courses', stranger).expect(200)).body).toEqual([]);
-    await get('/api/courses/sys/items', stranger).expect(404);
-    await get('/api/courses/sys/files', stranger).expect(404);
-    for (const path of ['', '/text', '/content'])
-      await get(`/api/files/${ids.slides}${path}`, stranger).expect(404);
-
+  it('finds no file a course does not show, nor one of a course not given', async () => {
+    // removed, or the attachment of a removed post
+    await get(`/api/files/${ids.removed}`, student).expect(404);
+    await get(`/api/files/${ids.solutions}/content`, student).expect(404);
     // the same bytes in another course don't open that course's file
     await get(`/api/files/${ids.copy}`, student).expect(404);
-    await get(`/api/files/${ids.copy}/content`, student).expect(404);
-    // removed, or not there at all: the same answer
-    await get(`/api/files/${ids.removed}`, student).expect(404);
-    // and an attachment goes with its post
-    await get(`/api/files/${ids.solutions}`, student).expect(404);
-    await get(`/api/files/${ids.solutions}/content`, student).expect(404);
-    await get('/api/courses/nope/items', student).expect(404);
+    expect((await get('/api/courses', stranger).expect(200)).body).toEqual([]);
+    await get(`/api/files/${ids.slides}`, stranger).expect(404);
   });
 
   it('lets an admin read every course', async () => {
@@ -314,7 +290,7 @@ describe('REST API', { timeout: 20_000 }, () => {
     await get(`/api/files/${ids.copy}`, admin).expect(200);
   });
 
-  it('lets admins grant and revoke a course that exists', async () => {
+  it('lets admins grant and revoke a course', async () => {
     const reader = await signUp('reader@rest.test');
     const id = await userId('reader@rest.test');
     const as = (cookie: string) => ({
@@ -331,52 +307,19 @@ describe('REST API', { timeout: 20_000 }, () => {
 
     await http().put(grant).expect(401);
     await as(student).put(grant).expect(403);
-    await as(student).delete(grant).expect(403);
 
-    // twice is once
-    for (let i = 0; i < 2; i++) await as(admin).put(grant).expect(204);
+    await as(admin).put(grant).expect(204);
     expect(await slugs()).toEqual(['net']);
-    for (let i = 0; i < 2; i++) await as(admin).delete(grant).expect(204);
+    await as(admin).delete(grant).expect(204);
     expect(await slugs()).toEqual([]);
-
-    // an id no course has, or no user has
-    const unknown = await as(admin)
-      .put(`/api/users/${id}/courses/nope`)
-      .expect(404);
-    expect(unknown.body.message).toBe('unknown course nope');
-    // a grant of a course catalog doesn't have can still be taken back
-    await as(admin).delete(`/api/users/${id}/courses/nope`).expect(204);
-    await as(admin)
-      .delete(`/api/users/nobody/courses/${courseIds.net}`)
-      .expect(404);
+    // a user Better Auth doesn't have
     await as(admin)
       .put(`/api/users/nobody/courses/${courseIds.net}`)
       .expect(404);
+    // an id postgres can't look up: its schema refuses it, not a 500
     await as(admin).put(`/api/users/${id}/courses/a%00b`).expect(400);
-    expect(await slugs()).toEqual([]);
-  });
-
-  it('describes itself in OpenAPI, for anyone', async () => {
-    const doc = (await http().get('/api/docs-json').expect(200)).body;
-    expect(Object.keys(doc.paths)).toEqual(
-      expect.arrayContaining([
-        '/api/courses',
-        '/api/courses/{slug}/items',
-        '/api/files/{id}/text',
-        '/api/files/{id}/content',
-        '/api/users/{userId}/courses/{courseId}',
-      ]),
-    );
-    // the page's bounds as the schema has them
-    expect(doc.paths['/api/courses/{slug}/items'].get.parameters).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          name: 'limit',
-          in: 'query',
-          required: false,
-          schema: expect.objectContaining({ maximum: 200, default: 50 }),
-        }),
-      ]),
-    );
+    await as(admin)
+      .delete(`/api/users/a%00b/courses/${courseIds.net}`)
+      .expect(400);
   });
 });

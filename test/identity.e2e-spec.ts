@@ -1,28 +1,25 @@
-import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { AuthService } from '@thallesp/nestjs-better-auth';
-import { AppModule } from '../src/app.module.js';
-import { appOptions, configureApp } from '../src/app.setup.js';
-import {
-  CourseName,
-  CreateCourseCommand,
-  Slug,
-} from '../src/catalog/contracts.js';
 import {
   GrantCourseAccessCommand,
   ReadScopeQuery,
   RevokeCourseAccessCommand,
-  UnknownUserError,
 } from '../src/identity/contracts.js';
+import type { Mail } from '../src/identity/domain/mailer.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
-import { Mailer, type Mail } from '../src/identity/domain/mailer.js';
+import { bootApp } from './app.js';
 import { accounts, ORIGIN } from './accounts.js';
+
+// Better Auth as the hub sets it up (its own cases, like a device code's
+// expiry, are its tests' to check), and the course grants as postgres keeps
+// them. Who reads what is checked on fakes (Reader, ReadScope, the handlers).
 
 describe('identity', { timeout: 20_000 }, () => {
   let app: INestApplication;
   const mails: Mail[] = [];
-  const { http, post, linkTo, signIn, signUp } = accounts(() => app, mails);
+  const { http, post, linkTo, signIn, signUp, userId, makeAdmin, ban } =
+    accounts(() => app, mails);
   // as an app without cookies does: the session token in Authorization
   const postWithToken = (path: string, body: object, token: string) =>
     http()
@@ -32,13 +29,7 @@ describe('identity', { timeout: 20_000 }, () => {
       .send(body);
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
-      .overrideProvider(Mailer)
-      .useValue({ send: async (mail: Mail) => void mails.push(mail) })
-      .compile();
-    app = moduleRef.createNestApplication(appOptions);
-    await configureApp(app);
-    await app.init();
+    app = await bootApp({ mails });
   });
 
   afterAll(() => app.close());
@@ -221,18 +212,11 @@ describe('identity', { timeout: 20_000 }, () => {
     const user = await signUp('dl@uni.test');
     const second = await keyOf(user);
     await signUp('dm@uni.test');
-    const prisma = app.get(PrismaService);
-    await prisma.user.update({
-      where: { email: 'dm@uni.test' },
-      data: { role: 'admin' },
-    });
+    await makeAdmin('dm@uni.test');
     const adminCookie = await signIn('dm@uni.test', 'correct horse 1');
-    const { id: userId } = await prisma.user.findUniqueOrThrow({
-      where: { email: 'dl@uni.test' },
-    });
     await post(
       '/admin/set-user-password',
-      { userId, newPassword: 'battery staple 2' },
+      { userId: await userId('dl@uni.test'), newPassword: 'battery staple 2' },
       adminCookie,
     ).expect(200);
     expect(await valid(second)).toBe(false);
@@ -272,50 +256,33 @@ describe('identity', { timeout: 20_000 }, () => {
   });
 
   // the admin route that sends these is access's (access.e2e-spec)
-  it('grants and revokes a course by the id catalog gave it', async () => {
-    const prisma = app.get(PrismaService);
+  it('keeps a grant once, and reads it back, but not for a banned user', async () => {
     const commands = app.get(CommandBus);
     await signUp('ed@uni.test');
-    const ed = await prisma.user.findUniqueOrThrow({
-      where: { email: 'ed@uni.test' },
-    });
-    const { id: courseId } = await commands.execute(
-      new CreateCourseCommand(
-        Slug.parse('os'),
-        CourseName.parse('Operativni sistemi'),
-      ),
-    );
-    const reads = async (userId: string) =>
-      (await app.get(QueryBus).execute(new ReadScopeQuery(userId))).allows(
-        courseId,
-      );
-    expect(await reads(ed.id)).toBe(false);
-
-    // twice is once
-    for (const changed of [true, false])
-      expect(
-        await commands.execute(new GrantCourseAccessCommand(ed.id, courseId)),
-      ).toEqual({ changed });
-    expect(await reads(ed.id)).toBe(true);
-    expect(await prisma.courseAccess.count({ where: { userId: ed.id } })).toBe(
-      1,
-    );
-
-    await prisma.user.update({ where: { id: ed.id }, data: { banned: true } });
-    expect(await reads(ed.id)).toBe(false);
-    await prisma.user.update({ where: { id: ed.id }, data: { banned: false } });
+    const ed = await userId('ed@uni.test');
+    const course = 'a-course-id';
+    const reads = async () =>
+      (await app.get(QueryBus).execute(new ReadScopeQuery(ed))).allows(course);
 
     for (const changed of [true, false])
       expect(
-        await commands.execute(new RevokeCourseAccessCommand(ed.id, courseId)),
+        await commands.execute(new GrantCourseAccessCommand(ed, course)),
       ).toEqual({ changed });
-    expect(await reads(ed.id)).toBe(false);
+    expect(await reads()).toBe(true);
+    expect(
+      await app
+        .get(PrismaService)
+        .courseAccess.count({ where: { userId: ed } }),
+    ).toBe(1);
 
-    await expect(
-      commands.execute(new GrantCourseAccessCommand('nobody', courseId)),
-    ).rejects.toThrow(UnknownUserError);
-    await expect(
-      app.get(QueryBus).execute(new ReadScopeQuery('nobody')),
-    ).rejects.toThrow(UnknownUserError);
+    await ban('ed@uni.test');
+    expect(await reads()).toBe(false);
+    await ban('ed@uni.test', false);
+
+    for (const changed of [true, false])
+      expect(
+        await commands.execute(new RevokeCourseAccessCommand(ed, course)),
+      ).toEqual({ changed });
+    expect(await reads()).toBe(false);
   });
 });

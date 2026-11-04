@@ -1,5 +1,7 @@
-import { Readable } from 'node:stream';
-import { ContentHash, MediaType, PluginName, PortalId } from '@app/kernel';
+import { MediaType, PluginName, PortalId } from '@app/kernel';
+import { FakeBus } from '../../../test/fake-bus.js';
+import { InMemoryBlobs } from '../../../test/in-memory-blobs.js';
+import { sha256 } from '../../../test/sha256.js';
 import {
   FindCourseQuery,
   GetCourseFileQuery,
@@ -15,13 +17,12 @@ import {
   GetTextPageQuery,
   ListTextsQuery,
 } from '../../processing/contracts.js';
-import type { BlobStore } from '../../storage/contracts.js';
-import { FakeQueries } from './access.fakes.js';
 import { CourseReader } from './course-reader.js';
 import { NotReadableError } from './errors.js';
 
 const portal = PortalId.parse('canvas');
-const hash = ContentHash.parse('a'.repeat(64));
+const content = '%PDF slides of f1';
+const hash = sha256(content);
 const os: CourseRef = { id: 'os-id', slug: 'os', name: 'OS' };
 const net: CourseRef = { id: 'net-id', slug: 'net', name: 'Networks' };
 
@@ -49,7 +50,7 @@ const text = {
 
 // ana reads os; catalog has os and net, three files and a text of f1
 function reader() {
-  const queries = new FakeQueries([
+  const queries = new FakeBus([
     [ReadScopeQuery, () => ({ allows: (id: string) => id === os.id })],
     [
       ListCoursesQuery,
@@ -80,10 +81,8 @@ function reader() {
         page <= text.pages ? { ...text, page, text: `page ${page}` } : null,
     ],
   ]);
-  const blobs = {
-    get: async (h: ContentHash) => Readable.from([h]),
-  } as unknown as BlobStore;
-  return { queries, reader: new CourseReader(queries.bus, blobs) };
+  const blobs = new InMemoryBlobs({ holding: [content] });
+  return { queries, reader: new CourseReader(queries.queries, blobs) };
 }
 
 describe('CourseReader', () => {
@@ -105,9 +104,7 @@ describe('CourseReader', () => {
     expect(await r.files('ana', Slug.parse('os'), page)).toEqual([
       expect.objectContaining({ id: 'f1', hasContent: true }),
     ]);
-    expect(queries.asked).toContainEqual(
-      new ListCourseFilesQuery(os.id, 10, 5),
-    );
+    expect(queries.sent).toContainEqual(new ListCourseFilesQuery(os.id, 10, 5));
     for (const slug of ['net', 'nope'])
       await expect(r.items('ana', Slug.parse(slug), page)).rejects.toThrowError(
         new NotReadableError('course'),
@@ -118,7 +115,7 @@ describe('CourseReader', () => {
     const { reader: r, queries } = reader();
     const reading = r.file('ana', 'f1');
     // both asked before either answered
-    expect(queries.asked.map((q) => q.constructor)).toEqual([
+    expect(queries.sent.map((q) => q.constructor)).toEqual([
       GetCourseFileQuery,
       ReadScopeQuery,
     ]);
@@ -153,6 +150,6 @@ describe('CourseReader', () => {
 
     const { stream, name } = await r.content('ana', 'f1');
     expect(name).toBe('f1.pdf');
-    expect((await stream.toArray()).join('')).toBe(hash);
+    expect((await stream.toArray()).join('')).toBe(content);
   });
 });

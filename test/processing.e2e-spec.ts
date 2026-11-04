@@ -1,45 +1,58 @@
-import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
-import { Test, type TestingModule } from '@nestjs/testing';
+import type { INestApplication } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import type { PortalIngest } from '@app/plugin-sdk';
-import { ContentHash, PluginName } from '@app/kernel';
-import { AppModule } from '../src/app.module.js';
+import { PluginName } from '@app/kernel';
+import { FILE_CONTENT_CHANGED } from '../src/catalog/contracts.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
-import type { ProcessJob } from '../src/processing/application/plugin-job.js';
+import {
+  jobId,
+  type PluginJob,
+  type ProcessJob,
+} from '../src/processing/application/plugin-job.js';
 import {
   FileFacts,
   PluginJobQueue,
 } from '../src/processing/application/ports.js';
 import { Reconcile } from '../src/processing/application/reconcile.js';
 import { PLUGINS_QUEUE } from '../src/processing/infrastructure/plugins.queue.js';
+import { bootApp } from './app.js';
 import { FakePluginsModule, FakeTextProcessor } from './fake-plugins.js';
 import { portalIngest } from './ingest.js';
+import { published } from './outbox.js';
+import { sha256 } from './sha256.js';
+
+// processing as BullMQ and postgres run it: jobs by the work's id, which
+// files hold content, what's stored. What runs and what's skipped is
+// checked on fakes (Dispatch, ProcessContent, Reconcile).
 
 const portal = 'processing-test';
+// fake-text's work on some content
+const job = (content: string): ProcessJob => ({
+  kind: 'process',
+  key: {
+    hash: sha256(content),
+    processor: PluginName.parse('fake-text'),
+    version: 1,
+  },
+});
 const text = 'the same notes in two courses';
-const sha = (content: string) =>
-  createHash('sha256').update(content).digest('hex');
-const hash = sha(text);
+const notes = job(text);
+const { hash } = notes.key;
 
 describe('processing', { timeout: 20_000 }, () => {
-  let app: TestingModule;
+  let app: INestApplication;
   let hub: PortalIngest;
   let prisma: PrismaService;
 
   const stored = () =>
     prisma.representation.findUnique({
-      where: {
-        hash_processor_version: { hash, processor: 'fake-text', version: 1 },
-      },
+      where: { hash_processor_version: notes.key },
     });
 
   beforeAll(async () => {
-    app = await Test.createTestingModule({
-      imports: [AppModule, FakePluginsModule],
-    }).compile();
-    await app.init();
+    app = await bootApp({ imports: [FakePluginsModule] });
     hub = portalIngest(app, portal);
     prisma = app.get(PrismaService);
   });
@@ -59,22 +72,34 @@ describe('processing', { timeout: 20_000 }, () => {
   it('processes the same content in another file only once', async () => {
     const seen = () =>
       app.get(FakeTextProcessor).seen.filter((t) => t === text).length;
-    expect(seen()).toBe(1);
+    const queue = app.get<Queue<PluginJob>>(getQueueToken(PLUGINS_QUEUE));
+    // a's job, kept for a day once done: its id is the work's
+    await vi.waitFor(async () =>
+      expect(await queue.getJobState(jobId(notes))).toBe('completed'),
+    );
+    const announced = published(
+      app,
+      ({ topic, payload }) =>
+        topic === FILE_CONTENT_CHANGED &&
+        (payload as { hash: string }).hash === hash,
+    );
 
     await hub.file({ externalId: 'b', name: 'b.txt' });
     await hub.content('b', Readable.from([text]));
+    await announced;
 
-    // b's job has run by the time it shows up as completed in redis, give it
-    // the relay's poll plus a margin
-    await new Promise((r) => setTimeout(r, 2_500));
+    // b's processing is that job, so nothing more was queued
+    expect(
+      (
+        await queue.getJobs(['wait', 'active', 'delayed', 'prioritized'])
+      ).filter(({ data }) => data.kind === 'process' && data.key.hash === hash),
+    ).toEqual([]);
     expect(seen()).toBe(1);
   });
 
   it('queues processing that went missing', async () => {
     await prisma.representation.delete({
-      where: {
-        hash_processor_version: { hash, processor: 'fake-text', version: 1 },
-      },
+      where: { hash_processor_version: notes.key },
     });
 
     expect(await app.get(Reconcile).run()).toBeGreaterThanOrEqual(1);
@@ -97,14 +122,6 @@ describe('processing', { timeout: 20_000 }, () => {
   it('queues the same processing once, whether a message or a reconcile asks first', async () => {
     const queue = app.get<Queue>(getQueueToken(PLUGINS_QUEUE));
     const jobs = app.get(PluginJobQueue);
-    const job = (content: string): ProcessJob => ({
-      kind: 'process',
-      key: {
-        hash: ContentHash.parse(sha(content)),
-        processor: PluginName.parse('fake-text'),
-        version: 1,
-      },
-    });
     const sent = job('sent first');
     const reconciled = job('reconciled first');
     const queued = async ({ key }: ProcessJob) =>
@@ -134,15 +151,11 @@ describe('processing', { timeout: 20_000 }, () => {
     const queue = app.get<Queue>(getQueueToken(PLUGINS_QUEUE));
     await vi.waitFor(
       async () =>
-        expect(
-          await queue.getDeduplicationJobId(`${hash}__fake-text__1`),
-        ).toBeNull(),
+        expect(await queue.getDeduplicationJobId(jobId(notes))).toBeNull(),
       { timeout: 10_000, interval: 100 },
     );
     await prisma.representation.delete({
-      where: {
-        hash_processor_version: { hash, processor: 'fake-text', version: 1 },
-      },
+      where: { hash_processor_version: notes.key },
     });
 
     await app.get(Reconcile).run();

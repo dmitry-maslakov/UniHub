@@ -1,6 +1,16 @@
 import { pluginsSettings } from './plugins.config.js';
 
 describe('plugins settings', () => {
+  it('turn built-in plugins on by name, none unless set', () => {
+    expect(pluginsSettings.parse({}).enabled).toEqual([]);
+    expect(
+      pluginsSettings.parse({ PLUGINS: 'office-text, acs' }).enabled,
+    ).toEqual(['office-text', 'acs']);
+    expect(pluginsSettings.safeParse({ PLUGINS: 'Office Text' }).success).toBe(
+      false,
+    );
+  });
+
   it('give connectors their times, in ms', () => {
     expect(pluginsSettings.parse({})).toMatchObject({
       pollTimeoutMs: 60 * 60_000,

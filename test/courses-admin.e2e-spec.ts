@@ -1,18 +1,20 @@
-import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
-import { AppModule } from '../src/app.module.js';
-import { appOptions, configureApp } from '../src/app.setup.js';
-import { Mailer, type Mail } from '../src/identity/domain/mailer.js';
-import { PrismaService } from '../src/platform/database/prisma.service.js';
+import type { Mail } from '../src/identity/domain/mailer.js';
+import { bootApp } from './app.js';
 import { accounts, ORIGIN } from './accounts.js';
 import { portalIngest } from './ingest.js';
+
+// Each admin route once, behind its role. What a request may hold is
+// checked on its schema (catalog's values.spec and requests.spec), what a
+// command refuses on fakes (course.handlers.spec); a route declares which
+// schema it takes, so one bad request each shows it is there.
 
 const PORTAL = 'admin-test';
 
 describe('course admin routes', { timeout: 20_000 }, () => {
   let app: INestApplication;
   const mails: Mail[] = [];
-  const { http, signUp } = accounts(() => app, mails);
+  const { http, signUp, makeAdmin } = accounts(() => app, mails);
   const as = (cookie: string) => ({
     post: (path: string, body: object) =>
       http().post(path).set('origin', ORIGIN).set('cookie', cookie).send(body),
@@ -28,25 +30,15 @@ describe('course admin routes', { timeout: 20_000 }, () => {
   let student: ReturnType<typeof as>;
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
-      .overrideProvider(Mailer)
-      .useValue({ send: async (mail: Mail) => void mails.push(mail) })
-      .compile();
-    app = moduleRef.createNestApplication(appOptions);
-    await configureApp(app);
-    await app.init();
+    app = await bootApp({ mails });
 
     await portalIngest(app, PORTAL).course({
       externalId: '1388',
       name: 'OS 2026/27',
     });
     student = as(await signUp('student@admin.test'));
-    const adminCookie = await signUp('admin@admin.test');
-    await app.get(PrismaService).user.update({
-      where: { email: 'admin@admin.test' },
-      data: { role: 'admin' },
-    });
-    admin = as(adminCookie);
+    admin = as(await signUp('admin@admin.test'));
+    await makeAdmin('admin@admin.test');
   });
 
   afterAll(() => app.close());
@@ -56,8 +48,6 @@ describe('course admin routes', { timeout: 20_000 }, () => {
     await student
       .post('/api/courses', { slug: 'admin-os', name: 'Operativni sistemi' })
       .expect(403);
-    await student.put(link, { course: 'admin-os', year: 2026 }).expect(403);
-    await student.delete(link).expect(403);
   });
 
   it('makes a course, once per slug', async () => {
@@ -69,14 +59,7 @@ describe('course admin routes', { timeout: 20_000 }, () => {
     await admin
       .post('/api/courses', { slug: 'admin-os', name: 'again' })
       .expect(409);
-    for (const bad of [
-      { slug: 'Not A Slug', name: 'x' },
-      { slug: 'ok', name: '  ' },
-      // postgres can't keep a NUL: refused here, not a 500 from the insert
-      { slug: 'ok', name: 'a\u0000b' },
-      { slug: 'ok' },
-    ])
-      await admin.post('/api/courses', bad).expect(400);
+    await admin.post('/api/courses', { slug: 'Not A Slug' }).expect(400);
   });
 
   it('links a portal course to a course and unlinks it', async () => {
@@ -95,41 +78,15 @@ describe('course admin routes', { timeout: 20_000 }, () => {
     );
   });
 
-  it('says what it could not find, and what it could not take', async () => {
-    await admin.put(link, { course: 'nope', year: null }).expect(404);
-    await admin
-      .put(`/api/portal-courses/${PORTAL}/nope/course`, {
-        course: 'admin-os',
-        year: null,
-      })
-      .expect(404);
-    await admin.put(link, { course: 'admin-os', year: 1800 }).expect(400);
-    // no year: one that spans years
-    await admin.put(link, { course: 'admin-os' }).expect(204);
-    await admin.delete(link).expect(204);
+  it('checks a portal course named against its schema', async () => {
     await admin
       .put('/api/portal-courses/Not_A_Portal/1388/course', {
         course: 'admin-os',
-        year: null,
       })
       .expect(400);
-    // nor in a portal course's id
-    const nul = `/api/portal-courses/${PORTAL}/a%00b/course`;
-    await admin.put(nul, { course: 'admin-os', year: null }).expect(400);
-    await admin.delete(nul).expect(400);
-  });
-
-  it('describes its routes in OpenAPI', async () => {
-    const doc = (await http().get('/api/docs-json').expect(200)).body;
-    expect(Object.keys(doc.paths)).toEqual(
-      expect.arrayContaining([
-        '/api/courses',
-        '/api/portal-courses/{portal}/{externalId}/course',
-      ]),
-    );
-    expect(
-      doc.paths['/api/courses'].post.requestBody.content['application/json']
-        .schema,
-    ).toMatchObject({ properties: { slug: {}, name: {} } });
+    // an id postgres can't look up: refused, not a 500
+    await admin
+      .delete(`/api/portal-courses/${PORTAL}/a%00b/course`)
+      .expect(400);
   });
 });

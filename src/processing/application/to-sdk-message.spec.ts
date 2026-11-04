@@ -6,11 +6,11 @@ import {
 } from '@app/plugin-sdk';
 import { PortalId } from '@app/kernel';
 import * as catalog from '../../catalog/contracts.js';
-import { sha } from './processing.fakes.js';
+import { sha256 } from '../../../test/sha256.js';
 import { toSdkMessage } from './to-sdk-message.js';
 
 const portal = PortalId.parse('canvas');
-const hash = sha('content');
+const hash = sha256('content');
 
 describe('toSdkMessage', () => {
   it("turns each of catalog's events into its sdk message", () => {

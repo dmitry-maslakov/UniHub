@@ -1,7 +1,6 @@
-import { Test, type TestingModule } from '@nestjs/testing';
+import type { INestApplication } from '@nestjs/common';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { PortalId } from '@app/kernel';
-import { AppModule } from '../src/app.module.js';
 import {
   AcademicYear,
   CourseName,
@@ -10,19 +9,20 @@ import {
   LinkPortalCourseCommand,
   ListCoursesQuery,
   Slug,
-  UnknownCourseError,
-  UnknownReferenceError,
   UnlinkPortalCourseCommand,
   UpsertPortalCourseCommand,
 } from '../src/catalog/contracts.js';
+import { bootApp } from './app.js';
 
+// courses as postgres keeps them: links upserted by their portal course,
+// portal courses read back in their order, slugs unique
 const ref = (portal: string, externalId: string) => ({
   portal: PortalId.parse(portal),
   externalId,
 });
 
 describe('courses', () => {
-  let app: TestingModule;
+  let app: INestApplication;
   let commands: CommandBus;
   let queries: QueryBus;
 
@@ -58,8 +58,7 @@ describe('courses', () => {
     );
 
   beforeAll(async () => {
-    app = await Test.createTestingModule({ imports: [AppModule] }).compile();
-    await app.init();
+    app = await bootApp();
     commands = app.get(CommandBus);
     queries = app.get(QueryBus);
 
@@ -105,17 +104,11 @@ describe('courses', () => {
     expect((await course('ar-old'))!.portalCourses).toEqual([]);
   });
 
-  // a slug that isn't one can't make a command at all: see values.spec and
-  // the admin routes
-  it('refuses a taken slug, an unknown course or portal course', async () => {
+  // the unique slug is postgres'; the rest of what's refused is checked
+  // on fakes (course.handlers.spec)
+  it('refuses a slug another course has', async () => {
     await expect(create('ar', 'again')).rejects.toBeInstanceOf(
       CourseSlugTakenError,
-    );
-    await expect(link('nope', 'acs-t', 'arsiit', null)).rejects.toBeInstanceOf(
-      UnknownCourseError,
-    );
-    await expect(link('ar', 'acs-t', 'nope', null)).rejects.toBeInstanceOf(
-      UnknownReferenceError,
     );
   });
 });

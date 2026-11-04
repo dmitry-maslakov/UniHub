@@ -1,4 +1,5 @@
-import { ContentHash, MediaType, PortalId } from '@app/kernel';
+import { MediaType, PortalId } from '@app/kernel';
+import { sha256 } from '../../../test/sha256.js';
 import { MisplacedFileError, UnknownReferenceError } from '../domain/errors.js';
 import { FILE_CONTENT_CHANGED, FILE_REMOVED } from '../domain/events.js';
 import {
@@ -13,7 +14,7 @@ import { onFakes } from './handlers.fakes.js';
 
 const portal = PortalId.parse('canvas');
 const ref = (externalId: string) => ({ portal, externalId });
-const hash = ContentHash.parse('ab'.repeat(32));
+const hash = sha256('%PDF lecture 5');
 const file = (fields: Partial<FileInput> = {}): FileInput => ({
   ...ref('f1'),
   course: null,
