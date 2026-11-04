@@ -16,12 +16,29 @@ npm run start:dev
 
 ## Layout
 
-- `src/` — the hub: its modules (`catalog`, `ingest`, `storage`, `processing`, `plugins`, `identity`, `access`), each used by the others only through its `contracts.ts`
-- `src/platform/` — what the modules run on: `database` (Prisma, `@Transactional()`), `redis`, `queues` (BullMQ), `messaging` (the outbox; `AppModule` names its transports), `errors` (one answer per kind of domain error); `app.module.ts` lists the modules and wires them into the platform
+- `src/` — the hub: its modules (`catalog`, `ingest`, `storage`, `processing`, `plugins`, `identity`, `access`), each used by the others only through its `contracts.ts` (a lint rule checks it)
+- `src/platform/` — what the modules run on: `database` (Prisma, `@Transactional()`), `redis`, `queues` (BullMQ), `messaging` (the outbox; `AppModule` names its transports), `errors` (one answer per kind of domain error), `validation` (a route's schemas); `app.module.ts` lists the modules and wires them into the platform, `app.setup.ts` sets the app up (HTTP, MCP and gRPC) for `main.ts` and the e2e tests alike
 - `libs/plugin-sdk` — everything a plugin may depend on, plugins never import the core directly; its `host.ts` is the hub's side (how it finds plugins), which plugins can't import
 - `libs/kernel` — what the hub's modules and the sdk share: values that hold the same rules everywhere (`ContentHash`, `MediaType`, `PortalId`, `PluginName`, `Json`) and the kinds of domain error (not found, conflict, invalid)
 - `prisma/schema/` — one schema file per module
 - `npm install` generates the Prisma client and the gRPC types (`src/ingest/infrastructure/grpc/generated`, from `proto/ingest.proto`); neither is committed
+
+A module has up to three layers, and a rule is written once, in the one that owns it:
+
+- `domain/` — the rules. Aggregates keep their own record's invariants and record its events (catalog's `PortalFile`, `Item`); rules over several things are functions or classes of their own (`placeFile`, `PluginSet`, `Reader` with `ReadScope` and `Ban`). It also declares the ports the module needs, as abstract classes, and imports nothing but itself and the kernel (a lint rule checks that too)
+- `application/` — the use cases: load an aggregate, call it, save it in one transaction; or ask other modules over the bus and put their answers together (access's `CourseReader` only orchestrates catalog and identity). No SQL, no queues
+- `infrastructure/` — what the ports are made of: Prisma repositories (a record and its events go to the outbox in the same transaction), queries that read straight into DTOs past the aggregates (`read/`), BullMQ, the file store; and the ways in (HTTP, MCP, gRPC), which only check what comes in against its schema and hand it on
+
+## Tests
+
+```bash
+npm test               # unit specs: no database, a few seconds
+docker compose up -d   # e2e specs need postgres and redis
+npm run test:e2e
+```
+
+- unit specs (`*.spec.ts`, next to the code) check the rules: the domain on its own, the use cases on in-memory fakes of their ports (`*.fakes.ts` beside them; `test/` has the shared ones: `FakeBus`, `InMemoryBlobs`, `sha256` of real content, plugins as discovery finds them)
+- e2e specs (`test/*.e2e-spec.ts`) check only what fakes can't: how records are written and read back, what the read queries find and in what order, the locks, the outbox rolling back with its transaction, BullMQ's deduplication, gRPC, each route once, and the whole pipeline once (`plugins.e2e-spec.ts`). Each boots the app as `main.ts` sets it up (`bootApp()` in `test/app.ts`) on a database, redis db and folder of its own (`test/env.ts`), made anew for every run, and waits for what it waits on (the outbox's events, a job's state), never for a while
 
 ## Users
 
