@@ -87,13 +87,15 @@ export class CourseWalk {
     return modules.flatMap((module) => module.items ?? []);
   }
 
+  // Without their items' content_details: Canvas gives an item's dates
+  // there as they are for the token's user.
   private async moduleList() {
     const modules = await this.api.list<Module>(
-      `${this.path}/modules?include[]=items&include[]=content_details`,
+      `${this.path}/modules?include[]=items`,
     );
     for (const module of modules)
       module.items ??= await this.api.list<ModuleItem>(
-        `${this.path}/modules/${module.id}/items?include[]=content_details`,
+        `${this.path}/modules/${module.id}/items`,
       );
     return modules;
   }

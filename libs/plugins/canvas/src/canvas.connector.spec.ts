@@ -62,6 +62,20 @@ describe('CanvasConnector', () => {
     ]);
   });
 
+  it("asks for no module item's details, which hold the user's own dates", async () => {
+    const urls: string[] = [];
+    canvas.server.events.on('request:start', ({ request }) => {
+      urls.push(request.url);
+    });
+    await run(new RecordingIngest());
+    canvas.server.events.removeAllListeners();
+
+    expect(urls).toContain(
+      `${CANVAS_URL}${COURSE}/modules?include%5B%5D=items&per_page=100`,
+    );
+    expect(urls.join(' ')).not.toContain('content_details');
+  });
+
   it('leaves out what only some of the course see, and how the user stands', async () => {
     const ingest = new RecordingIngest();
     await run(ingest);

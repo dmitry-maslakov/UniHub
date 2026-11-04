@@ -63,7 +63,6 @@ describe('only what the whole course sees', () => {
           id: 9,
           type: 'Page',
           completion_requirement: { type: 'must_view', completed: true },
-          content_details: { due_at: null, locked_for_user: false },
         },
       ],
     };
@@ -76,7 +75,6 @@ describe('only what the whole course sees', () => {
           id: 9,
           type: 'Page',
           completion_requirement: { type: 'must_view' },
-          content_details: { due_at: null },
         },
       ],
     });
