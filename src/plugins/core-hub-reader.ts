@@ -77,7 +77,8 @@ export class CoreHubReader extends HubReader {
     );
   }
 
-  content(hash: string) {
+  // async, so a malformed hash rejects like any other failure
+  async content(hash: string) {
     return this.blobs.get(ContentHash.parse(hash));
   }
 }
