@@ -1,7 +1,9 @@
 // the only file other modules import from identity
 export { IdentityModule } from './identity.module.js';
-export { GrantCourseAccessCommand } from './application/commands/grant-course-access.command.js';
-export { RevokeCourseAccessCommand } from './application/commands/revoke-course-access.command.js';
+export {
+  GrantCourseAccessCommand,
+  RevokeCourseAccessCommand,
+} from './application/commands.js';
 export { ReadScopeQuery } from './application/queries.js';
 export type { ReadScope } from './domain/read-scope.js';
 export { UnknownUserError } from './domain/errors.js';

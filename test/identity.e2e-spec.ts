@@ -8,17 +8,11 @@ import {
   CourseName,
   CreateCourseCommand,
   Slug,
-  UnknownCourseError,
 } from '../src/catalog/contracts.js';
-import {
-  GrantCourseAccessCommand,
-  ReadScopeQuery,
-  RevokeCourseAccessCommand,
-  UnknownUserError,
-} from '../src/identity/contracts.js';
+import { ReadScopeQuery, UnknownUserError } from '../src/identity/contracts.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
 import { Mailer, type Mail } from '../src/identity/domain/mailer.js';
-import { accounts } from './accounts.js';
+import { accounts, ORIGIN } from './accounts.js';
 
 describe('identity', { timeout: 20_000 }, () => {
   let app: INestApplication;
@@ -217,51 +211,60 @@ describe('identity', { timeout: 20_000 }, () => {
     ).expect(400);
   });
 
-  it('lets a user read the courses granted to them, an admin every course', async () => {
-    const commands = app.get(CommandBus);
-    const queries = app.get(QueryBus);
+  it('lets admins grant and revoke a course, by the id catalog gave it', async () => {
     const prisma = app.get(PrismaService);
-    await signUp('ed@uni.test');
-    await signUp('fa@uni.test');
+    const student = await signUp('ed@uni.test');
+    const admin = await signUp('fa@uni.test');
     const [ed, fa] = await Promise.all(
       ['ed@uni.test', 'fa@uni.test'].map((email) =>
         prisma.user.findUniqueOrThrow({ where: { email } }),
       ),
     );
     await prisma.user.update({ where: { id: fa.id }, data: { role: 'admin' } });
-    const { id: courseId } = await commands.execute(
-      new CreateCourseCommand(
-        Slug.parse('os'),
-        CourseName.parse('Operativni sistemi'),
-      ),
-    );
-    const reads = async (userId: string, course = courseId) =>
-      (await queries.execute(new ReadScopeQuery(userId))).allows(course);
+    const { id: courseId } = await app
+      .get(CommandBus)
+      .execute(
+        new CreateCourseCommand(
+          Slug.parse('os'),
+          CourseName.parse('Operativni sistemi'),
+        ),
+      );
+    const grant = `/api/users/${ed.id}/courses/${courseId}`;
+    const as = (cookie: string) => ({
+      put: (path: string) =>
+        http().put(path).set('origin', ORIGIN).set('cookie', cookie),
+      delete: (path: string) =>
+        http().delete(path).set('origin', ORIGIN).set('cookie', cookie),
+    });
+    const reads = async (userId: string) =>
+      (await app.get(QueryBus).execute(new ReadScopeQuery(userId))).allows(
+        courseId,
+      );
 
-    expect(
-      await commands.execute(new GrantCourseAccessCommand(ed.id, 'os')),
-    ).toEqual({ changed: true });
-    expect(
-      await commands.execute(new GrantCourseAccessCommand(ed.id, 'os')),
-    ).toEqual({ changed: false });
+    await http().put(grant).expect(401);
+    await as(student).put(grant).expect(403);
+    await as(student).delete(grant).expect(403);
+    expect(await reads(ed.id)).toBe(false);
+    expect(await reads(fa.id)).toBe(true);
+
+    // twice is once
+    for (let i = 0; i < 2; i++) await as(admin).put(grant).expect(204);
     expect(await reads(ed.id)).toBe(true);
-    expect(await reads(fa.id, 'any')).toBe(true);
-    expect(await reads(ed.id, 'any')).toBe(false);
+    expect(await prisma.courseAccess.count({ where: { userId: ed.id } })).toBe(
+      1,
+    );
 
     await prisma.user.update({ where: { id: ed.id }, data: { banned: true } });
     expect(await reads(ed.id)).toBe(false);
     await prisma.user.update({ where: { id: ed.id }, data: { banned: false } });
 
-    expect(
-      await commands.execute(new RevokeCourseAccessCommand(ed.id, 'os')),
-    ).toEqual({ changed: true });
+    for (let i = 0; i < 2; i++) await as(admin).delete(grant).expect(204);
     expect(await reads(ed.id)).toBe(false);
 
+    await as(admin).put(`/api/users/nobody/courses/${courseId}`).expect(404);
+    await as(admin).put(`/api/users/${ed.id}/courses/a%00b`).expect(400);
     await expect(
-      commands.execute(new GrantCourseAccessCommand(ed.id, 'nope')),
-    ).rejects.toThrow(UnknownCourseError);
-    await expect(
-      commands.execute(new GrantCourseAccessCommand('nobody', 'os')),
+      app.get(QueryBus).execute(new ReadScopeQuery('nobody')),
     ).rejects.toThrow(UnknownUserError);
   });
 });

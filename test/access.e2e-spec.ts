@@ -136,13 +136,14 @@ describe('REST API', { timeout: 20_000 }, () => {
         data: { hash: sha256(slides), processor, version, parts: [...parts] },
       });
 
+    const courseIds: Record<string, string> = {};
     for (const [slug, name, externalId] of [
       ['sys', 'Operativni sistemi', 'c1'],
       ['net', 'Mreže', 'c2'],
     ]) {
-      await commands.execute(
+      ({ id: courseIds[slug] } = await commands.execute(
         new CreateCourseCommand(Slug.parse(slug), CourseName.parse(name)),
-      );
+      ));
       await commands.execute(
         new LinkPortalCourseCommand(
           Slug.parse(slug),
@@ -158,7 +159,10 @@ describe('REST API', { timeout: 20_000 }, () => {
     const user = (email: string) =>
       prisma.user.findUniqueOrThrow({ where: { email } });
     await commands.execute(
-      new GrantCourseAccessCommand((await user('student@rest.test')).id, 'sys'),
+      new GrantCourseAccessCommand(
+        (await user('student@rest.test')).id,
+        courseIds.sys,
+      ),
     );
     await prisma.user.update({
       where: { email: 'admin@rest.test' },

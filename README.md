@@ -34,7 +34,7 @@ npm run start:dev
 
 The first admin: `npm run auth:create-admin -- --email you@example.com --password '…'`. After adding a Better Auth plugin, `npm run auth:generate` updates `prisma/schema/identity.prisma`.
 
-Every HTTP route needs a signed-in user unless it says `@AllowAnonymous()`. Admins read every course, other users the ones granted to them (`GrantCourseAccessCommand`).
+Every HTTP route needs a signed-in user unless it says `@AllowAnonymous()`. Admins read every course, other users the ones an admin granted them, a banned user nothing (by API key either).
 
 ## REST API
 
@@ -52,6 +52,7 @@ Admins set the courses up (`@Roles([ADMIN_ROLE])`):
 - `POST /api/courses` with `{ slug, name }`: a course
 - `PUT /api/portal-courses/{portal}/{externalId}/course` with `{ course, year }`: the portal course becomes part of that course (no `year` for one that spans years); one linked elsewhere moves
 - `DELETE /api/portal-courses/{portal}/{externalId}/course`: unlinks it
+- `PUT /api/users/{userId}/courses/{courseId}`: the user reads the course, named by the id `POST /api/courses` answered (users' ids from Better Auth's `GET /api/auth/admin/list-users`); `DELETE` on the same path takes it back
 
 ## MCP
 
