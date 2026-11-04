@@ -2,13 +2,14 @@ name: Release
 
 # the images of every commit CI passed on main, tagged with its sha, for a
 # deployment to pull. The registry and its login are repo secrets; without
-# REGISTRY (forks) nothing is built
+# REGISTRY (forks) nothing is built. No manual trigger: it could publish a
+# commit off main or one CI hasn't passed; to publish a commit again, re-run
+# its Release run (or CI on main)
 on:
   workflow_run:
     workflows: [CI]
     types: [completed]
     branches: [main]
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -22,7 +23,7 @@ jobs:
   # secrets can't be read in a job's `if`
   registry:
     # a pull request's run never publishes, one from a fork's main included
-    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
     outputs:
       set: ${{ steps.registry.outputs.set }}
@@ -38,7 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       REGISTRY: ${{ secrets.REGISTRY }}
-      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      SHA: ${{ github.event.workflow_run.head_sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
