@@ -2,7 +2,7 @@ import { PortalId } from '@app/kernel';
 import { PortalCourse } from './portal-course.js';
 
 const ref = { portal: PortalId.parse('moodle'), externalId: 'os-101' };
-const props = { name: 'AR', url: null, meta: { semester: 5 } };
+const props = { name: 'OS', url: null, meta: { semester: 5 } };
 
 describe('PortalCourse', () => {
   it('changes only when the portal sends something new, quietly', () => {
@@ -10,7 +10,7 @@ describe('PortalCourse', () => {
 
     expect(course.sync({ ...props, meta: { semester: 5 } })).toBe(false);
     expect(course.dirty).toBe(false);
-    expect(course.sync({ ...props, name: 'AR SIIT' })).toBe(true);
+    expect(course.sync({ ...props, name: 'OS (advanced)' })).toBe(true);
     expect(course.dirty).toBe(true);
     // nothing downstream reads portal courses
     expect(course.getUncommittedEvents()).toEqual([]);

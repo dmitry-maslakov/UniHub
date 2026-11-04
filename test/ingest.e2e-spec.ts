@@ -19,10 +19,10 @@ describe('ingest', () => {
   // what a plugin does on every run: sends everything it sees
   async function sync(slides: string) {
     return [
-      await hub.course({ externalId: 'ar', name: 'AR' }),
+      await hub.course({ externalId: 'os', name: 'OS' }),
       await hub.item({
         externalId: 'post-1',
-        course: 'ar',
+        course: 'os',
         kind: 'post',
         title: 'Lecture 5 is up',
         publishedAt: new Date('2026-10-29T14:12:00Z'),
@@ -30,7 +30,7 @@ describe('ingest', () => {
       }),
       await hub.file({
         externalId: 'file-1',
-        course: 'ar',
+        course: 'os',
         item: 'post-1',
         name: 'lecture-5.pdf',
       }),
@@ -64,7 +64,7 @@ describe('ingest', () => {
   it('removes an item and brings it back when it is sent again', async () => {
     const post = {
       externalId: 'post-1',
-      course: 'ar',
+      course: 'os',
       kind: 'post',
       title: 'Lecture 5 is up',
       raw: { guid: 'post-1' },
