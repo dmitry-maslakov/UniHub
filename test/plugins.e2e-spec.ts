@@ -1,10 +1,11 @@
 import { setTimeout as sleep } from 'node:timers/promises';
-import { NonRetryableMessageError } from '@nestjs/outbox';
+import { Outbox, OutboxDeadLetters } from '@nestjs/outbox';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { getQueueToken } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import { HubReader, ITEM_INGESTED, ITEM_REMOVED } from '@app/plugin-sdk';
 import { AppModule } from '../src/app.module.js';
+import { PrismaService } from '../src/platform/database/prisma.service.js';
 import { ITEM_CHANGED } from '../src/catalog/contracts.js';
 import { ConnectorHost } from '../src/plugins/connector-host.js';
 import { CONNECTORS_QUEUE } from '../src/plugins/connectors.queue.js';
@@ -146,14 +147,23 @@ describe('plugins', { timeout: 20_000 }, () => {
   });
 
   it('dead-letters a topic nothing maps at once, a bug rather than an outage', async () => {
-    const transport = app.get(PluginsOutboxTransport, { strict: false });
-    await expect(
-      transport.publish({
-        id: 'unknown-topic',
-        topic: 'catalog.nobody-maps-this',
-        payload: {},
-      } as never),
-    ).rejects.toBeInstanceOf(NonRetryableMessageError);
+    const topic = 'catalog.nobody-maps-this';
+    const outbox = app.get(Outbox);
+    const message = await app
+      .get(PrismaService)
+      .$transaction(async (tx) => outbox.add(tx, { topic, payload: {} }));
+    outbox.notify();
+
+    await vi.waitFor(
+      async () => {
+        const letters = await app.get(OutboxDeadLetters).list({ topic });
+        expect(letters.find((l) => l.id === message.id)).toMatchObject({
+          reason: 'rejected',
+          attempts: 1,
+        });
+      },
+      { timeout: 10_000, interval: 200 },
+    );
   });
 
   it('finds the plugins by their decorators', () => {
