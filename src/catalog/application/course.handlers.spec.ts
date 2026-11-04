@@ -11,7 +11,7 @@ import {
   UnlinkPortalCourseCommand,
   UpsertPortalCourseCommand,
 } from './commands.js';
-import { onFakes } from './fakes.js';
+import { onFakes } from './handlers.fakes.js';
 
 const portalCourse = { portal: PortalId.parse('canvas'), externalId: '1388' };
 const year = AcademicYear.parse(2026);

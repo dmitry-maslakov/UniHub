@@ -9,7 +9,7 @@ import {
   UpsertPortalCourseCommand,
   type FileInput,
 } from './commands.js';
-import { onFakes } from './fakes.js';
+import { onFakes } from './handlers.fakes.js';
 
 const portal = PortalId.parse('canvas');
 const ref = (externalId: string) => ({ portal, externalId });
