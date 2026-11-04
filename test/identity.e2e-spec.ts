@@ -130,7 +130,7 @@ describe('identity', { timeout: 20_000 }, () => {
     await post('/device/code', { client_id: 'someone-else' }).expect(400);
   });
 
-  it('gives API keys to signed-in users', async () => {
+  it('gives API keys to users just signed in', async () => {
     const cookie = await signUp('di@uni.test');
     const created = await post('/api-key/create', { name: 'claude' }, cookie);
     expect(created.status).toBe(200);
@@ -140,6 +140,21 @@ describe('identity', { timeout: 20_000 }, () => {
       .api.verifyApiKey({ body: { key: created.body.key } });
     expect(valid).toBe(true);
     expect(key?.referenceId).toBe(created.body.referenceId);
+
+    // a session signed in two days ago is still a session, but makes no key
+    const day = 24 * 60 * 60 * 1000;
+    await app.get(PrismaService).session.updateMany({
+      where: { userId: created.body.referenceId },
+      data: { createdAt: new Date(Date.now() - 2 * day) },
+    });
+    await http()
+      .get('/api/auth/get-session')
+      .set('cookie', cookie)
+      .expect(200)
+      .expect((res) => expect(res.body.user.email).toBe('di@uni.test'));
+    const stale = await post('/api-key/create', { name: 'later' }, cookie);
+    expect(stale.status).toBe(403);
+    expect(stale.body.code).toBe('SESSION_NOT_FRESH');
   });
 
   it("ends a user's keys when they or an admin set a new password", async () => {

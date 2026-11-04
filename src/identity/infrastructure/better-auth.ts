@@ -1,6 +1,10 @@
 import { Logger } from '@nestjs/common';
 import { betterAuth } from 'better-auth';
-import { createAuthMiddleware, isAPIError } from 'better-auth/api';
+import {
+  createAuthMiddleware,
+  freshSessionMiddleware,
+  isAPIError,
+} from 'better-auth/api';
 import { admin, bearer, deviceAuthorization } from 'better-auth/plugins';
 import { apiKey } from '@better-auth/api-key';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
@@ -93,8 +97,14 @@ export function createAuth({
         }),
     },
     socialProviders: google ? { google } : {},
-    // the other ways to a new password: the user's own change, an admin's
     hooks: {
+      // A key outlives the session that made it, so only a session signed in
+      // within a day (Better Auth's freshAge) makes one: an old cookie
+      // someone stole doesn't, nor does a session kept alive for weeks.
+      before: createAuthMiddleware(async (ctx) => {
+        if (ctx.path === '/api-key/create') await freshSessionMiddleware(ctx);
+      }),
+      // the other ways to a new password: the user's own change, an admin's
       after: createAuthMiddleware(async (ctx) => {
         if (isAPIError(ctx.context.returned)) return;
         const userId =
