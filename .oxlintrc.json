@@ -564,6 +564,14 @@
               {
                 "group": ["@app/plugin-sdk/*"],
                 "message": "plugins use the sdk's index; host.ts is the hub's side of it"
+              },
+              {
+                "group": ["@app/kernel", "@app/kernel/*"],
+                "message": "plugins take kernel values from the sdk"
+              },
+              {
+                "group": ["@app/plugins/*"],
+                "message": "a plugin doesn't import another one"
               }
             ]
           }
