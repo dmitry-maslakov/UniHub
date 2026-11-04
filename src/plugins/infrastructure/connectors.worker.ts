@@ -16,10 +16,12 @@ import {
 } from './connectors.queue.js';
 
 // A poll gets the job's abort signal (BullMQ hands it to a processor that
-// takes three arguments), aborted past CONNECTOR_POLL_TIMEOUT_MINUTES too.
+// takes three arguments), aborted past CONNECTOR_POLL_TIMEOUT_MINUTES and at
+// shutdown too.
 @Processor(CONNECTORS_QUEUE, { concurrency: 4 })
 export class ConnectorsWorker extends WorkerHost implements OnModuleDestroy {
   private readonly logger = new Logger(ConnectorsWorker.name);
+  private readonly shutdown = new AbortController();
 
   constructor(
     private readonly catalog: PluginCatalog,
@@ -38,13 +40,17 @@ export class ConnectorsWorker extends WorkerHost implements OnModuleDestroy {
     const connector = this.catalog.pollConnector(connection.portal);
     // turned off since the job was queued
     if (!connector) return;
-    const timeout = AbortSignal.timeout(this.config.pollTimeoutMs);
-    const run = signal ? AbortSignal.any([signal, timeout]) : timeout;
+    const run = AbortSignal.any([
+      AbortSignal.timeout(this.config.pollTimeoutMs),
+      this.shutdown.signal,
+      ...(signal ? [signal] : []),
+    ]);
     const ctx = this.directory.context(connection, run);
     // let go of at the signal even when the connector doesn't listen to it,
     // so the job ends and the next tick can poll again (aborted() holds the
     // job weakly, and BullMQ holds it while it runs)
-    await Promise.race([connector.instance.poll(ctx), aborted(run, job)]);
+    if (!run.aborted)
+      await Promise.race([connector.instance.poll(ctx), aborted(run, job)]);
     if (run.aborted) throw new Error(`poll stopped: ${String(run.reason)}`);
   }
 
@@ -55,9 +61,13 @@ export class ConnectorsWorker extends WorkerHost implements OnModuleDestroy {
     for (const id of jobIds) this.worker.cancelJob(id, 'its lock was lost');
   }
 
-  // a poll can stop anywhere, the next one goes on from the state it saved
-  onModuleDestroy() {
-    this.worker.cancelAllJobs('the app is shutting down');
+  // A poll can stop anywhere, the next one goes on from the state it saved.
+  // Closed here rather than when Nest closes the workers, after every
+  // module's shutdown: until then it would go on taking polls. The running
+  // ones are let go of at once, and so is one fetched meanwhile.
+  async onModuleDestroy() {
+    this.shutdown.abort('the app is shutting down');
+    await this.worker.close();
   }
 
   @OnWorkerEvent('failed')

@@ -21,7 +21,10 @@ function worker(polled: (ctx: ConnectorContext) => Promise<void>) {
     { pollNow } as unknown as ConnectorSchedules,
     config,
   );
-  return { w, pollNow };
+  // the BullMQ worker Nest would have made for it
+  const close = vi.fn(async () => {});
+  Object.defineProperty(w, 'worker', { value: { close } });
+  return { w, pollNow, close };
 }
 
 describe('ConnectorsWorker', () => {
@@ -63,5 +66,20 @@ describe('ConnectorsWorker', () => {
 
     await expect(run).rejects.toThrow('poll stopped: its lock was lost');
     expect(signal?.aborted).toBe(true);
+  });
+
+  it('lets go of its polls at shutdown and starts none after', async () => {
+    // one that doesn't listen to its signal
+    const polled = vi.fn(() => new Promise<void>(() => {}));
+    const { w, close } = worker(polled);
+    const running = w.process(job(POLL), 'token', new AbortController().signal);
+
+    await w.onModuleDestroy();
+
+    await expect(running).rejects.toThrow('the app is shutting down');
+    // one BullMQ fetched before it was closed
+    await expect(w.process(job(POLL))).rejects.toThrow(/poll stopped/);
+    expect(polled).toHaveBeenCalledTimes(1);
+    expect(close).toHaveBeenCalled();
   });
 });
