@@ -13,20 +13,17 @@ describe('opensearch settings', () => {
     ).toBe('unihub-e2e');
   });
 
-  it('refuse a node not named by url, and a prefix no index name starts with', () => {
+  it('refuse a node not named by url, and a prefix outside unihub-*', () => {
     for (const bad of [
       {},
       { OPENSEARCH_URL: '' },
       { OPENSEARCH_URL: 'opensearch' },
-      { OPENSEARCH_URL: 'http://localhost:9200', OPENSEARCH_INDEX_PREFIX: '' },
-      {
-        OPENSEARCH_URL: 'http://localhost:9200',
-        OPENSEARCH_INDEX_PREFIX: 'UniHub',
-      },
-      {
-        OPENSEARCH_URL: 'http://localhost:9200',
-        OPENSEARCH_INDEX_PREFIX: '-unihub',
-      },
+      ...['', 'UniHub', '-unihub', 'unihub-', 'unihub2', 'school'].map(
+        (prefix) => ({
+          OPENSEARCH_URL: 'http://localhost:9200',
+          OPENSEARCH_INDEX_PREFIX: prefix,
+        }),
+      ),
     ])
       expect(opensearchSettings.safeParse(bad).success).toBe(false);
   });

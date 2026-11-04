@@ -4,11 +4,12 @@ import { settings } from '../config/settings.js';
 export const opensearchSettings = z
   .object({
     OPENSEARCH_URL: z.url(),
-    // indices and pipelines are named after it; the node creates none of
-    // unihub-* by itself (action.auto_create_index)
+    // indices are named <prefix>-…, so it stays under unihub-*, the indices
+    // action.auto_create_index keeps the node from creating on a write: a
+    // lost one would come back without the mapping
     OPENSEARCH_INDEX_PREFIX: z
       .string()
-      .regex(/^[a-z0-9][a-z0-9-]*$/)
+      .regex(/^unihub(-[a-z0-9]+)*$/)
       .default('unihub'),
   })
   .transform((env) => ({

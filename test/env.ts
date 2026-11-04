@@ -16,7 +16,6 @@ export const testEnv = {
   REDIS_URL: withPath(process.env.REDIS_URL ?? 'redis://localhost:6379', '/15'),
   STORAGE_PATH: join(tmpdir(), 'unihub-e2e'),
   OPENSEARCH_URL: process.env.OPENSEARCH_URL ?? 'http://localhost:9200',
-  // still unihub-*: the node creates none of these by itself either
   OPENSEARCH_INDEX_PREFIX: 'unihub-e2e',
   // small, so a test can go past it; the largest upload in the tests is 1 MB
   STORAGE_MAX_FILE_MB: '2',
