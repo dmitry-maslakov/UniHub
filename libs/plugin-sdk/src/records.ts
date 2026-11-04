@@ -3,8 +3,9 @@
 // A record describes the object as everyone sees it: no per-user data
 // (grades, submissions, personal due dates) in it or in `raw`.
 
-export type Json =
-  string | number | boolean | null | Json[] | { [key: string]: Json };
+import type { Json } from '@app/kernel';
+
+export type { Json };
 
 export interface CourseRecord {
   externalId: string;

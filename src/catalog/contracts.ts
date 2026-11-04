@@ -35,7 +35,6 @@ export type {
   ItemDto,
   PortalCourseDto,
 } from './application/queries/dtos.js';
-export type { Json } from './domain/changes.js';
 export {
   CourseSlugTakenError,
   UnknownCourseError,

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PluginName, PortalId } from '@app/kernel';
 
 // "pdf-text, acs" → ['pdf-text', 'acs']
 export const parseList = (value = '') =>
@@ -22,7 +23,8 @@ const validTokens = (value: string) => {
   return (
     tokens.size === pairs.length &&
     pairs.every(
-      ([portal, token]) => /^[a-z0-9-]+$/.test(portal) && token.length >= 16,
+      ([portal, token]) =>
+        PortalId.safeParse(portal).success && token.length >= 16,
     )
   );
 };
@@ -48,9 +50,12 @@ export const envSchema = z
     PLUGINS: z
       .string()
       .default('')
-      .refine((v) => parseList(v).every((n) => /^[a-z0-9-]+$/.test(n)), {
-        message: 'plugin names are lower-case letters, digits and dashes',
-      }),
+      .refine(
+        (v) => parseList(v).every((n) => PluginName.safeParse(n).success),
+        {
+          message: 'plugin names are lower-case letters, digits and dashes',
+        },
+      ),
     // this instance starts push connectors (one instance should)
     RUN_CONNECTORS: z.stringbool().default(true),
     // external connectors connect here over gRPC, which has no TLS of its own:

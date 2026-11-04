@@ -10,7 +10,8 @@ import {
 } from '@app/plugin-sdk';
 import * as catalog from '../../catalog/contracts.js';
 import { PutContentCommand } from '../../storage/contracts.js';
-import { SyncStateRepository, type Json } from '../domain/sync-state.js';
+import type { Json } from '@app/kernel';
+import { SyncStateRepository } from '../domain/sync-state.js';
 import {
   courseRecord,
   removal,

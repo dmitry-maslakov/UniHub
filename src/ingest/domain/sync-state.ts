@@ -1,5 +1,4 @@
-export type Json =
-  string | number | boolean | null | Json[] | { [key: string]: Json };
+import type { Json } from '@app/kernel';
 
 export abstract class SyncStateRepository {
   abstract get(portal: string, account: string): Promise<Json | null>;

@@ -67,8 +67,15 @@ describe('PluginRegistry', () => {
     ).toThrow('plugin name "text" is used twice');
   });
 
-  it("refuses names with ':', they go into job ids", () => {
+  it('refuses names that would break the keys and job ids they go into', () => {
     expect(() => registry(processor('pdf:v2'))).toThrow('bad plugin name');
+    expect(() => registry(processor('PDF'))).toThrow('bad plugin name');
+  });
+
+  it('refuses an accepts entry that is neither an extension nor a media type', () => {
+    expect(() => registry(processor('pdf', ['pdf']))).toThrow(
+      'processor pdf accepts "pdf"',
+    );
   });
 
   it('refuses an aggregator listening to a topic that does not exist', () => {

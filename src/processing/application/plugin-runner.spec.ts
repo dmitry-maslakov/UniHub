@@ -19,6 +19,7 @@ function runner(
   processor: ProcessesContent,
   contentHash: string,
   existing = false,
+  mime: string | null = null,
 ) {
   const streams: PassThrough[] = [];
   const registry = {
@@ -30,7 +31,7 @@ function runner(
   const queries = {
     execute: async (query: unknown) => {
       if (query instanceof GetFileQuery)
-        return { name: 'a.pdf', mime: null, contentHash, removed: false };
+        return { name: 'a.pdf', mime, contentHash, removed: false };
       const stream = new PassThrough();
       streams.push(stream);
       return stream;
@@ -87,6 +88,25 @@ describe('PluginRunner', () => {
     expect(saved).toEqual([
       { hash: 'h', processor: 'pdf', version: 1, parts: ['page 1'] },
     ]);
+  });
+
+  it('hands a processor the media type the registry matched on', async () => {
+    const seen: (string | null)[] = [];
+    const { run } = runner(
+      {
+        process: async ({ mime }) => {
+          seen.push(mime);
+          return { parts: [] };
+        },
+      },
+      'h',
+      false,
+      'Application/PDF; charset=binary',
+    );
+
+    await run.run(job('h'));
+
+    expect(seen).toEqual(['application/pdf']);
   });
 
   it('skips content this processor version already did', async () => {

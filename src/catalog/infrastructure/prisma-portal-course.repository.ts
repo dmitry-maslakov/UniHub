@@ -6,7 +6,7 @@ import {
   Prisma,
   type PortalCourse as Row,
 } from '../../generated/prisma/client.js';
-import type { Json } from '../domain/changes.js';
+import type { Json } from '@app/kernel';
 import {
   type PortalCourse,
   type PortalCourseData,

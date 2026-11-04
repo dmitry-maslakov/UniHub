@@ -23,6 +23,12 @@
       "node"
     ],
     "paths": {
+      "@app/kernel": [
+        "./libs/kernel/src/index.ts"
+      ],
+      "@app/kernel/*": [
+        "./libs/kernel/src/*"
+      ],
       "@app/plugin-sdk": [
         "./libs/plugin-sdk/src/index.ts"
       ],

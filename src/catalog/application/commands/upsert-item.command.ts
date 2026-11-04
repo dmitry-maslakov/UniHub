@@ -1,5 +1,5 @@
 import { Command } from '@nestjs/cqrs';
-import type { Json } from '../../domain/changes.js';
+import type { Json } from '@app/kernel';
 
 // `course` is the portal's id of the course, not ours
 export interface ItemInput {

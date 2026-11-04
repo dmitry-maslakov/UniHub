@@ -4,6 +4,7 @@ import { mkdir, open, readdir, rename, rm, stat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { Transform, type Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
+import { ContentHash } from '@app/kernel';
 import { BlobStore } from '../domain/blob-store.js';
 
 // makes the rename itself durable
@@ -35,9 +36,9 @@ export class FsBlobStore extends BlobStore {
     this.tmp = join(root, 'tmp');
   }
 
-  private pathOf(hash: string) {
-    // the hash comes from outside (plugins, later gRPC): never a path
-    if (!/^[0-9a-f]{64}$/.test(hash)) throw new Error(`bad hash: ${hash}`);
+  private pathOf(value: string) {
+    // the hash comes from outside (plugins, gRPC): never a path
+    const hash = ContentHash.parse(value);
     return join(this.root, hash.slice(0, 2), hash);
   }
 
