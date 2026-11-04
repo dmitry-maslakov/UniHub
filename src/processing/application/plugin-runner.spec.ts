@@ -1,8 +1,8 @@
 import { PassThrough } from 'node:stream';
 import type { QueryBus } from '@nestjs/cqrs';
 import { FILE_CONTENT_STORED, type ProcessesContent } from '@app/plugin-sdk';
-import { GetFileQuery } from '../../catalog/contracts.js';
 import type { PluginRegistry } from '../../plugins/plugin-registry.js';
+import type { BlobStore } from '../../storage/contracts.js';
 import type { RepresentationRepository } from '../domain/representation.js';
 import type { PluginJob } from '../queues.js';
 import { PluginRunner } from './plugin-runner.js';
@@ -28,22 +28,24 @@ function runner(
       plugin: { options: { name: 'pdf', version: 1 }, instance: processor },
     }),
   } as unknown as PluginRegistry;
+  // GetFileQuery, the only query it sends
   const queries = {
-    execute: async (query: unknown) => {
-      if (query instanceof GetFileQuery)
-        return { name: 'a.pdf', mime, contentHash, removed: false };
+    execute: async () => ({ name: 'a.pdf', mime, contentHash, removed: false }),
+  } as unknown as QueryBus;
+  const blobs = {
+    get: async () => {
       const stream = new PassThrough();
       streams.push(stream);
       return stream;
     },
-  } as unknown as QueryBus;
+  } as unknown as BlobStore;
   const saved: unknown[] = [];
   const representations = {
     exists: async () => existing,
     save: async (r: unknown) => void saved.push(r),
   } as unknown as RepresentationRepository;
   return {
-    run: new PluginRunner(registry, queries, representations),
+    run: new PluginRunner(registry, queries, blobs, representations),
     streams,
     saved,
   };

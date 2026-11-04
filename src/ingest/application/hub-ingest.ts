@@ -9,8 +9,8 @@ import {
   type PortalIngest,
 } from '@app/plugin-sdk';
 import * as catalog from '../../catalog/contracts.js';
-import { PutContentCommand } from '../../storage/contracts.js';
-import { ContentHash, InvalidError, PortalId, type Json } from '@app/kernel';
+import { BlobStore } from '../../storage/contracts.js';
+import { InvalidError, PortalId, type Json } from '@app/kernel';
 import { SyncStateRepository } from '../domain/sync-state.js';
 import {
   courseRecord,
@@ -45,6 +45,7 @@ export class HubIngest {
   constructor(
     private readonly commands: CommandBus,
     private readonly queries: QueryBus,
+    private readonly blobs: BlobStore,
     private readonly states: SyncStateRepository,
     private readonly outbox: Outbox,
   ) {}
@@ -123,11 +124,9 @@ export class HubIngest {
       content.destroy();
       throw new catalog.UnknownReferenceError(portal, externalId);
     }
-    const { hash } = await this.commands.execute(
-      new PutContentCommand(content),
-    );
+    const { hash } = await this.blobs.put(content);
     const { changed } = await this.commands.execute(
-      new catalog.SetFileContentCommand(ref, ContentHash.parse(hash)),
+      new catalog.SetFileContentCommand(ref, hash),
     );
     return { hash, changed };
   }

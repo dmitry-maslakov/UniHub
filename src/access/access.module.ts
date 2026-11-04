@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { signedInUserId } from '../identity/contracts.js';
+import { StorageModule } from '../storage/contracts.js';
 import { CourseReader } from './application/course-reader.js';
 import { CoursesController } from './infrastructure/http/courses.controller.js';
 import { FilesController } from './infrastructure/http/files.controller.js';
@@ -31,6 +32,7 @@ import { McpRequestMiddleware } from './infrastructure/mcp/mcp-request.middlewar
       getTracker: (req) => signedInUserId(req) ?? req.ip,
       generateKey: (_, tracker, name) => `${name}-${tracker}`,
     }),
+    StorageModule,
   ],
   controllers: [
     CoursesController,

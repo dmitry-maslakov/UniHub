@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { StorageModule } from '../storage/contracts.js';
 import { HubIngest } from './application/hub-ingest.js';
 import { SyncStateRepository } from './domain/sync-state.js';
 import { ConnectorTokens } from './infrastructure/grpc/connector-tokens.js';
@@ -9,7 +10,7 @@ import { ingestConfig } from './ingest.config.js';
 
 // the single way in for data from plugins, whatever transport they use
 @Module({
-  imports: [ConfigModule.forFeature(ingestConfig)],
+  imports: [ConfigModule.forFeature(ingestConfig), StorageModule],
   controllers: [IngestGrpcController],
   providers: [
     HubIngest,

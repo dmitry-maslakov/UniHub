@@ -4,6 +4,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule } from '@nestjs/config';
 import { HubReader } from '@app/plugin-sdk';
 import { IngestModule } from '../ingest/contracts.js';
+import { StorageModule } from '../storage/contracts.js';
 import { ConnectorHost } from './connector-host.js';
 import { ConnectorsWorker } from './connectors.worker.js';
 import { CONNECTORS_QUEUE } from './connectors.queue.js';
@@ -18,6 +19,7 @@ import { pluginsConfig } from './plugins.config.js';
     ConfigModule.forFeature(pluginsConfig),
     DiscoveryModule,
     IngestModule,
+    StorageModule,
     BullModule.registerQueue({
       name: CONNECTORS_QUEUE,
       // a failed poll is retried by the next tick

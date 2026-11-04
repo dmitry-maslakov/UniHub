@@ -1,13 +1,22 @@
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  mkdtemp,
+  readdir,
+  rm,
+  stat,
+  utimes,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { buffer } from 'node:stream/consumers';
+import type { ContentHash } from '@app/kernel';
 import { FsBlobStore } from './fs-blob-store.js';
 
 const sha256 = (data: Buffer) =>
-  createHash('sha256').update(data).digest('hex');
+  createHash('sha256').update(data).digest('hex') as ContentHash;
 
 describe('FsBlobStore', () => {
   let root: string;
@@ -19,7 +28,7 @@ describe('FsBlobStore', () => {
 
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'blobs-'));
-    store = new FsBlobStore(root);
+    store = new FsBlobStore({ location: root });
   });
 
   afterEach(() => rm(root, { recursive: true, force: true }));
@@ -63,24 +72,27 @@ describe('FsBlobStore', () => {
     });
 
     await expect(store.put(broken)).rejects.toThrow('connection reset');
+    expect(await readdir(root)).toEqual(['tmp']);
     expect(await readdir(join(root, 'tmp'))).toEqual([]);
-    expect(await store.has(hash)).toBe(false);
   });
 
-  it('removes only old temp files', async () => {
+  it('removes only old temp files when it starts', async () => {
+    // the first start: no temp folder yet
+    await store.onModuleInit();
     await mkdir(join(root, 'tmp'), { recursive: true });
     await writeFile(join(root, 'tmp', 'in-flight'), 'x');
+    await writeFile(join(root, 'tmp', 'stale'), 'x');
+    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    await utimes(join(root, 'tmp', 'stale'), twoDaysAgo, twoDaysAgo);
 
-    await store.removeStaleTemp(60_000);
+    await store.onModuleInit();
+
     expect(await readdir(join(root, 'tmp'))).toEqual(['in-flight']);
-
-    await store.removeStaleTemp(-1);
-    expect(await readdir(join(root, 'tmp'))).toEqual([]);
   });
 
   it('refuses anything that is not a sha256 as a hash', async () => {
-    await expect(store.get('../../etc/passwd')).rejects.toThrow(
-      'not a sha256 in hex',
-    );
+    // a value that skipped ContentHash.parse
+    const path = '../../etc/passwd' as ContentHash;
+    await expect(store.get(path)).rejects.toThrow('not a sha256 in hex');
   });
 });

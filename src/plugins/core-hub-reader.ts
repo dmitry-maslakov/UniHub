@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { QueryBus } from '@nestjs/cqrs';
+import { ContentHash } from '@app/kernel';
 import {
   HubReader,
   type CourseView,
@@ -11,13 +12,16 @@ import {
   GetItemQuery,
   GetPortalCourseQuery,
 } from '../catalog/contracts.js';
-import { GetContentQuery } from '../storage/contracts.js';
+import { BlobStore } from '../storage/contracts.js';
 
 // What plugins can read. Copied field by field, so a field added to catalog's
 // dtos doesn't reach plugins without the sdk saying so.
 @Injectable()
 export class CoreHubReader extends HubReader {
-  constructor(private readonly queries: QueryBus) {
+  constructor(
+    private readonly queries: QueryBus,
+    private readonly blobs: BlobStore,
+  ) {
     super();
   }
 
@@ -74,6 +78,6 @@ export class CoreHubReader extends HubReader {
   }
 
   content(hash: string) {
-    return this.queries.execute(new GetContentQuery(hash));
+    return this.blobs.get(ContentHash.parse(hash));
   }
 }
