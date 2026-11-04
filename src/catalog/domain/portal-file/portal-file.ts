@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { ContentHash, MediaType } from '@app/kernel';
 import { CatalogAggregate } from '../aggregate.js';
-import { differs, kept } from '../changes.js';
+import { differs } from '../changes.js';
 import { FILE_CONTENT_CHANGED, FILE_REMOVED } from '../events.js';
 import type { PortalRef } from '../portal-ref.js';
 import type { Placement } from './placement.js';
@@ -47,7 +47,7 @@ export class PortalFile extends CatalogAggregate {
     const file = new PortalFile({
       id: randomUUID(),
       ref,
-      props: kept(props),
+      props,
       placement,
       content: null,
       stale: false,
@@ -81,17 +81,16 @@ export class PortalFile extends CatalogAggregate {
   // false when the portal sent what we already have; a removed file it
   // sends again is back
   sync(props: FileProps, placement: Placement) {
-    const next = kept(props);
     const s = this.state;
     const cameBack = s.removedAt !== null;
     if (
       !cameBack &&
-      !differs({ ...s.props, ...s.placement }, { ...next, ...placement })
+      !differs({ ...s.props, ...s.placement }, { ...props, ...placement })
     )
       return false;
     // stays stale until new content arrives, even if this run fails to send it
-    if (s.content && contentMayDiffer(s.props, next)) s.stale = true;
-    s.props = next;
+    if (s.content && contentMayDiffer(s.props, props)) s.stale = true;
+    s.props = props;
     s.placement = placement;
     s.removedAt = null;
     this.touch();

@@ -78,10 +78,8 @@ describe('Item', () => {
     expect(item.getUncommittedEvents()).toEqual([changed]);
   });
 
-  it('keeps a bare null and -0 in raw as json does', () => {
+  it('keeps a bare null in raw as json does', () => {
     const item = stored();
-    expect(item.sync({ ...props, raw: { score: -0 } }, 'pc1')).toBe(true);
-    expect(item.sync({ ...props, raw: { score: 0 } }, 'pc1')).toBe(false);
     expect(item.sync({ ...props, raw: null }, 'pc1')).toBe(true);
     expect(item.sync({ ...props, raw: null }, 'pc1')).toBe(false);
   });

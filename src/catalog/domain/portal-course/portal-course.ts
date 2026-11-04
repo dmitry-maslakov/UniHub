@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Json } from '@app/kernel';
 import { CatalogAggregate } from '../aggregate.js';
-import { differs, kept } from '../changes.js';
+import { differs } from '../changes.js';
 import type { PortalRef } from '../portal-ref.js';
 
 // what the portal says about one of its courses
@@ -28,7 +28,7 @@ export class PortalCourse extends CatalogAggregate {
     const course = new PortalCourse({
       id: randomUUID(),
       ref,
-      props: kept(props),
+      props,
     });
     course.touch();
     return course;
@@ -52,9 +52,8 @@ export class PortalCourse extends CatalogAggregate {
 
   // false when the portal sent what we already have
   sync(props: PortalCourseProps) {
-    const next = kept(props);
-    if (!differs(this.state.props, next)) return false;
-    this.state.props = next;
+    if (!differs(this.state.props, props)) return false;
+    this.state.props = props;
     this.touch();
     return true;
   }

@@ -136,14 +136,4 @@ describe('PortalFile', () => {
     expect(topics(file)).toEqual([]);
     expect(file.needsContent).toBe(true);
   });
-
-  it('counts -0 and a lone surrogate as what they are once stored', () => {
-    const file = stored();
-    const odd = { ...props, name: 'half \ud83d', size: -0 };
-    file.sync(odd, inCourse);
-
-    expect(file.snapshot.props).toMatchObject({ name: 'half \uFFFD', size: 0 });
-    expect(Object.is(file.snapshot.props.size, 0)).toBe(true);
-    expect(file.sync(odd, inCourse)).toBe(false);
-  });
 });

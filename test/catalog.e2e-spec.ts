@@ -269,23 +269,16 @@ describe('catalog', () => {
     ).rejects.toBeInstanceOf(UnknownReferenceError);
   });
 
-  it('takes -0, lone surrogates and a bare null as what is stored', async () => {
-    // postgres keeps 0, U+FFFD and a json null: sent again, nothing changed
-    for (const odd of [
-      item({
-        externalId: 'post-odd',
-        title: 'half an emoji \ud83d',
-        raw: { score: -0, note: 'cut \udc00 here' },
-      }),
-      item({ externalId: 'post-null', raw: null }),
-    ]) {
-      expect(await commands.execute(new UpsertItemCommand(odd))).toMatchObject({
-        changed: true,
-      });
-      expect(await commands.execute(new UpsertItemCommand(odd))).toMatchObject({
-        changed: false,
-      });
-    }
+  it('takes a bare null in raw as what is stored', async () => {
+    // postgres keeps a json null: sent again, nothing changed (-0 and lone
+    // surrogates come in the form they are kept, see the ingest spec)
+    const odd = item({ externalId: 'post-null', raw: null });
+    expect(await commands.execute(new UpsertItemCommand(odd))).toMatchObject({
+      changed: true,
+    });
+    expect(await commands.execute(new UpsertItemCommand(odd))).toMatchObject({
+      changed: false,
+    });
     const row = await prisma.item.findUniqueOrThrow({
       where: { portal_externalId: ref('post-null') },
     });

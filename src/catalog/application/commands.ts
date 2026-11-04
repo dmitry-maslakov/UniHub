@@ -5,7 +5,9 @@ import type { AcademicYear, CourseName, Slug } from '../domain/values.js';
 
 // What catalog does when asked: ingest writes what portals send (by the
 // portal's ids, so `course` and `item` are theirs too), admins make courses.
-// The values are checked where they come in, so the types say they were.
+// The values are checked where they come in, so the types say they were;
+// text and json come as postgres keeps them (the kernel's StoredText and
+// StoredJson), so what a portal sends again compares equal to what's stored.
 
 export interface PortalCourseInput {
   portal: PortalId;

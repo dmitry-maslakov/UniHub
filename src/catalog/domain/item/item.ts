@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Json } from '@app/kernel';
 import { CatalogAggregate } from '../aggregate.js';
-import { differs, kept } from '../changes.js';
+import { differs } from '../changes.js';
 import { ITEM_CHANGED, ITEM_REMOVED } from '../events.js';
 import type { PortalRef } from '../portal-ref.js';
 
@@ -39,7 +39,7 @@ export class Item extends CatalogAggregate {
     const item = new Item({
       id: randomUUID(),
       ref,
-      props: kept(props),
+      props,
       portalCourseId,
       removedAt: null,
     });
@@ -70,12 +70,11 @@ export class Item extends CatalogAggregate {
   // false when the portal sent what we already have; a removed item it
   // sends again is back
   sync(props: ItemProps, portalCourseId: string | null) {
-    const next = kept(props);
     const s = this.state;
     const now = { ...s.props, portalCourseId: s.portalCourseId };
-    if (s.removedAt === null && !differs(now, { ...next, portalCourseId }))
+    if (s.removedAt === null && !differs(now, { ...props, portalCourseId }))
       return false;
-    s.props = next;
+    s.props = props;
     s.portalCourseId = portalCourseId;
     s.removedAt = null;
     this.recordChange();
