@@ -10,8 +10,8 @@ import {
 } from './commands.js';
 
 // A grant or a revoke, of a user who exists. Courses are catalog's, which
-// identity doesn't know, so a course id isn't checked: one no course has
-// reads nothing.
+// identity doesn't know, so the course id isn't checked here: access looks
+// a grant's course up before it sends one.
 @Injectable()
 abstract class CourseAccessHandler {
   constructor(

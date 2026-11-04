@@ -48,9 +48,9 @@ export class ListCoursesHandler implements IQueryHandler<ListCoursesQuery> {
 export class FindCourseHandler implements IQueryHandler<FindCourseQuery> {
   constructor(@InjectTransactionHost() private readonly txHost: PrismaTxHost) {}
 
-  execute({ slug }: FindCourseQuery) {
+  execute({ by }: FindCourseQuery) {
     return this.txHost.tx.course.findUnique({
-      where: { slug },
+      where: by,
       select: { id: true, slug: true, name: true },
     });
   }

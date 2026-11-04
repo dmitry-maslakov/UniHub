@@ -8,6 +8,7 @@ import { ErrorsModule } from './platform/errors/errors.module.js';
 import { MessagingModule } from './platform/messaging/messaging.module.js';
 import { QueuesModule } from './platform/queues/queues.module.js';
 import { RedisModule } from './platform/redis/redis.module.js';
+import { ValidationModule } from './platform/validation/validation.module.js';
 import { AccessModule } from './access/access.module.js';
 import { HealthModule } from './health/health.module.js';
 import { CatalogModule } from './catalog/catalog.module.js';
@@ -36,6 +37,7 @@ import { PluginsModule } from './plugins/plugins.module.js';
       imports: [ProcessingModule],
     }),
     ErrorsModule,
+    ValidationModule,
     CqrsModule.forRoot(),
     ScheduleModule.forRoot(),
     PluginsModule,

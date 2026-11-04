@@ -1,13 +1,13 @@
 import { Injectable } from '@nestjs/common';
-import { QueryBus } from '@nestjs/cqrs';
-import { PluginName } from '@app/kernel';
+import { QueryBus, type Query } from '@nestjs/cqrs';
+import type { PluginName } from '@app/kernel';
 import {
   FindCourseQuery,
   GetCourseFileQuery,
   ListCourseFilesQuery,
   ListCourseItemsQuery,
   ListCoursesQuery,
-  type FileDto,
+  type Slug,
 } from '../../catalog/contracts.js';
 import { ReadScopeQuery } from '../../identity/contracts.js';
 import {
@@ -16,27 +16,14 @@ import {
 } from '../../processing/contracts.js';
 import { BlobStore } from '../../storage/contracts.js';
 import { NotReadableError } from './errors.js';
+import type { Page } from './page.js';
+import { courseView, fileView, itemView } from './views.js';
 
-export interface Page {
-  offset: number;
-  limit: number;
-}
-
-export const MAX_LIMIT = 200;
-// far past any real list, small enough for the database to take
-export const MAX_OFFSET = 1_000_000_000;
-
-// whoever calls, a page stays within bounds
-const bounded = ({ offset, limit }: Page): Page => ({
-  offset: Math.min(MAX_OFFSET, Math.max(0, Math.trunc(offset) || 0)),
-  limit: Math.min(MAX_LIMIT, Math.max(1, Math.trunc(limit) || 1)),
-});
-
-// What a user may read, for every way in (REST, MCP): every method checks
-// the user's courses and throws NotReadableError for anything they can't
-// see, so a caller can't tell "not yours" from "doesn't exist". Admins read
-// every course; a portal course nobody linked to a course isn't readable
-// here.
+// What a user may read, for every way in (REST, MCP). The rules are the
+// owners': catalog finds only what a course shows, identity's ReadScope says
+// which courses the user reads. Here they are asked together, and whatever the
+// user can't read is a NotReadableError, so a caller can't tell "not yours"
+// from "doesn't exist".
 @Injectable()
 export class CourseReader {
   constructor(
@@ -44,93 +31,48 @@ export class CourseReader {
     private readonly blobs: BlobStore,
   ) {}
 
-  private async canRead(userId: string, courseId: string) {
-    const scope = await this.queries.execute(new ReadScopeQuery(userId));
-    return scope.allows(courseId);
-  }
-
-  private async readableCourse(userId: string, slug: string) {
-    const course = await this.queries.execute(new FindCourseQuery(slug));
-    if (course && (await this.canRead(userId, course.id))) return course;
-    throw new NotReadableError('course');
-  }
-
-  // a file its course shows (catalog decides which), of a course the user
-  // may read
-  private async readableFile(userId: string, fileId: string) {
-    const file = await this.queries.execute(new GetCourseFileQuery(fileId));
-    if (file && (await this.canRead(userId, file.courseId))) return file;
-    throw new NotReadableError('file');
-  }
-
-  // what the file's content is stored under; a file without content yet
-  // has nothing to read
-  private async readableContent(userId: string, fileId: string) {
-    const file = await this.readableFile(userId, fileId);
-    if (!file.contentHash) throw new NotReadableError('file');
-    return { file, hash: file.contentHash };
-  }
-
   async courses(userId: string) {
-    const scope = await this.queries.execute(new ReadScopeQuery(userId));
-    const courses = await this.queries.execute(new ListCoursesQuery());
-    return courses
-      .filter((c) => scope.allows(c.id))
-      .map(({ slug, name, portalCourses }) => ({
-        slug,
-        name,
-        portalCourses: portalCourses.map(({ portal, name, year }) => ({
-          portal,
-          name,
-          year,
-        })),
-      }));
+    const [courses, scope] = await Promise.all([
+      this.queries.execute(new ListCoursesQuery()),
+      this.queries.execute(new ReadScopeQuery(userId)),
+    ]);
+    return courses.filter(({ id }) => scope.allows(id)).map(courseView);
   }
 
-  async items(userId: string, slug: string, page: Page) {
+  async items(userId: string, slug: Slug, { offset, limit }: Page) {
     const course = await this.readableCourse(userId, slug);
-    const { offset, limit } = bounded(page);
     const items = await this.queries.execute(
       new ListCourseItemsQuery(course.id, offset, limit),
     );
-    return items.map(({ id, portal, kind, title, url, publishedAt, raw }) => ({
-      id,
-      portal,
-      kind,
-      title,
-      url,
-      publishedAt,
-      raw,
-    }));
+    return items.map(itemView);
   }
 
-  async files(userId: string, slug: string, page: Page) {
+  async files(userId: string, slug: Slug, { offset, limit }: Page) {
     const course = await this.readableCourse(userId, slug);
-    const { offset, limit } = bounded(page);
     const files = await this.queries.execute(
       new ListCourseFilesQuery(course.id, offset, limit),
     );
-    return files.map(toFileView);
+    return files.map(fileView);
   }
 
-  // the file and what processors made of it, without the text
   async file(userId: string, fileId: string) {
     const file = await this.readableFile(userId, fileId);
     const texts = file.contentHash
       ? await this.queries.execute(new ListTextsQuery(file.contentHash))
       : [];
-    return { ...toFileView(file), texts };
+    return { ...fileView(file), texts };
   }
 
-  // one page (slide, section) of the file's text; the first processor's
-  // unless one is named
-  async text(userId: string, fileId: string, page: number, processor?: string) {
+  // one page of the file's text; the first processor's unless one is named
+  async text(
+    userId: string,
+    fileId: string,
+    page: number,
+    processor?: PluginName,
+  ) {
     const { hash } = await this.readableContent(userId, fileId);
-    // a name no plugin can have names no text
-    const name = PluginName.optional().safeParse(processor);
-    if (!name.success) throw new NotReadableError('page');
     const text = await this.queries.execute(
-      new GetTextPageQuery(hash, page, name.data),
+      new GetTextPageQuery(hash, page, processor),
     );
     if (!text) throw new NotReadableError('page');
     return text;
@@ -138,22 +80,43 @@ export class CourseReader {
 
   async content(userId: string, fileId: string) {
     const { file, hash } = await this.readableContent(userId, fileId);
-    return {
-      ...toFileView(file),
-      stream: await this.blobs.get(hash),
-    };
+    return { ...fileView(file), stream: await this.blobs.get(hash) };
+  }
+
+  private readableCourse(userId: string, slug: Slug) {
+    return this.readable(userId, 'course', {
+      query: new FindCourseQuery({ slug }),
+      courseOf: ({ id }) => id,
+    });
+  }
+
+  private readableFile(userId: string, fileId: string) {
+    return this.readable(userId, 'file', {
+      query: new GetCourseFileQuery(fileId),
+      courseOf: ({ courseId }) => courseId,
+    });
+  }
+
+  // a file without content yet has nothing to read
+  private async readableContent(userId: string, fileId: string) {
+    const file = await this.readableFile(userId, fileId);
+    if (!file.contentHash) throw new NotReadableError('file');
+    return { file, hash: file.contentHash };
+  }
+
+  // what the query finds, if the user may read the course it is in; the
+  // thing and the user's scope are asked for at once
+  private async readable<T>(
+    userId: string,
+    what: NotReadableError['what'],
+    find: { query: Query<T | null>; courseOf: (found: T) => string },
+  ) {
+    const [found, scope] = await Promise.all([
+      this.queries.execute(find.query),
+      this.queries.execute(new ReadScopeQuery(userId)),
+    ]);
+    if (!found || !scope.allows(find.courseOf(found)))
+      throw new NotReadableError(what);
+    return found;
   }
 }
-
-const toFileView = (f: FileDto) => ({
-  id: f.id,
-  portal: f.portal,
-  // the post it came with, if any
-  itemId: f.itemId,
-  name: f.name,
-  path: f.path,
-  url: f.url,
-  size: f.size,
-  mime: f.mime,
-  hasContent: f.contentHash !== null,
-});

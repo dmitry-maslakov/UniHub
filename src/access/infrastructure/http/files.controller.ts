@@ -6,37 +6,35 @@ import {
   ParseUUIDPipe,
   Query,
   StreamableFile,
-  UseGuards,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiProduces,
-  ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
 import { create as contentDisposition } from 'content-disposition';
+import { z } from 'zod';
+import { PluginName } from '@app/kernel';
 import { CurrentUserId } from '../../../identity/contracts.js';
 import { CourseReader } from '../../application/course-reader.js';
-import { throttleBy } from '../throttle.js';
-import { PageNumber } from './paging.js';
+import { textPage } from '../../application/page.js';
+import { Limited } from '../throttle.js';
 import { FileDetailsResponse, TextPageResponse } from './responses.js';
 
-// the portal's mime type, if it is a plain type/subtype a header can carry
-const TOKEN = "[!#$%&'*+.^_`|~0-9a-z-]+";
-const MIME = new RegExp(`^${TOKEN}/${TOKEN}$`, 'i');
-const contentType = (mime: string | null) => {
-  const type = mime?.split(';')[0].trim();
-  return type && MIME.test(type) ? type : 'application/octet-stream';
-};
+const textQuery = z.object({
+  page: textPage,
+  processor: PluginName.optional().describe(
+    'which text, the first one by default',
+  ),
+});
 
 @ApiTags('files')
 @ApiBearerAuth()
 @ApiNotFoundResponse()
 @Controller('files')
-// after the session guard, so it counts per user
-@UseGuards(throttleBy('api'))
+@Limited('api')
 export class FilesController {
   constructor(private readonly reader: CourseReader) {}
 
@@ -54,17 +52,11 @@ export class FilesController {
     type: TextPageResponse,
     description: 'one page, slide or section of the text made from the file',
   })
-  @ApiQuery({ name: 'page', required: false, type: Number })
-  @ApiQuery({
-    name: 'processor',
-    required: false,
-    description: 'which text, the first one by default',
-  })
   text(
     @CurrentUserId() userId: string,
     @Param('id', ParseUUIDPipe) id: string,
-    @PageNumber() page: number,
-    @Query('processor') processor?: string,
+    @Query({ schema: textQuery })
+    { page, processor }: z.output<typeof textQuery>,
   ): Promise<TextPageResponse> {
     return this.reader.text(userId, id, page, processor);
   }
@@ -80,7 +72,8 @@ export class FilesController {
   ) {
     const file = await this.reader.content(userId, id);
     return new StreamableFile(file.stream, {
-      type: contentType(file.mime),
+      // a media type's essence is type/subtype, which a header carries
+      type: file.mime ?? 'application/octet-stream',
       disposition: contentDisposition(file.name),
     });
   }

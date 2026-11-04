@@ -185,6 +185,17 @@ describe('MCP', { timeout: 20_000 }, () => {
 
     const past = await call('read_file', { file: fileId, page: 3 });
     expect(past.isError).toBe(true);
+
+    // past what postgres takes, or not a page or a course at all
+    for (const [tool, args] of [
+      ['read_file', { file: fileId, page: 1e12 }],
+      ['list_items', { course: 'alg', limit: 500 }],
+      ['list_files', { course: 'Not A Slug' }],
+    ] as const) {
+      const invalid = await call(tool, args);
+      expect(invalid.isError).toBe(true);
+      expect(invalid.content[0].text).toContain('Invalid parameters');
+    }
   });
 
   it("stops a banned user's key", async () => {

@@ -43,7 +43,9 @@ export class ApiKeyGuard implements CanActivate {
 }
 
 // A route for API keys instead of sessions (MCP). The user carries no roles,
-// so @Roles doesn't belong on such a route. The module that has one imports
-// IdentityModule, for the guard's AuthenticateApiKey.
-export const ApiKeyAuth = () =>
-  applyDecorators(AllowAnonymous(), UseGuards(ApiKeyGuard));
+// so @Roles doesn't belong on such a route. What needs the key's user (a limit
+// per user) goes in `then`: applied after the key's guard, its guards run
+// after it, wherever the route's decorators sit. The module that has one
+// imports IdentityModule, for the guard's AuthenticateApiKey.
+export const ApiKeyAuth = (...then: ReturnType<typeof applyDecorators>[]) =>
+  applyDecorators(AllowAnonymous(), UseGuards(ApiKeyGuard), ...then);

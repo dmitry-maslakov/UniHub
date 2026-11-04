@@ -27,11 +27,12 @@ export class MisplacedFileError extends InvalidError {
   }
 }
 
+// no course has this slug, or this id
 export class UnknownCourseError extends NotFoundError {
   readonly reason = 'UNKNOWN_COURSE';
 
-  constructor(readonly slug: string) {
-    super(`unknown course ${slug}`);
+  constructor(readonly course: string) {
+    super(`unknown course ${course}`);
   }
 }
 
