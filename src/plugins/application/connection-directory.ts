@@ -21,7 +21,7 @@ export class ConnectionDirectory {
     const { portal, account } = connection;
     return {
       connection: { portal, account },
-      ingest: new SdkPortalIngest(this.ingest, connection),
+      ingest: new SdkPortalIngest(this.ingest, connection, signal),
       signal,
     };
   }

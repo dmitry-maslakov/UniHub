@@ -6,7 +6,7 @@ import {
   SHARED_ACCOUNT,
 } from '../src/ingest/contracts.js';
 
-// what a connector of this portal gets as ctx.ingest
+// what a connector of this portal gets as ctx.ingest, in a run never stopped
 export const portalIngest = (
   app: INestApplicationContext,
   portal: string,
@@ -15,4 +15,5 @@ export const portalIngest = (
   new SdkPortalIngest(
     app.get(IngestService),
     Connection.of({ portal, account }),
+    new AbortController().signal,
   );

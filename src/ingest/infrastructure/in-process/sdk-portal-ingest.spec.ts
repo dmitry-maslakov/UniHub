@@ -1,3 +1,5 @@
+import { PassThrough, type Readable } from 'node:stream';
+import { buffer } from 'node:stream/consumers';
 import { InvalidRecordError, UnknownReferenceError } from '@app/plugin-sdk';
 import { InvalidError, PortalId } from '@app/kernel';
 import * as catalog from '../../../catalog/contracts.js';
@@ -20,6 +22,7 @@ const refusedWith = (error: unknown) => {
   return new SdkPortalIngest(
     ingest as unknown as IngestService,
     Connection.shared(portal),
+    new AbortController().signal,
   ).file({ externalId: 'f1', name: 'a.pdf' });
 };
 
@@ -49,5 +52,39 @@ describe('SdkPortalIngest', () => {
   it('leaves the rest as it is: an outage, a bug', async () => {
     const outage = new Error('Connection is closed.');
     await expect(refusedWith(outage)).rejects.toBe(outage);
+  });
+
+  it("refuses a run's calls once the hub has let go of it", async () => {
+    const saveState = vi.fn(async () => {});
+    const run = new AbortController();
+    const ingest = new SdkPortalIngest(
+      { saveState } as unknown as IngestService,
+      Connection.shared(portal),
+      run.signal,
+    );
+
+    run.abort('past its time');
+
+    await expect(ingest.saveState({ cursor: 2 })).rejects.toBe('past its time');
+    expect(saveState).not.toHaveBeenCalled();
+  });
+
+  it('cuts an upload still going when its run is let go of', async () => {
+    const run = new AbortController();
+    const ingest = new SdkPortalIngest(
+      {
+        content: (_c: Connection, _id: string, content: Readable) =>
+          buffer(content),
+      } as unknown as IngestService,
+      Connection.shared(portal),
+      run.signal,
+    );
+    const upload = new PassThrough();
+
+    const sent = ingest.content('f1', upload);
+    upload.write('half of it');
+    run.abort();
+
+    await expect(sent).rejects.toMatchObject({ name: 'AbortError' });
   });
 });

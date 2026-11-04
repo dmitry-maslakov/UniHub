@@ -27,7 +27,8 @@ export interface ConnectorContext {
   // Aborts when the hub wants the run over: a poll past the hub's time for
   // one, or whose job another instance has taken over; the app shutting
   // down. Pass it to fetch() and the like, and stop soon after it aborts:
-  // the hub lets go of a run that doesn't.
+  // the hub lets go of a run that doesn't, and from then on its ingest
+  // rejects every call with the signal's reason.
   signal: AbortSignal;
 }
 
