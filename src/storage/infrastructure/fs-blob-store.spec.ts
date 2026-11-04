@@ -13,6 +13,7 @@ import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { buffer } from 'node:stream/consumers';
 import type { ContentHash } from '@app/kernel';
+import { ContentTooLargeError } from '../domain/blob-store.js';
 import { FsBlobStore } from './fs-blob-store.js';
 
 const sha256 = (data: Buffer) =>
@@ -28,7 +29,8 @@ describe('FsBlobStore', () => {
 
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'blobs-'));
-    store = new FsBlobStore({ location: root });
+    // content right at the limit is kept
+    store = new FsBlobStore({ location: root, maxBytes: content.length });
   });
 
   afterEach(() => rm(root, { recursive: true, force: true }));
@@ -72,6 +74,18 @@ describe('FsBlobStore', () => {
     });
 
     await expect(store.put(broken)).rejects.toThrow('connection reset');
+    expect(await readdir(root)).toEqual(['tmp']);
+    expect(await readdir(join(root, 'tmp'))).toEqual([]);
+  });
+
+  it('refuses content past its limit and keeps none of it', async () => {
+    const endless = Readable.from(
+      (function* () {
+        for (;;) yield content.subarray(0, 65_536);
+      })(),
+    );
+
+    await expect(store.put(endless)).rejects.toThrow(ContentTooLargeError);
     expect(await readdir(root)).toEqual(['tmp']);
     expect(await readdir(join(root, 'tmp'))).toEqual([]);
   });

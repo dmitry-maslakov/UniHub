@@ -7,7 +7,7 @@ import { pipeline } from 'node:stream/promises';
 import { Inject, Injectable, type OnModuleInit } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
 import { ContentHash } from '@app/kernel';
-import { BlobStore } from '../domain/blob-store.js';
+import { BlobStore, ContentTooLargeError } from '../domain/blob-store.js';
 import { storageConfig } from '../storage.config.js';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -37,13 +37,16 @@ async function sizeOf(path: string) {
 export class FsBlobStore extends BlobStore implements OnModuleInit {
   private readonly root: string;
   private readonly tmp: string;
+  private readonly maxBytes: number;
 
   constructor(
-    @Inject(storageConfig.KEY) { location }: ConfigType<typeof storageConfig>,
+    @Inject(storageConfig.KEY)
+    { location, maxBytes }: ConfigType<typeof storageConfig>,
   ) {
     super();
     this.root = location;
     this.tmp = join(location, 'tmp');
+    this.maxBytes = maxBytes;
   }
 
   // Temp files of writes that never finished. Only old ones: another instance
@@ -68,12 +71,14 @@ export class FsBlobStore extends BlobStore implements OnModuleInit {
   }
 
   async put(content: Readable) {
+    const { maxBytes } = this;
     const hasher = createHash('sha256');
     let size = 0;
     const tap = new Transform({
       transform(chunk: Buffer, _encoding, done) {
-        hasher.update(chunk);
         size += chunk.length;
+        if (size > maxBytes) return done(new ContentTooLargeError(maxBytes));
+        hasher.update(chunk);
         done(null, chunk);
       },
     });

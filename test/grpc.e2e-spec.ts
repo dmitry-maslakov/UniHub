@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { readdir } from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
@@ -7,6 +8,7 @@ import * as loader from '@grpc/proto-loader';
 import { AppModule } from '../src/app.module.js';
 import { grpcOptions } from '../src/ingest/contracts.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
+import { testEnv } from './env.js';
 
 const url = '127.0.0.1:50999';
 const TOKEN = 'good-test-token-0001';
@@ -197,6 +199,20 @@ describe('gRPC ingest', () => {
     });
 
     expect((await file('f3')).contentHash).toBeNull();
+  });
+
+  it('refuses content past STORAGE_MAX_FILE_MB and keeps none of it', async () => {
+    await call('File', { externalId: 'f6', course: 'c1', name: 'talk.mp4' });
+    const stored = async () =>
+      (await readdir(testEnv.STORAGE_PATH, { recursive: true })).length;
+    const before = await stored();
+
+    await expect(
+      sendContent('f6', Buffer.alloc(3 * 1024 * 1024, 'video ')),
+    ).rejects.toMatchObject({ code: grpc.status.INVALID_ARGUMENT });
+
+    expect((await file('f6')).contentHash).toBeNull();
+    expect(await stored()).toBe(before);
   });
 
   it('keeps the connector state', async () => {
