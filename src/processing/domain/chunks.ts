@@ -10,8 +10,10 @@ export interface TextChunk {
   text: string;
 }
 
-// the index marks highlights with these, so they mustn't be in the text
-const MARKERS = /[\uE000\uE001]/g;
+// The search index marks highlights with these (characters for private
+// use), so they're taken out of the text and can only be its marks.
+export const HIGHLIGHT = { open: '\uE000', close: '\uE001' } as const;
+const MARKERS = new RegExp(`[${HIGHLIGHT.open}${HIGHLIGHT.close}]`, 'g');
 // where a chunk may end, the first one found in its second half winning
 const BREAKS = [/\n\n/g, /\n/g, /\s/g];
 const HIGH_SURROGATE = /[\uD800-\uDBFF]/;

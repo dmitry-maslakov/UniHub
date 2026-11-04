@@ -1,8 +1,9 @@
 import { Query } from '@nestjs/cqrs';
 import type { ContentHash, PluginName } from '@app/kernel';
 
-// What other modules read of processing, straight from the database
-// (infrastructure/read).
+// What other modules read of processing: the texts straight from the
+// database (infrastructure/read), and a search over them in the index
+// (SearchTexts).
 
 export interface TextInfo {
   processor: PluginName;
@@ -30,6 +31,38 @@ export class GetTextPageQuery extends Query<TextPage | null> {
     public readonly hash: ContentHash,
     public readonly page: number,
     public readonly processor?: PluginName,
+  ) {
+    super();
+  }
+}
+
+// A fragment of a chunk's text and where in it the query's words are:
+// UTF-16 offsets into `text` (the chunk as indexed, NFC), each [start, end).
+// Plain text: whatever HTML the source had comes as it was.
+export interface Snippet {
+  text: string;
+  highlights: [start: number, end: number][];
+}
+
+export interface TextHit {
+  hash: ContentHash;
+  // best first, each page once, by its best chunk (at most 3)
+  pages: {
+    processor: PluginName;
+    version: number;
+    page: number;
+    snippet: Snippet;
+  }[];
+}
+
+// The contents among these whose newest texts match, best first, at most
+// `limit`, with their best pages. The index knows nothing of who reads
+// what: `hashes` are all it looks through.
+export class SearchTextsQuery extends Query<TextHit[]> {
+  constructor(
+    public readonly text: string,
+    public readonly hashes: readonly ContentHash[],
+    public readonly limit: number,
   ) {
     super();
   }

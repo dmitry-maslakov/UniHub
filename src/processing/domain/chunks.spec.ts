@@ -1,4 +1,4 @@
-import { CHUNK_CHARS, chunksOf } from './chunks.js';
+import { CHUNK_CHARS, chunksOf, HIGHLIGHT } from './chunks.js';
 
 const texts = (parts: string[]) => chunksOf(parts).map(({ text }) => text);
 const words = (n: number) => Array.from({ length: n }, () => 'word').join(' ');
@@ -41,7 +41,8 @@ describe('chunksOf', () => {
   });
 
   it('takes the highlight markers out of the text', () => {
-    expect(texts(['abc'])).toEqual(['a�b�c']);
+    const { open, close } = HIGHLIGHT;
+    expect(texts([`a${open}b${close}c`])).toEqual(['a\uFFFDb\uFFFDc']);
   });
 
   it('gives decomposed text the chunks of its composed form', () => {

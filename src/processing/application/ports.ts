@@ -7,6 +7,7 @@ import {
 import type { TextChunk } from '../domain/chunks.js';
 import type { RepresentationKey } from '../domain/representation.js';
 import type { PluginJob } from './plugin-job.js';
+import type { TextHit } from './queries.js';
 
 // what processors are matched by
 export interface FileFact {
@@ -37,6 +38,14 @@ export abstract class PluginJobQueue {
   abstract requeue(job: PluginJob): Promise<void>;
 }
 
+// words to look for (NFC, as the chunks are), among these contents only
+export interface TextQuery {
+  text: string;
+  hashes: readonly ContentHash[];
+  // contents, at most
+  size: number;
+}
+
 // The processors' texts in the search index. Made of postgres alone, so
 // ReconcileIndex can build it again from nothing.
 export abstract class TextIndex {
@@ -55,6 +64,8 @@ export abstract class TextIndex {
   }): Promise<void>;
   // the representations indexed in full (those with a manifest)
   abstract keys(): AsyncIterable<RepresentationKey>;
+  // the contents whose texts match, best first, as SearchTextsQuery answers
+  abstract search(query: TextQuery): Promise<TextHit[]>;
 }
 
 // a job per key, which indexes the newest version of its (hash, processor)

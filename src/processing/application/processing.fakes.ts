@@ -13,7 +13,9 @@ import {
   TextIndex,
   TextIndexQueue,
   type FileFact,
+  type TextQuery,
 } from './ports.js';
+import type { TextHit } from './queries.js';
 
 // In-memory ports for the application's unit tests; plugins come from
 // test/discovered-plugins.ts, content from test/in-memory-blobs.ts.
@@ -87,13 +89,16 @@ export class InMemoryRepresentations extends RepresentationRepository {
   }
 }
 
-// what put() wrote, by key; `calls` says in what order it was asked
+// What put() wrote, by key; `calls` says in what order it was asked. A
+// search answers `hits` whatever it asks, and is kept in `searched`.
 export class InMemoryTextIndex extends TextIndex {
   readonly texts = new Map<
     string,
     { key: RepresentationKey; chunks: readonly TextChunk[] }
   >();
   readonly calls: string[] = [];
+  readonly searched: TextQuery[] = [];
+  hits: TextHit[] = [];
 
   async ensure() {
     this.calls.push('ensure');
@@ -116,6 +121,11 @@ export class InMemoryTextIndex extends TextIndex {
   async *keys() {
     this.calls.push('keys');
     for (const { key } of this.texts.values()) yield key;
+  }
+
+  async search(query: TextQuery) {
+    this.searched.push(query);
+    return this.hits;
   }
 }
 

@@ -2,9 +2,10 @@ import { errors, type Client } from '@opensearch-project/opensearch';
 import { PluginName } from '@app/kernel';
 import { sha256 } from '../../../../test/sha256.js';
 import { TextIndexUnavailableError } from '../../application/ports.js';
-import { chunksOf } from '../../domain/chunks.js';
+import { chunksOf, HIGHLIGHT } from '../../domain/chunks.js';
 import { OpenSearchTextIndex } from './opensearch-text-index.js';
 import { GENERATION, indexBody, indexName } from './text-index.mapping.js';
+import { keywordBody } from './text-index.search.js';
 
 const index = indexName('unihub');
 const key = {
@@ -29,6 +30,8 @@ const items = (...failed: [status: number, type: string][]) => ({
   },
 });
 const ok = { body: { errors: false, items: [] } };
+const query = { text: 'semafor', hashes: [key.hash], size: 10 };
+const none = { body: { hits: { hits: [] } } };
 
 // the calls OpenSearchTextIndex makes, answered as an index of this
 // generation that's there and takes every write
@@ -304,5 +307,97 @@ describe('OpenSearchTextIndex', () => {
     await text.ensure();
 
     expect(client.indices.create).toHaveBeenCalledTimes(2);
+  });
+
+  it('searches within 5 s, a hit per content read back as its best pages', async () => {
+    const { client, text } = opensearch();
+    const { open, close } = HIGHLIGHT;
+    client.search.mockResolvedValueOnce({
+      body: {
+        hits: {
+          hits: [
+            {
+              _source: { hash: key.hash },
+              inner_hits: {
+                pages: {
+                  hits: {
+                    hits: [
+                      {
+                        _source: {
+                          processor: key.processor,
+                          version: 2,
+                          page: 3,
+                        },
+                        highlight: { text: [`a ${open}semafor${close}`] },
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          ],
+        },
+      },
+    });
+
+    const hits = await text.search(query);
+
+    expect(client.search).toHaveBeenCalledWith(
+      { index, body: keywordBody(query) },
+      { requestTimeout: 5_000 },
+    );
+    expect(hits).toEqual([
+      {
+        hash: key.hash,
+        pages: [
+          {
+            processor: key.processor,
+            version: 2,
+            page: 3,
+            snippet: { text: 'a semafor', highlights: [[2, 9]] },
+          },
+        ],
+      },
+    ]);
+  });
+
+  // making sure of it would wait the client's 30 s on a stuck node
+  it('searches without making sure of the index first', async () => {
+    const { client, text } = opensearch();
+    client.indices.create.mockReturnValue(new Promise(() => {}));
+    client.search.mockResolvedValueOnce(none);
+
+    expect(await text.search(query)).toEqual([]);
+    expect(client.indices.create).not.toHaveBeenCalled();
+  });
+
+  it('takes a search stuck past its time for an outage', async () => {
+    const { client, text } = opensearch();
+    client.search.mockRejectedValue(
+      new errors.TimeoutError('Request timed out', {} as never),
+    );
+
+    await expect(text.search(query)).rejects.toBeInstanceOf(
+      TextIndexUnavailableError,
+    );
+  });
+
+  it('makes the index again when a search finds it gone, and finds nothing in it', async () => {
+    const { client, text } = opensearch();
+    client.search
+      .mockRejectedValueOnce(refused(404, 'index_not_found_exception'))
+      .mockResolvedValueOnce(none);
+
+    expect(await text.search(query)).toEqual([]);
+    expect(client.indices.create).toHaveBeenCalledTimes(1);
+    expect(client.search).toHaveBeenCalledTimes(2);
+  });
+
+  it('lets a search the index refuses otherwise through as it came', async () => {
+    const { client, text } = opensearch();
+    const tooMany = refused(400, 'illegal_argument_exception');
+    client.search.mockRejectedValue(tooMany);
+
+    await expect(text.search(query)).rejects.toBe(tooMany);
   });
 });

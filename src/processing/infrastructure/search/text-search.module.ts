@@ -51,6 +51,7 @@ const DAY = 24 * 60 * 60;
     SearchIndexWorker,
     ReconcileIndexSchedule,
   ],
-  exports: [TextIndexQueue],
+  // to ProcessContent and SearchTexts, which do without them when it's off
+  exports: [TextIndex, TextIndexQueue],
 })
 export class TextSearchModule {}

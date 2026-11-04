@@ -7,6 +7,9 @@ export { PluginsOutboxTransport } from './infrastructure/plugins-outbox.transpor
 export {
   GetTextPageQuery,
   ListTextsQuery,
+  SearchTextsQuery,
+  type Snippet,
+  type TextHit,
   type TextInfo,
   type TextPage,
 } from './application/queries.js';
