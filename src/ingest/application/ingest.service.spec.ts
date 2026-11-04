@@ -161,7 +161,7 @@ describe('IngestService', () => {
       RemovalNotAllowedError,
     );
     await expect(service.removeFile(shared, '')).rejects.toThrow(
-      MalformedRecordError,
+      /^invalid record: externalId: /,
     );
     expect(sent).toEqual([]);
 
@@ -180,6 +180,9 @@ describe('IngestService', () => {
     expect(await service.state(someone)).toBeNull();
     await expect(service.saveState(shared, new Date())).rejects.toThrow(
       MalformedRecordError,
+    );
+    await expect(service.saveState(shared, 'a\u0000')).rejects.toThrow(
+      'invalid record: state: contains a NUL character',
     );
   });
 });

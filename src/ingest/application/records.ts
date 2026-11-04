@@ -62,35 +62,38 @@ const fileRecord = z.object({
   updatedAt: optional(z.coerce.date()),
 } satisfies Shape<FileRecord>);
 
-// what doesn't fit is the sender's to fix, named field by field
-function parse<T extends z.ZodType>(schema: T, raw: unknown) {
+// what doesn't fit is the sender's to fix, named field by field; an issue
+// with the value as a whole (an id, the state) has no path, so `what` names it
+function parse<T extends z.ZodType>(schema: T, raw: unknown, what: string) {
   const result = schema.safeParse(raw);
   if (result.success) return result.data;
   throw new MalformedRecordError(
-    result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`),
+    result.error.issues.map(
+      (i) => `${i.path.length ? i.path.join('.') : what}: ${i.message}`,
+    ),
   );
 }
 
 // a record of this connection's portal, by the portal's id
 export const toRef = ({ portal }: Connection, id: unknown): PortalRef => ({
   portal,
-  externalId: parse(externalId, id),
+  externalId: parse(externalId, id, 'externalId'),
 });
 
 export const toPortalCourseInput = (
   { portal }: Connection,
   raw: unknown,
-): PortalCourseInput => ({ ...parse(courseRecord, raw), portal });
+): PortalCourseInput => ({ ...parse(courseRecord, raw, 'course'), portal });
 
 export const toItemInput = (
   { portal }: Connection,
   raw: unknown,
-): ItemInput => ({ ...parse(itemRecord, raw), portal });
+): ItemInput => ({ ...parse(itemRecord, raw, 'item'), portal });
 
 export function toFileInput({ portal }: Connection, raw: unknown): FileInput {
-  const { updatedAt, ...file } = parse(fileRecord, raw);
+  const { updatedAt, ...file } = parse(fileRecord, raw, 'file');
   return { ...file, sourceUpdatedAt: updatedAt, portal };
 }
 
 // whatever json the connector wants back on its next run
-export const toState = (raw: unknown) => parse(StoredJson, raw);
+export const toState = (raw: unknown) => parse(StoredJson, raw, 'state');
