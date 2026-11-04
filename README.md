@@ -27,7 +27,7 @@ npm run start:dev
 - email and password, the email confirmed by a link in a mail (without `SMTP_URL` mails only go to the log)
 - Google, when `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set
 - sign-in by QR code: a new screen asks for a code (device authorization), a signed-in phone approves it
-- session tokens as `Authorization: Bearer`, and API keys for MCP clients
+- session tokens as `Authorization: Bearer`, and API keys for MCP clients: they expire after 90 days, and a new password (a reset, a change, or one an admin sets) deletes them
 
 The first admin: `npm run auth:create-admin -- --email you@example.com --password '…'`. After adding a Better Auth plugin, `npm run auth:generate` updates `prisma/schema/identity.prisma`.
 

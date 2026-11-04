@@ -64,6 +64,9 @@ describe('identity', { timeout: 20_000 }, () => {
 
   it('resets a forgotten password by mail, signing out everywhere', async () => {
     const before = await signUp('bo@uni.test');
+    const { key } = (
+      await post('/api-key/create', { name: 'agent' }, before).expect(200)
+    ).body as { key: string };
     await post('/request-password-reset', {
       email: 'bo@uni.test',
       redirectTo: '/reset',
@@ -82,6 +85,11 @@ describe('identity', { timeout: 20_000 }, () => {
       .set('cookie', before)
       .expect(200);
     expect(old.body).toBeNull();
+    // a key made from the old session goes with it
+    const { valid } = await app
+      .get(AuthService)
+      .api.verifyApiKey({ body: { key } });
+    expect(valid).toBe(false);
   });
 
   it('refuses links to other sites and requests from them', async () => {
@@ -136,6 +144,75 @@ describe('identity', { timeout: 20_000 }, () => {
       .api.verifyApiKey({ body: { key: created.body.key } });
     expect(valid).toBe(true);
     expect(key?.referenceId).toBe(created.body.referenceId);
+  });
+
+  it("ends a user's keys when they or an admin set a new password", async () => {
+    const valid = async (key: string) =>
+      (await app.get(AuthService).api.verifyApiKey({ body: { key } })).valid;
+    const keyOf = async (cookie: string) =>
+      (await post('/api-key/create', { name: 'agent' }, cookie).expect(200))
+        .body.key as string;
+
+    const own = await signUp('dk@uni.test');
+    const first = await keyOf(own);
+    await post(
+      '/change-password',
+      { currentPassword: 'correct horse 1', newPassword: 'battery staple 2' },
+      own,
+    ).expect(200);
+    expect(await valid(first)).toBe(false);
+
+    const user = await signUp('dl@uni.test');
+    const second = await keyOf(user);
+    await signUp('dm@uni.test');
+    const prisma = app.get(PrismaService);
+    await prisma.user.update({
+      where: { email: 'dm@uni.test' },
+      data: { role: 'admin' },
+    });
+    const adminCookie = await signIn('dm@uni.test', 'correct horse 1');
+    const { id: userId } = await prisma.user.findUniqueOrThrow({
+      where: { email: 'dl@uni.test' },
+    });
+    await post(
+      '/admin/set-user-password',
+      { userId, newPassword: 'battery staple 2' },
+      adminCookie,
+    ).expect(200);
+    expect(await valid(second)).toBe(false);
+
+    // a failed change leaves them alone
+    const third = await keyOf(user);
+    await post(
+      '/change-password',
+      { currentPassword: 'wrong', newPassword: 'anything else 3' },
+      await signIn('dl@uni.test', 'battery staple 2'),
+    ).expect(400);
+    expect(await valid(third)).toBe(true);
+  });
+
+  it('gives keys that expire in 90 days, which clients cannot change', async () => {
+    const cookie = await signUp('dj@uni.test');
+    const created = await post('/api-key/create', { name: 'x' }, cookie).expect(
+      200,
+    );
+    const left = new Date(created.body.expiresAt).getTime() - Date.now();
+    const day = 24 * 60 * 60 * 1000;
+    expect(left).toBeGreaterThan(89 * day);
+    expect(left).toBeLessThanOrEqual(90 * day);
+
+    await post(
+      '/api-key/create',
+      // within the plugin's own 1 to 365 days, so only the setting refuses it
+      { name: 'month', expiresIn: 30 * 24 * 60 * 60 },
+      cookie,
+    ).expect(400);
+    // null would mean "never expires"
+    await post(
+      '/api-key/update',
+      { keyId: created.body.id, expiresIn: null },
+      cookie,
+    ).expect(400);
   });
 
   it('lets a user read the courses granted to them, an admin every course', async () => {
