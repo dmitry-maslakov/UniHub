@@ -52,7 +52,7 @@ Admins set the courses up (`@Roles([ADMIN_ROLE])`):
 - `POST /api/courses` with `{ slug, name }`: a course
 - `PUT /api/portal-courses/{portal}/{externalId}/course` with `{ course, year }`: the portal course becomes part of that course (no `year` for one that spans years); one linked elsewhere moves
 - `DELETE /api/portal-courses/{portal}/{externalId}/course`: unlinks it
-- `PUT /api/users/{userId}/courses/{courseId}`: the user reads the course, named by the id `POST /api/courses` answered (users' ids from Better Auth's `GET /api/auth/admin/list-users`); `DELETE` on the same path takes it back. An id no user or no course has is a 404
+- `PUT /api/users/{userId}/courses/{courseId}`: the user reads the course, named by the id `POST /api/courses` answered (users' ids from Better Auth's `GET /api/auth/admin/list-users`); `DELETE` on the same path takes it back. An id no user has is a 404, and so is granting one no course has
 
 ## MCP
 

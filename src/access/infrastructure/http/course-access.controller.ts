@@ -26,7 +26,6 @@ const id = { schema: StoredText.min(1) };
 @ApiTags('admin')
 @ApiBearerAuth()
 @ApiForbiddenResponse({ description: 'for admins only' })
-@ApiNotFoundResponse({ description: 'no such user or course' })
 @Roles([ADMIN_ROLE])
 @Controller('users/:userId/courses/:courseId')
 export class CourseAccessController {
@@ -35,6 +34,7 @@ export class CourseAccessController {
   @Put()
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiNoContentResponse({ description: 'the user reads the course' })
+  @ApiNotFoundResponse({ description: 'no such user or course' })
   grant(
     @Param('userId', id) userId: string,
     @Param('courseId', id) courseId: string,
@@ -47,6 +47,7 @@ export class CourseAccessController {
   @ApiNoContentResponse({
     description: "the user doesn't read it now, unless an admin",
   })
+  @ApiNotFoundResponse({ description: 'no such user' })
   revoke(
     @Param('userId', id) userId: string,
     @Param('courseId', id) courseId: string,

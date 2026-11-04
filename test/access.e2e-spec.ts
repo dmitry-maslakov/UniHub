@@ -344,7 +344,11 @@ describe('REST API', { timeout: 20_000 }, () => {
       .put(`/api/users/${id}/courses/nope`)
       .expect(404);
     expect(unknown.body.message).toBe('unknown course nope');
-    await as(admin).delete(`/api/users/${id}/courses/nope`).expect(404);
+    // a grant of a course catalog doesn't have can still be taken back
+    await as(admin).delete(`/api/users/${id}/courses/nope`).expect(204);
+    await as(admin)
+      .delete(`/api/users/nobody/courses/${courseIds.net}`)
+      .expect(404);
     await as(admin)
       .put(`/api/users/nobody/courses/${courseIds.net}`)
       .expect(404);

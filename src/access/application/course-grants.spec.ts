@@ -37,14 +37,17 @@ describe('CourseGrants', () => {
     ]);
   });
 
-  it('refuses a course no one made, and sends nothing', async () => {
+  it('refuses a grant of a course no one made, and sends nothing', async () => {
     const { grants: g, sent } = grants();
     await expect(g.grant('ana', 'nope')).rejects.toBeInstanceOf(
       UnknownCourseError,
     );
-    await expect(g.revoke('ana', 'nope')).rejects.toBeInstanceOf(
-      UnknownCourseError,
-    );
     expect(sent).toEqual([]);
+  });
+
+  it("takes back a grant of a course catalog doesn't have", async () => {
+    const { grants: g, sent } = grants();
+    await g.revoke('ana', 'nope');
+    expect(sent).toEqual([new RevokeCourseAccessCommand('ana', 'nope')]);
   });
 });

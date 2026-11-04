@@ -11,7 +11,7 @@ import {
 
 // A grant or a revoke, of a user who exists. Courses are catalog's, which
 // identity doesn't know, so the course id isn't checked here: access looks
-// the course up before it sends these.
+// a grant's course up before it sends one.
 @Injectable()
 abstract class CourseAccessHandler {
   constructor(
