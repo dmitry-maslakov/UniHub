@@ -22,7 +22,7 @@ OpenSearch needs `vm.max_map_count` of at least 262144, which Docker Desktop has
 - `src/platform/` — what the modules run on: `database` (Prisma, `@Transactional()`), `redis`, `queues` (BullMQ), `messaging` (the outbox; `AppModule` names its transports), `errors` (one answer per kind of domain error), `validation` (a route's schemas), `search` (the OpenSearch client); `app.module.ts` lists the modules and wires them into the platform, `app.setup.ts` sets the app up (HTTP, MCP and gRPC) for `main.ts` and the e2e tests alike
 - `libs/plugin-sdk` — everything a plugin may depend on, plugins never import the core directly; its `host.ts` is the hub's side (how it finds plugins), which plugins can't import
 - `libs/plugins/` — the built-in plugins (`canvas`, `office-text`, `plain-text`), each on the sdk alone. A worker thread's file is run by node as it is in the tests, types stripped, so it and what it imports name each other's `.ts` (`rewriteRelativeImportExtensions` lets tsc take that)
-- `libs/kernel` — what the hub's modules and the sdk share: values that hold the same rules everywhere (`ContentHash`, `MediaType`, `PortalId`, `PluginName`, `Json`) and the kinds of domain error (not found, conflict, invalid)
+- `libs/kernel` — what the hub's modules and the sdk share: values that hold the same rules everywhere (`ContentHash`, `MediaType`, `PortalId`, `PluginName`, `Json`) and the kinds of domain error (not found, conflict, invalid, unavailable)
 - `prisma/schema/` — one schema file per module
 - `npm install` generates the Prisma client and the gRPC types (`src/ingest/infrastructure/grpc/generated`, from `proto/ingest.proto`); neither is committed
 

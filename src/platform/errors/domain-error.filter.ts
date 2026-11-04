@@ -3,6 +3,7 @@ import {
   Catch,
   ConflictException,
   NotFoundException,
+  ServiceUnavailableException,
   type ArgumentsHost,
   type HttpException,
   type HttpExceptionOptions,
@@ -17,6 +18,7 @@ const HTTP: Record<
   'not-found': NotFoundException,
   conflict: ConflictException,
   invalid: BadRequestException,
+  unavailable: ServiceUnavailableException,
 };
 
 // One answer per kind of domain error, whichever module threw it: Nest's own

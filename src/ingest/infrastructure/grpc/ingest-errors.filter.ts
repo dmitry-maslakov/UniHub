@@ -21,6 +21,7 @@ const KINDS: Record<DomainErrorKind, GrpcStatus> = {
   'not-found': GrpcStatus.NOT_FOUND,
   conflict: GrpcStatus.ALREADY_EXISTS,
   invalid: GrpcStatus.INVALID_ARGUMENT,
+  unavailable: GrpcStatus.UNAVAILABLE,
 };
 
 // a record that refers to one the connector hasn't sent: send that first

@@ -8,6 +8,7 @@ import {
   InvalidValueError,
   NotFoundError,
   PortalId,
+  UnavailableError,
 } from '@app/kernel';
 import { UnknownReferenceError } from '../../../catalog/contracts.js';
 import { IngestErrorsFilter } from './ingest-errors.filter.js';
@@ -17,6 +18,9 @@ class GoneError extends NotFoundError {
 }
 class TakenError extends ConflictError {
   readonly reason = 'TAKEN';
+}
+class AwayError extends UnavailableError {
+  readonly reason = 'AWAY';
 }
 
 interface Answer {
@@ -58,6 +62,7 @@ describe('IngestErrorsFilter', () => {
     expect(
       (await answerTo(new InvalidValueError('content hash', 'x'))).code,
     ).toBe(status.INVALID_ARGUMENT);
+    expect((await answerTo(new AwayError('x'))).code).toBe(status.UNAVAILABLE);
   });
 
   it('asks for the parent first when a record refers to an unknown one', async () => {

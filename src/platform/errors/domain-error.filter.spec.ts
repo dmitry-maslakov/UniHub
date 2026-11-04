@@ -3,6 +3,7 @@ import {
   ConflictError,
   InvalidValueError,
   NotFoundError,
+  UnavailableError,
   type DomainError,
 } from '@app/kernel';
 import { DomainErrorFilter } from './domain-error.filter.js';
@@ -12,6 +13,9 @@ class GoneError extends NotFoundError {
 }
 class TakenError extends ConflictError {
   readonly reason = 'TAKEN';
+}
+class AwayError extends UnavailableError {
+  readonly reason = 'AWAY';
 }
 
 function http(error: DomainError) {
@@ -41,5 +45,6 @@ describe('DomainErrorFilter', () => {
     });
     expect(http(new TakenError('taken')).status).toBe(409);
     expect(http(new InvalidValueError('course slug', 'A B')).status).toBe(400);
+    expect(http(new AwayError('try again later')).status).toBe(503);
   });
 });
