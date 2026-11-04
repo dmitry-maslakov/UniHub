@@ -15,7 +15,7 @@ const api = (signal = new AbortController().signal) =>
   new CanvasApi({
     url: CANVAS,
     userAgent: 'test agent',
-    token: async () => 'the-token',
+    token: 'the-token',
     signal,
   });
 

@@ -9,9 +9,7 @@ export interface CanvasApiOptions {
   // the school's Canvas, 'https://canvas.example.edu'
   url: string;
   userAgent: string;
-  // asked for on each request, so a token that gets refreshed (a user's
-  // own, through OAuth) is only another function
-  token: () => Promise<string>;
+  token: string;
   // the run's: requests, retries and waits all stop on it
   signal: AbortSignal;
 }
@@ -62,7 +60,7 @@ export class CanvasApi {
       async () => {
         const res = await fetch(url, {
           headers: {
-            authorization: `Bearer ${await token()}`,
+            authorization: `Bearer ${token}`,
             'user-agent': userAgent,
           },
           signal,

@@ -31,17 +31,15 @@ export class CanvasConnector implements PollsPortal {
   ) {}
 
   async poll({ ingest, signal }: ConnectorContext) {
-    const { url, userAgent } = this.config;
-    const token = () => Promise.resolve(this.config.token);
-    const api = new CanvasApi({ url, userAgent, token, signal });
-    await this.warnOfExpiry(api, await token());
-    await new CanvasSync(api, ingest, url).run();
+    const api = new CanvasApi({ ...this.config, signal });
+    await this.warnOfExpiry(api);
+    await new CanvasSync(api, ingest, this.config.url).run();
   }
 
   // A token Canvas doesn't find by its hint, or won't show, goes unchecked;
   // one it no longer takes fails the run here, before anything is read.
-  private async warnOfExpiry(api: CanvasApi, token: string) {
-    const hint = encodeURIComponent(token.slice(0, HINT_LENGTH));
+  private async warnOfExpiry(api: CanvasApi) {
+    const hint = encodeURIComponent(this.config.token.slice(0, HINT_LENGTH));
     const found = await visible(
       api.get<Token>(`/api/v1/users/self/tokens/${hint}`),
     );
