@@ -3,7 +3,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import type { ContentHash } from '@app/kernel';
 import { PluginCatalog } from '../../plugins/contracts.js';
 import { BlobStore } from '../../storage/contracts.js';
-import { RepresentationRepository } from '../domain/representation.js';
+import {
+  representation,
+  RepresentationRepository,
+} from '../domain/representation.js';
 import type { ProcessJob } from './plugin-job.js';
 import { FileFacts, type FileFact } from './ports.js';
 
@@ -38,7 +41,7 @@ export class ProcessContent {
     const { parts } = await this.streaming(hash, (content) =>
       instance.process({ ...file, hash, content }),
     );
-    await this.representations.save({ ...key, parts });
+    await this.representations.save(representation(key, parts));
     this.logger.log(`${name}: ${file.name}, ${parts.length} parts`);
   }
 

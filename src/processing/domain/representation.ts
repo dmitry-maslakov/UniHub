@@ -14,6 +14,17 @@ export interface Representation extends RepresentationKey {
   parts: string[];
 }
 
+// The parts as postgres keeps them in jsonb, which takes no NUL and no lone
+// surrogate. Parsers leave either in now and then (a pdf's broken font
+// map), and a save they fail would fail on every try.
+export const representation = (
+  key: RepresentationKey,
+  parts: readonly string[],
+): Representation => ({
+  ...key,
+  parts: parts.map((part) => part.replaceAll('\u0000', '').toWellFormed()),
+});
+
 export abstract class RepresentationRepository {
   abstract exists(key: RepresentationKey): Promise<boolean>;
   // saving the same one again is harmless

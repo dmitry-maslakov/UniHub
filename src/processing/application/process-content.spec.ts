@@ -44,7 +44,7 @@ const parts = (...texts: string[]): ProcessesContent => ({
 
 describe('ProcessContent', () => {
   it('stores what the processor made, keyed by content and version', async () => {
-    const { process, saved } = run(parts('page 1', 'page 2'));
+    const { process, saved } = run(parts('page 1', 'page\u0000 2'));
 
     await process.run(job());
 
