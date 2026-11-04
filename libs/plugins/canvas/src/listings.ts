@@ -13,10 +13,11 @@ type Sources = z.output<typeof Sources>;
 export const Listings = z.object({ items: Sources, files: Sources });
 export type Listings = z.output<typeof Listings>;
 
-// what the connector saves between runs, by course id; none at first
+// What the connector saves between runs, by course id; none at first. A
+// new object each time: a run fills it in.
 export const SyncState = z
   .object({ courses: z.record(z.string(), Listings) })
-  .catch({ courses: {} });
+  .catch(() => ({ courses: {} }));
 export type SyncState = z.output<typeof SyncState>;
 
 function settleSources(last: Sources = {}, now: Sources) {

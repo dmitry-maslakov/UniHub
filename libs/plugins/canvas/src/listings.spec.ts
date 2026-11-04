@@ -6,6 +6,12 @@ describe('listings', () => {
     expect(SyncState.parse({ cursor: 'x' })).toEqual({ courses: {} });
   });
 
+  it('start each run from its own empty state', () => {
+    const first = SyncState.parse(null);
+    first.courses['101'] = { items: {}, files: {} };
+    expect(SyncState.parse(null)).toEqual({ courses: {} });
+  });
+
   it('find gone what a source that went through no longer has', () => {
     const last = {
       items: { assignments: ['assignment:1', 'assignment:2'] },
