@@ -54,8 +54,9 @@ model Item {
   files          File[]
 
   @@unique([portal, externalId])
-  // postgres doesn't index foreign keys: course listings and cascades
-  @@index([portalCourseId])
+  // postgres doesn't index foreign keys: cascades, and course listings in
+  // their order (newest first, the undated last: NULLS LAST in the migration)
+  @@index([portalCourseId, publishedAt(sort: Desc)])
 }
 
 model File {
@@ -82,7 +83,8 @@ model File {
   updatedAt       DateTime      @updatedAt
 
   @@unique([portal, externalId])
-  // course listings and cascades; a post's attachments and SetNull
-  @@index([portalCourseId])
+  // cascades and course listings in their order; a post's attachments and
+  // SetNull
+  @@index([portalCourseId, path, name])
   @@index([itemId])
 }
