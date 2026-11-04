@@ -1,14 +1,14 @@
 import {
+  Inject,
   Injectable,
   Logger,
   type OnApplicationBootstrap,
   type OnModuleDestroy,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import type { ConfigType } from '@nestjs/config';
 import { InjectQueue } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import type { ConnectorContext, PushesFromPortal } from '@app/plugin-sdk';
-import type { Env } from '../config.js';
 import { HubIngest } from '../ingest/contracts.js';
 import {
   CONNECTORS_QUEUE,
@@ -16,6 +16,7 @@ import {
   type ConnectorJob,
 } from './connectors.queue.js';
 import { PluginRegistry } from './plugin-registry.js';
+import { pluginsConfig } from './plugins.config.js';
 
 // Runs connectors: schedules poll connectors, starts and stops push ones.
 // A connector only ever sees one connection (portal + account).
@@ -28,7 +29,8 @@ export class ConnectorHost implements OnApplicationBootstrap, OnModuleDestroy {
     private readonly registry: PluginRegistry,
     private readonly ingest: HubIngest,
     @InjectQueue(CONNECTORS_QUEUE) private readonly queue: Queue<ConnectorJob>,
-    private readonly config: ConfigService<Env, true>,
+    @Inject(pluginsConfig.KEY)
+    private readonly config: ConfigType<typeof pluginsConfig>,
   ) {}
 
   // the one place that knows a portal's accounts; per-user ones come with auth
@@ -51,7 +53,7 @@ export class ConnectorHost implements OnApplicationBootstrap, OnModuleDestroy {
   async onApplicationBootstrap() {
     await this.schedulePolls();
     // push connectors hold connections, so only one instance runs them
-    if (this.config.get('RUN_CONNECTORS', { infer: true })) this.startPushes();
+    if (this.config.runConnectors) this.startPushes();
   }
 
   async onModuleDestroy() {

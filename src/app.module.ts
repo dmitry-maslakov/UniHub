@@ -1,9 +1,8 @@
 import { Module } from '@nestjs/common';
-import { resolve } from 'node:path';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConfigModule } from '@nestjs/config';
 import { CqrsModule } from '@nestjs/cqrs';
 import { ScheduleModule } from '@nestjs/schedule';
-import { type Env, envSchema } from './config.js';
+import { appConfig } from './app.config.js';
 import { DatabaseModule } from './platform/database/database.module.js';
 import { ErrorsModule } from './platform/errors/errors.module.js';
 import { MessagingModule } from './platform/messaging/messaging.module.js';
@@ -20,10 +19,11 @@ import { PluginsOutboxTransport } from './processing/contracts.js';
 import { plugins } from './plugins/enabled.js';
 import { PluginsModule } from './plugins/plugins.module.js';
 
-// The modules the hub is made of; each one configures what it owns.
+// The modules the hub is made of; each one configures what it owns, its
+// settings included (ConfigModule.forFeature).
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, validationSchema: envSchema }),
+    ConfigModule.forRoot({ isGlobal: true, load: [appConfig] }),
     // Redis and the database come before anything that pulls in BullMQ:
     // global modules shut down in reverse order, so they close after the
     // workers
@@ -44,12 +44,7 @@ import { PluginsModule } from './plugins/plugins.module.js';
     AccessModule,
     HealthModule,
     IngestModule,
-    StorageModule.forRootAsync({
-      inject: [ConfigService],
-      useFactory: (config: ConfigService<Env, true>) => ({
-        location: resolve(config.get('STORAGE_PATH', { infer: true })),
-      }),
-    }),
+    StorageModule,
     ProcessingModule,
     ...plugins,
   ],

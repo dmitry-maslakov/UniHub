@@ -4,9 +4,9 @@ import {
   Module,
   type OnApplicationShutdown,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { ConfigModule, type ConfigType } from '@nestjs/config';
 import { Redis } from 'ioredis';
-import type { Env } from '../../config.js';
+import { redisConfig } from './redis.config.js';
 
 export const REDIS = Symbol('REDIS');
 
@@ -14,15 +14,14 @@ export const REDIS = Symbol('REDIS');
 // Global and first in the app's imports, so it shuts down after the queues.
 @Global()
 @Module({
+  imports: [ConfigModule.forFeature(redisConfig)],
   providers: [
     {
       provide: REDIS,
-      inject: [ConfigService],
-      useFactory: (config: ConfigService<Env, true>) =>
+      inject: [redisConfig.KEY],
+      useFactory: ({ url }: ConfigType<typeof redisConfig>) =>
         // BullMQ workers need maxRetriesPerRequest: null
-        new Redis(config.get('REDIS_URL', { infer: true }), {
-          maxRetriesPerRequest: null,
-        }),
+        new Redis(url, { maxRetriesPerRequest: null }),
     },
   ],
   exports: [REDIS],

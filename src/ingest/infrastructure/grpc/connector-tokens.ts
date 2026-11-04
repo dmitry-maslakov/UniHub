@@ -1,22 +1,20 @@
-import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Inject, Injectable } from '@nestjs/common';
+import type { ConfigType } from '@nestjs/config';
 import type { Metadata } from '@grpc/grpc-js';
 import { GrpcUnauthenticatedException } from '@nestjs/microservices';
-import { parseConnectorTokens, type Env } from '../../../config.js';
+import { ingestConfig } from '../../ingest.config.js';
 
 // A connector's token decides its portal, it can't write as another one.
 // Several tokens for one portal let a token be rotated. Proper credentials
 // come with auth.
 @Injectable()
 export class ConnectorTokens {
-  private readonly byToken: Map<string, string>;
+  private readonly byToken: ReadonlyMap<string, string>;
 
-  constructor(config: ConfigService<Env, true>) {
-    this.byToken = new Map(
-      parseConnectorTokens(config.get('CONNECTOR_TOKENS', { infer: true })).map(
-        ([portal, token]) => [token, portal],
-      ),
-    );
+  constructor(
+    @Inject(ingestConfig.KEY) { tokens }: ConfigType<typeof ingestConfig>,
+  ) {
+    this.byToken = tokens;
   }
 
   // portals whose connectors run outside the hub

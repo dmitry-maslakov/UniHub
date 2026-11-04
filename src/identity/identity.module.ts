@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { ConfigModule, type ConfigType } from '@nestjs/config';
 import { AuthModule } from '@thallesp/nestjs-better-auth';
-import { parseList, type Env } from '../config.js';
 import { PrismaService } from '../platform/database/prisma.service.js';
 import { GrantCourseAccessHandler } from './application/commands/grant-course-access.handler.js';
 import { RevokeCourseAccessHandler } from './application/commands/revoke-course-access.handler.js';
@@ -11,6 +10,7 @@ import { ApiKeys } from './domain/api-keys.js';
 import { CourseAccessRepository } from './domain/course-access.js';
 import { Mailer } from './domain/mailer.js';
 import { UserRepository } from './domain/user.js';
+import { identityConfig } from './identity.config.js';
 import { createAuth } from './infrastructure/better-auth.js';
 import { BetterAuthApiKeys } from './infrastructure/better-auth-api-keys.js';
 import { MailModule } from './infrastructure/mail.module.js';
@@ -22,31 +22,22 @@ import { PrismaUserRepository } from './infrastructure/prisma-user.repository.js
 @Module({
   imports: [
     AuthModule.forRootAsync({
-      imports: [MailModule],
-      inject: [PrismaService, ConfigService, Mailer],
+      imports: [MailModule, ConfigModule.forFeature(identityConfig)],
+      inject: [PrismaService, identityConfig.KEY, Mailer],
       useFactory: (
         prisma: PrismaService,
-        config: ConfigService<Env, true>,
+        config: ConfigType<typeof identityConfig>,
         mailer: Mailer,
-      ) => {
-        const clientId = config.get('GOOGLE_CLIENT_ID', { infer: true });
-        const clientSecret = config.get('GOOGLE_CLIENT_SECRET', {
-          infer: true,
-        });
-        return {
-          auth: createAuth({
-            prisma,
-            mailer,
-            secret: config.get('BETTER_AUTH_SECRET', { infer: true }),
-            baseURL: config.get('BETTER_AUTH_URL', { infer: true }),
-            trustedOrigins: parseList(
-              config.get('TRUSTED_ORIGINS', { infer: true }),
-            ),
-            google:
-              clientId && clientSecret ? { clientId, clientSecret } : undefined,
-          }),
-        };
-      },
+      ) => ({
+        auth: createAuth({
+          prisma,
+          mailer,
+          secret: config.secret,
+          baseURL: config.baseURL,
+          trustedOrigins: config.trustedOrigins,
+          google: config.google,
+        }),
+      }),
     }),
   ],
   providers: [
