@@ -1,0 +1,2 @@
+Ispit iz predmeta Programski prevodioci odr¾aæe se u èetvrtak.
+Zadatak: napisati funkciju koja raèuna najveæi zajednièki delilac; ¹ta se de¹ava kada je ulaz negativan? ®urite, Ðorðe.

@@ -30,6 +30,11 @@ export interface ProcessorOutput {
   parts: string[];
 }
 
+// The most a reader gets at once of text with no unit of its own (a section,
+// lines): past this many characters it goes on in the next part. A page or
+// a slide is a part however long it is.
+export const MAX_PART = 10_000;
+
 // Processors and aggregators get each message at least once and in no
 // particular order: the same message can come again after a failure, and an
 // item.ingested can arrive after the item.removed that followed it. Handle a

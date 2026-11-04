@@ -61,6 +61,21 @@ describe('OfficeTextProcessor', () => {
     });
   });
 
+  // a page's script and style are in none of the parts
+  it.each([
+    ['labs.html', '.html'],
+    ['labs.html', 'text/html'],
+    ['labs.rtf', '.rtf'],
+    ['labs.epub', '.epub'],
+  ])('splits %s matched by %s by heading', async (name, matched) => {
+    expect(await processor.process(fixture(name, matched))).toEqual({
+      parts: [
+        'Lab 1\nInstall the toolchain.',
+        'Lab 2\nWrite a loop in assembly.',
+      ],
+    });
+  });
+
   it('splits the way the entry the hub matched says, a media type too', async () => {
     expect(
       await processor.process(fixture('lecture.pdf', 'application/pdf')),

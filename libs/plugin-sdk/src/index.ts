@@ -6,6 +6,7 @@ export * from './connectors.js';
 export * from './decorators.js';
 export * from './errors.js';
 export * from './messages.js';
+export * from './parsing.js';
 export * from './processors.js';
 export * from './reader.js';
 export * from './records.js';
