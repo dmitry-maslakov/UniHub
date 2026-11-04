@@ -1,6 +1,5 @@
 import { QueryHandler, type IQueryHandler } from '@nestjs/cqrs';
 import { InjectTransactionHost } from '@nestjs-cls/transactional';
-import type { Json, PortalId } from '@app/kernel';
 import type { PrismaTxHost } from '../../../platform/database/prisma.service.js';
 import {
   FindCourseQuery,
@@ -8,6 +7,7 @@ import {
   ListCoursesQuery,
   type CourseDto,
 } from '../../application/queries.js';
+import { portalCourseValues, portalOf } from '../rows.js';
 
 @QueryHandler(ListCoursesQuery)
 export class ListCoursesHandler implements IQueryHandler<ListCoursesQuery> {
@@ -37,7 +37,7 @@ export class ListCoursesHandler implements IQueryHandler<ListCoursesQuery> {
       ...course,
       portalCourses: links.map(({ year, portalCourse }) => ({
         ...portalCourse,
-        portal: portalCourse.portal as PortalId,
+        portal: portalOf(portalCourse),
         year,
       })),
     }));
@@ -72,12 +72,6 @@ export class GetPortalCourseHandler implements IQueryHandler<GetPortalCourseQuer
         meta: true,
       },
     });
-    return (
-      row && {
-        ...row,
-        portal: row.portal as PortalId,
-        meta: row.meta as Json | null,
-      }
-    );
+    return row && { ...row, ...portalCourseValues(row) };
   }
 }

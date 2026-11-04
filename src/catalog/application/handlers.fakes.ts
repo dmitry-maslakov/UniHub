@@ -5,7 +5,7 @@ import {
   ClsPluginTransactional,
   NoOpTransactionalAdapter,
 } from '@nestjs-cls/transactional';
-import type { CatalogAggregate } from '../domain/aggregate.js';
+import type { CatalogAggregate, Ingested } from '../domain/aggregate.js';
 import type { CourseLink } from '../domain/course-link/course-link.js';
 import { CourseLinkRepository } from '../domain/course-link/course-link.repository.js';
 import type { Course } from '../domain/course/course.js';
@@ -45,10 +45,7 @@ import { References } from './references.js';
 const key = ({ portal, externalId }: PortalRef) => `${portal}:${externalId}`;
 
 // keeps what save() was given, and loads it anew, as a database would
-class InMemory<
-  S extends { ref: PortalRef },
-  T extends CatalogAggregate & { readonly snapshot: Readonly<S> },
-> {
+class InMemory<S extends Ingested, T extends CatalogAggregate<S>> {
   readonly records = new Map<string, S>();
   readonly events: CatalogEvent[] = [];
   writes = 0;

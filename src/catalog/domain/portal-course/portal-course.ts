@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Json } from '@app/kernel';
-import { CatalogAggregate } from '../aggregate.js';
+import { CatalogAggregate, type Ingested } from '../aggregate.js';
 import { differs } from '../changes.js';
 import type { PortalRef } from '../portal-ref.js';
 
@@ -11,19 +11,13 @@ export interface PortalCourseProps {
   meta: Json | null;
 }
 
-export interface PortalCourseState {
-  id: string;
-  ref: PortalRef;
+export interface PortalCourseState extends Ingested {
   props: PortalCourseProps;
 }
 
 // A course as it exists in one portal (a Canvas course, an ACS group, a
 // Teams team). Nothing downstream reads them, so a change records no event.
-export class PortalCourse extends CatalogAggregate {
-  private constructor(private readonly state: PortalCourseState) {
-    super();
-  }
-
+export class PortalCourse extends CatalogAggregate<PortalCourseState> {
   static create(ref: PortalRef, props: PortalCourseProps) {
     const course = new PortalCourse({
       id: randomUUID(),
@@ -36,18 +30,6 @@ export class PortalCourse extends CatalogAggregate {
 
   static restore(state: PortalCourseState) {
     return new PortalCourse(state);
-  }
-
-  get id() {
-    return this.state.id;
-  }
-
-  get ref() {
-    return this.state.ref;
-  }
-
-  get snapshot(): Readonly<PortalCourseState> {
-    return { ...this.state };
   }
 
   // false when the portal sent what we already have

@@ -1,6 +1,5 @@
 import { QueryHandler, type IQueryHandler } from '@nestjs/cqrs';
 import { InjectTransactionHost } from '@nestjs-cls/transactional';
-import type { ContentHash, MediaType, PortalId } from '@app/kernel';
 import type { Prisma } from '../../../generated/prisma/client.js';
 import type { PrismaTxHost } from '../../../platform/database/prisma.service.js';
 import {
@@ -11,7 +10,7 @@ import {
   ListFilesWithContentQuery,
   type FileDto,
 } from '../../application/queries.js';
-import { byPortalRef } from '../by-portal-ref.js';
+import { byPortalRef, fileValues } from '../rows.js';
 import { visibleFile } from './visibility.js';
 
 const select = {
@@ -29,17 +28,12 @@ const select = {
   removedAt: true,
 } satisfies Prisma.FileSelect;
 
-// Values were checked on the way in (media types of older rows by their
-// migration too). Size is a bigint in the db (files over 2 GB).
 const toDto = ({
   removedAt,
   ...row
 }: Prisma.FileGetPayload<{ select: typeof select }>): FileDto => ({
   ...row,
-  portal: row.portal as PortalId,
-  size: row.size === null ? null : Number(row.size),
-  mime: row.mime as MediaType | null,
-  contentHash: row.contentHash as ContentHash | null,
+  ...fileValues(row),
   removed: removedAt !== null,
 });
 

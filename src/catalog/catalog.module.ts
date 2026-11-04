@@ -20,7 +20,6 @@ import { CourseRepository } from './domain/course/course.repository.js';
 import { ItemRepository } from './domain/item/item.repository.js';
 import { PortalCourseRepository } from './domain/portal-course/portal-course.repository.js';
 import { PortalFileRepository } from './domain/portal-file/portal-file.repository.js';
-import { CatalogOutbox } from './infrastructure/catalog-outbox.js';
 import { CoursesAdminController } from './infrastructure/http/courses-admin.controller.js';
 import { PrismaCourseLinkRepository } from './infrastructure/prisma-course-link.repository.js';
 import { PrismaCourseRepository } from './infrastructure/prisma-course.repository.js';
@@ -55,7 +54,6 @@ import {
     { provide: PortalFileRepository, useClass: PrismaPortalFileRepository },
     { provide: CourseRepository, useClass: PrismaCourseRepository },
     { provide: CourseLinkRepository, useClass: PrismaCourseLinkRepository },
-    CatalogOutbox,
     References,
     UpsertPortalCourseHandler,
     UpsertItemHandler,

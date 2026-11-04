@@ -1,78 +1,73 @@
 import { Injectable } from '@nestjs/common';
-import {
-  InjectTransactionHost,
-  Propagation,
-  Transactional,
-} from '@nestjs-cls/transactional';
-import type { ContentHash, MediaType, PortalId } from '@app/kernel';
 import type { File as Row } from '../../generated/prisma/client.js';
-import type { PrismaTxHost } from '../../platform/database/prisma.service.js';
-import { PortalFile } from '../domain/portal-file/portal-file.js';
-import { PortalFileRepository } from '../domain/portal-file/portal-file.repository.js';
+import {
+  PortalFile,
+  type FileState,
+} from '../domain/portal-file/portal-file.js';
+import type { PortalFileRepository } from '../domain/portal-file/portal-file.repository.js';
 import type { PortalRef } from '../domain/portal-ref.js';
-import { byPortalRef } from './by-portal-ref.js';
-import { CatalogOutbox } from './catalog-outbox.js';
-import { LOCK, lockRecord } from './record-lock.js';
+import {
+  LOCK,
+  PrismaIngestedRepository,
+} from './prisma-ingested.repository.js';
+import { byPortalRef, fileValues } from './rows.js';
 
-// Values were checked on the way in (media types of older rows by their
-// migration too). Size is a bigint in the db (files over 2 GB), a number
-// everywhere else.
-const toFile = (row: Row) =>
-  PortalFile.restore({
+const toFile = (row: Row) => {
+  const { portal, size, mime, contentHash } = fileValues(row);
+  return PortalFile.restore({
     id: row.id,
-    ref: { portal: row.portal as PortalId, externalId: row.externalId },
+    ref: { portal, externalId: row.externalId },
     props: {
       name: row.name,
       path: row.path,
       url: row.url,
-      size: row.size === null ? null : Number(row.size),
-      mime: row.mime as MediaType | null,
+      size,
+      mime,
       sourceUpdatedAt: row.sourceUpdatedAt,
     },
     placement: { portalCourseId: row.portalCourseId, itemId: row.itemId },
-    content: row.contentHash as ContentHash | null,
+    content: contentHash,
     stale: row.contentStale,
     removedAt: row.removedAt,
   });
+};
 
 @Injectable()
-export class PrismaPortalFileRepository extends PortalFileRepository {
-  constructor(
-    @InjectTransactionHost() private readonly txHost: PrismaTxHost,
-    private readonly outbox: CatalogOutbox,
-  ) {
-    super();
-  }
+export class PrismaPortalFileRepository
+  extends PrismaIngestedRepository<PortalFile>
+  implements PortalFileRepository
+{
+  protected readonly lock = LOCK.file;
 
-  @Transactional(Propagation.Mandatory)
-  async getForUpdate(ref: PortalRef) {
-    await lockRecord(this.txHost.tx, LOCK.file, ref);
+  async findByRef(ref: PortalRef) {
     const row = await this.txHost.tx.file.findUnique({
       where: byPortalRef(ref),
     });
     return row && toFile(row);
   }
 
-  @Transactional(Propagation.Mandatory)
-  async save(file: PortalFile) {
-    if (file.dirty) {
-      const { id, ref, props, placement, content, stale, removedAt } =
-        file.snapshot;
-      const data = {
-        portal: ref.portal,
-        externalId: ref.externalId,
-        ...props,
-        ...placement,
-        contentHash: content,
-        contentStale: stale,
-        removedAt,
-      };
-      await this.txHost.tx.file.upsert({
-        where: { id },
-        create: { id, ...data },
-        update: data,
-      });
-    }
-    await this.outbox.write(file);
+  protected upsert({
+    id,
+    ref,
+    props,
+    placement,
+    content,
+    stale,
+    removedAt,
+  }: Readonly<FileState>) {
+    const data = {
+      portal: ref.portal,
+      externalId: ref.externalId,
+      ...props,
+      ...placement,
+      contentHash: content,
+      contentStale: stale,
+      removedAt,
+    };
+    return this.txHost.tx.file.upsert({
+      where: { id },
+      create: { id, ...data },
+      update: data,
+    });
   }
 }
