@@ -5,7 +5,7 @@ See @AGENTS.md as well.
 - Nest's (and the libraries') documented way first; nothing hand-rolled when a standard way exists
 - issue per change, branch `feat/<issue>-<name>`, commits under the owner's name without AI trailers
 - PR descriptions: `Closes #N` and 2–4 short bullets, no signature
-- every PR is reviewed by independent agents (Nest canon, architecture, correctness) with no context but the diff; agreed fixes go in, then the PR is merged right away
+- every PR gets one independent reviewer with no context but the diff, covering correctness, Nest and library canon, and architecture; agreed fixes go in, then the PR is merged right away. A declined point goes under Declined only if a later review would raise it again
 - connectors for private portals (ACS) never go into this repo; they run elsewhere and talk gRPC
 
 ## Turned down or put off on review, to go through later
@@ -17,7 +17,7 @@ Declined:
 - swagger CLI plugin via `PluginMetadataGenerator`: explicit `@ApiProperty` instead
 - `protoPath` from `import.meta.dirname`: rspack bundles, so it's `process.cwd()`; Docker WORKDIR must be the repo root
 - connector token mapping to (portal, account): env tokens get replaced by API keys (#33), not extended
-- `actorId` in course access commands: the admin check is `@Roles(['admin'])` at the route
+- `actorId` in course access commands: the admin check is `@Roles([ADMIN_ROLE])` at the route
 - a `source` column on course access (manual vs. from a portal): when per-user accounts come
 - portal courses not linked to a course: nobody reads them through the API, admins included
 - tests of Better Auth's own device flow cases (deny, expiry, reuse)
@@ -44,6 +44,6 @@ Put off:
 - device sign-in: approval screen details and shorter device sessions, with the web portal
 - helmet's `Cross-Origin-Resource-Policy: same-origin` stops another origin embedding file content (`<img>`, `<iframe>`); `same-site` if the web portal lives on a sibling subdomain
 - grants of a deleted course: when catalog can delete courses (an event for identity)
-- kernel values (`ContentHash`, `MediaType`) in the modules' own signatures, and media types normalised where files come in: with each module's rewrite
+- kernel values (`ContentHash`, `MediaType`, `PortalId`) in the modules' own signatures: catalog has them (and ingest normalises media types where files come in), the other modules with their rewrite
 
 Done the standard way after all: global prefix, gRPC guard (#36).
