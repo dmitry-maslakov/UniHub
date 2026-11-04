@@ -6,7 +6,6 @@ import {
   ParseUUIDPipe,
   Query,
   StreamableFile,
-  UseGuards,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -21,7 +20,7 @@ import { PluginName } from '@app/kernel';
 import { CurrentUserId } from '../../../identity/contracts.js';
 import { CourseReader } from '../../application/course-reader.js';
 import { textPage } from '../../application/page.js';
-import { throttleBy } from '../throttle.js';
+import { Limited } from '../throttle.js';
 import { FileDetailsResponse, TextPageResponse } from './responses.js';
 
 const textQuery = z.object({
@@ -35,8 +34,7 @@ const textQuery = z.object({
 @ApiBearerAuth()
 @ApiNotFoundResponse()
 @Controller('files')
-// after the session guard, so it counts per user
-@UseGuards(throttleBy('api'))
+@Limited('api')
 export class FilesController {
   constructor(private readonly reader: CourseReader) {}
 

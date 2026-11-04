@@ -45,7 +45,7 @@ OpenAPI at `/api/docs`. A signed-in user reads the courses they were given:
 - `GET /api/files/{id}/text?page=2`: one page, slide or section of a text
 - `GET /api/files/{id}/content`: the file itself
 
-Everything goes through `CourseReader` (`src/access`), which MCP shares.
+Everything goes through `CourseReader` (`src/access`), which MCP shares; 1200 calls a minute per user.
 
 Admins set the courses up (`@Roles([ADMIN_ROLE])`):
 

@@ -14,6 +14,5 @@ export { ApiKeyAuth } from './infrastructure/http/api-key.guard.js';
 export { AllowAnonymous, Roles } from '@thallesp/nestjs-better-auth';
 export {
   CurrentUserId,
-  signedInUserId,
   userIdOf,
 } from './infrastructure/http/current-user-id.js';
