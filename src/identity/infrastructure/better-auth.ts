@@ -15,6 +15,10 @@ import { ADMIN_ROLE } from '../domain/reader.js';
 // our own apps that may sign in by QR code (device authorization)
 export const DEVICE_CLIENTS = ['unihub-web', 'unihub-app'];
 
+// what a session does that outlasts it: makes an API key, or approves a
+// screen's sign-in by QR, which gives that screen a session of its own
+const FRESH_SESSION_PATHS = ['/api-key/create', '/device/approve'];
+
 // 90 days; the plugin reads it in seconds, whatever its docs say
 export const API_KEY_LIFETIME_SECONDS = 90 * 24 * 60 * 60;
 
@@ -54,7 +58,7 @@ export function createAuth({
   const dropApiKeys = (userId: string) =>
     prisma.apikey.deleteMany({ where: { referenceId: userId } });
 
-  return betterAuth({
+  const auth = betterAuth({
     secret,
     baseURL,
     trustedOrigins,
@@ -98,11 +102,21 @@ export function createAuth({
     },
     socialProviders: google ? { google } : {},
     hooks: {
-      // A key outlives the session that made it, so only a session signed in
-      // within a day (Better Auth's freshAge) makes one: an old cookie
-      // someone stole doesn't, nor does a session kept alive for weeks.
+      // A key outlives the session that made it, and a screen approved by QR
+      // gets a session of its own, new and so fresh. So only a session
+      // signed in within a day (Better Auth's freshAge) does either: an old
+      // cookie someone stole doesn't, nor does a session kept alive for
+      // weeks. Before hooks all get the request as it came, before bearer()
+      // turns a token into the cookie, so the session is read through
+      // auth.api, which runs bearer() first, and left where the middleware
+      // and the endpoint look for it.
       before: createAuthMiddleware(async (ctx) => {
-        if (ctx.path === '/api-key/create') await freshSessionMiddleware(ctx);
+        if (!ctx.headers || !FRESH_SESSION_PATHS.includes(ctx.path)) return;
+        ctx.context.session = await auth.api.getSession({
+          headers: ctx.headers,
+          query: { disableRefresh: true },
+        });
+        await freshSessionMiddleware(ctx);
       }),
       // the other ways to a new password: the user's own change, an admin's
       after: createAuthMiddleware(async (ctx) => {
@@ -142,6 +156,7 @@ export function createAuth({
       }),
     ],
   });
+  return auth;
 }
 
 export type Auth = ReturnType<typeof createAuth>;

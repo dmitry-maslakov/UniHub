@@ -18,6 +18,13 @@ describe('identity', { timeout: 20_000 }, () => {
   let app: INestApplication;
   const mails: Mail[] = [];
   const { http, post, linkTo, signIn, signUp } = accounts(() => app, mails);
+  // as an app without cookies does: the session token in Authorization
+  const postWithToken = (path: string, body: object, token: string) =>
+    http()
+      .post(`/api/auth${path}`)
+      .set('origin', ORIGIN)
+      .set('authorization', `Bearer ${token}`)
+      .send(body);
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
@@ -126,14 +133,26 @@ describe('identity', { timeout: 20_000 }, () => {
       .set('authorization', `Bearer ${token.body.access_token}`)
       .expect(200);
     expect(session.body.user.email).toBe('cy@uni.test');
+    // a screen signed in just now makes a key for its MCP client
+    await postWithToken(
+      '/api-key/create',
+      { name: 'screen' },
+      token.body.access_token,
+    ).expect(200);
 
     await post('/device/code', { client_id: 'someone-else' }).expect(400);
   });
 
-  it('gives API keys to users just signed in', async () => {
+  it('gives API keys to users just signed in, by cookie or token', async () => {
     const cookie = await signUp('di@uni.test');
+    const { headers } = await post('/sign-in/email', {
+      email: 'di@uni.test',
+      password: 'correct horse 1',
+    }).expect(200);
+    const token = headers['set-auth-token'] as string;
     const created = await post('/api-key/create', { name: 'claude' }, cookie);
     expect(created.status).toBe(200);
+    await postWithToken('/api-key/create', { name: 'cli' }, token).expect(200);
 
     const { valid, key } = await app
       .get(AuthService)
@@ -141,7 +160,7 @@ describe('identity', { timeout: 20_000 }, () => {
     expect(valid).toBe(true);
     expect(key?.referenceId).toBe(created.body.referenceId);
 
-    // a session signed in two days ago is still a session, but makes no key
+    // sessions signed in two days ago are still sessions, but make no key
     const day = 24 * 60 * 60 * 1000;
     await app.get(PrismaService).session.updateMany({
       where: { userId: created.body.referenceId },
@@ -152,9 +171,30 @@ describe('identity', { timeout: 20_000 }, () => {
       .set('cookie', cookie)
       .expect(200)
       .expect((res) => expect(res.body.user.email).toBe('di@uni.test'));
-    const stale = await post('/api-key/create', { name: 'later' }, cookie);
-    expect(stale.status).toBe(403);
-    expect(stale.body.code).toBe('SESSION_NOT_FRESH');
+    for (const stale of [
+      await post('/api-key/create', { name: 'later' }, cookie),
+      await postWithToken('/api-key/create', { name: 'later' }, token),
+    ]) {
+      expect(stale.status).toBe(403);
+      expect(stale.body.code).toBe('SESSION_NOT_FRESH');
+    }
+
+    // nor approve a screen's sign-in, which would give it a fresh session
+    const { user_code } = (
+      await post('/device/code', { client_id: 'unihub-web' }).expect(200)
+    ).body as Record<string, string>;
+    await http()
+      .get('/api/auth/device')
+      .query({ user_code })
+      .set('cookie', cookie)
+      .expect(200);
+    const approve = await post(
+      '/device/approve',
+      { userCode: user_code },
+      cookie,
+    );
+    expect(approve.status).toBe(403);
+    expect(approve.body.code).toBe('SESSION_NOT_FRESH');
   });
 
   it("ends a user's keys when they or an admin set a new password", async () => {
