@@ -348,19 +348,13 @@
               {
                 "group": [
                   "**/catalog/**",
-                  "!**/catalog/contracts.js",
                   "**/ingest/**",
-                  "!**/ingest/contracts.js",
                   "**/storage/**",
-                  "!**/storage/contracts.js",
                   "**/processing/**",
-                  "!**/processing/contracts.js",
                   "**/plugins/**",
-                  "!**/plugins/contracts.js",
-                  "**/access/**",
-                  "!**/access/contracts.js"
+                  "**/access/**"
                 ],
-                "message": "other modules are used through their contracts.ts"
+                "message": "identity uses no other module: the others use it"
               }
             ]
           }
@@ -377,19 +371,13 @@
               {
                 "group": [
                   "**/catalog/**",
-                  "!**/catalog/contracts.js",
                   "**/ingest/**",
-                  "!**/ingest/contracts.js",
                   "**/storage/**",
-                  "!**/storage/contracts.js",
                   "**/processing/**",
-                  "!**/processing/contracts.js",
                   "**/plugins/**",
-                  "!**/plugins/contracts.js",
-                  "**/access/**",
-                  "!**/access/contracts.js"
+                  "**/access/**"
                 ],
-                "message": "other modules are used through their contracts.ts"
+                "message": "identity uses no other module: the others use it"
               },
               {
                 "group": [

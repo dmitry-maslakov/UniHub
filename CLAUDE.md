@@ -17,7 +17,8 @@ Declined:
 - swagger CLI plugin via `PluginMetadataGenerator`: explicit `@ApiProperty` instead
 - `protoPath` from `import.meta.dirname`: rspack bundles, so it's `process.cwd()`; Docker WORKDIR must be the repo root
 - connector token mapping to (portal, account): env tokens get replaced by API keys (#33), not extended
-- `actorId` in course access commands: the admin check is `@Roles([ADMIN_ROLE])` at the route
+- `actorId` in course access commands: the admin check is `@Roles([ADMIN_ROLE])` on the routes that send them (`CourseAccessController`)
+- a grant's course checked to exist: identity uses no other module (catalog uses it), and a grant of an id no course has reads nothing
 - a `source` column on course access (manual vs. from a portal): when per-user accounts come
 - portal courses not linked to a course: nobody reads them through the API, admins included
 - tests of Better Auth's own device flow cases (deny, expiry, reuse)
@@ -44,6 +45,6 @@ Put off:
 - device sign-in: approval screen details and shorter device sessions, with the web portal
 - helmet's `Cross-Origin-Resource-Policy: same-origin` stops another origin embedding file content (`<img>`, `<iframe>`); `same-site` if the web portal lives on a sibling subdomain
 - grants of a deleted course: when catalog can delete courses (an event for identity)
-- kernel values (`ContentHash`, `MediaType`, `PortalId`, `PluginName`) in the modules' own signatures: catalog, storage, ingest, plugins, processing and the sdk have them (ingest normalises media types where files come in), identity and access with their rewrite
+- kernel values (`ContentHash`, `MediaType`, `PortalId`, `PluginName`) in the modules' own signatures: catalog, storage, ingest, plugins, processing and the sdk have them (ingest normalises media types where files come in), identity carries none of them, access with its rewrite
 
 Done the standard way after all: global prefix, gRPC guard (#36).

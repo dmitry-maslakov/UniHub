@@ -86,7 +86,7 @@ describe('MCP', { timeout: 20_000 }, () => {
         where: { portal_externalId: { portal: PORTAL, externalId: 'f1' } },
       })
     ).id;
-    await commands.execute(
+    const { id: courseId } = await commands.execute(
       new CreateCourseCommand(Slug.parse('alg'), CourseName.parse('Algoritmi')),
     );
     await commands.execute(
@@ -101,7 +101,7 @@ describe('MCP', { timeout: 20_000 }, () => {
     const { id: userId } = await prisma.user.findUniqueOrThrow({
       where: { email: 'agent@mcp.test' },
     });
-    await commands.execute(new GrantCourseAccessCommand(userId, 'alg'));
+    await commands.execute(new GrantCourseAccessCommand(userId, courseId));
     key = (
       await post('/api-key/create', { name: 'claude' }, cookie).expect(200)
     ).body.key;

@@ -29,12 +29,12 @@ npm run start:dev
 
 - email and password, the email confirmed by a link in a mail (without `SMTP_URL` mails only go to the log)
 - Google, when `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set
-- sign-in by QR code: a new screen asks for a code (device authorization), a signed-in phone approves it
-- session tokens as `Authorization: Bearer`, and API keys for MCP clients: they expire after 90 days, and a new password (a reset, a change, or one an admin sets) deletes them
+- sign-in by QR code: a new screen asks for a code (device authorization), a phone signed in within the last day approves it
+- session tokens as `Authorization: Bearer`, and API keys for MCP clients: only a session signed in within the last day makes one, they expire after 90 days, and a new password (a reset, a change, or one an admin sets) deletes them
 
 The first admin: `npm run auth:create-admin -- --email you@example.com --password '…'`. After adding a Better Auth plugin, `npm run auth:generate` updates `prisma/schema/identity.prisma`.
 
-Every HTTP route needs a signed-in user unless it says `@AllowAnonymous()`. Admins read every course, other users the ones granted to them (`GrantCourseAccessCommand`).
+Every HTTP route needs a signed-in user unless it says `@AllowAnonymous()`. Admins read every course, other users the ones an admin granted them, a banned user nothing (by API key either).
 
 ## REST API
 
@@ -52,6 +52,7 @@ Admins set the courses up (`@Roles([ADMIN_ROLE])`):
 - `POST /api/courses` with `{ slug, name }`: a course
 - `PUT /api/portal-courses/{portal}/{externalId}/course` with `{ course, year }`: the portal course becomes part of that course (no `year` for one that spans years); one linked elsewhere moves
 - `DELETE /api/portal-courses/{portal}/{externalId}/course`: unlinks it
+- `PUT /api/users/{userId}/courses/{courseId}`: the user reads the course, named by the id `POST /api/courses` answered (users' ids from Better Auth's `GET /api/auth/admin/list-users`); `DELETE` on the same path takes it back
 
 ## MCP
 

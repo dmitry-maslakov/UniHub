@@ -8,22 +8,23 @@ import {
   CourseName,
   CreateCourseCommand,
   Slug,
-  UnknownCourseError,
 } from '../src/catalog/contracts.js';
-import {
-  GrantCourseAccessCommand,
-  ReadableCoursesQuery,
-  RevokeCourseAccessCommand,
-  UnknownUserError,
-} from '../src/identity/contracts.js';
+import { ReadScopeQuery, UnknownUserError } from '../src/identity/contracts.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
 import { Mailer, type Mail } from '../src/identity/domain/mailer.js';
-import { accounts } from './accounts.js';
+import { accounts, ORIGIN } from './accounts.js';
 
 describe('identity', { timeout: 20_000 }, () => {
   let app: INestApplication;
   const mails: Mail[] = [];
   const { http, post, linkTo, signIn, signUp } = accounts(() => app, mails);
+  // as an app without cookies does: the session token in Authorization
+  const postWithToken = (path: string, body: object, token: string) =>
+    http()
+      .post(`/api/auth${path}`)
+      .set('origin', ORIGIN)
+      .set('authorization', `Bearer ${token}`)
+      .send(body);
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
@@ -132,20 +133,68 @@ describe('identity', { timeout: 20_000 }, () => {
       .set('authorization', `Bearer ${token.body.access_token}`)
       .expect(200);
     expect(session.body.user.email).toBe('cy@uni.test');
+    // a screen signed in just now makes a key for its MCP client
+    await postWithToken(
+      '/api-key/create',
+      { name: 'screen' },
+      token.body.access_token,
+    ).expect(200);
 
     await post('/device/code', { client_id: 'someone-else' }).expect(400);
   });
 
-  it('gives API keys to signed-in users', async () => {
+  it('gives API keys to users just signed in, by cookie or token', async () => {
     const cookie = await signUp('di@uni.test');
+    const { headers } = await post('/sign-in/email', {
+      email: 'di@uni.test',
+      password: 'correct horse 1',
+    }).expect(200);
+    const token = headers['set-auth-token'] as string;
     const created = await post('/api-key/create', { name: 'claude' }, cookie);
     expect(created.status).toBe(200);
+    await postWithToken('/api-key/create', { name: 'cli' }, token).expect(200);
 
     const { valid, key } = await app
       .get(AuthService)
       .api.verifyApiKey({ body: { key: created.body.key } });
     expect(valid).toBe(true);
     expect(key?.referenceId).toBe(created.body.referenceId);
+
+    // sessions signed in two days ago are still sessions, but make no key
+    const day = 24 * 60 * 60 * 1000;
+    await app.get(PrismaService).session.updateMany({
+      where: { userId: created.body.referenceId },
+      data: { createdAt: new Date(Date.now() - 2 * day) },
+    });
+    await http()
+      .get('/api/auth/get-session')
+      .set('cookie', cookie)
+      .expect(200)
+      .expect((res) => expect(res.body.user.email).toBe('di@uni.test'));
+    for (const stale of [
+      await post('/api-key/create', { name: 'later' }, cookie),
+      await postWithToken('/api-key/create', { name: 'later' }, token),
+    ]) {
+      expect(stale.status).toBe(403);
+      expect(stale.body.code).toBe('SESSION_NOT_FRESH');
+    }
+
+    // nor approve a screen's sign-in, which would give it a fresh session
+    const { user_code } = (
+      await post('/device/code', { client_id: 'unihub-web' }).expect(200)
+    ).body as Record<string, string>;
+    await http()
+      .get('/api/auth/device')
+      .query({ user_code })
+      .set('cookie', cookie)
+      .expect(200);
+    const approve = await post(
+      '/device/approve',
+      { userCode: user_code },
+      cookie,
+    );
+    expect(approve.status).toBe(403);
+    expect(approve.body.code).toBe('SESSION_NOT_FRESH');
   });
 
   it("ends a user's keys when they or an admin set a new password", async () => {
@@ -217,59 +266,60 @@ describe('identity', { timeout: 20_000 }, () => {
     ).expect(400);
   });
 
-  it('lets a user read the courses granted to them, an admin every course', async () => {
-    const commands = app.get(CommandBus);
-    const queries = app.get(QueryBus);
+  it('lets admins grant and revoke a course, by the id catalog gave it', async () => {
     const prisma = app.get(PrismaService);
-    await signUp('ed@uni.test');
-    await signUp('fa@uni.test');
+    const student = await signUp('ed@uni.test');
+    const admin = await signUp('fa@uni.test');
     const [ed, fa] = await Promise.all(
       ['ed@uni.test', 'fa@uni.test'].map((email) =>
         prisma.user.findUniqueOrThrow({ where: { email } }),
       ),
     );
     await prisma.user.update({ where: { id: fa.id }, data: { role: 'admin' } });
-    const { id: courseId } = await commands.execute(
-      new CreateCourseCommand(
-        Slug.parse('os'),
-        CourseName.parse('Operativni sistemi'),
-      ),
+    const { id: courseId } = await app
+      .get(CommandBus)
+      .execute(
+        new CreateCourseCommand(
+          Slug.parse('os'),
+          CourseName.parse('Operativni sistemi'),
+        ),
+      );
+    const grant = `/api/users/${ed.id}/courses/${courseId}`;
+    const as = (cookie: string) => ({
+      put: (path: string) =>
+        http().put(path).set('origin', ORIGIN).set('cookie', cookie),
+      delete: (path: string) =>
+        http().delete(path).set('origin', ORIGIN).set('cookie', cookie),
+    });
+    const reads = async (userId: string) =>
+      (await app.get(QueryBus).execute(new ReadScopeQuery(userId))).allows(
+        courseId,
+      );
+
+    await http().put(grant).expect(401);
+    await as(student).put(grant).expect(403);
+    await as(student).delete(grant).expect(403);
+    expect(await reads(ed.id)).toBe(false);
+    expect(await reads(fa.id)).toBe(true);
+
+    // twice is once
+    for (let i = 0; i < 2; i++) await as(admin).put(grant).expect(204);
+    expect(await reads(ed.id)).toBe(true);
+    expect(await prisma.courseAccess.count({ where: { userId: ed.id } })).toBe(
+      1,
     );
 
-    expect(
-      await commands.execute(new GrantCourseAccessCommand(ed.id, 'os')),
-    ).toEqual({ changed: true });
-    expect(
-      await commands.execute(new GrantCourseAccessCommand(ed.id, 'os')),
-    ).toEqual({ changed: false });
-    expect(await queries.execute(new ReadableCoursesQuery(ed.id))).toEqual({
-      all: false,
-      courseIds: [courseId],
-    });
-    expect(await queries.execute(new ReadableCoursesQuery(fa.id))).toEqual({
-      all: true,
-    });
-
     await prisma.user.update({ where: { id: ed.id }, data: { banned: true } });
-    expect(await queries.execute(new ReadableCoursesQuery(ed.id))).toEqual({
-      all: false,
-      courseIds: [],
-    });
+    expect(await reads(ed.id)).toBe(false);
     await prisma.user.update({ where: { id: ed.id }, data: { banned: false } });
 
-    expect(
-      await commands.execute(new RevokeCourseAccessCommand(ed.id, 'os')),
-    ).toEqual({ changed: true });
-    expect(await queries.execute(new ReadableCoursesQuery(ed.id))).toEqual({
-      all: false,
-      courseIds: [],
-    });
+    for (let i = 0; i < 2; i++) await as(admin).delete(grant).expect(204);
+    expect(await reads(ed.id)).toBe(false);
 
+    await as(admin).put(`/api/users/nobody/courses/${courseId}`).expect(404);
+    await as(admin).put(`/api/users/${ed.id}/courses/a%00b`).expect(400);
     await expect(
-      commands.execute(new GrantCourseAccessCommand(ed.id, 'nope')),
-    ).rejects.toThrow(UnknownCourseError);
-    await expect(
-      commands.execute(new GrantCourseAccessCommand('nobody', 'os')),
+      app.get(QueryBus).execute(new ReadScopeQuery('nobody')),
     ).rejects.toThrow(UnknownUserError);
   });
 });
