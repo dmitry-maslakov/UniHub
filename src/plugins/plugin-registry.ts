@@ -45,7 +45,9 @@ export type Runnable =
 // '.PDF' → '.pdf', 'Application/PDF; charset=binary' → 'application/pdf';
 // null for an entry that's neither
 const normalise = (entry: string) =>
-  entry.startsWith('.') ? entry.toLowerCase() : MediaType.parse(entry);
+  entry.startsWith('.')
+    ? entry.toLowerCase()
+    : (MediaType.safeParse(entry).data ?? null);
 
 // Everything the enabled plugins provide, found by their sdk decorators.
 // Collected in onModuleInit, when every provider exists, and checked there,
@@ -98,7 +100,7 @@ export class PluginRegistry implements OnModuleInit {
 
   processorsFor(file: { name: string; mime: string | null }) {
     const ext = extname(file.name).toLowerCase();
-    const mime = file.mime && MediaType.parse(file.mime);
+    const mime = MediaType.safeParse(file.mime).data;
     return this.processors.filter(({ options }) =>
       options.accepts.some((a) => a === mime || a === ext),
     );
@@ -136,13 +138,13 @@ export class PluginRegistry implements OnModuleInit {
       ...this.aggregators.map((a) => a.options.name),
     ];
     const portals = this.connectors.map((c) => c.options.portal);
-    for (const [what, list, isValid] of [
-      ['plugin name', names, PluginName.isValid],
-      ['connector portal', portals, PortalId.isValid],
+    for (const [what, list, schema] of [
+      ['plugin name', names, PluginName],
+      ['connector portal', portals, PortalId],
     ] as const) {
       const dup = list.find((n, i) => list.indexOf(n) !== i);
       if (dup) throw new Error(`${what} "${dup}" is used twice`);
-      const bad = list.find((n) => !isValid(n));
+      const bad = list.find((n) => !schema.safeParse(n).success);
       if (bad !== undefined) throw new Error(`bad ${what} "${bad}"`);
     }
 

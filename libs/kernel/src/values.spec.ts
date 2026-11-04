@@ -11,7 +11,7 @@ describe('ContentHash', () => {
 
   it('refuses anything else, a path above all', () => {
     for (const bad of ['', sha.slice(1), `${sha}0`, '../../etc/passwd'])
-      expect(() => ContentHash.parse(bad)).toThrow(InvalidValueError);
+      expect(ContentHash.safeParse(bad).success).toBe(false);
   });
 });
 
@@ -23,19 +23,18 @@ describe('MediaType', () => {
     expect(MediaType.parse('text/plain;')).toBe('text/plain');
   });
 
-  it('is null for what is no media type', () => {
-    expect(MediaType.parse('pdf')).toBeNull();
-    expect(MediaType.parse('')).toBeNull();
+  it('refuses what is no media type', () => {
+    for (const bad of ['pdf', '', null])
+      expect(MediaType.safeParse(bad).data).toBeUndefined();
   });
 });
 
 describe('portal ids and plugin names', () => {
   it('are lower-case letters, digits and dashes', () => {
     expect(PortalId.parse('ms-teams')).toBe('ms-teams');
-    expect(PluginName.isValid('office-text')).toBe(true);
+    expect(PluginName.safeParse('office-text').success).toBe(true);
     for (const bad of ['', 'Canvas', 'a__b', 'a:b', 'a b'])
-      expect(PortalId.isValid(bad)).toBe(false);
-    expect(() => PluginName.parse('a:b')).toThrow(/invalid plugin name/);
+      expect(PortalId.safeParse(bad).success).toBe(false);
   });
 });
 

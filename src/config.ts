@@ -23,7 +23,8 @@ const validTokens = (value: string) => {
   return (
     tokens.size === pairs.length &&
     pairs.every(
-      ([portal, token]) => PortalId.isValid(portal) && token.length >= 16,
+      ([portal, token]) =>
+        PortalId.safeParse(portal).success && token.length >= 16,
     )
   );
 };
@@ -49,9 +50,12 @@ export const envSchema = z
     PLUGINS: z
       .string()
       .default('')
-      .refine((v) => parseList(v).every(PluginName.isValid), {
-        message: 'plugin names are lower-case letters, digits and dashes',
-      }),
+      .refine(
+        (v) => parseList(v).every((n) => PluginName.safeParse(n).success),
+        {
+          message: 'plugin names are lower-case letters, digits and dashes',
+        },
+      ),
     // this instance starts push connectors (one instance should)
     RUN_CONNECTORS: z.stringbool().default(true),
     // external connectors connect here over gRPC, which has no TLS of its own:

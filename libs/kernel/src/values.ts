@@ -1,47 +1,48 @@
 import { MIMEType } from 'node:util';
-import type { Brand } from './brand.js';
-import { InvalidValueError } from './errors.js';
+import { z } from 'zod';
+
+// Values that went through a check, as zod brands: a ContentHash is a
+// string, but a string is not a ContentHash until ContentHash.parse said so.
+// Brands survive JSON (job data, outbox payloads), classes wouldn't.
 
 // sha256 of some content, in lower-case hex: the key content is stored and
 // processed under, and safe as a file name
-export type ContentHash = Brand<string, 'ContentHash'>;
-export const ContentHash = {
-  parse(value: string): ContentHash {
-    const hash = value.toLowerCase();
-    if (!/^[0-9a-f]{64}$/.test(hash))
-      throw new InvalidValueError('content hash', value);
-    return hash as ContentHash;
-  },
-};
+export const ContentHash = z
+  .string()
+  .toLowerCase()
+  .regex(/^[0-9a-f]{64}$/, 'not a sha256 in hex')
+  .brand<'ContentHash'>();
+export type ContentHash = z.output<typeof ContentHash>;
 
 // A media type's essence: 'Application/PDF; charset=binary' is
-// 'application/pdf'. A portal's type is a hint, not a promise, so what
-// isn't one is null rather than an error.
-export type MediaType = Brand<string, 'MediaType'>;
-export const MediaType = {
-  parse(value: string): MediaType | null {
+// 'application/pdf'. A portal's type is only a hint, so callers usually
+// take safeParse(...).data and treat what isn't one as unknown.
+export const MediaType = z
+  .string()
+  .transform((value, ctx) => {
     try {
-      return new MIMEType(value).essence as MediaType;
+      return new MIMEType(value).essence;
     } catch {
-      return null;
+      ctx.addIssue({
+        code: 'custom',
+        message: 'not a media type',
+        input: value,
+      });
+      return z.NEVER;
     }
-  },
-};
+  })
+  .brand<'MediaType'>();
+export type MediaType = z.output<typeof MediaType>;
 
 // Portal ids and plugin names end up in keys and job ids joined with '__'
 // and ':', so lower-case letters, digits and dashes only.
-const NAME = /^[a-z0-9-]+$/;
-const name = <T extends string>(what: string) => ({
-  isValid: (value: string) => NAME.test(value),
-  parse(value: string): T {
-    if (!NAME.test(value)) throw new InvalidValueError(what, value);
-    return value as T;
-  },
-});
+const name = z
+  .string()
+  .regex(/^[a-z0-9-]+$/, 'lower-case letters, digits and dashes only');
 
 // a portal's id ('canvas', 'acs'): which connector writes its records
-export type PortalId = Brand<string, 'PortalId'>;
-export const PortalId = name<PortalId>('portal id');
+export const PortalId = name.brand<'PortalId'>();
+export type PortalId = z.output<typeof PortalId>;
 
-export type PluginName = Brand<string, 'PluginName'>;
-export const PluginName = name<PluginName>('plugin name');
+export const PluginName = name.brand<'PluginName'>();
+export type PluginName = z.output<typeof PluginName>;

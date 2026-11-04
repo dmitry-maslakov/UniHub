@@ -80,7 +80,7 @@ describe('FsBlobStore', () => {
 
   it('refuses anything that is not a sha256 as a hash', async () => {
     await expect(store.get('../../etc/passwd')).rejects.toThrow(
-      'invalid content hash',
+      'not a sha256 in hex',
     );
   });
 });

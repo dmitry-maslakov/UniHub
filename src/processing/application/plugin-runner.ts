@@ -45,7 +45,7 @@ export class PluginRunner {
       const result = await found.plugin.instance.process({
         name: file.name,
         // the type the registry matched on, not the portal's spelling of it
-        mime: file.mime && MediaType.parse(file.mime),
+        mime: MediaType.safeParse(file.mime).data ?? null,
         hash,
         content: async () => {
           const stream = await this.queries.execute(new GetContentQuery(hash));
