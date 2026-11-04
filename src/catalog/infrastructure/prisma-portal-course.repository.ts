@@ -10,11 +10,11 @@ import {
 } from '../domain/portal-course/portal-course.js';
 import type { PortalCourseRepository } from '../domain/portal-course/portal-course.repository.js';
 import type { PortalRef } from '../domain/portal-ref.js';
-import { byPortalRef } from './by-portal-ref.js';
 import {
   LOCK,
   PrismaIngestedRepository,
 } from './prisma-ingested.repository.js';
+import { byPortalRef } from './rows.js';
 
 const toPortalCourse = (row: Row) =>
   PortalCourse.restore({

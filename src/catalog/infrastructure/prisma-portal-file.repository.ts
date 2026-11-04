@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import type { ContentHash, MediaType, PortalId } from '@app/kernel';
 import type { File as Row } from '../../generated/prisma/client.js';
 import {
   PortalFile,
@@ -7,32 +6,31 @@ import {
 } from '../domain/portal-file/portal-file.js';
 import type { PortalFileRepository } from '../domain/portal-file/portal-file.repository.js';
 import type { PortalRef } from '../domain/portal-ref.js';
-import { byPortalRef } from './by-portal-ref.js';
 import {
   LOCK,
   PrismaIngestedRepository,
 } from './prisma-ingested.repository.js';
+import { byPortalRef, fileValues } from './rows.js';
 
-// Values were checked on the way in (media types of older rows by their
-// migration too). Size is a bigint in the db (files over 2 GB), a number
-// everywhere else.
-const toFile = (row: Row) =>
-  PortalFile.restore({
+const toFile = (row: Row) => {
+  const { portal, size, mime, contentHash } = fileValues(row);
+  return PortalFile.restore({
     id: row.id,
-    ref: { portal: row.portal as PortalId, externalId: row.externalId },
+    ref: { portal, externalId: row.externalId },
     props: {
       name: row.name,
       path: row.path,
       url: row.url,
-      size: row.size === null ? null : Number(row.size),
-      mime: row.mime as MediaType | null,
+      size,
+      mime,
       sourceUpdatedAt: row.sourceUpdatedAt,
     },
     placement: { portalCourseId: row.portalCourseId, itemId: row.itemId },
-    content: row.contentHash as ContentHash | null,
+    content: contentHash,
     stale: row.contentStale,
     removedAt: row.removedAt,
   });
+};
 
 @Injectable()
 export class PrismaPortalFileRepository

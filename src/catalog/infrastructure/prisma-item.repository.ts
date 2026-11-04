@@ -4,11 +4,11 @@ import { Prisma, type Item as Row } from '../../generated/prisma/client.js';
 import { Item, type ItemState } from '../domain/item/item.js';
 import type { ItemRepository } from '../domain/item/item.repository.js';
 import type { PortalRef } from '../domain/portal-ref.js';
-import { byPortalRef } from './by-portal-ref.js';
 import {
   LOCK,
   PrismaIngestedRepository,
 } from './prisma-ingested.repository.js';
+import { byPortalRef } from './rows.js';
 
 const toItem = (row: Row) =>
   Item.restore({
