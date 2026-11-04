@@ -6,9 +6,10 @@ import type { PortalIngest } from '@app/plugin-sdk';
 import { PluginName } from '@app/kernel';
 import { FILE_CONTENT_CHANGED } from '../src/catalog/contracts.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
-import type {
-  PluginJob,
-  ProcessJob,
+import {
+  jobId,
+  type PluginJob,
+  type ProcessJob,
 } from '../src/processing/application/plugin-job.js';
 import {
   FileFacts,
@@ -27,8 +28,18 @@ import { sha256 } from './sha256.js';
 // checked on fakes (Dispatch, ProcessContent, Reconcile).
 
 const portal = 'processing-test';
+// fake-text's work on some content
+const job = (content: string): ProcessJob => ({
+  kind: 'process',
+  key: {
+    hash: sha256(content),
+    processor: PluginName.parse('fake-text'),
+    version: 1,
+  },
+});
 const text = 'the same notes in two courses';
-const hash = sha256(text);
+const notes = job(text);
+const { hash } = notes.key;
 
 describe('processing', { timeout: 20_000 }, () => {
   let app: INestApplication;
@@ -37,9 +48,7 @@ describe('processing', { timeout: 20_000 }, () => {
 
   const stored = () =>
     prisma.representation.findUnique({
-      where: {
-        hash_processor_version: { hash, processor: 'fake-text', version: 1 },
-      },
+      where: { hash_processor_version: notes.key },
     });
 
   beforeAll(async () => {
@@ -66,9 +75,7 @@ describe('processing', { timeout: 20_000 }, () => {
     const queue = app.get<Queue<PluginJob>>(getQueueToken(PLUGINS_QUEUE));
     // a's job, kept for a day once done: its id is the work's
     await vi.waitFor(async () =>
-      expect(await queue.getJobState(`${hash}__fake-text__1`)).toBe(
-        'completed',
-      ),
+      expect(await queue.getJobState(jobId(notes))).toBe('completed'),
     );
     const announced = published(
       app,
@@ -92,9 +99,7 @@ describe('processing', { timeout: 20_000 }, () => {
 
   it('queues processing that went missing', async () => {
     await prisma.representation.delete({
-      where: {
-        hash_processor_version: { hash, processor: 'fake-text', version: 1 },
-      },
+      where: { hash_processor_version: notes.key },
     });
 
     expect(await app.get(Reconcile).run()).toBeGreaterThanOrEqual(1);
@@ -117,14 +122,6 @@ describe('processing', { timeout: 20_000 }, () => {
   it('queues the same processing once, whether a message or a reconcile asks first', async () => {
     const queue = app.get<Queue>(getQueueToken(PLUGINS_QUEUE));
     const jobs = app.get(PluginJobQueue);
-    const job = (content: string): ProcessJob => ({
-      kind: 'process',
-      key: {
-        hash: sha256(content),
-        processor: PluginName.parse('fake-text'),
-        version: 1,
-      },
-    });
     const sent = job('sent first');
     const reconciled = job('reconciled first');
     const queued = async ({ key }: ProcessJob) =>
@@ -154,15 +151,11 @@ describe('processing', { timeout: 20_000 }, () => {
     const queue = app.get<Queue>(getQueueToken(PLUGINS_QUEUE));
     await vi.waitFor(
       async () =>
-        expect(
-          await queue.getDeduplicationJobId(`${hash}__fake-text__1`),
-        ).toBeNull(),
+        expect(await queue.getDeduplicationJobId(jobId(notes))).toBeNull(),
       { timeout: 10_000, interval: 100 },
     );
     await prisma.representation.delete({
-      where: {
-        hash_processor_version: { hash, processor: 'fake-text', version: 1 },
-      },
+      where: { hash_processor_version: notes.key },
     });
 
     await app.get(Reconcile).run();
