@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Json } from '@app/kernel';
-import { CatalogAggregate } from '../aggregate.js';
-import { differs } from '../changes.js';
+import { RemovableAggregate, type Removable } from '../aggregate.js';
 import { ITEM_CHANGED, ITEM_REMOVED } from '../events.js';
 import type { PortalRef } from '../portal-ref.js';
 
@@ -15,22 +14,14 @@ export interface ItemProps {
   raw: Json;
 }
 
-export interface ItemState {
-  id: string;
-  ref: PortalRef;
+export interface ItemState extends Removable {
   props: ItemProps;
   portalCourseId: string | null;
-  // the portal said it's gone; sending it again clears this
-  removedAt: Date | null;
 }
 
 // Anything a portal publishes that isn't a file: posts, announcements,
 // pages. Every real change, its first sync included, is news to plugins.
-export class Item extends CatalogAggregate {
-  private constructor(private readonly state: ItemState) {
-    super();
-  }
-
+export class Item extends RemovableAggregate<ItemState> {
   static create(
     ref: PortalRef,
     props: ItemProps,
@@ -51,46 +42,27 @@ export class Item extends CatalogAggregate {
     return new Item(state);
   }
 
-  get id() {
-    return this.state.id;
-  }
-
-  get ref() {
-    return this.state.ref;
-  }
-
   get portalCourseId() {
     return this.state.portalCourseId;
   }
 
-  get snapshot(): Readonly<ItemState> {
-    return { ...this.state };
-  }
-
-  // false when the portal sent what we already have; a removed item it
-  // sends again is back
+  // false when the portal sent what we already have
   sync(props: ItemProps, portalCourseId: string | null) {
     const s = this.state;
     const now = { ...s.props, portalCourseId: s.portalCourseId };
-    if (s.removedAt === null && !differs(now, { ...props, portalCourseId }))
-      return false;
+    if (!this.resync(now, { ...props, portalCourseId })) return false;
     s.props = props;
     s.portalCourseId = portalCourseId;
-    s.removedAt = null;
     this.recordChange();
     return true;
   }
 
-  // false if it was removed already: one removal, one event
+  // false if it was removed already
   remove(at = new Date()) {
-    if (this.state.removedAt) return false;
-    this.state.removedAt = at;
-    this.touch();
-    this.apply({
+    return this.markRemoved(at, {
       topic: ITEM_REMOVED,
       payload: { portal: this.ref.portal, itemId: this.id },
     });
-    return true;
   }
 
   private recordChange() {

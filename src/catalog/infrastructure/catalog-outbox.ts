@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectTransactionHost } from '@nestjs-cls/transactional';
 import { Outbox } from '@nestjs/outbox';
 import type { PrismaTxHost } from '../../platform/database/prisma.service.js';
-import type { CatalogAggregate } from '../domain/aggregate.js';
+import type { CatalogAggregate, Ingested } from '../domain/aggregate.js';
 import type { CatalogEvent } from '../domain/events.js';
 
 // Writes the events an aggregate recorded to the outbox, through the
@@ -16,7 +16,7 @@ export class CatalogOutbox {
     private readonly outbox: Outbox,
   ) {}
 
-  async write(aggregate: CatalogAggregate) {
+  async write(aggregate: CatalogAggregate<Ingested>) {
     const events = aggregate.getUncommittedEvents();
     if (events.length)
       await this.outbox.add<CatalogEvent['payload']>(this.txHost.tx, [

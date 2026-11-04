@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { ContentHash, MediaType } from '@app/kernel';
-import { CatalogAggregate } from '../aggregate.js';
-import { differs } from '../changes.js';
+import { RemovableAggregate, type Removable } from '../aggregate.js';
 import { FILE_CONTENT_CHANGED, FILE_REMOVED } from '../events.js';
 import type { PortalRef } from '../portal-ref.js';
 import type { Placement } from './placement.js';
@@ -18,17 +17,13 @@ export interface FileProps {
   sourceUpdatedAt: Date | null;
 }
 
-export interface FileState {
-  id: string;
-  ref: PortalRef;
+export interface FileState extends Removable {
   props: FileProps;
   placement: Placement;
   // the content storage has, once it has it
   content: ContentHash | null;
   // the portal changed the file since its content was stored
   stale: boolean;
-  // the portal said it's gone; sending it again clears this
-  removedAt: Date | null;
 }
 
 // a rename or a move doesn't make the connector download the file again
@@ -38,11 +33,7 @@ const contentMayDiffer = (a: FileProps, b: FileProps) =>
 
 // A file as a portal has it; the content itself is in storage. Not `File`,
 // which would shadow Node's global one.
-export class PortalFile extends CatalogAggregate {
-  private constructor(private readonly state: FileState) {
-    super();
-  }
-
+export class PortalFile extends RemovableAggregate<FileState> {
   static create(ref: PortalRef, props: FileProps, placement: Placement) {
     const file = new PortalFile({
       id: randomUUID(),
@@ -61,39 +52,21 @@ export class PortalFile extends CatalogAggregate {
     return new PortalFile(state);
   }
 
-  get id() {
-    return this.state.id;
-  }
-
-  get ref() {
-    return this.state.ref;
-  }
-
-  get snapshot(): Readonly<FileState> {
-    return { ...this.state };
-  }
-
   // no content yet, or the portal changed the file since it was stored
   get needsContent() {
     return this.state.content === null || this.state.stale;
   }
 
-  // false when the portal sent what we already have; a removed file it
-  // sends again is back
+  // false when the portal sent what we already have
   sync(props: FileProps, placement: Placement) {
     const s = this.state;
-    const cameBack = s.removedAt !== null;
-    if (
-      !cameBack &&
-      !differs({ ...s.props, ...s.placement }, { ...props, ...placement })
-    )
-      return false;
+    const cameBack = this.wasRemoved;
+    const now = { ...s.props, ...s.placement };
+    if (!this.resync(now, { ...props, ...placement })) return false;
     // stays stale until new content arrives, even if this run fails to send it
     if (s.content && contentMayDiffer(s.props, props)) s.stale = true;
     s.props = props;
     s.placement = placement;
-    s.removedAt = null;
-    this.touch();
     // plugins dropped what they had on file.removed: give it to them again
     if (cameBack && s.content) this.contentChanged(s.content);
     return true;
@@ -112,16 +85,12 @@ export class PortalFile extends CatalogAggregate {
     return isNew;
   }
 
-  // false if it was removed already: one removal, one event
+  // false if it was removed already
   remove(at = new Date()) {
-    if (this.state.removedAt) return false;
-    this.state.removedAt = at;
-    this.touch();
-    this.apply({
+    return this.markRemoved(at, {
       topic: FILE_REMOVED,
       payload: { portal: this.ref.portal, fileId: this.id },
     });
-    return true;
   }
 
   private contentChanged(hash: ContentHash) {
