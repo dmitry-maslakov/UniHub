@@ -22,15 +22,29 @@ const SPLIT_BY: Record<string, SplitBy> = {
     'heading',
   '.odt': 'heading',
   'application/vnd.oasis.opendocument.text': 'heading',
+  // a page's scripts and styles are left out
+  '.html': 'heading',
+  '.htm': 'heading',
+  'text/html': 'heading',
+  '.rtf': 'heading',
+  'application/rtf': 'heading',
+  'text/rtf': 'heading',
+  '.epub': 'heading',
+  'application/epub+zip': 'heading',
 };
+
+// html has no magic bytes officeparser could tell it by; the rest have
+const HTML = new Set(['.html', '.htm', 'text/html']);
 
 // past this a document isn't parsed, it's held in memory twice meanwhile
 export const MAX_BYTES = 100 * 1024 * 1024;
 
-// Text of pdf / pptx / docx / odt / odp, one part per page, slide or
-// section, made of officeparser's chunks.
+// Text of pdf / pptx / docx / odt / odp / html / rtf / epub, one part per
+// page, slide or section, made of officeparser's chunks.
 @ContentProcessor({
   name: 'office-text',
+  // still 2 with html, rtf and epub taken: the other formats come out as
+  // before, so what's stored stays, and reconcile queues the new ones
   version: 2,
   accepts: Object.keys(SPLIT_BY),
 })
@@ -41,7 +55,8 @@ export class OfficeTextProcessor implements ProcessesContent {
     const splitBy = SPLIT_BY[input.matched];
     const data = await readUpTo(await input.content(), MAX_BYTES);
     if (!data) throw new Error(`larger than ${MAX_BYTES} bytes, not parsed`);
-    const parsed = await parse(data, {
+    const fileType = HTML.has(input.matched) ? 'html' : null;
+    const parsed = await parse(data, fileType, {
       chunksConfig: {
         strategy: 'document-structure',
         splitBy,
