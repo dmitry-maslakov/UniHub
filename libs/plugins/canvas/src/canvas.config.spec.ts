@@ -18,11 +18,15 @@ describe('canvas settings', () => {
     ).toBe('hub of A. Student');
   });
 
-  it('refuse a missing token or an address that is no web one', () => {
+  it('refuse a missing token or an address that is no https one', () => {
     expect(canvasSettings.safeParse({ ...env, CANVAS_TOKEN: '' }).success).toBe(
       false,
     );
-    for (const url of ['canvas.example.edu', 'ftp://canvas.example.edu'])
+    for (const url of [
+      'canvas.example.edu',
+      'ftp://canvas.example.edu',
+      'http://canvas.example.edu',
+    ])
       expect(
         canvasSettings.safeParse({ ...env, CANVAS_URL: url }).success,
       ).toBe(false);

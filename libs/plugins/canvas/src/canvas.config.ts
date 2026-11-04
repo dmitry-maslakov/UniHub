@@ -3,8 +3,10 @@ import { z } from 'zod';
 
 export const canvasSettings = z
   .object({
-    // the school's Canvas: https://canvas.example.edu
-    CANVAS_URL: z.url({ protocol: /^https?$/ }),
+    // the school's Canvas: https://canvas.example.edu. Not http, which
+    // would send the token in the clear (and Canvas's redirect to https,
+    // another origin, would drop it)
+    CANVAS_URL: z.url({ protocol: /^https$/ }),
     // a personal access token of the hub's owner (README, Plugins)
     CANVAS_TOKEN: z.string().min(1),
     // Canvas refuses requests that come without one

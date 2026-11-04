@@ -102,7 +102,7 @@ The `canvas` connector (`libs/plugins/canvas`) polls a school's [Canvas LMS](htt
 To turn it on:
 
 - in Canvas, Account → Settings → Approved Integrations → New Access Token, with a purpose and an expiry date. Some schools don't let students make tokens or cap how long one lasts, and Canvas has revoked tokens in bulk before: the connector warns in the log 14 days before the token expires, and a run fails with "canvas token expired or was revoked" once Canvas no longer takes it
-- set `CANVAS_URL` (the school's Canvas, `https://canvas.example.edu`: in `.env` or `deploy/.env`, never in the repo), `CANVAS_TOKEN` and, if you like, `CANVAS_USER_AGENT` (Canvas refuses requests without one; `UniHub canvas connector` by default), then add `canvas` to `PLUGINS`
+- set `CANVAS_URL` (the school's Canvas, `https://canvas.example.edu`, https only as the token goes with every request: in `.env` or `deploy/.env`, never in the repo), `CANVAS_TOKEN` and, if you like, `CANVAS_USER_AGENT` (Canvas refuses requests without one; `UniHub canvas connector` by default), then add `canvas` to `PLUGINS`
 
 What it reads, of the courses you're active in:
 
