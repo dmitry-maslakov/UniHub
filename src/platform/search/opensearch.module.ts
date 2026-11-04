@@ -16,7 +16,7 @@ export const OPENSEARCH = Symbol('OPENSEARCH');
       useFactory: ({ url }: ConfigType<typeof opensearchConfig>) =>
         // No retries of its own, after a timeout either: with one node it
         // would wait on the same stuck one again. The queue retries jobs.
-        new Client({ node: url, maxRetries: 0, requestTimeout: 30_000 }),
+        new Client({ node: url, maxRetries: 0 }),
     },
   ],
   exports: [OPENSEARCH],
