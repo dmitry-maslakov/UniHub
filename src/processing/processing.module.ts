@@ -8,7 +8,6 @@ import { Reconciler } from './application/reconciler.js';
 import { RepresentationRepository } from './domain/representation.js';
 import { PrismaRepresentationRepository } from './infrastructure/prisma-representation.repository.js';
 import { ReconcileSchedule } from './infrastructure/reconcile.schedule.js';
-import { PluginsOutboxTransport } from './infrastructure/plugins-outbox.transport.js';
 import { PluginsWorker } from './infrastructure/plugins.worker.js';
 import { PLUGINS_QUEUE } from './queues.js';
 
@@ -36,7 +35,6 @@ const DAY = 24 * 60 * 60;
     GetTextPageHandler,
     PluginRunner,
     PluginsWorker,
-    PluginsOutboxTransport,
     Reconciler,
     ReconcileSchedule,
     {
@@ -44,7 +42,8 @@ const DAY = 24 * 60 * 60;
       useClass: PrismaRepresentationRepository,
     },
   ],
-  // the outbox publishes to plugins through it (messaging)
-  exports: [PluginsOutboxTransport],
+  // the plugins queue, for PluginsOutboxTransport: the outbox makes it,
+  // with this module's exports (AppModule wires it into messaging)
+  exports: [BullModule],
 })
 export class ProcessingModule {}

@@ -16,6 +16,7 @@ import { IdentityModule } from './identity/identity.module.js';
 import { IngestModule } from './ingest/ingest.module.js';
 import { StorageModule } from './storage/storage.module.js';
 import { ProcessingModule } from './processing/processing.module.js';
+import { PluginsOutboxTransport } from './processing/contracts.js';
 import { plugins } from './plugins/enabled.js';
 import { PluginsModule } from './plugins/plugins.module.js';
 
@@ -29,7 +30,11 @@ import { PluginsModule } from './plugins/plugins.module.js';
     RedisModule,
     DatabaseModule,
     QueuesModule,
-    MessagingModule,
+    // outbox messages go to the plugins, as processing's queue jobs
+    MessagingModule.forRoot({
+      transports: { plugins: PluginsOutboxTransport },
+      imports: [ProcessingModule],
+    }),
     ErrorsModule,
     CqrsModule.forRoot(),
     ScheduleModule.forRoot(),

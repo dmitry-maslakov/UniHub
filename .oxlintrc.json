@@ -62,7 +62,11 @@
                 "message": "other modules are used through their contracts.ts"
               },
               {
-                "group": ["**/infrastructure/**", "**/generated/**"],
+                "group": [
+                  "**/infrastructure/**",
+                  "**/generated/**",
+                  "**/platform/**"
+                ],
                 "message": "application code talks to infrastructure through domain ports"
               }
             ]
@@ -124,7 +128,11 @@
                 "message": "other modules are used through their contracts.ts"
               },
               {
-                "group": ["**/infrastructure/**", "**/generated/**"],
+                "group": [
+                  "**/infrastructure/**",
+                  "**/generated/**",
+                  "**/platform/**"
+                ],
                 "message": "application code talks to infrastructure through domain ports"
               }
             ]
@@ -186,7 +194,11 @@
                 "message": "other modules are used through their contracts.ts"
               },
               {
-                "group": ["**/infrastructure/**", "**/generated/**"],
+                "group": [
+                  "**/infrastructure/**",
+                  "**/generated/**",
+                  "**/platform/**"
+                ],
                 "message": "application code talks to infrastructure through domain ports"
               }
             ]
@@ -250,7 +262,11 @@
                 "message": "other modules are used through their contracts.ts"
               },
               {
-                "group": ["**/infrastructure/**", "**/generated/**"],
+                "group": [
+                  "**/infrastructure/**",
+                  "**/generated/**",
+                  "**/platform/**"
+                ],
                 "message": "application code talks to infrastructure through domain ports"
               }
             ]
@@ -312,7 +328,11 @@
                 "message": "other modules are used through their contracts.ts"
               },
               {
-                "group": ["**/infrastructure/**", "**/generated/**"],
+                "group": [
+                  "**/infrastructure/**",
+                  "**/generated/**",
+                  "**/platform/**"
+                ],
                 "message": "application code talks to infrastructure through domain ports"
               }
             ]
@@ -374,7 +394,11 @@
                 "message": "other modules are used through their contracts.ts"
               },
               {
-                "group": ["**/infrastructure/**", "**/generated/**"],
+                "group": [
+                  "**/infrastructure/**",
+                  "**/generated/**",
+                  "**/platform/**"
+                ],
                 "message": "application code talks to infrastructure through domain ports"
               }
             ]
@@ -436,7 +460,11 @@
                 "message": "other modules are used through their contracts.ts"
               },
               {
-                "group": ["**/infrastructure/**", "**/generated/**"],
+                "group": [
+                  "**/infrastructure/**",
+                  "**/generated/**",
+                  "**/platform/**"
+                ],
                 "message": "application code talks to infrastructure through domain ports"
               }
             ]
@@ -454,21 +482,14 @@
               {
                 "group": [
                   "**/catalog/**",
-                  "!**/catalog/contracts.js",
                   "**/ingest/**",
-                  "!**/ingest/contracts.js",
                   "**/storage/**",
-                  "!**/storage/contracts.js",
                   "**/processing/**",
-                  "!**/processing/contracts.js",
                   "**/plugins/**",
-                  "!**/plugins/contracts.js",
                   "**/identity/**",
-                  "!**/identity/contracts.js",
-                  "**/access/**",
-                  "!**/access/contracts.js"
+                  "**/access/**"
                 ],
-                "message": "the platform uses modules through their contracts.ts"
+                "message": "platform knows no module: AppModule wires modules into it"
               }
             ]
           }
@@ -497,7 +518,8 @@
                   "**/processing/**",
                   "**/plugins/**",
                   "**/identity/**",
-                  "**/access/**"
+                  "**/access/**",
+                  "**/platform/**"
                 ],
                 "message": "domain code depends on nothing but itself"
               }

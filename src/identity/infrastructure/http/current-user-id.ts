@@ -4,12 +4,17 @@ import {
   type ExecutionContext,
 } from '@nestjs/common';
 
-// The signed-in user's id. The auth guard puts the user on the request (the
-// session's now, an API key's in #16), so other modules don't need to know
-// how they signed in. A route that lets anyone in has no user: 401.
+// The signed-in user's id, if anyone signed in. The auth guard puts the
+// user on the request (a session's or an API key's), so other modules don't
+// need to know how they signed in.
+export const signedInUserId = (request: { user?: { id: string } | null }) =>
+  request.user?.id;
+
+// the same where a user is required: a route that lets anyone in has none, 401
 export const userIdOf = (request: { user?: { id: string } | null }) => {
-  if (!request.user) throw new UnauthorizedException();
-  return request.user.id;
+  const id = signedInUserId(request);
+  if (!id) throw new UnauthorizedException();
+  return id;
 };
 
 export const CurrentUserId = createParamDecorator(
