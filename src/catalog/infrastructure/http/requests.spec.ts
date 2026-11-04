@@ -1,4 +1,4 @@
-import { courseLink, ExternalId, newCourse } from './courses-admin.requests.js';
+import { courseLink, ExternalId, newCourse } from './requests.js';
 
 describe('admin requests', () => {
   it('make a course of a slug and a trimmed name', () => {

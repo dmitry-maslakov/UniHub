@@ -5,7 +5,7 @@ import { accounts, ORIGIN } from './accounts.js';
 import { portalIngest } from './ingest.js';
 
 // Each admin route once, behind its role. What a request may hold is
-// checked on its schema (courses-admin.requests.spec), what a command
+// checked on its schema (catalog's requests.spec), what a command
 // refuses on fakes (course.handlers.spec).
 
 const PORTAL = 'admin-test';

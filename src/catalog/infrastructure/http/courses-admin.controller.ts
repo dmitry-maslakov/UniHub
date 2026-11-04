@@ -26,7 +26,7 @@ import {
   LinkPortalCourseCommand,
   UnlinkPortalCourseCommand,
 } from '../../application/commands.js';
-import { courseLink, ExternalId, newCourse } from './courses-admin.requests.js';
+import { courseLink, ExternalId, newCourse } from './requests.js';
 
 // What admins set up: courses, and which portal courses each is made of.
 // A portal course is named the way its portal names it.

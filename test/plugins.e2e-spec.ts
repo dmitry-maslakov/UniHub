@@ -48,15 +48,10 @@ describe('plugins', { timeout: 20_000 }, () => {
 
   afterAll(() => app.close());
 
+  const connection = Connection.shared(PortalId.parse(FAKE_PORTAL));
   // what "sync now" from a client sends
   const syncNow = () =>
-    app
-      .get(CommandBus)
-      .execute(
-        new SyncConnectionCommand(
-          Connection.shared(PortalId.parse(FAKE_PORTAL)),
-        ),
-      );
+    app.get(CommandBus).execute(new SyncConnectionCommand(connection));
 
   // the whole pipeline, once: a poll's records through catalog and the
   // outbox to the plugins' queue, a processor and an aggregator
@@ -90,13 +85,12 @@ describe('plugins', { timeout: 20_000 }, () => {
 
     await syncNow();
     await vi.waitFor(() => expect(connector.polls).toBe(before + 1));
-    const running = await queue.getDeduplicationJobId(`${FAKE_PORTAL}__shared`);
+    const running = await queue.getDeduplicationJobId(connection.key);
+    expect(running).not.toBeNull();
     // asked for again while it runs: the same poll, nothing queued after it
     await syncNow();
     await syncNow();
-    expect(await queue.getDeduplicationJobId(`${FAKE_PORTAL}__shared`)).toBe(
-      running,
-    );
+    expect(await queue.getDeduplicationJobId(connection.key)).toBe(running);
     expect(
       (await queue.getJobs(['wait', 'delayed', 'prioritized'])).filter(
         ({ name, data }) => name === POLL && data.portal === FAKE_PORTAL,
@@ -118,7 +112,7 @@ describe('plugins', { timeout: 20_000 }, () => {
     await app.get(PollSchedule).apply();
 
     const keys = (await queue.getJobSchedulers()).map((s) => s.key);
-    expect(keys).toContain(`${FAKE_PORTAL}__shared`);
+    expect(keys).toContain(connection.key);
     expect(keys).not.toContain('gone__shared');
   });
 
