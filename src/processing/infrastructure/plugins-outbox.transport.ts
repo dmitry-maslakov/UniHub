@@ -9,7 +9,7 @@ import {
 import type { Queue } from 'bullmq';
 import { FILE_CONTENT_STORED, type Message } from '@app/plugin-sdk';
 import { GetFileQuery } from '../../catalog/contracts.js';
-import { PluginRegistry } from '../../plugins/plugin-registry.js';
+import { PluginCatalog } from '../../plugins/contracts.js';
 import { toSdkMessage } from '../application/to-sdk-message.js';
 import { PLUGINS_QUEUE, type PluginJob } from '../queues.js';
 
@@ -20,7 +20,7 @@ import { PLUGINS_QUEUE, type PluginJob } from '../queues.js';
 export class PluginsOutboxTransport extends OutboxTransport {
   constructor(
     @InjectQueue(PLUGINS_QUEUE) private readonly queue: Queue<PluginJob>,
-    private readonly registry: PluginRegistry,
+    private readonly plugins: PluginCatalog,
     private readonly queries: QueryBus,
   ) {
     super();
@@ -48,16 +48,18 @@ export class PluginsOutboxTransport extends OutboxTransport {
   }
 
   private async targets(message: Message) {
-    const names = this.registry
+    const names = this.plugins
       .aggregatorsFor(message.topic)
-      .map((a) => a.options.name);
+      .map((a) => a.spec.name);
     if (message.topic === FILE_CONTENT_STORED) {
       const file = await this.queries.execute(
         new GetFileQuery(message.payload.fileId),
       );
       if (file)
         names.unshift(
-          ...this.registry.processorsFor(file).map((p) => p.options.name),
+          ...this.plugins
+            .processorsFor(file)
+            .map(({ processor }) => processor.spec.name),
         );
     }
     return names;

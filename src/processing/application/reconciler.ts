@@ -7,7 +7,7 @@ import {
   ListFilesWithContentQuery,
   type FileDto,
 } from '../../catalog/contracts.js';
-import { PluginRegistry } from '../../plugins/plugin-registry.js';
+import { PluginCatalog } from '../../plugins/contracts.js';
 import { RepresentationRepository } from '../domain/representation.js';
 import { PLUGINS_QUEUE, type PluginJob } from '../queues.js';
 
@@ -22,7 +22,7 @@ const PAGE = 500;
 export class Reconciler {
   constructor(
     private readonly queries: QueryBus,
-    private readonly registry: PluginRegistry,
+    private readonly plugins: PluginCatalog,
     private readonly representations: RepresentationRepository,
     @InjectQueue(PLUGINS_QUEUE) private readonly queue: Queue<PluginJob>,
   ) {}
@@ -36,8 +36,8 @@ export class Reconciler {
       );
       for (const file of files) {
         const hash = file.contentHash!;
-        for (const { options } of this.registry.processorsFor(file)) {
-          const { name, version } = options;
+        for (const { processor } of this.plugins.processorsFor(file)) {
+          const { name, version } = processor.spec;
           if (await this.representations.exists(hash, name, version)) continue;
           await this.queue.add(
             name,

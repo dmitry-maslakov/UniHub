@@ -18,7 +18,7 @@ npm run start:dev
 
 - `src/` — the hub: its modules (`catalog`, `ingest`, `storage`, `processing`, `plugins`, `identity`, `access`), each used by the others only through its `contracts.ts`
 - `src/platform/` — what the modules run on: `database` (Prisma, `@Transactional()`), `redis`, `queues` (BullMQ), `messaging` (the outbox; `AppModule` names its transports), `errors` (one answer per kind of domain error); `app.module.ts` lists the modules and wires them into the platform
-- `libs/plugin-sdk` — everything a plugin may depend on, plugins never import the core directly
+- `libs/plugin-sdk` — everything a plugin may depend on, plugins never import the core directly; its `host.ts` is the hub's side (how it finds plugins), which plugins can't import
 - `libs/kernel` — what the hub's modules and the sdk share: values that hold the same rules everywhere (`ContentHash`, `MediaType`, `PortalId`, `PluginName`, `Json`) and the kinds of domain error (not found, conflict, invalid)
 - `prisma/schema/` — one schema file per module
 - `npm install` generates the Prisma client and the gRPC types (`src/ingest/infrastructure/grpc/generated`, from `proto/ingest.proto`); neither is committed
@@ -61,11 +61,11 @@ Admins set the courses up (`@Roles([ADMIN_ROLE])`):
 
 A plugin is a Nest module that depends only on `@app/plugin-sdk` (a lint rule checks it):
 
-- `@PollConnector({ portal, schedule })` — the hub calls `poll(ctx)` on the cron schedule, one run per account at a time
-- `@PushConnector({ portal })` — keeps its own connection; the hub calls `start(ctx)` / `stop()`, only on the instance with `RUN_CONNECTORS=true`
-- either way data goes in only through `ctx.ingest`, bound to the connector's portal and account. A record it refuses rejects with `InvalidRecordError` (fix it or skip it) or `UnknownReferenceError` (send what it refers to first), and their `reason` says which rule it broke, the same reasons gRPC connectors get
-- `@ContentProcessor({ name, version, accepts })` turns file content into text for models
-- `@Aggregator({ name, topics })` reacts to messages (`item.ingested`, `item.removed`, `file.content-stored`, `file.removed`) and reads the rest through `HubReader`
+- `@PollConnector({ portal, schedule })` — the hub calls `poll(ctx)` on the cron schedule (or at once on `SyncConnectionCommand`), one run per account at a time. `ctx.signal` aborts past `CONNECTOR_POLL_TIMEOUT_MINUTES` (60), when another instance has taken the run over, or at shutdown; the hub lets go of the run then, and the next one goes on from the state it saved
+- `@PushConnector({ portal })` — `run(ctx)` keeps its own connection until `ctx.signal` aborts, only on the instance with `RUN_CONNECTORS=true`. A run that ends or fails is started again after a second, then twice as long each time it ends soon again, up to `CONNECTOR_RESTART_MAX_SECONDS` (60); a run that stayed up longer than that starts over at a second; at shutdown all are stopped at once, each given `CONNECTOR_STOP_SECONDS` (10)
+- either way data goes in only through `ctx.ingest`, bound to `ctx.connection` (the portal and account). A record it refuses rejects with `InvalidRecordError` (fix it or skip it) or `UnknownReferenceError` (send what it refers to first), and their `reason` says which rule it broke, the same reasons gRPC connectors get
+- `@ContentProcessor({ name, version, accepts })` turns file content into text for models; it gets only files it accepts, and `input.matched` says which `accepts` entry the file matched (its extension first, then its media type)
+- `@Aggregator({ name, topics })` reacts to messages (`item.ingested`, `item.removed`, `file.content-stored`, `file.removed`) and reads the rest through `HubReader`; `handle()` is typed by the topics, so one that doesn't handle them all doesn't compile
 
 Built-in: `office-text` (`libs/plugins/office-text`) turns pdf, pptx, docx, odt and odp into text, one part per page, slide or section. Results are stored per content hash and processor version, and a daily reconcile queues whatever is missing.
 

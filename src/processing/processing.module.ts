@@ -3,6 +3,7 @@ import { ListTextsHandler } from './application/queries/list-texts.handler.js';
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { TerminusModule } from '@nestjs/terminus';
+import { PluginsModule } from '../plugins/contracts.js';
 import { StorageModule } from '../storage/contracts.js';
 import { PluginRunner } from './application/plugin-runner.js';
 import { Reconciler } from './application/reconciler.js';
@@ -31,6 +32,7 @@ const DAY = 24 * 60 * 60;
     // the worker asks whether the database is up before blaming a plugin
     TerminusModule,
     StorageModule,
+    PluginsModule,
   ],
   providers: [
     ListTextsHandler,
@@ -44,8 +46,8 @@ const DAY = 24 * 60 * 60;
       useClass: PrismaRepresentationRepository,
     },
   ],
-  // the plugins queue, for PluginsOutboxTransport: the outbox makes it,
-  // with this module's exports (AppModule wires it into messaging)
-  exports: [BullModule],
+  // the plugins queue and catalog, for PluginsOutboxTransport: the outbox
+  // makes it, with this module's exports (AppModule wires it into messaging)
+  exports: [BullModule, PluginsModule],
 })
 export class ProcessingModule {}

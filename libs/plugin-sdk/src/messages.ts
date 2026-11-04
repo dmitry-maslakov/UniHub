@@ -1,24 +1,26 @@
+import type { ContentHash, PortalId } from '@app/kernel';
+
 // What the hub tells plugins when something actually changed (not on every
 // resend). Topic names and payloads are part of the contract.
 
 export interface ItemIngested {
-  portal: string;
+  portal: PortalId;
   itemId: string;
 }
 
 export interface ItemRemoved {
-  portal: string;
+  portal: PortalId;
   itemId: string;
 }
 
 export interface FileContentStored {
-  portal: string;
+  portal: PortalId;
   fileId: string;
-  hash: string;
+  hash: ContentHash;
 }
 
 export interface FileRemoved {
-  portal: string;
+  portal: PortalId;
   fileId: string;
 }
 
@@ -31,19 +33,13 @@ export interface Messages {
 
 export type Topic = keyof Messages;
 
-// switch on `topic` and the payload type follows
-export type Message = {
-  [T in Topic]: { topic: T; payload: Messages[T] };
-}[Topic];
+// a message of one of these topics, any by default; switch on `topic` and
+// the payload type follows
+export type Message<T extends Topic = Topic> = {
+  [K in T]: { topic: K; payload: Messages[K] };
+}[T];
 
 export const ITEM_INGESTED = 'item.ingested' satisfies Topic;
 export const ITEM_REMOVED = 'item.removed' satisfies Topic;
 export const FILE_CONTENT_STORED = 'file.content-stored' satisfies Topic;
 export const FILE_REMOVED = 'file.removed' satisfies Topic;
-
-export const TOPICS: readonly Topic[] = [
-  ITEM_INGESTED,
-  ITEM_REMOVED,
-  FILE_CONTENT_STORED,
-  FILE_REMOVED,
-];

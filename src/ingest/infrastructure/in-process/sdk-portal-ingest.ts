@@ -1,4 +1,4 @@
-import type { Readable } from 'node:stream';
+import { addAbortSignal, type Readable } from 'node:stream';
 import {
   InvalidRecordError,
   UnknownReferenceError,
@@ -26,48 +26,58 @@ function asSdkError(error: unknown) {
   return error;
 }
 
-const sdk = <T>(work: Promise<T>) =>
-  work.catch((error: unknown) => {
-    throw asSdkError(error);
-  });
-
 // What an in-process connector gets as ctx.ingest: IngestService bound to
-// the connector's connection.
+// the connector's connection and run. Once the hub has let go of the run
+// (stopped, past its time, its job taken over) every call is refused, so a
+// connector that doesn't listen to ctx.signal can't write alongside the run
+// that took over.
 export class SdkPortalIngest implements PortalIngest {
   constructor(
     private readonly ingest: IngestService,
     private readonly connection: Connection,
+    private readonly signal: AbortSignal,
   ) {}
 
   course(record: CourseRecord) {
-    return sdk(this.ingest.course(this.connection, record));
+    return this.sdk(() => this.ingest.course(this.connection, record));
   }
 
   item(record: ItemRecord) {
-    return sdk(this.ingest.item(this.connection, record));
+    return this.sdk(() => this.ingest.item(this.connection, record));
   }
 
   file(record: FileRecord) {
-    return sdk(this.ingest.file(this.connection, record));
+    return this.sdk(() => this.ingest.file(this.connection, record));
   }
 
   content(fileExternalId: string, content: Readable) {
-    return sdk(this.ingest.content(this.connection, fileExternalId, content));
+    // an upload still going when the run is let go of is cut
+    const cut = addAbortSignal(this.signal, content);
+    return this.sdk(() =>
+      this.ingest.content(this.connection, fileExternalId, cut),
+    );
   }
 
   removeItem(externalId: string) {
-    return sdk(this.ingest.removeItem(this.connection, externalId));
+    return this.sdk(() => this.ingest.removeItem(this.connection, externalId));
   }
 
   removeFile(externalId: string) {
-    return sdk(this.ingest.removeFile(this.connection, externalId));
+    return this.sdk(() => this.ingest.removeFile(this.connection, externalId));
   }
 
   state() {
-    return sdk(this.ingest.state(this.connection));
+    return this.sdk(() => this.ingest.state(this.connection));
   }
 
   saveState(state: Json) {
-    return sdk(this.ingest.saveState(this.connection, state));
+    return this.sdk(() => this.ingest.saveState(this.connection, state));
+  }
+
+  private async sdk<T>(work: () => Promise<T>) {
+    this.signal.throwIfAborted();
+    return work().catch((error: unknown) => {
+      throw asSdkError(error);
+    });
   }
 }

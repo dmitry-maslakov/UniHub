@@ -1,6 +1,7 @@
 import { Readable } from 'node:stream';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { text } from 'node:stream/consumers';
+import { aborted } from 'node:util';
 import { Injectable, Module } from '@nestjs/common';
 import {
   Aggregator,
@@ -51,15 +52,11 @@ export class FakePollConnector implements PollsPortal {
 @PushConnector({ portal: 'fake-push' })
 @Injectable()
 export class FakePushConnector implements PushesFromPortal {
-  started: string[] = [];
-  stopped = 0;
+  running: string[] = [];
 
-  start(ctx: ConnectorContext) {
-    this.started.push(ctx.account);
-  }
-
-  stop() {
-    this.stopped++;
+  async run(ctx: ConnectorContext) {
+    this.running.push(ctx.connection.account);
+    await aborted(ctx.signal, this);
   }
 }
 
@@ -90,12 +87,14 @@ export class FakePdfProcessor implements ProcessesContent {
   }
 }
 
+type ItemMessage = Message<typeof ITEM_INGESTED | typeof ITEM_REMOVED>;
+
 @Aggregator({ name: 'fake-feed', topics: [ITEM_INGESTED, ITEM_REMOVED] })
 @Injectable()
-export class FakeAggregator implements HandlesMessages {
-  received: Message[] = [];
+export class FakeAggregator implements HandlesMessages<ItemMessage['topic']> {
+  received: ItemMessage[] = [];
 
-  async handle(message: Message) {
+  async handle(message: ItemMessage) {
     this.received.push(message);
   }
 }
@@ -103,11 +102,11 @@ export class FakeAggregator implements HandlesMessages {
 // fails the first time it sees each message
 @Aggregator({ name: 'flaky-feed', topics: [ITEM_INGESTED] })
 @Injectable()
-export class FlakyAggregator implements HandlesMessages {
+export class FlakyAggregator implements HandlesMessages<typeof ITEM_INGESTED> {
   failed = new Set<string>();
-  received: Message[] = [];
+  received: Message<typeof ITEM_INGESTED>[] = [];
 
-  async handle(message: Message) {
+  async handle(message: Message<typeof ITEM_INGESTED>) {
     const key = JSON.stringify(message);
     if (!this.failed.has(key)) {
       this.failed.add(key);

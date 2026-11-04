@@ -1,11 +1,9 @@
+import type { Json } from '@app/kernel';
+
 // What a plugin sends to the hub. Ids are the portal's own, the hub maps them
 // to its ids. Only `externalId` and the fields without `?` are required.
 // A record describes the object as everyone sees it: no per-user data
 // (grades, submissions, personal due dates) in it or in `raw`.
-
-import type { Json } from '@app/kernel';
-
-export type { Json };
 
 export interface CourseRecord {
   externalId: string;
