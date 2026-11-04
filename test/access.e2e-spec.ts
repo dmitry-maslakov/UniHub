@@ -5,9 +5,13 @@ import type { INestApplication } from '@nestjs/common';
 import { CommandBus } from '@nestjs/cqrs';
 import { AppModule } from '../src/app.module.js';
 import { appOptions, configureApp } from '../src/app.setup.js';
+import { PortalId } from '@app/kernel';
 import {
+  AcademicYear,
+  CourseName,
   CreateCourseCommand,
   LinkPortalCourseCommand,
+  Slug,
 } from '../src/catalog/contracts.js';
 import { GrantCourseAccessCommand } from '../src/identity/contracts.js';
 import { Mailer, type Mail } from '../src/identity/domain/mailer.js';
@@ -132,16 +136,21 @@ describe('REST API', { timeout: 20_000 }, () => {
         data: { hash: sha256(slides), processor, version, parts: [...parts] },
       });
 
-    await commands.execute(
-      new CreateCourseCommand('sys', 'Operativni sistemi'),
-    );
-    await commands.execute(
-      new LinkPortalCourseCommand('sys', PORTAL, 'c1', 2026),
-    );
-    await commands.execute(new CreateCourseCommand('net', 'Mreže'));
-    await commands.execute(
-      new LinkPortalCourseCommand('net', PORTAL, 'c2', 2026),
-    );
+    for (const [slug, name, externalId] of [
+      ['sys', 'Operativni sistemi', 'c1'],
+      ['net', 'Mreže', 'c2'],
+    ]) {
+      await commands.execute(
+        new CreateCourseCommand(Slug.parse(slug), CourseName.parse(name)),
+      );
+      await commands.execute(
+        new LinkPortalCourseCommand(
+          Slug.parse(slug),
+          { portal: PortalId.parse(PORTAL), externalId },
+          AcademicYear.parse(2026),
+        ),
+      );
+    }
 
     student = await signUp('student@rest.test');
     stranger = await signUp('stranger@rest.test');

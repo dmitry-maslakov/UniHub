@@ -1,57 +1,76 @@
 import { Module } from '@nestjs/common';
-import { CreateCourseHandler } from './application/commands/create-course.handler.js';
-import { LinkPortalCourseHandler } from './application/commands/link-portal-course.handler.js';
-import { UnlinkPortalCourseHandler } from './application/commands/unlink-portal-course.handler.js';
-import { ListCoursesHandler } from './application/queries/list-courses.handler.js';
-import { FindCourseHandler } from './application/queries/find-course.handler.js';
-import { ListCourseItemsHandler } from './application/queries/list-course-items.handler.js';
-import { ListCourseFilesHandler } from './application/queries/list-course-files.handler.js';
-import { CourseOfHandler } from './application/queries/course-of.handler.js';
-import { CourseRepository } from './domain/course.js';
+import {
+  CreateCourseHandler,
+  LinkPortalCourseHandler,
+  UnlinkPortalCourseHandler,
+} from './application/course.handlers.js';
+import {
+  RemoveFileHandler,
+  SetFileContentHandler,
+  UpsertFileHandler,
+} from './application/file.handlers.js';
+import {
+  RemoveItemHandler,
+  UpsertItemHandler,
+} from './application/item.handlers.js';
+import { UpsertPortalCourseHandler } from './application/portal-course.handlers.js';
+import { References } from './application/references.js';
+import { CourseLinkRepository } from './domain/course-link/course-link.repository.js';
+import { CourseRepository } from './domain/course/course.repository.js';
+import { ItemRepository } from './domain/item/item.repository.js';
+import { PortalCourseRepository } from './domain/portal-course/portal-course.repository.js';
+import { PortalFileRepository } from './domain/portal-file/portal-file.repository.js';
+import { CatalogOutbox } from './infrastructure/catalog-outbox.js';
+import { PrismaCourseLinkRepository } from './infrastructure/prisma-course-link.repository.js';
 import { PrismaCourseRepository } from './infrastructure/prisma-course.repository.js';
-import { RemoveFileHandler } from './application/commands/remove-file.handler.js';
-import { RemoveItemHandler } from './application/commands/remove-item.handler.js';
-import { ListFilesWithContentHandler } from './application/queries/list-files-with-content.handler.js';
-import { GetItemHandler } from './application/queries/get-item.handler.js';
-import { GetPortalCourseHandler } from './application/queries/get-portal-course.handler.js';
-import { SetFileContentHandler } from './application/commands/set-file-content.handler.js';
-import { UpsertFileHandler } from './application/commands/upsert-file.handler.js';
-import { UpsertItemHandler } from './application/commands/upsert-item.handler.js';
-import { UpsertPortalCourseHandler } from './application/commands/upsert-portal-course.handler.js';
-import { FindFileHandler } from './application/queries/find-file.handler.js';
-import { GetFileHandler } from './application/queries/get-file.handler.js';
-import { CatalogEvents } from './domain/events.js';
-import { FileRepository } from './domain/file.js';
-import { ItemRepository } from './domain/item.js';
-import { PortalCourseRepository } from './domain/portal-course.js';
-import { OutboxCatalogEvents } from './infrastructure/outbox-catalog-events.js';
-import { PrismaFileRepository } from './infrastructure/prisma-file.repository.js';
 import { PrismaItemRepository } from './infrastructure/prisma-item.repository.js';
 import { PrismaPortalCourseRepository } from './infrastructure/prisma-portal-course.repository.js';
+import { PrismaPortalFileRepository } from './infrastructure/prisma-portal-file.repository.js';
+import {
+  FindCourseHandler,
+  GetPortalCourseHandler,
+  ListCoursesHandler,
+} from './infrastructure/read/courses.read.js';
+import {
+  FindFileHandler,
+  GetCourseFileHandler,
+  GetFileHandler,
+  ListCourseFilesHandler,
+  ListFilesWithContentHandler,
+} from './infrastructure/read/files.read.js';
+import {
+  GetItemHandler,
+  ListCourseItemsHandler,
+} from './infrastructure/read/items.read.js';
 
+// What portals publish (written by ingest) and the courses admins make of
+// it. Commands go through the aggregates; queries read the database
+// straight into what other modules get.
 @Module({
   providers: [
     { provide: PortalCourseRepository, useClass: PrismaPortalCourseRepository },
     { provide: ItemRepository, useClass: PrismaItemRepository },
-    { provide: FileRepository, useClass: PrismaFileRepository },
-    { provide: CatalogEvents, useClass: OutboxCatalogEvents },
+    { provide: PortalFileRepository, useClass: PrismaPortalFileRepository },
     { provide: CourseRepository, useClass: PrismaCourseRepository },
+    { provide: CourseLinkRepository, useClass: PrismaCourseLinkRepository },
+    CatalogOutbox,
+    References,
+    UpsertPortalCourseHandler,
+    UpsertItemHandler,
+    RemoveItemHandler,
+    UpsertFileHandler,
+    SetFileContentHandler,
+    RemoveFileHandler,
     CreateCourseHandler,
     LinkPortalCourseHandler,
     UnlinkPortalCourseHandler,
     ListCoursesHandler,
     FindCourseHandler,
-    ListCourseItemsHandler,
-    ListCourseFilesHandler,
-    CourseOfHandler,
-    UpsertPortalCourseHandler,
-    UpsertItemHandler,
-    UpsertFileHandler,
-    SetFileContentHandler,
-    RemoveItemHandler,
-    RemoveFileHandler,
     GetPortalCourseHandler,
+    ListCourseItemsHandler,
     GetItemHandler,
+    ListCourseFilesHandler,
+    GetCourseFileHandler,
     GetFileHandler,
     FindFileHandler,
     ListFilesWithContentHandler,

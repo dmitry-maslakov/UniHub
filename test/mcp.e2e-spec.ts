@@ -2,11 +2,15 @@ import { Readable } from 'node:stream';
 import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import { CommandBus } from '@nestjs/cqrs';
+import { PortalId } from '@app/kernel';
 import { AppModule } from '../src/app.module.js';
 import { appOptions, configureApp } from '../src/app.setup.js';
 import {
+  AcademicYear,
+  CourseName,
   CreateCourseCommand,
   LinkPortalCourseCommand,
+  Slug,
 } from '../src/catalog/contracts.js';
 import { GrantCourseAccessCommand } from '../src/identity/contracts.js';
 import { Mailer, type Mail } from '../src/identity/domain/mailer.js';
@@ -82,9 +86,15 @@ describe('MCP', { timeout: 20_000 }, () => {
         where: { portal_externalId: { portal: PORTAL, externalId: 'f1' } },
       })
     ).id;
-    await commands.execute(new CreateCourseCommand('alg', 'Algoritmi'));
     await commands.execute(
-      new LinkPortalCourseCommand('alg', PORTAL, 'c1', 2026),
+      new CreateCourseCommand(Slug.parse('alg'), CourseName.parse('Algoritmi')),
+    );
+    await commands.execute(
+      new LinkPortalCourseCommand(
+        Slug.parse('alg'),
+        { portal: PortalId.parse(PORTAL), externalId: 'c1' },
+        AcademicYear.parse(2026),
+      ),
     );
 
     cookie = await signUp('agent@mcp.test');

@@ -1,4 +1,4 @@
-import { differs } from './changes.js';
+import { differs, kept } from './changes.js';
 
 describe('differs', () => {
   const current = {
@@ -25,5 +25,22 @@ describe('differs', () => {
       true,
     );
     expect(differs(current, { url: 'https://example.com' })).toBe(true);
+  });
+});
+
+describe('kept', () => {
+  it('is what postgres gives back: no lone surrogates, no -0', () => {
+    expect(kept('a\ud800b😀c')).toBe('a\uFFFDb😀c');
+    expect(Object.is(kept(-0), 0)).toBe(true);
+    expect(
+      kept({ 'k\udc00': [-0, 'x\ud800', null], at: new Date(0), n: 1.5 }),
+    ).toEqual({ 'k\uFFFD': [0, 'x\uFFFD', null], at: new Date(0), n: 1.5 });
+  });
+
+  it('makes the strict compare see them as stored', () => {
+    // as sent, these differ from what postgres kept on every sync
+    expect(differs({ size: 0 }, { size: -0 })).toBe(true);
+    expect(differs({ size: 0 }, kept({ size: -0 }))).toBe(false);
+    expect(differs({ t: '\uFFFD' }, kept({ t: '\ud800' }))).toBe(false);
   });
 });

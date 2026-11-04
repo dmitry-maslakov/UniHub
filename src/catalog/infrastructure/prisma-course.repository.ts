@@ -2,13 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { InjectTransactionHost } from '@nestjs-cls/transactional';
 import { Prisma } from '../../generated/prisma/client.js';
 import type { PrismaTxHost } from '../../platform/database/prisma.service.js';
-import {
-  CourseRepository,
-  type Course,
-  type CourseLink,
-} from '../domain/course.js';
-
-const toCourse = ({ id, slug, name }: Course): Course => ({ id, slug, name });
+import { Course } from '../domain/course/course.js';
+import { CourseRepository } from '../domain/course/course.repository.js';
+import type { CourseName, Slug } from '../domain/values.js';
 
 @Injectable()
 export class PrismaCourseRepository extends CourseRepository {
@@ -16,66 +12,31 @@ export class PrismaCourseRepository extends CourseRepository {
     super();
   }
 
-  private get db() {
-    return this.txHost.tx;
-  }
-
-  async create(slug: string, name: string) {
+  async add({ id, slug, name }: Course) {
     try {
-      return toCourse(await this.db.course.create({ data: { slug, name } }));
+      await this.txHost.tx.course.create({ data: { id, slug, name } });
+      return true;
     } catch (err) {
-      // unique violation on slug
+      // unique violation: the slug is taken
       if (
         err instanceof Prisma.PrismaClientKnownRequestError &&
         err.code === 'P2002'
       )
-        return null;
+        return false;
       throw err;
     }
   }
 
-  async findBySlug(slug: string) {
-    const row = await this.db.course.findUnique({ where: { slug } });
-    return row && toCourse(row);
-  }
-
-  async list() {
-    const rows = await this.db.course.findMany({ orderBy: { slug: 'asc' } });
-    return rows.map(toCourse);
-  }
-
-  async link({ courseId, portalCourseId, year }: CourseLink) {
-    await this.db.courseLink.upsert({
-      where: { portalCourseId },
-      create: { courseId, portalCourseId, year },
-      update: { courseId, year },
-    });
-  }
-
-  async unlink(portalCourseId: string) {
-    const { count } = await this.db.courseLink.deleteMany({
-      where: { portalCourseId },
-    });
-    return count > 0;
-  }
-
-  async courseIdOf(portalCourseId: string) {
-    const row = await this.db.courseLink.findUnique({
-      where: { portalCourseId },
-      select: { courseId: true },
-    });
-    return row?.courseId ?? null;
-  }
-
-  async linksOf(courseIds: string[]) {
-    const rows = await this.db.courseLink.findMany({
-      where: { courseId: { in: courseIds } },
-      orderBy: [{ year: 'asc' }, { portalCourseId: 'asc' }],
-    });
-    return rows.map(({ courseId, portalCourseId, year }) => ({
-      courseId,
-      portalCourseId,
-      year,
-    }));
+  async findBySlug(slug: Slug) {
+    const row = await this.txHost.tx.course.findUnique({ where: { slug } });
+    // checked when the course was made
+    return (
+      row &&
+      Course.restore({
+        id: row.id,
+        slug: row.slug as Slug,
+        name: row.name as CourseName,
+      })
+    );
   }
 }

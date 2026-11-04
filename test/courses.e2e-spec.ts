@@ -1,16 +1,25 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
+import { PortalId } from '@app/kernel';
 import { AppModule } from '../src/app.module.js';
 import {
+  AcademicYear,
+  CourseName,
   CourseSlugTakenError,
   CreateCourseCommand,
   LinkPortalCourseCommand,
   ListCoursesQuery,
+  Slug,
   UnknownCourseError,
   UnknownReferenceError,
   UnlinkPortalCourseCommand,
   UpsertPortalCourseCommand,
 } from '../src/catalog/contracts.js';
+
+const ref = (portal: string, externalId: string) => ({
+  portal: PortalId.parse(portal),
+  externalId,
+});
 
 describe('courses', () => {
   let app: TestingModule;
@@ -20,12 +29,28 @@ describe('courses', () => {
   const portalCourse = (portal: string, externalId: string, name: string) =>
     commands.execute(
       new UpsertPortalCourseCommand({
-        portal,
-        externalId,
+        ...ref(portal, externalId),
         name,
         url: null,
         meta: null,
       }),
+    );
+  const create = (slug: string, name: string) =>
+    commands.execute(
+      new CreateCourseCommand(Slug.parse(slug), CourseName.parse(name)),
+    );
+  const link = (
+    slug: string,
+    portal: string,
+    externalId: string,
+    year: number | null,
+  ) =>
+    commands.execute(
+      new LinkPortalCourseCommand(
+        Slug.parse(slug),
+        ref(portal, externalId),
+        year === null ? null : AcademicYear.parse(year),
+      ),
     );
   const course = async (slug: string) =>
     (await queries.execute(new ListCoursesQuery())).find(
@@ -46,18 +71,10 @@ describe('courses', () => {
   afterAll(() => app.close());
 
   it('makes a course of courses from several portals and years', async () => {
-    await commands.execute(
-      new CreateCourseCommand('ar', 'Arhitektura računara'),
-    );
-    await commands.execute(
-      new LinkPortalCourseCommand('ar', 'acs-t', 'arsiit', null),
-    );
-    await commands.execute(
-      new LinkPortalCourseCommand('ar', 'canvas-t', '1388', 2026),
-    );
-    await commands.execute(
-      new LinkPortalCourseCommand('ar', 'canvas-t', '1201', 2025),
-    );
+    await create('ar', 'Arhitektura računara');
+    await link('ar', 'acs-t', 'arsiit', null);
+    await link('ar', 'canvas-t', '1388', 2026);
+    await link('ar', 'canvas-t', '1201', 2025);
 
     expect(await course('ar')).toMatchObject({
       name: 'Arhitektura računara',
@@ -70,10 +87,8 @@ describe('courses', () => {
   });
 
   it('moves a portal course when it is linked to another course', async () => {
-    await commands.execute(new CreateCourseCommand('ar-old', 'AR (old)'));
-    await commands.execute(
-      new LinkPortalCourseCommand('ar-old', 'canvas-t', '1201', 2025),
-    );
+    await create('ar-old', 'AR (old)');
+    await link('ar-old', 'canvas-t', '1201', 2025);
 
     expect((await course('ar'))!.portalCourses).toHaveLength(2);
     expect((await course('ar-old'))!.portalCourses).toMatchObject([
@@ -83,27 +98,24 @@ describe('courses', () => {
 
   it('unlinks a portal course', async () => {
     expect(
-      await commands.execute(new UnlinkPortalCourseCommand('canvas-t', '1201')),
+      await commands.execute(
+        new UnlinkPortalCourseCommand(ref('canvas-t', '1201')),
+      ),
     ).toEqual({ changed: true });
     expect((await course('ar-old'))!.portalCourses).toEqual([]);
   });
 
+  // a slug that isn't one can't make a command at all: see values.spec and
+  // the admin routes
   it('refuses a taken slug, an unknown course or portal course', async () => {
-    await expect(
-      commands.execute(new CreateCourseCommand('ar', 'again')),
-    ).rejects.toBeInstanceOf(CourseSlugTakenError);
-    await expect(
-      commands.execute(new CreateCourseCommand('Not A Slug', 'x')),
-    ).rejects.toThrow('invalid course slug');
-    await expect(
-      commands.execute(
-        new LinkPortalCourseCommand('nope', 'acs-t', 'arsiit', null),
-      ),
-    ).rejects.toBeInstanceOf(UnknownCourseError);
-    await expect(
-      commands.execute(
-        new LinkPortalCourseCommand('ar', 'acs-t', 'nope', null),
-      ),
-    ).rejects.toBeInstanceOf(UnknownReferenceError);
+    await expect(create('ar', 'again')).rejects.toBeInstanceOf(
+      CourseSlugTakenError,
+    );
+    await expect(link('nope', 'acs-t', 'arsiit', null)).rejects.toBeInstanceOf(
+      UnknownCourseError,
+    );
+    await expect(link('ar', 'acs-t', 'nope', null)).rejects.toBeInstanceOf(
+      UnknownReferenceError,
+    );
   });
 });

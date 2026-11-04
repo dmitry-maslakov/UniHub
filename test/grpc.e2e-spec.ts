@@ -151,6 +151,17 @@ describe('gRPC ingest', () => {
     expect((await file('f1')).removedAt).not.toBeNull();
   });
 
+  it('takes json as postgres keeps it, so a resend changes nothing', async () => {
+    for (const [externalId, rawJson] of [
+      ['p-minus-zero', '{"score":-0}'],
+      ['p-null', 'null'],
+    ]) {
+      const item = { externalId, kind: 'post', rawJson };
+      expect(await call('Item', item)).toEqual({ changed: true });
+      expect(await call('Item', item)).toEqual({ changed: false });
+    }
+  });
+
   it('stores nothing from an upload that was cut off', async () => {
     await call('File', { externalId: 'f2', course: 'c1', name: 'l6.pdf' });
 
@@ -218,6 +229,11 @@ describe('gRPC ingest', () => {
     await expect(
       sendContent('nope', Buffer.from('bytes')),
     ).rejects.toMatchObject({ code: grpc.status.FAILED_PRECONDITION });
+    // a post's file that names another course than the post's
+    await call('Course', { externalId: 'c3', name: 'other' });
+    await expect(
+      call('File', { externalId: 'f5', course: 'c3', item: 'p1', name: 'a' }),
+    ).rejects.toMatchObject({ code: grpc.status.INVALID_ARGUMENT });
 
     // the client stream is guarded too
     const { stream, answer } = openContent('wrong-token');

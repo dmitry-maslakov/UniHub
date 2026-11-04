@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MediaType, type PortalId } from '@app/kernel';
 import type { FileInput, ItemInput } from '../../catalog/contracts.js';
 
 // Plugin records are checked here: in-process plugins can pass objects with
@@ -41,7 +42,8 @@ export const fileRecord = z.object({
   path: text.nullish().transform((v) => v ?? ''),
   url: optional(text),
   size: optional(z.number().int().nonnegative()),
-  mime: optional(text),
+  // a portal's type is a hint: its essence, or unknown if it is none
+  mime: optional(text).transform((v) => MediaType.safeParse(v).data ?? null),
   updatedAt: optional(z.coerce.date()),
 });
 
@@ -52,11 +54,11 @@ export const removal = z.object({
 
 export const syncState = json;
 
-export function toItemInput(portal: string, record: unknown): ItemInput {
+export function toItemInput(portal: PortalId, record: unknown): ItemInput {
   return { ...itemRecord.parse(record), portal };
 }
 
-export function toFileInput(portal: string, record: unknown): FileInput {
+export function toFileInput(portal: PortalId, record: unknown): FileInput {
   const { updatedAt, ...file } = fileRecord.parse(record);
   return { ...file, sourceUpdatedAt: updatedAt, portal };
 }

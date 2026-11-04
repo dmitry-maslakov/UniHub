@@ -1,4 +1,5 @@
-import { ConflictError, NotFoundError } from '@app/kernel';
+import { ConflictError, InvalidError, NotFoundError } from '@app/kernel';
+import type { PortalRef } from './portal-ref.js';
 
 // a plugin referred to something it never sent (an item before its course...)
 export class UnknownReferenceError extends NotFoundError {
@@ -7,6 +8,18 @@ export class UnknownReferenceError extends NotFoundError {
     readonly externalId: string,
   ) {
     super(`${portal}: unknown reference ${externalId}`);
+  }
+}
+
+// a file that names a course, and a post that is in another one
+export class MisplacedFileError extends InvalidError {
+  constructor(
+    readonly course: PortalRef,
+    readonly item: PortalRef,
+  ) {
+    super(
+      `${item.portal}: post ${item.externalId} isn't in course ${course.externalId}`,
+    );
   }
 }
 
