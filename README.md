@@ -176,3 +176,5 @@ docker compose -f deploy/compose.yml up -d
 ```
 
 Updating: back up, `git pull`, then `up -d --build` again. The old app keeps running while `migrate` applies the new schema, so a migration only adds until the code that needed the old shape is gone; going back past a migration means restoring a backup.
+
+Published images: after CI passes on main, `.github/workflows/release.yml` pushes two images of that commit, tagged with its full sha, to the registry in the repo secret `REGISTRY` (logged in with `REGISTRY_USERNAME` and `REGISTRY_PASSWORD`; without it nothing is published): `unihub/app`, the app, and `unihub/migrate`, the `build` stage the `migrate` service runs. A deployment can pull a version instead of building it, and go back to an older one without a rebuild.

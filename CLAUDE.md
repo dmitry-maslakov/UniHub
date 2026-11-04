@@ -35,7 +35,6 @@ Put off:
 - failed API key attempts limited per address, counting only failures: each costs a database lookup (caddy has no rate limits without a plugin). Not a limit on all calls per address. The named limits are access's, a route counted against one by `@Limited(name)` while the others skip it (`skipIf`); this one would join them with a tracker of its own
 - Better Auth's rate limits in Redis (`secondaryStorage`): in memory is right for the one instance there is; with a second one, they'd need sharing
 - Better Auth reads the client's address from `X-Forwarded-For` regardless of `TRUST_PROXY`: right behind caddy, which overwrites it; in production the app runs only behind it
-- images built and tagged in CI (ghcr) instead of on the server, for rollbacks without a rebuild
 - monitoring: NestJS Observe (see AGENTS.md), alerts on downtime, disk space and dead letters; failed jobs only reach the logs now
 - connector API keys, and moving the "portal both built-in and external" check to key creation (#33)
 - cursor paging for MCP, if agents need it
