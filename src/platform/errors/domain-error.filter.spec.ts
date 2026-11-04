@@ -7,8 +7,12 @@ import {
 } from '@app/kernel';
 import { DomainErrorFilter } from './domain-error.filter.js';
 
-class GoneError extends NotFoundError {}
-class TakenError extends ConflictError {}
+class GoneError extends NotFoundError {
+  readonly reason = 'GONE';
+}
+class TakenError extends ConflictError {
+  readonly reason = 'TAKEN';
+}
 
 function http(error: DomainError) {
   const replies: { body: unknown; status: number }[] = [];

@@ -3,6 +3,8 @@ import { InvalidError, type ContentHash } from '@app/kernel';
 
 // more than storage keeps of one file; an endless upload would fill the disk
 export class ContentTooLargeError extends InvalidError {
+  readonly reason = 'CONTENT_TOO_LARGE';
+
   constructor(maxBytes: number) {
     super(`content is larger than ${maxBytes} bytes`);
   }

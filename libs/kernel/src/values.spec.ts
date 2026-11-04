@@ -39,10 +39,13 @@ describe('portal ids and plugin names', () => {
 });
 
 describe('domain errors', () => {
-  it('carry their kind and their own name', () => {
-    class GoneError extends NotFoundError {}
+  it('carry their kind, their reason and their own name', () => {
+    class GoneError extends NotFoundError {
+      readonly reason = 'GONE';
+    }
     const error = new GoneError('gone');
     expect(error.kind).toBe('not-found');
+    expect(error.reason).toBe('GONE');
     expect(error.name).toBe('GoneError');
     expect(new InvalidValueError('x', 'y'.repeat(200)).message.length).toBe(
       'invalid x: '.length + 82,

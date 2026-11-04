@@ -6,6 +6,10 @@ export type DomainErrorKind = 'not-found' | 'conflict' | 'invalid';
 
 export abstract class DomainError extends Error {
   abstract readonly kind: DomainErrorKind;
+  // which error it is, for a client's code to tell apart where the kind and
+  // the message don't ('FILE_COURSE_MISMATCH'): a name that stays when the
+  // message is reworded, so UPPER_SNAKE_CASE and never changed
+  abstract readonly reason: Uppercase<string>;
 
   constructor(message: string) {
     super(message);
@@ -27,6 +31,8 @@ export abstract class InvalidError extends DomainError {
 
 // a value that isn't what its type says ("content hash", "plugin name")
 export class InvalidValueError extends InvalidError {
+  readonly reason = 'INVALID_VALUE';
+
   constructor(
     readonly what: string,
     readonly value: string,

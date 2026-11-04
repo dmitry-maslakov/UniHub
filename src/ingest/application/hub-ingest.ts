@@ -33,7 +33,7 @@ async function asPluginErrors<T>(work: () => Promise<T>): Promise<T> {
         err.issues.map((i) => `${i.path.join('.')}: ${i.message}`),
       );
     if (err instanceof InvalidError)
-      throw new InvalidRecordError([err.message]);
+      throw new InvalidRecordError([err.message], err.reason);
     throw err;
   }
 }
