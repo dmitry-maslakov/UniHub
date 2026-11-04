@@ -2,9 +2,9 @@ import { AcademicYear, CourseName, Slug } from './values.js';
 
 describe('Slug', () => {
   it('is lower case, digits and single dashes', () => {
-    for (const ok of ['ar', 'os-2', 'arhitektura-racunara'])
+    for (const ok of ['os', 'os-2', 'operating-systems'])
       expect(Slug.parse(ok)).toBe(ok);
-    for (const bad of ['', 'Not A Slug', 'ar_', '-ar', 'ar-', 'a--r', 'ä'])
+    for (const bad of ['', 'Not A Slug', 'os_', '-os', 'os-', 'a--r', 'ä'])
       expect(Slug.safeParse(bad).success).toBe(false);
   });
 });

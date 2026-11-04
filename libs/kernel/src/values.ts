@@ -40,7 +40,7 @@ const name = z
   .string()
   .regex(/^[a-z0-9-]+$/, 'lower-case letters, digits and dashes only');
 
-// a portal's id ('canvas', 'acs'): which connector writes its records
+// a portal's id ('canvas', 'moodle'): which connector writes its records
 export const PortalId = name.brand<'PortalId'>();
 export type PortalId = z.output<typeof PortalId>;
 

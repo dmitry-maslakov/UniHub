@@ -9,7 +9,7 @@ export class CourseLink {
   private constructor(
     readonly portalCourseId: string,
     readonly courseId: string,
-    // null when the portal course spans years (ACS)
+    // null when the portal course spans years
     readonly year: AcademicYear | null,
   ) {}
 

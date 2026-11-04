@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { PortalId } from '@app/kernel';
 import { list, settings } from '../platform/config/settings.js';
 
-// "acs=token1, teams=token2": the token decides the portal, so a connector
+// "moodle=token1, teams=token2": the token decides the portal, so a connector
 // can't write as another one. Several tokens per portal let one be rotated.
 const tokens = list.transform((pairs, ctx) => {
   const byToken = new Map<string, PortalId>();

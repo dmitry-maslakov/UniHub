@@ -7,7 +7,7 @@ const duration = z.coerce.number().positive();
 
 export const pluginsSettings = z
   .object({
-    // built-in plugins to turn on, by name: "office-text, acs"
+    // built-in plugins to turn on, by name: "office-text, moodle"
     PLUGINS: list.pipe(z.array(PluginName)),
     // this instance starts push connectors (one instance should)
     RUN_CONNECTORS: z.stringbool().default(true),

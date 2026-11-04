@@ -62,35 +62,35 @@ describe('courses', () => {
     commands = app.get(CommandBus);
     queries = app.get(QueryBus);
 
-    await portalCourse('acs-t', 'arsiit', 'Arhitektura računara SIIT');
-    await portalCourse('canvas-t', '1201', 'AR 2025/26');
-    await portalCourse('canvas-t', '1388', 'AR 2026/27');
+    await portalCourse('blackboard-t', 'os-101', 'Operating systems');
+    await portalCourse('canvas-t', '1201', 'OS 2025/26');
+    await portalCourse('canvas-t', '1388', 'OS 2026/27');
   });
 
   afterAll(() => app.close());
 
   it('makes a course of courses from several portals and years', async () => {
-    await create('ar', 'Arhitektura računara');
-    await link('ar', 'acs-t', 'arsiit', null);
-    await link('ar', 'canvas-t', '1388', 2026);
-    await link('ar', 'canvas-t', '1201', 2025);
+    await create('os', 'Operating systems');
+    await link('os', 'blackboard-t', 'os-101', null);
+    await link('os', 'canvas-t', '1388', 2026);
+    await link('os', 'canvas-t', '1201', 2025);
 
-    expect(await course('ar')).toMatchObject({
-      name: 'Arhitektura računara',
+    expect(await course('os')).toMatchObject({
+      name: 'Operating systems',
       portalCourses: [
         { portal: 'canvas-t', externalId: '1201', year: 2025 },
         { portal: 'canvas-t', externalId: '1388', year: 2026 },
-        { portal: 'acs-t', externalId: 'arsiit', year: null },
+        { portal: 'blackboard-t', externalId: 'os-101', year: null },
       ],
     });
   });
 
   it('moves a portal course when it is linked to another course', async () => {
-    await create('ar-old', 'AR (old)');
-    await link('ar-old', 'canvas-t', '1201', 2025);
+    await create('os-old', 'OS (old)');
+    await link('os-old', 'canvas-t', '1201', 2025);
 
-    expect((await course('ar'))!.portalCourses).toHaveLength(2);
-    expect((await course('ar-old'))!.portalCourses).toMatchObject([
+    expect((await course('os'))!.portalCourses).toHaveLength(2);
+    expect((await course('os-old'))!.portalCourses).toMatchObject([
       { externalId: '1201' },
     ]);
   });
@@ -101,13 +101,13 @@ describe('courses', () => {
         new UnlinkPortalCourseCommand(ref('canvas-t', '1201')),
       ),
     ).toEqual({ changed: true });
-    expect((await course('ar-old'))!.portalCourses).toEqual([]);
+    expect((await course('os-old'))!.portalCourses).toEqual([]);
   });
 
   // the unique slug is postgres'; the rest of what's refused is checked
   // on fakes (course.handlers.spec)
   it('refuses a slug another course has', async () => {
-    await expect(create('ar', 'again')).rejects.toBeInstanceOf(
+    await expect(create('os', 'again')).rejects.toBeInstanceOf(
       CourseSlugTakenError,
     );
   });

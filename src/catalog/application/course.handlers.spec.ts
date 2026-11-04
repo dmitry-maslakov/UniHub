@@ -21,7 +21,7 @@ async function catalog() {
   const { id } = await fakes.commands.execute(
     new UpsertPortalCourseCommand({
       ...portalCourse,
-      name: 'AR 2026/27',
+      name: 'OS 2026/27',
       url: null,
       meta: null,
     }),
@@ -37,30 +37,30 @@ describe('course commands', () => {
   it('make a course, one per slug', async () => {
     const { create, courses } = await catalog();
 
-    const { id } = await create('ar');
+    const { id } = await create('os');
 
-    expect(courses.bySlug.get('ar')?.id).toBe(id);
-    await expect(create('ar')).rejects.toBeInstanceOf(CourseSlugTakenError);
+    expect(courses.bySlug.get('os')?.id).toBe(id);
+    await expect(create('os')).rejects.toBeInstanceOf(CourseSlugTakenError);
   });
 
   it('link a portal course to one course, moving it when linked again', async () => {
     const { commands, create, links, portalCourseId } = await catalog();
-    const ar = await create('ar');
-    await create('ar-old');
+    const os = await create('os');
+    await create('os-old');
 
-    for (const slug of ['ar-old', 'ar'])
+    for (const slug of ['os-old', 'os'])
       await commands.execute(
         new LinkPortalCourseCommand(Slug.parse(slug), portalCourse, year),
       );
 
     expect([...links.byPortalCourse.values()]).toEqual([
-      { portalCourseId, courseId: ar.id, year },
+      { portalCourseId, courseId: os.id, year },
     ]);
   });
 
   it('refuse an unknown course or portal course', async () => {
     const { commands, create } = await catalog();
-    await create('ar');
+    await create('os');
 
     await expect(
       commands.execute(
@@ -70,7 +70,7 @@ describe('course commands', () => {
     await expect(
       commands.execute(
         new LinkPortalCourseCommand(
-          Slug.parse('ar'),
+          Slug.parse('os'),
           { ...portalCourse, externalId: 'nope' },
           null,
         ),
@@ -80,9 +80,9 @@ describe('course commands', () => {
 
   it('unlink a portal course, saying whether it was linked, and no unknown one', async () => {
     const { commands, create } = await catalog();
-    await create('ar');
+    await create('os');
     await commands.execute(
-      new LinkPortalCourseCommand(Slug.parse('ar'), portalCourse, year),
+      new LinkPortalCourseCommand(Slug.parse('os'), portalCourse, year),
     );
 
     const unlink = (externalId = portalCourse.externalId) =>

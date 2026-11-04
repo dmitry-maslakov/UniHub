@@ -120,7 +120,7 @@ describe('gRPC ingest', () => {
   });
 
   it('takes what a connector sends, as the portal of its token', async () => {
-    expect(await call('Course', { externalId: 'c1', name: 'AR' })).toEqual({
+    expect(await call('Course', { externalId: 'c1', name: 'OS' })).toEqual({
       changed: true,
     });
     expect(

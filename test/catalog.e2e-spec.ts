@@ -70,8 +70,8 @@ describe('catalog', { timeout: 20_000 }, () => {
   it('reads a portal course back as it was written', async () => {
     const course = {
       portal,
-      externalId: 'ar',
-      name: 'AR',
+      externalId: 'os',
+      name: 'OS',
       url: null,
       meta: { semester: 5 },
     };
@@ -79,7 +79,7 @@ describe('catalog', { timeout: 20_000 }, () => {
     const first = await commands.execute(new UpsertPortalCourseCommand(course));
     const again = await commands.execute(new UpsertPortalCourseCommand(course));
     const renamed = await commands.execute(
-      new UpsertPortalCourseCommand({ ...course, name: 'AR SIIT' }),
+      new UpsertPortalCourseCommand({ ...course, name: 'OS (advanced)' }),
     );
 
     expect(first.changed).toBe(true);

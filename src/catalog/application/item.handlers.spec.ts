@@ -27,21 +27,21 @@ describe('item commands', () => {
     const { commands, items, portalCourses } = await onFakes();
     const course = await commands.execute(
       new UpsertPortalCourseCommand({
-        ...ref('ar'),
-        name: 'AR',
+        ...ref('os'),
+        name: 'OS',
         url: null,
         meta: null,
       }),
     );
 
     const first = await commands.execute(
-      new UpsertItemCommand(item({ course: 'ar' })),
+      new UpsertItemCommand(item({ course: 'os' })),
     );
     const again = await commands.execute(
-      new UpsertItemCommand(item({ course: 'ar' })),
+      new UpsertItemCommand(item({ course: 'os' })),
     );
     const edited = await commands.execute(
-      new UpsertItemCommand(item({ course: 'ar', title: 'Exam moved' })),
+      new UpsertItemCommand(item({ course: 'os', title: 'Exam moved' })),
     );
 
     expect([first.changed, again.changed, edited.changed]).toEqual([

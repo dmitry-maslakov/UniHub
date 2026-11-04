@@ -12,11 +12,11 @@ describe('Connection', () => {
   });
 
   it('removes records only for what everyone sees', () => {
-    expect(Connection.shared(PortalId.parse('acs')).mayRemoveRecords).toBe(
+    expect(Connection.shared(PortalId.parse('moodle')).mayRemoveRecords).toBe(
       true,
     );
     expect(
-      Connection.of({ portal: 'acs', account: 'someone' }).mayRemoveRecords,
+      Connection.of({ portal: 'moodle', account: 'someone' }).mayRemoveRecords,
     ).toBe(false);
   });
 
