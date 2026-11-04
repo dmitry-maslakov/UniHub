@@ -72,4 +72,23 @@ describe('processing', { timeout: 20_000 }, () => {
       interval: 200,
     });
   });
+
+  it('queues it again once the last reconcile job for it is done', async () => {
+    // that job is kept in redis for a day; it mustn't block the next run
+    await prisma.representation.delete({
+      where: {
+        hash_processor_version: { hash, processor: 'fake-text', version: 1 },
+      },
+    });
+
+    await app.get(Reconciler).run();
+    await vi.waitFor(async () => expect(await stored()).not.toBeNull(), {
+      timeout: 10_000,
+      interval: 200,
+    });
+  });
+
+  it('tells whether the database answers', async () => {
+    expect(await prisma.isReachable()).toBe(true);
+  });
 });

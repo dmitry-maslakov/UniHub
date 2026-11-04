@@ -15,7 +15,9 @@ const PAGE = 500;
 
 // Queues processing that should exist but doesn't: a new processor, a new
 // version of one, a file renamed to a type it now accepts, work lost with
-// redis. The job id is per content, so files sharing it queue one job.
+// redis, a job that gave up. Deduplicated per content, so files sharing it
+// queue one job; unlike a fixed job id, a job that finished or failed
+// doesn't keep the next run from queueing it again.
 @Injectable()
 export class Reconciler {
   constructor(
@@ -46,7 +48,9 @@ export class Reconciler {
                 payload: { portal: file.portal, fileId: file.id, hash },
               },
             },
-            { jobId: `reconcile__${hash}__${name}__${version}` },
+            {
+              deduplication: { id: `reconcile__${hash}__${name}__${version}` },
+            },
           );
           queued++;
         }

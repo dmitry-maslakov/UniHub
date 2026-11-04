@@ -23,6 +23,19 @@ export class PrismaService
     await this.$connect();
   }
 
+  // whether the database answers at all, to tell an outage from a failure;
+  // a database that doesn't answer in time counts as away
+  async isReachable(timeoutMs = 5_000): Promise<boolean> {
+    const ping = this.$queryRaw`SELECT 1`.then(
+      () => true,
+      () => false,
+    );
+    const late = new Promise<false>((resolve) =>
+      setTimeout(resolve, timeoutMs, false).unref(),
+    );
+    return Promise.race([ping, late]);
+  }
+
   // not onModuleDestroy: queue workers finish their jobs in
   // onApplicationShutdown and may still need the database
   async onApplicationShutdown() {
