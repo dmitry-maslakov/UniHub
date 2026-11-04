@@ -46,6 +46,12 @@ OpenAPI at `/api/docs`. A signed-in user reads the courses they were given:
 
 Everything goes through `CourseReader` (`src/access`), which MCP shares.
 
+Admins set the courses up (`@Roles([ADMIN_ROLE])`):
+
+- `POST /api/courses` with `{ slug, name }`: a course
+- `PUT /api/portal-courses/{portal}/{externalId}/course` with `{ course, year }`: the portal course becomes part of that course (no `year` for one that spans years); one linked elsewhere moves
+- `DELETE /api/portal-courses/{portal}/{externalId}/course`: unlinks it
+
 ## MCP
 
 `/api/mcp` serves the same reads to AI clients over streamable HTTP, as the tools `list_courses`, `list_items`, `list_files` and `read_file` (page by page). A client signs in with an API key (create one at `POST /api/auth/api-key/create`), sent as `X-API-Key` or `Authorization: Bearer`; 600 calls a minute per user, however many keys they have. A request carries one JSON-RPC message as JSON: other bodies get 415, batches 400.

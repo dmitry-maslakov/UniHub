@@ -21,6 +21,7 @@ import { ItemRepository } from './domain/item/item.repository.js';
 import { PortalCourseRepository } from './domain/portal-course/portal-course.repository.js';
 import { PortalFileRepository } from './domain/portal-file/portal-file.repository.js';
 import { CatalogOutbox } from './infrastructure/catalog-outbox.js';
+import { CoursesAdminController } from './infrastructure/http/courses-admin.controller.js';
 import { PrismaCourseLinkRepository } from './infrastructure/prisma-course-link.repository.js';
 import { PrismaCourseRepository } from './infrastructure/prisma-course.repository.js';
 import { PrismaItemRepository } from './infrastructure/prisma-item.repository.js';
@@ -47,6 +48,7 @@ import {
 // it. Commands go through the aggregates; queries read the database
 // straight into what other modules get.
 @Module({
+  controllers: [CoursesAdminController],
   providers: [
     { provide: PortalCourseRepository, useClass: PrismaPortalCourseRepository },
     { provide: ItemRepository, useClass: PrismaItemRepository },
