@@ -40,7 +40,7 @@ Every HTTP route needs a signed-in user unless it says `@AllowAnonymous()`. Admi
 
 OpenAPI at `/api/docs`. A signed-in user reads the courses they were given:
 
-- `GET /api/courses`, then `/api/courses/{slug}/items` and `/files` (`offset`, `limit`)
+- `GET /api/courses`, then `/api/courses/{slug}/items` and `/files` (`offset`, `limit` up to 200, 50 by default)
 - `GET /api/files/{id}`: the file and the texts made from it
 - `GET /api/files/{id}/text?page=2`: one page, slide or section of a text
 - `GET /api/files/{id}/content`: the file itself

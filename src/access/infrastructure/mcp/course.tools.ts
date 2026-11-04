@@ -1,18 +1,18 @@
 import { UseFilters } from '@nestjs/common';
 import { Payload } from '@nestjs/microservices';
-import { McpController, McpRawRequest, Tool } from '@rekog/mcp-nest';
+import { McpController, Tool } from '@rekog/mcp-nest';
 import { z } from 'zod';
-import { userIdOf } from '../../../identity/contracts.js';
-import { CourseReader, MAX_LIMIT } from '../../application/course-reader.js';
+import { Slug } from '../../../catalog/contracts.js';
+import { CourseReader } from '../../application/course-reader.js';
+import { pageSchema, textPage } from '../../application/page.js';
 import { McpErrorsFilter } from './mcp-errors.filter.js';
+import { McpUserId } from './mcp-user-id.js';
 
-// the HTTP request, with the user the key guard put on it
-type Caller = Parameters<typeof userIdOf>[0];
-
-const page = {
-  offset: z.number().int().min(0).default(0),
-  limit: z.number().int().min(1).max(MAX_LIMIT).default(50),
-};
+const inCourse = pageSchema.extend({ course: Slug.describe('course slug') });
+const fileText = z.object({
+  file: z.uuid().describe('file id from list_files'),
+  page: textPage,
+});
 const readOnly = { readOnlyHint: true, openWorldHint: false };
 
 // what a tool hands back: JSON a model reads as text
@@ -33,77 +33,50 @@ export class CourseTools {
     parameters: z.object({}),
     annotations: readOnly,
   })
-  async courses(@Payload() _: unknown, @McpRawRequest() req: Caller) {
-    return json(await this.reader.courses(userIdOf(req)));
+  async courses(@McpUserId() userId: string) {
+    return json(await this.reader.courses(userId));
   }
 
   @Tool({
     name: 'list_items',
     description:
       "Posts, announcements and pages of a course, newest first. `raw` is the portal's own data and usually holds the text.",
-    parameters: z.object({
-      course: z.string().describe('course slug'),
-      ...page,
-    }),
+    parameters: inCourse,
     annotations: readOnly,
   })
   async items(
-    @Payload()
-    {
-      course,
-      offset,
-      limit,
-    }: { course: string; offset: number; limit: number },
-    @McpRawRequest() req: Caller,
+    @Payload() { course, ...page }: z.output<typeof inCourse>,
+    @McpUserId() userId: string,
   ) {
-    const items = await this.reader.items(userIdOf(req), course, {
-      offset,
-      limit,
-    });
-    return json(items);
+    return json(await this.reader.items(userId, course, page));
   }
 
   @Tool({
     name: 'list_files',
     description:
       'Files of a course by folder and name. `itemId` is the post a file came with.',
-    parameters: z.object({
-      course: z.string().describe('course slug'),
-      ...page,
-    }),
+    parameters: inCourse,
     annotations: readOnly,
   })
   async files(
-    @Payload()
-    {
-      course,
-      offset,
-      limit,
-    }: { course: string; offset: number; limit: number },
-    @McpRawRequest() req: Caller,
+    @Payload() { course, ...page }: z.output<typeof inCourse>,
+    @McpUserId() userId: string,
   ) {
-    const files = await this.reader.files(userIdOf(req), course, {
-      offset,
-      limit,
-    });
-    return json(files);
+    return json(await this.reader.files(userId, course, page));
   }
 
   @Tool({
     name: 'read_file',
     description:
       'One page (slide, section) of the text made from a file, with how many pages there are. Read the next page with page + 1.',
-    parameters: z.object({
-      file: z.string().uuid().describe('file id from list_files'),
-      page: z.number().int().min(1).default(1),
-    }),
+    parameters: fileText,
     annotations: readOnly,
   })
   async read(
-    @Payload() { file, page }: { file: string; page: number },
-    @McpRawRequest() req: Caller,
+    @Payload() { file, page }: z.output<typeof fileText>,
+    @McpUserId() userId: string,
   ) {
-    const text = await this.reader.text(userIdOf(req), file, page);
+    const text = await this.reader.text(userId, file, page);
     return {
       content: [
         {

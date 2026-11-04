@@ -1,14 +1,15 @@
-import { Controller, Get, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { Slug } from '../../../catalog/contracts.js';
 import { CurrentUserId } from '../../../identity/contracts.js';
 import { CourseReader } from '../../application/course-reader.js';
+import { pageSchema, type Page } from '../../application/page.js';
 import { throttleBy } from '../throttle.js';
-import { Limit, Offset, Paged } from './paging.js';
 import { CourseResponse, FileResponse, ItemResponse } from './responses.js';
 
 @ApiTags('courses')
@@ -31,26 +32,22 @@ export class CoursesController {
   @Get(':slug/items')
   @ApiOkResponse({ type: [ItemResponse], description: 'newest first' })
   @ApiNotFoundResponse()
-  @Paged()
   items(
     @CurrentUserId() userId: string,
-    @Param('slug') slug: string,
-    @Offset() offset: number,
-    @Limit() limit: number,
+    @Param('slug', { schema: Slug }) slug: Slug,
+    @Query({ schema: pageSchema }) page: Page,
   ): Promise<ItemResponse[]> {
-    return this.reader.items(userId, slug, { offset, limit });
+    return this.reader.items(userId, slug, page);
   }
 
   @Get(':slug/files')
   @ApiOkResponse({ type: [FileResponse], description: 'by folder and name' })
   @ApiNotFoundResponse()
-  @Paged()
   files(
     @CurrentUserId() userId: string,
-    @Param('slug') slug: string,
-    @Offset() offset: number,
-    @Limit() limit: number,
+    @Param('slug', { schema: Slug }) slug: Slug,
+    @Query({ schema: pageSchema }) page: Page,
   ): Promise<FileResponse[]> {
-    return this.reader.files(userId, slug, { offset, limit });
+    return this.reader.files(userId, slug, page);
   }
 }

@@ -1,24 +1,34 @@
 import { ApiProperty } from '@nestjs/swagger';
+import type { Json, MediaType, PluginName, PortalId } from '@app/kernel';
+import type { TextInfo, TextPage } from '../../../processing/contracts.js';
+import type {
+  CourseView,
+  FileDetailsView,
+  FileView,
+  ItemView,
+  PortalCourseView,
+} from '../../application/views.js';
 
-// what the REST API answers with, described for OpenAPI
+// The views the REST API answers with, described for OpenAPI. A branded
+// value names its type: the decorator's metadata only sees an Object.
 
-export class PortalCourseResponse {
-  @ApiProperty({ example: 'canvas' }) portal!: string;
+export class PortalCourseResponse implements PortalCourseView {
+  @ApiProperty({ type: String, example: 'canvas' }) portal!: PortalId;
   @ApiProperty() name!: string;
   @ApiProperty({ type: Number, nullable: true, example: 2026 })
   year!: number | null;
 }
 
-export class CourseResponse {
+export class CourseResponse implements CourseView {
   @ApiProperty({ example: 'os' }) slug!: string;
   @ApiProperty({ example: 'Operativni sistemi' }) name!: string;
   @ApiProperty({ type: [PortalCourseResponse] })
   portalCourses!: PortalCourseResponse[];
 }
 
-export class ItemResponse {
+export class ItemResponse implements ItemView {
   @ApiProperty() id!: string;
-  @ApiProperty({ example: 'canvas' }) portal!: string;
+  @ApiProperty({ type: String, example: 'canvas' }) portal!: PortalId;
   @ApiProperty({ example: 'announcement' }) kind!: string;
   @ApiProperty({ type: String, nullable: true }) title!: string | null;
   @ApiProperty({ type: String, nullable: true }) url!: string | null;
@@ -28,12 +38,12 @@ export class ItemResponse {
     type: 'object',
     additionalProperties: true,
   })
-  raw!: unknown;
+  raw!: Json;
 }
 
-export class FileResponse {
+export class FileResponse implements FileView {
   @ApiProperty() id!: string;
-  @ApiProperty({ example: 'canvas' }) portal!: string;
+  @ApiProperty({ type: String, example: 'canvas' }) portal!: PortalId;
   @ApiProperty({
     type: String,
     nullable: true,
@@ -45,24 +55,26 @@ export class FileResponse {
   path!: string;
   @ApiProperty({ type: String, nullable: true }) url!: string | null;
   @ApiProperty({ type: Number, nullable: true }) size!: number | null;
-  @ApiProperty({ type: String, nullable: true }) mime!: string | null;
+  @ApiProperty({ type: String, nullable: true, example: 'application/pdf' })
+  mime!: MediaType | null;
   @ApiProperty({ description: 'the hub has the bytes' }) hasContent!: boolean;
 }
 
-export class TextInfoResponse {
-  @ApiProperty({ example: 'office-text' }) processor!: string;
+export class TextInfoResponse implements TextInfo {
+  @ApiProperty({ type: String, example: 'office-text' })
+  processor!: PluginName;
   @ApiProperty() version!: number;
   @ApiProperty({ description: 'pages, slides or sections' }) pages!: number;
 }
 
-export class FileDetailsResponse extends FileResponse {
+export class FileDetailsResponse
+  extends FileResponse
+  implements FileDetailsView
+{
   @ApiProperty({ type: [TextInfoResponse] }) texts!: TextInfoResponse[];
 }
 
-export class TextPageResponse {
-  @ApiProperty({ example: 'office-text' }) processor!: string;
-  @ApiProperty() version!: number;
+export class TextPageResponse extends TextInfoResponse implements TextPage {
   @ApiProperty({ example: 1 }) page!: number;
-  @ApiProperty() pages!: number;
   @ApiProperty() text!: string;
 }

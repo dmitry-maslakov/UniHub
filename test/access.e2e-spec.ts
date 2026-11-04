@@ -225,6 +225,7 @@ describe('REST API', { timeout: 20_000 }, () => {
       'offset=-1',
       'offset=1.5',
       'offset=99999999999999999999',
+      'limit=1&limit=2',
     ])
       await get(`/api/courses/sys/items?${query}`, student).expect(400);
   });
@@ -255,6 +256,12 @@ describe('REST API', { timeout: 20_000 }, () => {
 
     await get(`/api/files/${ids.slides}/text?page=4`, student).expect(404);
     await get(`/api/files/${ids.slides}/text?page=0`, student).expect(400);
+    for (const query of [
+      'page=99999999999',
+      'processor=a&processor=b',
+      'processor=Not%20One',
+    ])
+      await get(`/api/files/${ids.slides}/text?${query}`, student).expect(400);
     await get(`/api/files/${ids['no-content']}/text`, student).expect(404);
   });
 
@@ -314,6 +321,17 @@ describe('REST API', { timeout: 20_000 }, () => {
         '/api/courses/{slug}/items',
         '/api/files/{id}/text',
         '/api/files/{id}/content',
+      ]),
+    );
+    // the page's bounds as the schema has them
+    expect(doc.paths['/api/courses/{slug}/items'].get.parameters).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'limit',
+          in: 'query',
+          required: false,
+          schema: expect.objectContaining({ maximum: 200, default: 50 }),
+        }),
       ]),
     );
   });
