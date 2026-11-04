@@ -1,18 +1,14 @@
 import { Injectable } from '@nestjs/common';
-import {
-  InjectTransactionHost,
-  Propagation,
-  Transactional,
-} from '@nestjs-cls/transactional';
 import type { Json, PortalId } from '@app/kernel';
 import { Prisma, type Item as Row } from '../../generated/prisma/client.js';
-import type { PrismaTxHost } from '../../platform/database/prisma.service.js';
-import { Item } from '../domain/item/item.js';
-import { ItemRepository } from '../domain/item/item.repository.js';
+import { Item, type ItemState } from '../domain/item/item.js';
+import type { ItemRepository } from '../domain/item/item.repository.js';
 import type { PortalRef } from '../domain/portal-ref.js';
 import { byPortalRef } from './by-portal-ref.js';
-import { CatalogOutbox } from './catalog-outbox.js';
-import { LOCK, lockRecord } from './record-lock.js';
+import {
+  LOCK,
+  PrismaIngestedRepository,
+} from './prisma-ingested.repository.js';
 
 const toItem = (row: Row) =>
   Item.restore({
@@ -34,19 +30,11 @@ const toJsonInput = (value: Json) =>
   value === null ? Prisma.JsonNull : (value as Prisma.InputJsonValue);
 
 @Injectable()
-export class PrismaItemRepository extends ItemRepository {
-  constructor(
-    @InjectTransactionHost() private readonly txHost: PrismaTxHost,
-    private readonly outbox: CatalogOutbox,
-  ) {
-    super();
-  }
-
-  @Transactional(Propagation.Mandatory)
-  async getForUpdate(ref: PortalRef) {
-    await lockRecord(this.txHost.tx, LOCK.item, ref);
-    return this.findByRef(ref);
-  }
+export class PrismaItemRepository
+  extends PrismaIngestedRepository<Item>
+  implements ItemRepository
+{
+  protected readonly lock = LOCK.item;
 
   async findByRef(ref: PortalRef) {
     const row = await this.txHost.tx.item.findUnique({
@@ -55,24 +43,25 @@ export class PrismaItemRepository extends ItemRepository {
     return row && toItem(row);
   }
 
-  @Transactional(Propagation.Mandatory)
-  async save(item: Item) {
-    if (item.dirty) {
-      const { id, ref, props, portalCourseId, removedAt } = item.snapshot;
-      const data = {
-        portal: ref.portal,
-        externalId: ref.externalId,
-        ...props,
-        raw: toJsonInput(props.raw),
-        portalCourseId,
-        removedAt,
-      };
-      await this.txHost.tx.item.upsert({
-        where: { id },
-        create: { id, ...data },
-        update: data,
-      });
-    }
-    await this.outbox.write(item);
+  protected upsert({
+    id,
+    ref,
+    props,
+    portalCourseId,
+    removedAt,
+  }: Readonly<ItemState>) {
+    const data = {
+      portal: ref.portal,
+      externalId: ref.externalId,
+      ...props,
+      raw: toJsonInput(props.raw),
+      portalCourseId,
+      removedAt,
+    };
+    return this.txHost.tx.item.upsert({
+      where: { id },
+      create: { id, ...data },
+      update: data,
+    });
   }
 }
