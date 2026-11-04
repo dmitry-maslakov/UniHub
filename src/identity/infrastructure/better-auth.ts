@@ -6,6 +6,7 @@ import { apiKey } from '@better-auth/api-key';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
 import type { PrismaClient } from '../../generated/prisma/client.js';
 import type { Mail, Mailer } from '../domain/mailer.js';
+import { ADMIN_ROLE } from '../domain/user.js';
 
 // our own apps that may sign in by QR code (device authorization)
 export const DEVICE_CLIENTS = ['unihub-web', 'unihub-app'];
@@ -107,7 +108,7 @@ export function createAuth({
     },
     plugins: [
       // user roles: an admin decides who reads which course
-      admin(),
+      admin({ adminRoles: [ADMIN_ROLE] }),
       // a session token in Authorization, for apps and API clients without
       // cookies, and for the token device sign-in hands out
       bearer(),

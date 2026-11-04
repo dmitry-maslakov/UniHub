@@ -1,10 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { QueryBus } from '@nestjs/cqrs';
 import {
-  CourseOfQuery,
   FindCourseQuery,
-  GetFileQuery,
-  GetItemQuery,
+  GetCourseFileQuery,
   ListCourseFilesQuery,
   ListCourseItemsQuery,
   ListCoursesQuery,
@@ -55,20 +53,11 @@ export class CourseReader {
     throw new NotReadableError('course');
   }
 
-  // a file of a course the user may read, not removed, nor attached to a
-  // removed post
+  // a file its course shows (catalog decides which), of a course the user
+  // may read
   private async readableFile(userId: string, fileId: string) {
-    const file = await this.queries.execute(new GetFileQuery(fileId));
-    if (!file || file.removed || !file.portalCourseId)
-      throw new NotReadableError('file');
-    if (file.itemId) {
-      const item = await this.queries.execute(new GetItemQuery(file.itemId));
-      if (!item || item.removed) throw new NotReadableError('file');
-    }
-    const courseId = await this.queries.execute(
-      new CourseOfQuery(file.portalCourseId),
-    );
-    if (courseId && (await this.canRead(userId, courseId))) return file;
+    const file = await this.queries.execute(new GetCourseFileQuery(fileId));
+    if (file && (await this.canRead(userId, file.courseId))) return file;
     throw new NotReadableError('file');
   }
 

@@ -506,6 +506,7 @@
               {
                 "group": [
                   "@nestjs/*",
+                  "!@nestjs/cqrs",
                   "@nestjs-cls/*",
                   "@prisma/*",
                   "**/generated/**",
@@ -522,6 +523,13 @@
                   "**/platform/**"
                 ],
                 "message": "domain code depends on nothing but itself"
+              }
+            ],
+            "paths": [
+              {
+                "name": "@nestjs/cqrs",
+                "allowImportNames": ["AggregateRoot"],
+                "message": "domain code takes only AggregateRoot from Nest: events recorded by the aggregate"
               }
             ]
           }

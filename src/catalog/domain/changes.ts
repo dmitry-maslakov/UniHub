@@ -1,13 +1,5 @@
 import { isDeepStrictEqual } from 'node:util';
 
-export interface Upserted<T> {
-  entity: T;
-  // what was there before, null for a new record
-  previous: T | null;
-  // false when the portal sent exactly what we already had
-  changed: boolean;
-}
-
 // Portals resend the same data on every sync, only real changes should go
 // further down the pipeline. Missing optional fields count as null, and
 // key order in json doesn't matter (postgres reorders jsonb keys anyway).

@@ -10,7 +10,7 @@ import {
 } from '@app/plugin-sdk';
 import * as catalog from '../../catalog/contracts.js';
 import { PutContentCommand } from '../../storage/contracts.js';
-import type { Json } from '@app/kernel';
+import { ContentHash, InvalidError, PortalId, type Json } from '@app/kernel';
 import { SyncStateRepository } from '../domain/sync-state.js';
 import {
   courseRecord,
@@ -20,7 +20,8 @@ import {
   toItemInput,
 } from './records.js';
 
-// errors plugins see are the sdk's, not catalog's or zod's
+// errors plugins see are the sdk's, not catalog's or zod's. Whatever a
+// module refuses as invalid is a record the plugin should fix or skip
 async function asPluginErrors<T>(work: () => Promise<T>): Promise<T> {
   try {
     return await work();
@@ -31,6 +32,8 @@ async function asPluginErrors<T>(work: () => Promise<T>): Promise<T> {
       throw new InvalidRecordError(
         err.issues.map((i) => `${i.path.join('.')}: ${i.message}`),
       );
+    if (err instanceof InvalidError)
+      throw new InvalidRecordError([err.message]);
     throw err;
   }
 }
@@ -52,7 +55,8 @@ export class HubIngest {
     return result;
   }
 
-  forPortal(portal: string, account = 'shared'): PortalIngest {
+  forPortal(name: string, account = 'shared'): PortalIngest {
+    const portal = PortalId.parse(name);
     const run = asPluginErrors;
     return {
       course: (record) =>
@@ -89,8 +93,14 @@ export class HubIngest {
             throw new Error('only shared accounts can remove records');
           const result = await this.commands.execute(
             r.kind === 'item'
-              ? new catalog.RemoveItemCommand(portal, r.externalId)
-              : new catalog.RemoveFileCommand(portal, r.externalId),
+              ? new catalog.RemoveItemCommand({
+                  portal,
+                  externalId: r.externalId,
+                })
+              : new catalog.RemoveFileCommand({
+                  portal,
+                  externalId: r.externalId,
+                }),
           );
           return this.notify(result);
         }),
@@ -102,12 +112,14 @@ export class HubIngest {
     };
   }
 
-  private async content(portal: string, externalId: string, content: Readable) {
+  private async content(
+    portal: PortalId,
+    externalId: string,
+    content: Readable,
+  ) {
+    const ref = { portal, externalId };
     // check first, so content of an unknown file isn't stored for nothing
-    const file = await this.queries.execute(
-      new catalog.FindFileQuery(portal, externalId),
-    );
-    if (!file) {
+    if (!(await this.queries.execute(new catalog.FindFileQuery(ref)))) {
       content.destroy();
       throw new catalog.UnknownReferenceError(portal, externalId);
     }
@@ -115,7 +127,7 @@ export class HubIngest {
       new PutContentCommand(content),
     );
     const { changed } = await this.commands.execute(
-      new catalog.SetFileContentCommand(file.id, hash),
+      new catalog.SetFileContentCommand(ref, ContentHash.parse(hash)),
     );
     return { hash, changed };
   }

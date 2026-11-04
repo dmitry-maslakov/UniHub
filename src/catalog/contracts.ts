@@ -1,54 +1,18 @@
 // the only file other modules import from catalog
-export { UpsertPortalCourseCommand } from './application/commands/upsert-portal-course.command.js';
-export {
-  UpsertItemCommand,
-  type ItemInput,
-} from './application/commands/upsert-item.command.js';
-export {
-  UpsertFileCommand,
-  type FileInput,
-} from './application/commands/upsert-file.command.js';
-export { CreateCourseCommand } from './application/commands/create-course.command.js';
-export { LinkPortalCourseCommand } from './application/commands/link-portal-course.command.js';
-export { UnlinkPortalCourseCommand } from './application/commands/unlink-portal-course.command.js';
-export {
-  FindCourseQuery,
-  type CourseRef,
-} from './application/queries/find-course.query.js';
-export {
-  ListCoursesQuery,
-  type CourseDto,
-} from './application/queries/list-courses.query.js';
-export { SetFileContentCommand } from './application/commands/set-file-content.command.js';
-export { RemoveItemCommand } from './application/commands/remove-item.command.js';
-export { RemoveFileCommand } from './application/commands/remove-file.command.js';
-export { ListCourseItemsQuery } from './application/queries/list-course-items.query.js';
-export { ListCourseFilesQuery } from './application/queries/list-course-files.query.js';
-export { CourseOfQuery } from './application/queries/course-of.query.js';
-export { GetPortalCourseQuery } from './application/queries/get-portal-course.query.js';
-export { GetItemQuery } from './application/queries/get-item.query.js';
-export { GetFileQuery } from './application/queries/get-file.query.js';
-export { FindFileQuery } from './application/queries/find-file.query.js';
-export { ListFilesWithContentQuery } from './application/queries/list-files-with-content.query.js';
-export type {
-  FileDto,
-  ItemDto,
-  PortalCourseDto,
-} from './application/queries/dtos.js';
-export {
-  CourseSlugTakenError,
-  UnknownCourseError,
-  UnknownReferenceError,
-} from './domain/errors.js';
-export type {
-  FileContentChanged,
-  FileRemoved,
-  ItemChanged,
-  ItemRemoved,
-} from './domain/events.js';
+export * from './application/commands.js';
+export * from './application/queries.js';
+export type { PortalRef } from './domain/portal-ref.js';
+export { AcademicYear, CourseName, Slug } from './domain/values.js';
 export {
   FILE_CONTENT_CHANGED,
   FILE_REMOVED,
   ITEM_CHANGED,
   ITEM_REMOVED,
-} from './topics.js';
+  type CatalogEvent,
+} from './domain/events.js';
+export {
+  CourseSlugTakenError,
+  MisplacedFileError,
+  UnknownCourseError,
+  UnknownReferenceError,
+} from './domain/errors.js';

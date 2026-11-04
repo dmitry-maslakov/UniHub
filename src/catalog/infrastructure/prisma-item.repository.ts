@@ -1,84 +1,78 @@
 import { Injectable } from '@nestjs/common';
-import { InjectTransactionHost } from '@nestjs-cls/transactional';
+import {
+  InjectTransactionHost,
+  Propagation,
+  Transactional,
+} from '@nestjs-cls/transactional';
+import type { Json, PortalId } from '@app/kernel';
+import { Prisma, type Item as Row } from '../../generated/prisma/client.js';
 import type { PrismaTxHost } from '../../platform/database/prisma.service.js';
-import type { Item as Row } from '../../generated/prisma/client.js';
-import type { Json } from '@app/kernel';
-import { type Item, type ItemData, ItemRepository } from '../domain/item.js';
-import { LOCK, lockRecord } from './lock.js';
-import { upsertTracked } from './upsert-tracked.js';
+import { Item } from '../domain/item/item.js';
+import { ItemRepository } from '../domain/item/item.repository.js';
+import type { PortalRef } from '../domain/portal-ref.js';
+import { byPortalRef } from './by-portal-ref.js';
+import { CatalogOutbox } from './catalog-outbox.js';
+import { LOCK, lockRecord } from './record-lock.js';
 
-const toEntity = (row: Row): Item => ({
-  id: row.id,
-  portal: row.portal,
-  externalId: row.externalId,
-  portalCourseId: row.portalCourseId,
-  kind: row.kind,
-  title: row.title,
-  url: row.url,
-  publishedAt: row.publishedAt,
-  raw: row.raw as Json,
-  removedAt: row.removedAt,
-});
+const toItem = (row: Row) =>
+  Item.restore({
+    id: row.id,
+    ref: { portal: row.portal as PortalId, externalId: row.externalId },
+    props: {
+      kind: row.kind,
+      title: row.title,
+      url: row.url,
+      publishedAt: row.publishedAt,
+      raw: row.raw as Json,
+    },
+    portalCourseId: row.portalCourseId,
+    removedAt: row.removedAt,
+  });
+
+// a bare null is json too, but Prisma takes it only as JsonNull
+const toJsonInput = (value: Json) =>
+  value === null ? Prisma.JsonNull : (value as Prisma.InputJsonValue);
 
 @Injectable()
 export class PrismaItemRepository extends ItemRepository {
-  constructor(@InjectTransactionHost() private readonly txHost: PrismaTxHost) {
+  constructor(
+    @InjectTransactionHost() private readonly txHost: PrismaTxHost,
+    private readonly outbox: CatalogOutbox,
+  ) {
     super();
   }
 
-  private get db() {
-    return this.txHost.tx.item;
+  @Transactional(Propagation.Mandatory)
+  async getForUpdate(ref: PortalRef) {
+    await lockRecord(this.txHost.tx, LOCK.item, ref);
+    return this.findByRef(ref);
   }
 
-  async findById(id: string) {
-    const row = await this.db.findUnique({ where: { id } });
-    return row && toEntity(row);
+  async findByRef(ref: PortalRef) {
+    const row = await this.txHost.tx.item.findUnique({
+      where: byPortalRef(ref),
+    });
+    return row && toItem(row);
   }
 
-  async listOfCourse(courseId: string, offset: number, limit: number) {
-    const rows = await this.db.findMany({
-      where: { removedAt: null, portalCourse: { link: { courseId } } },
-      orderBy: [
-        { publishedAt: { sort: 'desc', nulls: 'last' } },
-        { id: 'asc' },
-      ],
-      skip: offset,
-      take: limit,
-    });
-    return rows.map(toEntity);
-  }
-
-  async findByExternalId(portal: string, externalId: string) {
-    const row = await this.db.findUnique({
-      where: { portal_externalId: { portal, externalId } },
-    });
-    return row && toEntity(row);
-  }
-
-  upsert(data: ItemData) {
-    // raw is required, so it is never null here
-    const values = { ...data, raw: data.raw as object };
-    return upsertTracked<Item>(data, {
-      lock: () =>
-        lockRecord(this.txHost, LOCK.item, data.portal, data.externalId),
-      find: () => this.findByExternalId(data.portal, data.externalId),
-      create: async () => toEntity(await this.db.create({ data: values })),
-      update: async ({ id }) =>
-        toEntity(await this.db.update({ where: { id }, data: values })),
-    });
-  }
-
-  async markRemoved(portal: string, externalId: string) {
-    await lockRecord(this.txHost, LOCK.item, portal, externalId);
-    const row = await this.db.findUnique({
-      where: { portal_externalId: { portal, externalId } },
-    });
-    if (!row) return null;
-    if (row.removedAt) return { id: row.id, changed: false };
-    await this.db.update({
-      where: { id: row.id },
-      data: { removedAt: new Date() },
-    });
-    return { id: row.id, changed: true };
+  @Transactional(Propagation.Mandatory)
+  async save(item: Item) {
+    if (item.dirty) {
+      const { id, ref, props, portalCourseId, removedAt } = item.snapshot;
+      const data = {
+        portal: ref.portal,
+        externalId: ref.externalId,
+        ...props,
+        raw: toJsonInput(props.raw),
+        portalCourseId,
+        removedAt,
+      };
+      await this.txHost.tx.item.upsert({
+        where: { id },
+        create: { id, ...data },
+        update: data,
+      });
+    }
+    await this.outbox.write(item);
   }
 }

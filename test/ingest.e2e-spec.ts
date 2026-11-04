@@ -107,6 +107,19 @@ describe('ingest', () => {
     ).rejects.toBeInstanceOf(InvalidRecordError);
   });
 
+  it("rejects a file of one course on another course's post", async () => {
+    await hub.course({ externalId: 'os', name: 'OS' });
+    // the sdk's error, so a connector can skip the record and go on
+    await expect(
+      hub.file({
+        externalId: 'file-x',
+        course: 'os',
+        item: 'post-1',
+        name: 'x.pdf',
+      }),
+    ).rejects.toBeInstanceOf(InvalidRecordError);
+  });
+
   it("drops fields a record isn't allowed to set", async () => {
     const record = {
       externalId: 'post-sneaky',
@@ -162,6 +175,31 @@ describe('ingest', () => {
     await expect(
       hub.item({ externalId: 'nul', kind: 'post', raw: { body: 'a\u0000b' } }),
     ).rejects.toBeInstanceOf(InvalidRecordError);
+  });
+
+  it('takes -0 and lone surrogates as postgres keeps them', async () => {
+    // it keeps 0 and U+FFFD: sent again, nothing changed
+    const post = {
+      externalId: 'post-odd',
+      kind: 'post',
+      title: 'half an emoji \ud83d',
+      raw: { score: -0, 'cut \udc00 here': [-0] },
+    };
+    const file = {
+      externalId: 'file-odd',
+      name: 'half \ud83d.pdf',
+      size: -0,
+    };
+    expect(await hub.item(post)).toEqual({ changed: true });
+    expect(await hub.item(post)).toEqual({ changed: false });
+    expect(await hub.file(file)).toMatchObject({ changed: true });
+    expect(await hub.file(file)).toMatchObject({ changed: false });
+
+    const row = await prisma.item.findFirstOrThrow({
+      where: { portal, externalId: 'post-odd' },
+    });
+    expect(row.title).toBe('half an emoji \uFFFD');
+    expect(row.raw).toEqual({ score: 0, 'cut \uFFFD here': [0] });
   });
 
   it('checks what remove() and saveState() are given', async () => {

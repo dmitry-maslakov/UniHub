@@ -5,7 +5,9 @@ import { AuthService } from '@thallesp/nestjs-better-auth';
 import { AppModule } from '../src/app.module.js';
 import { appOptions, configureApp } from '../src/app.setup.js';
 import {
+  CourseName,
   CreateCourseCommand,
+  Slug,
   UnknownCourseError,
 } from '../src/catalog/contracts.js';
 import {
@@ -228,7 +230,10 @@ describe('identity', { timeout: 20_000 }, () => {
     );
     await prisma.user.update({ where: { id: fa.id }, data: { role: 'admin' } });
     const { id: courseId } = await commands.execute(
-      new CreateCourseCommand('os', 'Operativni sistemi'),
+      new CreateCourseCommand(
+        Slug.parse('os'),
+        CourseName.parse('Operativni sistemi'),
+      ),
     );
 
     expect(

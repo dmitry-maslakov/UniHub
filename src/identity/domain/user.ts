@@ -6,7 +6,10 @@ export interface User {
   bannedUntil: Date | null;
 }
 
-export const isAdmin = (user: User) => user.roles.includes('admin');
+// the role Better Auth's admin plugin treats as admin, and @Roles asks for
+export const ADMIN_ROLE = 'admin';
+
+export const isAdmin = (user: User) => user.roles.includes(ADMIN_ROLE);
 
 export const isBanned = (user: User, now = new Date()) =>
   user.bannedUntil !== null && user.bannedUntil > now;

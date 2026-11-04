@@ -1,62 +1,68 @@
 import { Injectable } from '@nestjs/common';
-import { InjectTransactionHost } from '@nestjs-cls/transactional';
-import type { PrismaTxHost } from '../../platform/database/prisma.service.js';
+import {
+  InjectTransactionHost,
+  Propagation,
+  Transactional,
+} from '@nestjs-cls/transactional';
+import type { Json, PortalId } from '@app/kernel';
 import {
   Prisma,
   type PortalCourse as Row,
 } from '../../generated/prisma/client.js';
-import type { Json } from '@app/kernel';
-import {
-  type PortalCourse,
-  type PortalCourseData,
-  PortalCourseRepository,
-} from '../domain/portal-course.js';
-import { LOCK, lockRecord } from './lock.js';
-import { upsertTracked } from './upsert-tracked.js';
+import type { PrismaTxHost } from '../../platform/database/prisma.service.js';
+import { PortalCourse } from '../domain/portal-course/portal-course.js';
+import { PortalCourseRepository } from '../domain/portal-course/portal-course.repository.js';
+import type { PortalRef } from '../domain/portal-ref.js';
+import { byPortalRef } from './by-portal-ref.js';
+import { CatalogOutbox } from './catalog-outbox.js';
+import { LOCK, lockRecord } from './record-lock.js';
 
-const toEntity = (row: Row): PortalCourse => ({
-  id: row.id,
-  portal: row.portal,
-  externalId: row.externalId,
-  name: row.name,
-  url: row.url,
-  meta: row.meta as Json | null,
-});
+const toPortalCourse = (row: Row) =>
+  PortalCourse.restore({
+    id: row.id,
+    ref: { portal: row.portal as PortalId, externalId: row.externalId },
+    props: { name: row.name, url: row.url, meta: row.meta as Json | null },
+  });
 
 @Injectable()
 export class PrismaPortalCourseRepository extends PortalCourseRepository {
-  constructor(@InjectTransactionHost() private readonly txHost: PrismaTxHost) {
+  constructor(
+    @InjectTransactionHost() private readonly txHost: PrismaTxHost,
+    private readonly outbox: CatalogOutbox,
+  ) {
     super();
   }
 
-  private get db() {
-    return this.txHost.tx.portalCourse;
+  @Transactional(Propagation.Mandatory)
+  async getForUpdate(ref: PortalRef) {
+    await lockRecord(this.txHost.tx, LOCK.course, ref);
+    return this.findByRef(ref);
   }
 
-  async findById(id: string) {
-    const row = await this.db.findUnique({ where: { id } });
-    return row && toEntity(row);
-  }
-
-  async findByExternalId(portal: string, externalId: string) {
-    const row = await this.db.findUnique({
-      where: { portal_externalId: { portal, externalId } },
+  async findByRef(ref: PortalRef) {
+    const row = await this.txHost.tx.portalCourse.findUnique({
+      where: byPortalRef(ref),
     });
-    return row && toEntity(row);
+    return row && toPortalCourse(row);
   }
 
-  upsert(data: PortalCourseData) {
-    const values = {
-      ...data,
-      meta: data.meta === null ? Prisma.DbNull : data.meta,
-    };
-    return upsertTracked<PortalCourse>(data, {
-      lock: () =>
-        lockRecord(this.txHost, LOCK.course, data.portal, data.externalId),
-      find: () => this.findByExternalId(data.portal, data.externalId),
-      create: async () => toEntity(await this.db.create({ data: values })),
-      update: async ({ id }) =>
-        toEntity(await this.db.update({ where: { id }, data: values })),
-    });
+  @Transactional(Propagation.Mandatory)
+  async save(course: PortalCourse) {
+    if (course.dirty) {
+      const { id, ref, props } = course.snapshot;
+      const data = {
+        portal: ref.portal,
+        externalId: ref.externalId,
+        ...props,
+        // no meta is no value at all, not a json null
+        meta: props.meta === null ? Prisma.DbNull : props.meta,
+      };
+      await this.txHost.tx.portalCourse.upsert({
+        where: { id },
+        create: { id, ...data },
+        update: data,
+      });
+    }
+    await this.outbox.write(course);
   }
 }
