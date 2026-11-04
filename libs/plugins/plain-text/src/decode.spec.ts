@@ -57,6 +57,17 @@ describe('decode', () => {
     expect(decode(iconv.encode(ascii + cyr, 'win1251'))).toBe(ascii + cyr);
   });
 
+  it('reads each line of a file pasted together from UTF-8 and a code page', () => {
+    const utf8 = '// funkcija računa, šta je ulaz\n'.repeat(100);
+    const cp1250 = '// komentar: čvor\n';
+    const mixed = Buffer.concat([
+      Buffer.from(utf8),
+      iconv.encode(cp1250, 'win1250'),
+    ]);
+
+    expect(decode(mixed)).toBe(utf8 + cp1250);
+  });
+
   it('takes binary content for no text', () => {
     expect(decode(fixture('noise.png'))).toBeNull();
   });
