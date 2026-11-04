@@ -1,7 +1,7 @@
 import type { PrismaHealthIndicator } from '@nestjs/terminus';
 import { RateLimitError, type Job, type Queue } from 'bullmq';
 import { FILE_CONTENT_STORED } from '@app/plugin-sdk';
-import { PluginName } from '@app/kernel';
+import { ContentHash, PluginName, PortalId } from '@app/kernel';
 import type { PrismaService } from '../../platform/database/prisma.service.js';
 import type { PluginRunner } from '../application/plugin-runner.js';
 import type { PluginJob } from '../queues.js';
@@ -12,7 +12,11 @@ const job = {
     plugin: PluginName.parse('pdf'),
     message: {
       topic: FILE_CONTENT_STORED,
-      payload: { portal: 'p', fileId: 'f1', hash: 'h' },
+      payload: {
+        portal: PortalId.parse('p'),
+        fileId: 'f1',
+        hash: ContentHash.parse('0'.repeat(64)),
+      },
     },
   },
 } as Job<PluginJob>;

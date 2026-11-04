@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { QueryBus } from '@nestjs/cqrs';
-import { ContentHash } from '@app/kernel';
-import { HubReader } from '@app/plugin-sdk';
+import { HubReader, type ContentHash } from '@app/plugin-sdk';
 import {
   GetFileQuery,
   GetItemQuery,
@@ -35,8 +34,9 @@ export class CoreHubReader extends HubReader {
     return file && fileView(file);
   }
 
-  // async, so a malformed hash rejects like any other failure
-  async content(hash: string) {
-    return this.blobs.get(ContentHash.parse(hash));
+  // async, so whatever the store throws (a hash that isn't one, cast past
+  // the type) rejects like any other failure
+  async content(hash: ContentHash) {
+    return this.blobs.get(hash);
   }
 }

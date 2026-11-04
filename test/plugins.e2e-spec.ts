@@ -76,7 +76,7 @@ describe('plugins', { timeout: 20_000 }, () => {
       account: 'shared',
     });
     expect(app.get(FakePdfProcessor).seen).not.toContain('notes.txt');
-    itemId = (feed.received.at(-1)!.payload as { itemId: string }).itemId;
+    itemId = feed.received.at(-1)!.payload.itemId;
   });
 
   it('never runs two polls of one connection at once', async () => {

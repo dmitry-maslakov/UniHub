@@ -11,6 +11,7 @@ import {
   PollConnectorMark,
   PushConnectorMark,
 } from './host.js';
+import type { Topic } from './messages.js';
 import type {
   ContentProcessorOptions,
   ProcessesContent,
@@ -22,8 +23,8 @@ import type {
 // digits and dashes. Connectors outside the repo talk to the hub over gRPC.
 //
 // Each decorator only fits a class that implements its kind, so a poll
-// connector without poll() or a push connector without run() doesn't
-// compile.
+// connector without poll(), or an aggregator that doesn't handle every
+// topic it listens to, doesn't compile.
 
 type Class<T> = abstract new (...args: any[]) => T;
 
@@ -45,8 +46,8 @@ export function ContentProcessor(options: ContentProcessorOptions) {
   };
 }
 
-export function Aggregator(options: AggregatorOptions) {
-  return <C extends Class<HandlesMessages>>(target: C) => {
+export function Aggregator<T extends Topic>(options: AggregatorOptions<T>) {
+  return <C extends Class<HandlesMessages<T>>>(target: C) => {
     AggregatorMark(options)(target);
   };
 }

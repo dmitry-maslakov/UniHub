@@ -1,11 +1,11 @@
 import type { Readable } from 'node:stream';
-import type { Json } from './records.js';
+import type { ContentHash, Json, MediaType, PortalId } from '@app/kernel';
 
 // Reading what the hub has, by the hub's ids from messages.
 
 export interface CourseView {
   id: string;
-  portal: string;
+  portal: PortalId;
   externalId: string;
   name: string;
   url: string | null;
@@ -14,7 +14,7 @@ export interface CourseView {
 
 export interface ItemView {
   id: string;
-  portal: string;
+  portal: PortalId;
   externalId: string;
   portalCourseId: string | null;
   kind: string;
@@ -27,7 +27,7 @@ export interface ItemView {
 
 export interface FileView {
   id: string;
-  portal: string;
+  portal: PortalId;
   externalId: string;
   portalCourseId: string | null;
   itemId: string | null;
@@ -35,8 +35,8 @@ export interface FileView {
   path: string;
   url: string | null;
   size: number | null;
-  mime: string | null;
-  contentHash: string | null;
+  mime: MediaType | null;
+  contentHash: ContentHash | null;
   removed: boolean;
 }
 
@@ -45,5 +45,5 @@ export abstract class HubReader {
   abstract course(id: string): Promise<CourseView | null>;
   abstract item(id: string): Promise<ItemView | null>;
   abstract file(id: string): Promise<FileView | null>;
-  abstract content(hash: string): Promise<Readable>;
+  abstract content(hash: ContentHash): Promise<Readable>;
 }

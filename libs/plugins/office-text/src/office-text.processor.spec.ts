@@ -1,11 +1,14 @@
 import { createReadStream } from 'node:fs';
-import { join } from 'node:path';
+import { extname, join } from 'node:path';
+import { ContentHash, type ProcessorInput } from '@app/plugin-sdk';
 import { OfficeTextProcessor } from './office-text.processor.js';
 
-const fixture = (name: string) => ({
+// as the hub hands it over: matched by its extension, the content unused
+const fixture = (name: string, matched = extname(name)): ProcessorInput => ({
   name,
   mime: null,
-  hash: 'unused',
+  matched,
+  hash: ContentHash.parse('0'.repeat(64)),
   content: async () =>
     createReadStream(join(import.meta.dirname, 'fixtures', name)),
 });
@@ -33,5 +36,11 @@ describe('OfficeTextProcessor', () => {
         'Lab 2\nWrite a loop in assembly.',
       ],
     });
+  });
+
+  it('splits the way the entry the hub matched says, a media type too', async () => {
+    expect(
+      await processor.process(fixture('lecture.pdf', 'application/pdf')),
+    ).toEqual({ parts: ['Lecture 5: caches', 'Direct mapped caches'] });
   });
 });

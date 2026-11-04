@@ -87,12 +87,14 @@ export class FakePdfProcessor implements ProcessesContent {
   }
 }
 
+type ItemMessage = Message<typeof ITEM_INGESTED | typeof ITEM_REMOVED>;
+
 @Aggregator({ name: 'fake-feed', topics: [ITEM_INGESTED, ITEM_REMOVED] })
 @Injectable()
-export class FakeAggregator implements HandlesMessages {
-  received: Message[] = [];
+export class FakeAggregator implements HandlesMessages<ItemMessage['topic']> {
+  received: ItemMessage[] = [];
 
-  async handle(message: Message) {
+  async handle(message: ItemMessage) {
     this.received.push(message);
   }
 }
@@ -100,11 +102,11 @@ export class FakeAggregator implements HandlesMessages {
 // fails the first time it sees each message
 @Aggregator({ name: 'flaky-feed', topics: [ITEM_INGESTED] })
 @Injectable()
-export class FlakyAggregator implements HandlesMessages {
+export class FlakyAggregator implements HandlesMessages<typeof ITEM_INGESTED> {
   failed = new Set<string>();
-  received: Message[] = [];
+  received: Message<typeof ITEM_INGESTED>[] = [];
 
-  async handle(message: Message) {
+  async handle(message: Message<typeof ITEM_INGESTED>) {
     const key = JSON.stringify(message);
     if (!this.failed.has(key)) {
       this.failed.add(key);

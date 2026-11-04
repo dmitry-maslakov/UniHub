@@ -28,10 +28,10 @@ const portal = 'shutdown-test';
 
 @Aggregator({ name: 'slow-feed', topics: [ITEM_INGESTED] })
 @Injectable()
-class SlowAggregator implements HandlesMessages {
+class SlowAggregator implements HandlesMessages<typeof ITEM_INGESTED> {
   started = false;
 
-  async handle(message: Message) {
+  async handle(message: Message<typeof ITEM_INGESTED>) {
     if (message.payload.portal === portal) this.started = true;
     await sleep(1_500);
   }

@@ -2,7 +2,6 @@ import type { Readable } from 'node:stream';
 import { Injectable, Logger } from '@nestjs/common';
 import { QueryBus } from '@nestjs/cqrs';
 import { FILE_CONTENT_STORED } from '@app/plugin-sdk';
-import { MediaType } from '@app/kernel';
 import { GetFileQuery } from '../../catalog/contracts.js';
 import { PluginCatalog } from '../../plugins/contracts.js';
 import { BlobStore } from '../../storage/contracts.js';
@@ -33,6 +32,9 @@ export class PluginRunner {
     // gone, or the job is about content that has been replaced since
     if (!file || file.removed || file.contentHash !== message.payload.hash)
       return;
+    // renamed since to something the processor doesn't take
+    const matched = processor.spec.match(file);
+    if (matched === null) return;
     const hash = file.contentHash;
     // the same content in another file, or a job queued twice
     const { name, version } = processor.spec;
@@ -43,8 +45,8 @@ export class PluginRunner {
     try {
       const result = await processor.instance.process({
         name: file.name,
-        // the type the catalog matched on, not the portal's spelling of it
-        mime: MediaType.safeParse(file.mime).data ?? null,
+        mime: file.mime,
+        matched,
         hash,
         content: async () => {
           const stream = await this.blobs.get(hash);
