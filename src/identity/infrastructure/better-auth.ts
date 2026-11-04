@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { betterAuth } from 'better-auth';
+import { createAuthMiddleware, isAPIError } from 'better-auth/api';
 import { admin, bearer, deviceAuthorization } from 'better-auth/plugins';
 import { apiKey } from '@better-auth/api-key';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
@@ -40,6 +41,14 @@ export function createAuth({
         logger.error(`mail to ${mail.to} failed`, err as Error),
       );
 
+  // A new password ends the API keys made under the old one: a stolen
+  // session, or a screen signed in by QR, may have made some, and a key
+  // never needs a session to work. The plugin has no call for all of a
+  // user's keys; it keeps them in the database only (no secondaryStorage
+  // here), so this is all of them.
+  const dropApiKeys = (userId: string) =>
+    prisma.apikey.deleteMany({ where: { referenceId: userId } });
+
   return betterAuth({
     secret,
     baseURL,
@@ -60,12 +69,10 @@ export function createAuth({
     emailAndPassword: {
       enabled: true,
       requireEmailVerification: true,
-      // a stolen session, or a screen signed in by QR, ends with a reset;
-      // so do the API keys it may have made (they're ours to drop: a key
-      // never needs a session to work)
+      // a stolen session, or a screen signed in by QR, ends with a reset
       revokeSessionsOnPasswordReset: true,
       onPasswordReset: async ({ user }) => {
-        await prisma.apikey.deleteMany({ where: { referenceId: user.id } });
+        await dropApiKeys(user.id);
       },
       sendResetPassword: async ({ user, url }) =>
         send({
@@ -85,6 +92,19 @@ export function createAuth({
         }),
     },
     socialProviders: google ? { google } : {},
+    // the other ways to a new password: the user's own change, an admin's
+    hooks: {
+      after: createAuthMiddleware(async (ctx) => {
+        if (isAPIError(ctx.context.returned)) return;
+        const userId =
+          ctx.path === '/change-password'
+            ? ctx.context.session?.user.id
+            : ctx.path === '/admin/set-user-password'
+              ? (ctx.body as { userId?: string }).userId
+              : undefined;
+        if (userId) await dropApiKeys(userId);
+      }),
+    },
     plugins: [
       // user roles: an admin decides who reads which course
       admin(),
