@@ -2,10 +2,10 @@ import { once } from 'node:events';
 import { setTimeout } from 'node:timers/promises';
 import type { ConfigType } from '@nestjs/config';
 import type { ConnectorContext, PushesFromPortal } from '@app/plugin-sdk';
+import { catalogOf, push } from '../../../test/discovered-plugins.js';
 import type { IngestService } from '../../ingest/contracts.js';
 import type { pluginsConfig } from '../plugins.config.js';
 import { ConnectionDirectory } from './connection-directory.js';
-import { catalogOf, push } from './plugins.fakes.js';
 import { PushConnections } from './push-connections.js';
 
 // to see the restart waits asked for without sitting through them

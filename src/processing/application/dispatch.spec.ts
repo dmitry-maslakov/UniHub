@@ -5,15 +5,14 @@ import {
   type Message,
 } from '@app/plugin-sdk';
 import { PortalId } from '@app/kernel';
-import { Dispatch } from './dispatch.js';
-import { jobId } from './plugin-job.js';
 import {
   aggregator,
   catalogOf,
-  FakeFiles,
   processor,
-  sha,
-} from './processing.fakes.js';
+} from '../../../test/discovered-plugins.js';
+import { Dispatch } from './dispatch.js';
+import { jobId } from './plugin-job.js';
+import { FakeFiles, sha } from './processing.fakes.js';
 
 const portal = PortalId.parse('canvas');
 const hash = sha('notes');
@@ -25,7 +24,7 @@ const stored = (fileId: string, content = hash): Message => ({
 
 function dispatch() {
   const plugins = catalogOf({
-    processors: [processor('pdf', '.pdf'), processor('slides', '.pptx')],
+    processors: [processor('pdf', ['.pdf']), processor('slides', ['.pptx'])],
     aggregators: [
       aggregator('feed', [ITEM_INGESTED, ITEM_REMOVED]),
       aggregator('files', [FILE_CONTENT_STORED]),

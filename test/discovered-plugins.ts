@@ -6,17 +6,18 @@ import type {
   Topic,
 } from '@app/plugin-sdk';
 import { PortalId } from '@app/kernel';
-import type { ConnectorTokens } from '../../ingest/contracts.js';
+import type { ConnectorTokens } from '../src/ingest/contracts.js';
+import { PluginCatalog } from '../src/plugins/application/plugin-catalog.js';
+import type { Found } from '../src/plugins/application/plugin-discovery.js';
 import {
   aggregatorSpec,
   pollSpec,
   ProcessorSpec,
   pushSpec,
-} from '../domain/specs.js';
-import { PluginCatalog } from './plugin-catalog.js';
-import type { Found } from './plugin-discovery.js';
+} from '../src/plugins/domain/specs.js';
 
-// Plugins as discovery would find them, for the specs.
+// Plugins as discovery would find them, for the unit specs of plugins and
+// of processing, which reads them through PluginCatalog.
 
 export const poll = (
   portal: string,
@@ -32,7 +33,8 @@ export const processor = (
   name: string,
   accepts: string[],
   instance: ProcessesContent = { process: async () => ({ parts: [] }) },
-) => ({ spec: ProcessorSpec.of({ name, version: 1, accepts }), instance });
+  version = 1,
+) => ({ spec: ProcessorSpec.of({ name, version, accepts }), instance });
 
 export const aggregator = (
   name: string,

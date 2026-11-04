@@ -1,7 +1,7 @@
 import { ITEM_INGESTED, type Message } from '@app/plugin-sdk';
 import { PluginName, PortalId } from '@app/kernel';
+import { aggregator, catalogOf } from '../../../test/discovered-plugins.js';
 import { DeliverMessage } from './deliver-message.js';
-import { aggregator, catalogOf } from './processing.fakes.js';
 
 const message: Message = {
   topic: ITEM_INGESTED,

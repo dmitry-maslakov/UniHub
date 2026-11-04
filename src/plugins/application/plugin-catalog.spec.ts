@@ -1,13 +1,13 @@
 import { FILE_REMOVED, ITEM_INGESTED, ITEM_REMOVED } from '@app/plugin-sdk';
 import { MediaType, PluginName, PortalId } from '@app/kernel';
-import { PortalHasTwoWritersError } from '../domain/errors.js';
 import {
   aggregator,
   catalogOf,
   poll,
   processor,
   push,
-} from './plugins.fakes.js';
+} from '../../../test/discovered-plugins.js';
+import { PortalHasTwoWritersError } from '../domain/errors.js';
 
 const names = (plugins: { spec: { name: string } }[]) =>
   plugins.map((p) => p.spec.name);

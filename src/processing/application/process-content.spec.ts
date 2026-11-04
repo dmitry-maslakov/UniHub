@@ -1,13 +1,12 @@
 import type { ProcessesContent, ProcessorInput } from '@app/plugin-sdk';
 import { MediaType, PluginName } from '@app/kernel';
+import { catalogOf, processor } from '../../../test/discovered-plugins.js';
 import type { ProcessJob } from './plugin-job.js';
 import { ProcessContent } from './process-content.js';
 import {
-  catalogOf,
   FakeBlobs,
   FakeFiles,
   InMemoryRepresentations,
-  processor,
   sha,
 } from './processing.fakes.js';
 
@@ -28,7 +27,7 @@ function run(
   const blobs = new FakeBlobs();
   const representations = new InMemoryRepresentations();
   const process = new ProcessContent(
-    catalogOf({ processors: [processor('pdf', '.pdf', instance, version)] }),
+    catalogOf({ processors: [processor('pdf', ['.pdf'], instance, version)] }),
     new FakeFiles(
       new Map(files.map((f, i) => [`f${i}`, { mime, hash, ...f }])),
     ),

@@ -1,8 +1,6 @@
 import { createHash } from 'node:crypto';
 import { PassThrough } from 'node:stream';
-import type { HandlesMessages, ProcessesContent, Topic } from '@app/plugin-sdk';
-import { ContentHash, PluginName } from '@app/kernel';
-import { PluginCatalog } from '../../plugins/contracts.js';
+import { ContentHash } from '@app/kernel';
 import { BlobStore } from '../../storage/contracts.js';
 import {
   RepresentationRepository,
@@ -12,45 +10,11 @@ import {
 import type { PluginJob } from './plugin-job.js';
 import { FileFacts, PluginJobQueue, type FileFact } from './ports.js';
 
-// In-memory ports for the application's unit tests.
+// In-memory ports for the application's unit tests; plugins come from
+// test/discovered-plugins.ts.
 
 export const sha = (text: string) =>
   ContentHash.parse(createHash('sha256').update(text).digest('hex'));
-
-// a processor of one extension; its spec as plugins would check it
-export const processor = (
-  name: string,
-  ext: string,
-  instance: ProcessesContent = { process: async () => ({ parts: [] }) },
-  version = 1,
-) => ({
-  spec: {
-    name: PluginName.parse(name),
-    version,
-    match: (file: FileFact) => (file.name.endsWith(ext) ? ext : null),
-  },
-  instance,
-});
-
-export const aggregator = (
-  name: string,
-  topics: Topic[],
-  instance: HandlesMessages = { handle: async () => {} },
-) => ({ spec: { name: PluginName.parse(name), topics }, instance });
-
-// the catalog the app would make of these plugins
-export function catalogOf(plugins: {
-  processors?: ReturnType<typeof processor>[];
-  aggregators?: ReturnType<typeof aggregator>[];
-}) {
-  const found = { polls: [], pushes: [], processors: [], aggregators: [] };
-  const catalog = new PluginCatalog(
-    { find: () => ({ ...found, ...plugins }) } as never,
-    { portals: () => [] } as never,
-  );
-  catalog.onModuleInit();
-  return catalog;
-}
 
 // catalog's files by id; a removed one is left out
 export class FakeFiles extends FileFacts {

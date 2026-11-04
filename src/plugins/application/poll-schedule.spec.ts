@@ -1,7 +1,7 @@
+import { catalogOf, poll, push } from '../../../test/discovered-plugins.js';
 import type { IngestService } from '../../ingest/contracts.js';
 import { ConnectionDirectory } from './connection-directory.js';
 import type { ConnectorSchedules, Schedule } from './connector-schedules.js';
-import { catalogOf, poll, push } from './plugins.fakes.js';
 import { PollSchedule } from './poll-schedule.js';
 
 describe('PollSchedule', () => {

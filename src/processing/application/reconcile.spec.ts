@@ -1,11 +1,10 @@
 import { PluginName } from '@app/kernel';
+import { catalogOf, processor } from '../../../test/discovered-plugins.js';
 import { Dispatch } from './dispatch.js';
 import {
-  catalogOf,
   FakeFiles,
   FakeQueue,
   InMemoryRepresentations,
-  processor,
   sha,
 } from './processing.fakes.js';
 import { Reconcile } from './reconcile.js';
@@ -13,7 +12,7 @@ import { Reconcile } from './reconcile.js';
 describe('Reconcile', () => {
   it('queues the processing missing for files with content', async () => {
     const plugins = catalogOf({
-      processors: [processor('pdf', '.pdf'), processor('slides', '.pptx')],
+      processors: [processor('pdf', ['.pdf']), processor('slides', ['.pptx'])],
     });
     const files = new FakeFiles(
       new Map([
