@@ -72,6 +72,17 @@ describe('byHeading', () => {
     expect(byHeading(`${long}# B\n`)).toEqual([...byLines(long), '# B\n']);
   });
 
+  // marked's inline pass took a minute for this (the test's timeout fails it)
+  it('reads a paragraph full of * at once, code pasted without a fence', () => {
+    const code = `# A\n${'int *p = *q * *r; // swap *a and *b\n'.repeat(3_000)}`;
+    expect(byHeading(code)).toEqual(byLines(code));
+  });
+
+  it('splits by lines what marked cannot lex, quotes nested past the stack', () => {
+    const quotes = '>'.repeat(20_000);
+    expect(byHeading(quotes)).toEqual(byLines(quotes));
+  });
+
   it('splits markdown too large for marked by lines', () => {
     const large = `# A\n${lines(MAX_MARKDOWN / 64, 64)}# B\n`;
     expect(byHeading(large)).toEqual(byLines(large));

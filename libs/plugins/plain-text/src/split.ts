@@ -1,10 +1,11 @@
-import { lexer } from 'marked';
+import { Lexer, type Token } from 'marked';
 
 // What a reader gets at once is at most this long, an office document's
 // section too.
 export const MAX_PART = 10_000;
-// marked takes seconds and most of the worker's heap for 16 MiB, so
-// markdown past a million characters (1 MiB or so) goes by lines
+// marked takes seconds for a megabyte of lists nested in each other, and
+// minutes for more, so markdown past a million characters (1 MiB or so) goes
+// by lines
 export const MAX_MARKDOWN = 1024 * 1024;
 
 // Whole lines, as many as fit in a part. The parts joined give the text back.
@@ -38,10 +39,19 @@ function cut(window: string) {
 // or a list starts none. The parts joined give the text back.
 export function byHeading(markdown: string): string[] {
   if (markdown.length > MAX_MARKDOWN) return byLines(markdown);
+  // only the blocks: their inline markup takes marked minutes for a
+  // paragraph full of * or _ (code pasted without a fence)
+  let blocks: Token[];
+  try {
+    blocks = new Lexer().blockTokens(markdown);
+  } catch {
+    // quotes nested past the stack (thousands of >)
+    return byLines(markdown);
+  }
   const sections: string[] = [];
   let start = 0;
   let at = 0;
-  for (const { type, raw } of lexer(markdown)) {
+  for (const { type, raw } of blocks) {
     // blank lines before the first heading are no section of their own
     if (type === 'heading' && markdown.slice(start, at).trim()) {
       sections.push(markdown.slice(start, at));
