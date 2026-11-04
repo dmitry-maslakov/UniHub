@@ -1,6 +1,6 @@
 import { QueryHandler, type IQueryHandler } from '@nestjs/cqrs';
 import { InjectTransactionHost } from '@nestjs-cls/transactional';
-import { MediaType, type ContentHash, type PortalId } from '@app/kernel';
+import type { ContentHash, MediaType, PortalId } from '@app/kernel';
 import type { Prisma } from '../../../generated/prisma/client.js';
 import type { PrismaTxHost } from '../../../platform/database/prisma.service.js';
 import {
@@ -29,9 +29,8 @@ const select = {
   removedAt: true,
 } satisfies Prisma.FileSelect;
 
-// Values were checked on the way in; media types of rows from before they
-// were normalised are read the way they are written now. Size is a bigint
-// in the db (files over 2 GB).
+// Values were checked on the way in (media types of older rows by their
+// migration too). Size is a bigint in the db (files over 2 GB).
 const toDto = ({
   removedAt,
   ...row
@@ -39,7 +38,7 @@ const toDto = ({
   ...row,
   portal: row.portal as PortalId,
   size: row.size === null ? null : Number(row.size),
-  mime: MediaType.safeParse(row.mime).data ?? null,
+  mime: row.mime as MediaType | null,
   contentHash: row.contentHash as ContentHash | null,
   removed: removedAt !== null,
 });

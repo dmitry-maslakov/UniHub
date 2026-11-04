@@ -4,7 +4,7 @@ import {
   Propagation,
   Transactional,
 } from '@nestjs-cls/transactional';
-import { MediaType, type ContentHash, type PortalId } from '@app/kernel';
+import type { ContentHash, MediaType, PortalId } from '@app/kernel';
 import type { File as Row } from '../../generated/prisma/client.js';
 import type { PrismaTxHost } from '../../platform/database/prisma.service.js';
 import { PortalFile } from '../domain/portal-file/portal-file.js';
@@ -14,9 +14,9 @@ import { byPortalRef } from './by-portal-ref.js';
 import { CatalogOutbox } from './catalog-outbox.js';
 import { LOCK, lockRecord } from './record-lock.js';
 
-// Values were checked on the way in. Rows from before media types were
-// normalised get theirs read the way they are now written. Size is a bigint
-// in the db (files over 2 GB), a number everywhere else.
+// Values were checked on the way in (media types of older rows by their
+// migration too). Size is a bigint in the db (files over 2 GB), a number
+// everywhere else.
 const toFile = (row: Row) =>
   PortalFile.restore({
     id: row.id,
@@ -26,7 +26,7 @@ const toFile = (row: Row) =>
       path: row.path,
       url: row.url,
       size: row.size === null ? null : Number(row.size),
-      mime: MediaType.safeParse(row.mime).data ?? null,
+      mime: row.mime as MediaType | null,
       sourceUpdatedAt: row.sourceUpdatedAt,
     },
     placement: { portalCourseId: row.portalCourseId, itemId: row.itemId },
