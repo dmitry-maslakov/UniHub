@@ -6,8 +6,8 @@ import {
   type SupportedFileType,
 } from 'officeparser';
 
-// Run by parse.ts in a thread of its own. Imports nothing of this repo: in
-// tests node runs it as it is, types stripped.
+// Run by office-text.processor.ts in a thread of its own. Imports nothing of
+// this repo: in tests node runs it as it is, types stripped.
 const {
   data,
   fileType,
