@@ -5,8 +5,9 @@ import { accounts, ORIGIN } from './accounts.js';
 import { portalIngest } from './ingest.js';
 
 // Each admin route once, behind its role. What a request may hold is
-// checked on its schema (catalog's requests.spec), what a command
-// refuses on fakes (course.handlers.spec).
+// checked on its schema (catalog's values.spec and requests.spec), what a
+// command refuses on fakes (course.handlers.spec); a route declares which
+// schema it takes, so one bad request each shows it is there.
 
 const PORTAL = 'admin-test';
 
@@ -75,5 +76,17 @@ describe('course admin routes', { timeout: 20_000 }, () => {
     expect(after.body).toContainEqual(
       expect.objectContaining({ slug: 'admin-os', portalCourses: [] }),
     );
+  });
+
+  it('checks a portal course named against its schema', async () => {
+    await admin
+      .put('/api/portal-courses/Not_A_Portal/1388/course', {
+        course: 'admin-os',
+      })
+      .expect(400);
+    // an id postgres can't look up: refused, not a 500
+    await admin
+      .delete(`/api/portal-courses/${PORTAL}/a%00b/course`)
+      .expect(400);
   });
 });

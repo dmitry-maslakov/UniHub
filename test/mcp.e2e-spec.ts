@@ -17,8 +17,9 @@ import { accounts } from './accounts.js';
 import { portalIngest } from './ingest.js';
 
 // Each tool once, behind the API key, the request checks and the limit.
-// What a request may hold is checked on its schema and on
-// McpRequestMiddleware, who reads what on fakes (CourseReader).
+// What a request may hold is checked on its values' specs and on
+// McpRequestMiddleware, who reads what on fakes (CourseReader); a tool
+// declares which schema it takes, so one bad call each shows it is there.
 
 const PORTAL = 'mcp-test';
 
@@ -165,9 +166,16 @@ describe('MCP', { timeout: 20_000 }, () => {
     expect(missing.content[0].text).toContain('course not found');
 
     // a tool's parameters are checked by its schema
-    const invalid = await call('list_items', { course: 'alg', limit: 500 });
-    expect(invalid.isError).toBe(true);
-    expect(invalid.content[0].text).toContain('Invalid parameters');
+    for (const [tool, args] of [
+      ['list_items', { course: 'alg', limit: 500 }],
+      ['list_files', { course: 'Not A Slug' }],
+      // past what postgres takes
+      ['read_file', { file: fileId, page: 1e12 }],
+    ] as const) {
+      const invalid = await call(tool, args);
+      expect(invalid.isError).toBe(true);
+      expect(invalid.content[0].text).toContain('Invalid parameters');
+    }
   });
 
   it("stops a banned user's key", async () => {

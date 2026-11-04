@@ -18,8 +18,9 @@ import { portalIngest } from './ingest.js';
 import { sha256 } from './sha256.js';
 
 // Each REST route once, and what only the queries decide: which files a
-// course shows, in what order, a page at a time. Who reads what, and
-// answers to bad requests, are checked on fakes (CourseReader, the schemas).
+// course shows, in what order, a page at a time. Who reads what is checked
+// on fakes (CourseReader), what a request may hold on its schemas; a route
+// declares which schema it takes, so one bad request each shows it is there.
 
 const PORTAL = 'rest-test';
 
@@ -206,7 +207,7 @@ describe('REST API', { timeout: 20_000 }, () => {
     expect(byName['notes.pdf'].hasContent).toBe(false);
   });
 
-  it('pages lists, within the bounds of its schema', async () => {
+  it('pages lists', async () => {
     const second = await get(
       '/api/courses/sys/items?offset=1&limit=1',
       student,
@@ -214,7 +215,15 @@ describe('REST API', { timeout: 20_000 }, () => {
     expect(second.body.map((i: { title: string }) => i.title)).toEqual([
       'post old',
     ]);
-    await get('/api/courses/sys/items?limit=500', student).expect(400);
+  });
+
+  it('checks a request against the schema its route takes', async () => {
+    for (const path of [
+      '/api/courses/sys/items?limit=500',
+      '/api/courses/Not%20A%20Slug/files',
+      `/api/files/${ids.slides}/text?page=0`,
+    ])
+      await get(path, student).expect(400);
   });
 
   it('reads a file as text page by page', async () => {
@@ -307,5 +316,10 @@ describe('REST API', { timeout: 20_000 }, () => {
     await as(admin)
       .put(`/api/users/nobody/courses/${courseIds.net}`)
       .expect(404);
+    // an id postgres can't look up: its schema refuses it, not a 500
+    await as(admin).put(`/api/users/${id}/courses/a%00b`).expect(400);
+    await as(admin)
+      .delete(`/api/users/a%00b/courses/${courseIds.net}`)
+      .expect(400);
   });
 });
