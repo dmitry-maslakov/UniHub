@@ -22,12 +22,33 @@ export class TokenRejectedError extends CanvasError {
     'canvas token expired or was revoked: make a new one and set CANVAS_TOKEN';
 }
 
-// A download cut off partway: the connection dropped, or stalled past the
-// timeout. The path only, as above.
-export class DownloadCutOffError extends Error {
-  constructor(url: string, cause: unknown) {
-    const why = cause instanceof Error ? cause.message : String(cause);
-    super(`download of ${new URL(url).pathname} cut off: ${why}`, { cause });
+// No answer from Canvas after the retries, or not a whole one: the network
+// failed, nothing came in time, or what came isn't the JSON asked for. The
+// path and the reason only, as above: axios's own error holds the token.
+export class NoAnswerError extends Error {
+  constructor(url: string, reason: string) {
+    super(`no answer from canvas to ${new URL(url).pathname}: ${reason}`);
+    this.name = new.target.name;
+  }
+}
+
+// A download with no answer after the retries, or cut off partway (the
+// connection dropped, or a minute went by without a byte read): that
+// file's failure, tried again the next run
+export class DownloadFailedError extends Error {
+  constructor(url: string, reason: string) {
+    super(`download of ${new URL(url).pathname} failed: ${reason}`);
+    this.name = new.target.name;
+  }
+}
+
+// A url Canvas gave (a file's, a next page) on another origin than the
+// school's Canvas: the token isn't sent there, and the run fails saying so
+export class OtherOriginError extends Error {
+  constructor(to: URL, canvas: string) {
+    super(
+      `not sending the canvas token to ${to.origin}${to.pathname}: it goes to ${canvas} only`,
+    );
     this.name = new.target.name;
   }
 }
@@ -41,9 +62,9 @@ export const visible = <T>(read: Promise<T>) =>
 
 // What fails one request, not the run: anything Canvas answered but a
 // token it no longer takes, which every request would get, and a download
-// cut off partway.
+// that failed short of an answer.
 export const skippable = (
   error: unknown,
-): error is CanvasError | DownloadCutOffError =>
+): error is CanvasError | DownloadFailedError =>
   (error instanceof CanvasError && !(error instanceof TokenRejectedError)) ||
-  error instanceof DownloadCutOffError;
+  error instanceof DownloadFailedError;

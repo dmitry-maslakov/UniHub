@@ -1,12 +1,22 @@
 import { text } from 'node:stream/consumers';
+import { inspect } from 'node:util';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
-import { CanvasApi, LOW_QUOTA, PAUSE_MS, RETRY } from './canvas-api.js';
+import {
+  CanvasApi,
+  LOW_QUOTA,
+  PAUSE_MS,
+  RETRY,
+  type CanvasApiOptions,
+} from './canvas-api.js';
 import { CuttingFileStore } from './canvas.fakes.js';
 import {
   CanvasError,
-  DownloadCutOffError,
+  DownloadFailedError,
+  NoAnswerError,
   NotVisibleError,
+  OtherOriginError,
+  skippable,
   TokenRejectedError,
 } from './errors.js';
 
@@ -17,8 +27,14 @@ vi.mock('node:timers/promises', () => ({ setTimeout: sleep }));
 const CANVAS = 'https://canvas.example.edu';
 const server = setupServer();
 
-const api = (signal = new AbortController().signal, url = CANVAS) =>
-  new CanvasApi({ url, userAgent: 'test agent', token: 'the-token', signal });
+const api = (options: Partial<CanvasApiOptions> = {}) =>
+  new CanvasApi({
+    url: CANVAS,
+    userAgent: 'test agent',
+    token: 'the-token',
+    signal: new AbortController().signal,
+    ...options,
+  });
 
 // answers in turn, the last one from then on; keeps the requests, and
 // when they came on the (fake) clock
@@ -38,6 +54,16 @@ const status =
   () =>
     new HttpResponse(body, { status: code });
 const ok = () => HttpResponse.json({ ok: true });
+
+// what a request ended in, on fake timers through its retries
+async function failure(request: Promise<unknown>) {
+  const failed = request.then(
+    () => expect.unreachable(),
+    (error: unknown) => error,
+  );
+  await vi.runAllTimersAsync();
+  return failed;
+}
 
 describe('CanvasApi', () => {
   beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
@@ -117,12 +143,36 @@ describe('CanvasApi', () => {
     vi.useFakeTimers();
     const asked = answering(status(502));
 
-    const got = expect(api().get('/api/v1/x')).rejects.toMatchObject({
+    expect(await failure(api().get('/api/v1/x'))).toMatchObject({
       status: 502,
     });
-    await vi.runAllTimersAsync();
-    await got;
     expect(asked).toHaveLength(RETRY.retries + 1);
+  });
+
+  it("takes a page that isn't JSON for no answer: tried again, then failed", async () => {
+    vi.useFakeTimers();
+    const asked = answering(() =>
+      HttpResponse.html('<html>down for maintenance</html>'),
+    );
+
+    const error = await failure(api().list('/api/v1/x'));
+    expect(error).toBeInstanceOf(NoAnswerError);
+    expect(error).toHaveProperty(
+      'message',
+      expect.stringMatching(/^no answer from canvas to \/api\/v1\/x: /),
+    );
+    expect(skippable(error)).toBe(false);
+    expect(asked).toHaveLength(RETRY.retries + 1);
+  });
+
+  it('takes an empty body for no listing, unlike an empty list', async () => {
+    answering(() => new HttpResponse(''));
+    await expect(api().list('/api/v1/x')).rejects.toThrow(
+      'no answer from canvas to /api/v1/x: not a list',
+    );
+
+    answering(() => HttpResponse.json([]));
+    expect(await api().list('/api/v1/x')).toEqual([]);
   });
 
   it('takes a refusal for one: not visible, or a bad request', async () => {
@@ -156,11 +206,33 @@ describe('CanvasApi', () => {
   it('names the path in its errors, never a download verifier', async () => {
     server.use(http.get(`${CANVAS}/files/1/download`, () => status(500)()));
     vi.useFakeTimers();
-    const got = expect(
+    const error = await failure(
       api().download(`${CANVAS}/files/1/download?verifier=secret`),
-    ).rejects.toThrow('canvas answered 500 to /files/1/download');
-    await vi.runAllTimersAsync();
-    await got;
+    );
+    expect(error).toHaveProperty(
+      'message',
+      'canvas answered 500 to /files/1/download',
+    );
+  });
+
+  it('fails just that file for a download that gets no answer, and holds neither the token nor the url', async () => {
+    let asked = 0;
+    server.use(
+      http.get(`${CANVAS}/files/1/download`, () => {
+        asked++;
+        return HttpResponse.error();
+      }),
+    );
+    vi.useFakeTimers();
+
+    const error = await failure(
+      api().download(`${CANVAS}/files/1/download?verifier=secret`),
+    );
+    expect(error).toBeInstanceOf(DownloadFailedError);
+    expect(skippable(error)).toBe(true);
+    expect(asked).toBe(RETRY.retries + 1);
+    // axios's error would have both, in its config
+    expect(inspect(error)).not.toMatch(/the-token|secret/);
   });
 
   it("reads a download's refusal too, so the quota's goes again", async () => {
@@ -187,11 +259,11 @@ describe('CanvasApi', () => {
     const signal = new AbortController().signal;
 
     answering(quota(LOW_QUOTA + 300));
-    await api(signal).get('/api/v1/x');
+    await api({ signal }).get('/api/v1/x');
     expect(sleep).not.toHaveBeenCalled();
 
     answering(quota(LOW_QUOTA - 0.5));
-    await api(signal).get('/api/v1/x');
+    await api({ signal }).get('/api/v1/x');
     expect(sleep).toHaveBeenCalledWith(PAUSE_MS, undefined, { signal });
   });
 
@@ -200,9 +272,9 @@ describe('CanvasApi', () => {
     const asked = answering(status(429));
     const run = new AbortController();
 
-    const got = expect(api(run.signal).get('/api/v1/x')).rejects.toBe(
-      'stopped',
-    );
+    const got = expect(
+      api({ signal: run.signal }).get('/api/v1/x'),
+    ).rejects.toBe('stopped');
     await vi.advanceTimersByTimeAsync(RETRY.delayFactor);
     run.abort('stopped');
     await got;
@@ -253,28 +325,82 @@ describe('CanvasApi', () => {
       [to[3]]: 'Bearer the-token',
     });
   });
+
+  // msw errors on any request it has no handler for: none goes out
+  it("asks nothing of an origin but the school's Canvas, whatever url Canvas gives", async () => {
+    await expect(
+      api().download('https://elsewhere.example.edu/files/1?verifier=secret'),
+    ).rejects.toThrow(
+      'not sending the canvas token to https://elsewhere.example.edu/files/1: it goes to https://canvas.example.edu only',
+    );
+
+    server.use(
+      http.get(`${CANVAS}/api/v1/courses`, () =>
+        HttpResponse.json([1], {
+          headers: {
+            link: '<https://elsewhere.example.edu/api/v1/courses?page=2>; rel="next"',
+          },
+        }),
+      ),
+    );
+    await expect(api().list('/api/v1/courses')).rejects.toBeInstanceOf(
+      OtherOriginError,
+    );
+  });
 });
 
-// msw closed: a real connection the store ends while the download waits
-// unread, as behind a slow storage, or keeps waiting
+// msw closed: real connections, which the store ends, holds or never answers
 describe('CanvasApi on a file store that lets go', () => {
   const store = new CuttingFileStore().listen();
-  const download = (path: string) =>
-    api(undefined, store.url).download(`${store.url}${path}`);
+  const download = (path: string, options: Partial<CanvasApiOptions> = {}) =>
+    api({ url: store.url, ...options }).download(`${store.url}${path}`);
 
   it('fails a download cut off partway, and nothing else', async () => {
     const uncaught = vi.fn();
     process.on('uncaughtException', uncaught);
 
     const content = await download('/files/1/download?verifier=secret');
-    await store.ended;
+    // the client has given up on the body by then, still unread
+    await store.closed;
     const read = text(content);
-    await expect(read).rejects.toBeInstanceOf(DownloadCutOffError);
+    await expect(read).rejects.toBeInstanceOf(DownloadFailedError);
     await expect(read).rejects.toThrow(
-      /^download of \/files\/1\/download cut off: aborted$/,
+      /^download of \/files\/1\/download failed: aborted$/,
     );
     process.off('uncaughtException', uncaught);
     expect(uncaught).not.toHaveBeenCalled();
+  });
+
+  it('fails a download that goes too long without a byte read', async () => {
+    const content = await download('/held/1', { timeoutMs: 200 });
+    await expect(text(content)).rejects.toThrow(
+      'download of /held/1 failed: aborted',
+    );
+  });
+
+  it('tries again a request with no answer in its time', async () => {
+    const run = new AbortController();
+    const got = expect(
+      download('/silent/1', { signal: run.signal, timeoutMs: 200 }),
+    ).rejects.toBe('stopped');
+    // the first timed out, the second is its retry
+    await store.requested(2);
+    run.abort('stopped');
+    await got;
+  });
+
+  it('fails a download the run stops, read or not', async () => {
+    const before = new AbortController();
+    const unread = await download('/held/1', { signal: before.signal });
+    before.abort('stopped');
+    await expect(text(unread)).rejects.toMatchObject({ name: 'AbortError' });
+
+    const during = new AbortController();
+    const content = await download('/held/2', { signal: during.signal });
+    const chunks = content[Symbol.asyncIterator]();
+    await chunks.next();
+    during.abort('stopped');
+    await expect(chunks.next()).rejects.toMatchObject({ name: 'AbortError' });
   });
 
   it('lets go of the connection with a download let go of unread', async () => {

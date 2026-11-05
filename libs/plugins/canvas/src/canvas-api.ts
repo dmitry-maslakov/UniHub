@@ -1,23 +1,32 @@
-import { Readable } from 'node:stream';
+import { addAbortSignal, Readable } from 'node:stream';
 import { text } from 'node:stream/consumers';
 import { setTimeout } from 'node:timers/promises';
-import axios, { type AxiosInstance, type AxiosResponse } from 'axios';
+import axios, {
+  type AxiosError,
+  type AxiosInstance,
+  type AxiosResponse,
+} from 'axios';
 import axiosRetry, { exponentialDelay } from 'axios-retry';
 import LinkHeader from 'http-link-header';
 import {
   CanvasError,
-  DownloadCutOffError,
+  DownloadFailedError,
+  NoAnswerError,
   NotVisibleError,
+  OtherOriginError,
   TokenRejectedError,
 } from './errors.js';
 
 export interface CanvasApiOptions {
-  // the school's Canvas, 'https://canvas.example.edu'
+  // the school's Canvas, 'https://canvas.example.edu': the one origin the
+  // token goes to
   url: string;
   userAgent: string;
   token: string;
-  // the run's: requests, retries and waits all stop on it
+  // the run's: requests, retries, waits and downloads all stop on it
   signal: AbortSignal;
+  // TIMEOUT_MS unless a spec has it shorter
+  timeoutMs?: number;
 }
 
 // A throttled or failing request goes again 5 times, after about 1, 2, 4, 8
@@ -29,10 +38,11 @@ export const RETRY = { retries: 5, delayFactor: 500 };
 // rather than run into refusals.
 export const LOW_QUOTA = 200;
 export const PAUSE_MS = 2_000;
-// Canvas answers in seconds: a minute without an answer, or without a byte
-// in the middle of a download, is a stalled connection. It fails then (a
-// request goes again, a download fails its file) rather than at the poll's
-// timeout; a long download that keeps coming isn't cut.
+// Canvas answers in seconds. A minute for its answer, redirects included,
+// and then a minute without a byte read (the other end stalling, or ours
+// not taking any) is a stalled connection: it fails then (a request goes
+// again, a download fails its file) rather than at the poll's timeout. A
+// long download that keeps coming isn't cut.
 const TIMEOUT_MS = 60_000;
 
 // Canvas's REST API, one request at a time.
@@ -40,15 +50,23 @@ export class CanvasApi {
   private readonly http: AxiosInstance;
 
   constructor(private readonly options: CanvasApiOptions) {
-    const { url, token, userAgent, signal } = options;
+    const { url, token, userAgent, signal, timeoutMs = TIMEOUT_MS } = options;
+    const canvas = new URL(url).origin;
     this.http = axios.create({
       baseURL: url,
+      // axios leaves Authorization out of a redirect to another origin
       headers: { Authorization: `Bearer ${token}`, 'User-Agent': userAgent },
-      // left out of a redirect to another origin, a subdomain too: axios
-      // does so for this header anyway, the documented option says it
-      sensitiveHeaders: ['Authorization'],
+      // a page that isn't JSON (a proxy's, a maintenance one) is no answer
+      responseType: 'json',
+      transitional: { silentJSONParsing: false },
       signal,
-      timeout: TIMEOUT_MS,
+      timeout: timeoutMs,
+    });
+    // whatever url Canvas gives, the token goes to the school's Canvas only
+    this.http.interceptors.request.use((config) => {
+      const to = new URL(axios.getUri(config));
+      if (to.origin !== canvas) throw new OtherOriginError(to, canvas);
+      return config;
     });
     // before the retries, so each try is paced and its refusal read
     this.http.interceptors.response.use((res) => this.pace(res), readBody);
@@ -61,9 +79,12 @@ export class CanvasApi {
       // each try gets the whole timeout, not what the last ones left
       shouldResetTimeout: true,
     });
+    // the plugin's errors, none holding axios's config (the token, a
+    // download's verifier); one a retry's own chain made goes as it is
     this.http.interceptors.response.use(undefined, (error: unknown) => {
       signal.throwIfAborted();
-      throw refusal(error) ?? error;
+      if (!axios.isAxiosError(error)) throw error;
+      throw refusal(error) ?? unanswered(error);
     });
   }
 
@@ -77,6 +98,9 @@ export class CanvasApi {
     const all: T[] = [];
     let res = await this.http.get<T[]>(path, { params: { per_page: 100 } });
     for (;;) {
+      // an empty body parses to no error, and to no listing either
+      if (!Array.isArray(res.data))
+        throw new NoAnswerError(axios.getUri(res.config), 'not a list');
       all.push(...res.data);
       const link = LinkHeader.parse(String(res.headers.link ?? ''));
       const next = link.rel('next')[0]?.uri;
@@ -91,22 +115,12 @@ export class CanvasApi {
     const { data } = await this.http.get<Readable>(url, {
       responseType: 'stream',
     });
-    const content = Readable.from(this.cutOff(data, url), {
-      objectMode: false,
-    });
+    const content = Readable.from(chunks(data, url), { objectMode: false });
     // let go of unread, it lets go of the connection
     content.once('close', () => data.destroy());
-    return content;
-  }
-
-  // the connection dropping or stalling partway fails that one file
-  private async *cutOff(data: Readable, url: string) {
-    try {
-      yield* data;
-    } catch (error) {
-      this.options.signal.throwIfAborted();
-      throw new DownloadCutOffError(url, error);
-    }
+    // The run stopping fails it, read or not: axios ends the stream quietly
+    // then, as if the file were whole.
+    return addAbortSignal(this.options.signal, content);
   }
 
   private async pace(res: AxiosResponse) {
@@ -114,6 +128,15 @@ export class CanvasApi {
     if (left != null && Number(left) < LOW_QUOTA)
       await setTimeout(PAUSE_MS, undefined, { signal: this.options.signal });
     return res;
+  }
+}
+
+// the connection dropping or stalling partway fails that one file
+async function* chunks(data: Readable, url: string) {
+  try {
+    yield* data;
+  } catch (error) {
+    throw new DownloadFailedError(url, (error as Error).message);
   }
 }
 
@@ -126,9 +149,9 @@ async function readBody(error: unknown) {
 
 // What Canvas answered instead of the data; nothing for what it didn't
 // answer, the network's failure
-function refusal(error: unknown) {
-  const res = axios.isAxiosError(error) ? error.response : undefined;
-  // a body cut off partway comes with the response it was of
+function refusal(error: AxiosError) {
+  const res = error.response;
+  // a body cut off partway, or not JSON, comes with the response it was of
   if (!res || res.status < 300) return;
   const { status, headers, data } = res;
   const url = axios.getUri(res.config);
@@ -142,4 +165,12 @@ function refusal(error: unknown) {
     return new TokenRejectedError(401, url);
   if ([401, 403, 404].includes(status)) return new NotVisibleError(status, url);
   return new CanvasError(status, url);
+}
+
+// no answer after the retries: a download's fails that file, any other the run
+function unanswered(error: AxiosError) {
+  const url = axios.getUri(error.config);
+  return error.config?.responseType === 'stream'
+    ? new DownloadFailedError(url, error.message)
+    : new NoAnswerError(url, error.message);
 }

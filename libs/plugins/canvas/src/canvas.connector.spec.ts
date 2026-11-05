@@ -241,7 +241,7 @@ describe('CanvasConnector', () => {
 
     expect([...ingest.contents.keys()]).toEqual(['3002']);
     expect(warn).toHaveBeenCalledWith(
-      'file 3001 skipped: download of /files/3001/download cut off: aborted',
+      'file 3001 skipped: download of /files/3001/download failed: aborted',
     );
   });
 
