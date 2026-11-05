@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, type ConfigType } from '@nestjs/config';
 import { CqrsModule } from '@nestjs/cqrs';
 import { ScheduleModule } from '@nestjs/schedule';
 import { appConfig } from './app.config.js';
@@ -8,6 +8,7 @@ import { ErrorsModule } from './platform/errors/errors.module.js';
 import { MessagingModule } from './platform/messaging/messaging.module.js';
 import { QueuesModule } from './platform/queues/queues.module.js';
 import { RedisModule } from './platform/redis/redis.module.js';
+import { roleConfig } from './platform/role/role.config.js';
 import { ValidationModule } from './platform/validation/validation.module.js';
 import { AccessModule } from './access/access.module.js';
 import { HealthModule } from './health/health.module.js';
@@ -21,7 +22,10 @@ import { plugins } from './plugins/enabled.js';
 import { PluginsModule } from './plugins/plugins.module.js';
 
 // The modules the hub is made of; each one configures what it owns, its
-// settings included (ConfigModule.forFeature).
+// settings included (ConfigModule.forFeature). Every role loads them all:
+// APP_ROLE decides what runs, the workers (QueuesModule), the scheduler
+// (below) and the outbox relay (MessagingModule), and main.ts whether a
+// server does.
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, load: [appConfig] }),
@@ -39,7 +43,17 @@ import { PluginsModule } from './plugins/plugins.module.js';
     ErrorsModule,
     ValidationModule,
     CqrsModule.forRoot(),
-    ScheduleModule.forRoot(),
+    // What runs on its own, the crons and what starts once the app is up
+    // (@Timeout(0)), runs only with the background work (APP_ROLE)
+    ScheduleModule.forRootAsync({
+      imports: [ConfigModule.forFeature(roleConfig)],
+      inject: [roleConfig.KEY],
+      useFactory: ({ worker }: ConfigType<typeof roleConfig>) => ({
+        cronJobs: worker,
+        intervals: worker,
+        timeouts: worker,
+      }),
+    }),
     PluginsModule,
     CatalogModule,
     IdentityModule,

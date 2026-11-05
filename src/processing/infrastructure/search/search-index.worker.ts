@@ -1,8 +1,10 @@
-import type { OnModuleDestroy } from '@nestjs/common';
+import { Inject, type OnModuleDestroy } from '@nestjs/common';
+import type { ConfigType } from '@nestjs/config';
 import { InjectQueue, Processor } from '@nestjs/bullmq';
 import { PrismaHealthIndicator } from '@nestjs/terminus';
 import type { Job, Queue } from 'bullmq';
 import { PrismaService } from '../../../platform/database/prisma.service.js';
+import { roleConfig } from '../../../platform/role/role.config.js';
 import { IndexText } from '../../application/index-text.js';
 import {
   EmbedderUnavailableError,
@@ -31,6 +33,8 @@ export class SearchIndexWorker
     health: PrismaHealthIndicator,
     prisma: PrismaService,
     @InjectQueue(SEARCH_INDEX_QUEUE) queue: Queue<IndexJob>,
+    @Inject(roleConfig.KEY)
+    private readonly role: ConfigType<typeof roleConfig>,
   ) {
     super(health, prisma, queue);
   }
@@ -58,10 +62,11 @@ export class SearchIndexWorker
   // may come after the OpenSearch client: the client's close waits for the
   // requests in flight, so a worker still taking jobs would hold it up. The
   // text being embedded is let go of at once (a long one takes minutes, past
-  // the grace a restart gives), and goes back to wait.
+  // the grace a restart gives), and goes back to wait. An api process
+  // registered no worker (APP_ROLE), so it has none to close.
   async onModuleDestroy() {
     this.shutdown.abort('the app is shutting down');
-    await this.worker.close();
+    if (this.role.worker) await this.worker.close();
   }
 
   protected nameOf() {

@@ -4,6 +4,7 @@ import { RateLimitError, WaitingError, type Job, type Queue } from 'bullmq';
 import { PluginName } from '@app/kernel';
 import { sha256 } from '../../../../test/sha256.js';
 import type { PrismaService } from '../../../platform/database/prisma.service.js';
+import { roleSettings } from '../../../platform/role/role.config.js';
 import type { IndexText } from '../../application/index-text.js';
 import {
   EmbedderUnavailableError,
@@ -27,10 +28,12 @@ const job = {
   moveToWait,
 } as unknown as Job<IndexJob>;
 
-// a worker whose jobs fail with what `run` throws, the database up or down
+// a worker whose jobs fail with what `run` throws, the database up or down,
+// in a process of `role`, which runs the workers unless it's an api one
 function worker(
   run: (key: IndexJob['key'], signal: AbortSignal) => Promise<void>,
   database: 'up' | 'down' = 'up',
+  role = 'all',
 ) {
   const health = {
     pingCheck: () => ({
@@ -38,15 +41,17 @@ function worker(
     }),
   } as unknown as PrismaHealthIndicator;
   const queue = { rateLimit: vi.fn(async () => {}) };
+  const settings = roleSettings.parse({ APP_ROLE: role });
   const w = new SearchIndexWorker(
     { run } as unknown as IndexText,
     health,
     {} as PrismaService,
     queue as unknown as Queue<IndexJob>,
+    settings,
   );
   // the BullMQ worker Nest would have made for it
   const close = vi.fn(async () => {});
-  Object.defineProperty(w, 'worker', { value: { close } });
+  if (settings.worker) Object.defineProperty(w, 'worker', { value: { close } });
   return { worker: w, queue, close };
 }
 
@@ -90,6 +95,11 @@ describe('SearchIndexWorker', () => {
       WaitingError,
     );
     expect(moveToWait).toHaveBeenCalledWith('token-2');
+  });
+
+  it('has no worker to close in an api process, which registers none', async () => {
+    const { worker: w } = worker(embedding, 'up', 'api');
+    await expect(w.onModuleDestroy()).resolves.toBeUndefined();
   });
 
   it('waits out the index being away without spending an attempt', async () => {

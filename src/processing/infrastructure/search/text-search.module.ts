@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule, type ConfigType } from '@nestjs/config';
 import { TerminusModule } from '@nestjs/terminus';
+import { roleConfig } from '../../../platform/role/role.config.js';
 import { opensearchConfig } from '../../../platform/search/opensearch.config.js';
 import { OpenSearchModule } from '../../../platform/search/opensearch.module.js';
 import { IndexText } from '../../application/index-text.js';
@@ -32,6 +33,7 @@ const DAY = 24 * 60 * 60;
   imports: [
     ConfigModule.forFeature(opensearchConfig),
     ConfigModule.forFeature(textSearchConfig),
+    ConfigModule.forFeature(roleConfig),
     OpenSearchModule,
     // the worker asks whether the database is up before blaming a job
     TerminusModule,
