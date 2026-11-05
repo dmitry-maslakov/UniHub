@@ -2,7 +2,13 @@ import { text } from 'node:stream/consumers';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { CanvasApi, LOW_QUOTA, PAUSE_MS, RETRY } from './canvas-api.js';
-import { CanvasError, NotVisibleError, TokenRejectedError } from './errors.js';
+import { CuttingFileStore } from './canvas.fakes.js';
+import {
+  CanvasError,
+  DownloadCutOffError,
+  NotVisibleError,
+  TokenRejectedError,
+} from './errors.js';
 
 // the wait on a low quota; the backoff runs on fake timers
 const { sleep } = vi.hoisted(() => ({ sleep: vi.fn(async () => {}) }));
@@ -11,13 +17,8 @@ vi.mock('node:timers/promises', () => ({ setTimeout: sleep }));
 const CANVAS = 'https://canvas.example.edu';
 const server = setupServer();
 
-const api = (signal = new AbortController().signal) =>
-  new CanvasApi({
-    url: CANVAS,
-    userAgent: 'test agent',
-    token: 'the-token',
-    signal,
-  });
+const api = (signal = new AbortController().signal, url = CANVAS) =>
+  new CanvasApi({ url, userAgent: 'test agent', token: 'the-token', signal });
 
 // answers in turn, the last one from then on; keeps the requests, and
 // when they came on the (fake) clock
@@ -84,7 +85,7 @@ describe('CanvasApi', () => {
   it('backs off while Canvas throttles: a 429, or a 403 that says so', async () => {
     vi.useFakeTimers();
     const asked = answering(
-      status(403, 'Rate Limit Exceeded'),
+      status(403, '403 Forbidden (Rate Limit Exceeded)'),
       status(429),
       ok,
     );
@@ -93,7 +94,23 @@ describe('CanvasApi', () => {
     await vi.runAllTimersAsync();
     expect(await got).toEqual({ ok: true });
     const waits = asked.slice(1).map(({ at }, i) => at - asked[i].at);
-    expect(waits).toEqual([RETRY.minTimeout, RETRY.minTimeout * RETRY.factor]);
+    // 1 and 2 s, each up to a fifth more
+    expect(waits).toHaveLength(2);
+    waits.forEach((wait, i) => {
+      const least = 2 ** (i + 1) * RETRY.delayFactor;
+      expect(wait).toBeGreaterThanOrEqual(least);
+      expect(wait).toBeLessThanOrEqual(least * 1.2);
+    });
+  });
+
+  it('tries again what the network failed', async () => {
+    vi.useFakeTimers();
+    const asked = answering(() => HttpResponse.error(), ok);
+
+    const got = api().get('/api/v1/x');
+    await vi.runAllTimersAsync();
+    expect(await got).toEqual({ ok: true });
+    expect(asked).toHaveLength(2);
   });
 
   it('gives up on a failing Canvas after its retries', async () => {
@@ -146,6 +163,22 @@ describe('CanvasApi', () => {
     await got;
   });
 
+  it("reads a download's refusal too, so the quota's goes again", async () => {
+    let asked = 0;
+    server.use(
+      http.get(`${CANVAS}/files/1/download`, () =>
+        asked++
+          ? HttpResponse.text('%PDF one')
+          : status(403, '403 Forbidden (Rate Limit Exceeded)')(),
+      ),
+    );
+    vi.useFakeTimers();
+    const got = api().download(`${CANVAS}/files/1/download`);
+    await vi.runAllTimersAsync();
+    expect(await text(await got)).toBe('%PDF one');
+    expect(asked).toBe(2);
+  });
+
   it('waits a while before going on once the quota runs low', async () => {
     const quota = (left: number) => () =>
       HttpResponse.json([], {
@@ -170,7 +203,7 @@ describe('CanvasApi', () => {
     const got = expect(api(run.signal).get('/api/v1/x')).rejects.toBe(
       'stopped',
     );
-    await vi.advanceTimersByTimeAsync(RETRY.minTimeout / 2);
+    await vi.advanceTimersByTimeAsync(RETRY.delayFactor);
     run.abort('stopped');
     await got;
     await vi.runAllTimersAsync();
@@ -190,5 +223,63 @@ describe('CanvasApi', () => {
       `${CANVAS}/files/1/download?download_frd=1&verifier=v`,
     );
     expect(await text(content)).toBe('%PDF one');
+  });
+
+  it('never sends the token on to another origin, a subdomain neither', async () => {
+    const to: Record<string, string> = {
+      1: 'https://files.example.edu/1',
+      2: 'https://files.canvas.example.edu/2',
+      3: `${CANVAS}/files/3`,
+    };
+    const tokens: Record<string, string | null> = {};
+    server.use(
+      http.get(`${CANVAS}/files/:id/download`, ({ params }) =>
+        HttpResponse.redirect(to[String(params.id)], 302),
+      ),
+      ...Object.values(to).map((url) =>
+        http.get(url, ({ request }) => {
+          tokens[url] = request.headers.get('authorization');
+          return HttpResponse.text('%PDF');
+        }),
+      ),
+    );
+
+    for (const id of Object.keys(to))
+      await text(await api().download(`${CANVAS}/files/${id}/download`));
+    expect(tokens).toEqual({
+      [to[1]]: null,
+      [to[2]]: null,
+      // a redirect on Canvas itself keeps it
+      [to[3]]: 'Bearer the-token',
+    });
+  });
+});
+
+// msw closed: a real connection the store ends while the download waits
+// unread, as behind a slow storage, or keeps waiting
+describe('CanvasApi on a file store that lets go', () => {
+  const store = new CuttingFileStore().listen();
+  const download = (path: string) =>
+    api(undefined, store.url).download(`${store.url}${path}`);
+
+  it('fails a download cut off partway, and nothing else', async () => {
+    const uncaught = vi.fn();
+    process.on('uncaughtException', uncaught);
+
+    const content = await download('/files/1/download?verifier=secret');
+    await store.ended;
+    const read = text(content);
+    await expect(read).rejects.toBeInstanceOf(DownloadCutOffError);
+    await expect(read).rejects.toThrow(
+      /^download of \/files\/1\/download cut off: aborted$/,
+    );
+    process.off('uncaughtException', uncaught);
+    expect(uncaught).not.toHaveBeenCalled();
+  });
+
+  it('lets go of the connection with a download let go of unread', async () => {
+    const content = await download('/held/1');
+    content.destroy();
+    await store.closed;
   });
 });

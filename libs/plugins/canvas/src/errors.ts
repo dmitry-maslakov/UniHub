@@ -22,6 +22,16 @@ export class TokenRejectedError extends CanvasError {
     'canvas token expired or was revoked: make a new one and set CANVAS_TOKEN';
 }
 
+// A download cut off partway: the connection dropped, or stalled past the
+// timeout. The path only, as above.
+export class DownloadCutOffError extends Error {
+  constructor(url: string, cause: unknown) {
+    const why = cause instanceof Error ? cause.message : String(cause);
+    super(`download of ${new URL(url).pathname} cut off: ${why}`, { cause });
+    this.name = new.target.name;
+  }
+}
+
 // what this account doesn't see is null, never an error
 export const visible = <T>(read: Promise<T>) =>
   read.catch((error: unknown) => {
@@ -29,7 +39,11 @@ export const visible = <T>(read: Promise<T>) =>
     throw error;
   });
 
-// What Canvas answered that fails one request, not the run: anything but a
-// token it no longer takes, which every request would get.
-export const skippable = (error: unknown): error is CanvasError =>
-  error instanceof CanvasError && !(error instanceof TokenRejectedError);
+// What fails one request, not the run: anything Canvas answered but a
+// token it no longer takes, which every request would get, and a download
+// cut off partway.
+export const skippable = (
+  error: unknown,
+): error is CanvasError | DownloadCutOffError =>
+  (error instanceof CanvasError && !(error instanceof TokenRejectedError)) ||
+  error instanceof DownloadCutOffError;

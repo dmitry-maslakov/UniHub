@@ -1,9 +1,15 @@
 import { Readable } from 'node:stream';
-import type { ReadableStream } from 'node:stream/web';
+import { text } from 'node:stream/consumers';
 import { setTimeout } from 'node:timers/promises';
+import axios, { type AxiosInstance, type AxiosResponse } from 'axios';
+import axiosRetry, { exponentialDelay } from 'axios-retry';
 import LinkHeader from 'http-link-header';
-import pRetry from 'p-retry';
-import { CanvasError, NotVisibleError, TokenRejectedError } from './errors.js';
+import {
+  CanvasError,
+  DownloadCutOffError,
+  NotVisibleError,
+  TokenRejectedError,
+} from './errors.js';
 
 export interface CanvasApiOptions {
   // the school's Canvas, 'https://canvas.example.edu'
@@ -14,88 +20,126 @@ export interface CanvasApiOptions {
   signal: AbortSignal;
 }
 
-// a throttled or failing request goes again after 1, 2, 4, 8 and 16 s
-export const RETRY = { retries: 5, minTimeout: 1_000, factor: 2 };
+// A throttled or failing request goes again 5 times, after about 1, 2, 4, 8
+// and 16 s: exponentialDelay's 2^n times the factor (n from 1), up to a
+// fifth more, or as long as Retry-After asks.
+export const RETRY = { retries: 5, delayFactor: 500 };
 // Each token has a quota that fills up again over time (Canvas's
 // throttling docs): with little of it left, each request waits a while
 // rather than run into refusals.
 export const LOW_QUOTA = 200;
 export const PAUSE_MS = 2_000;
+// Canvas answers in seconds: a minute without an answer, or without a byte
+// in the middle of a download, is a stalled connection. It fails then (a
+// request goes again, a download fails its file) rather than at the poll's
+// timeout; a long download that keeps coming isn't cut.
+const TIMEOUT_MS = 60_000;
 
 // Canvas's REST API, one request at a time.
 export class CanvasApi {
-  constructor(private readonly options: CanvasApiOptions) {}
+  private readonly http: AxiosInstance;
+
+  constructor(private readonly options: CanvasApiOptions) {
+    const { url, token, userAgent, signal } = options;
+    this.http = axios.create({
+      baseURL: url,
+      headers: { Authorization: `Bearer ${token}`, 'User-Agent': userAgent },
+      // left out of a redirect to another origin, a subdomain too: axios
+      // does so for this header anyway, the documented option says it
+      sensitiveHeaders: ['Authorization'],
+      signal,
+      timeout: TIMEOUT_MS,
+    });
+    // before the retries, so each try is paced and its refusal read
+    this.http.interceptors.response.use((res) => this.pace(res), readBody);
+    axiosRetry(this.http, {
+      retries: RETRY.retries,
+      retryDelay: (n, error) => exponentialDelay(n, error, RETRY.delayFactor),
+      // what isn't Canvas's answer is the network's
+      retryCondition: (error) =>
+        !axios.isCancel(error) && (refusal(error)?.transient ?? true),
+      // each try gets the whole timeout, not what the last ones left
+      shouldResetTimeout: true,
+    });
+    this.http.interceptors.response.use(undefined, (error: unknown) => {
+      signal.throwIfAborted();
+      throw refusal(error) ?? error;
+    });
+  }
 
   async get<T>(path: string): Promise<T> {
-    const res = await this.request(new URL(path, this.options.url).href);
-    return (await res.json()) as T;
+    const { data } = await this.http.get<T>(path);
+    return data;
   }
 
   // every page of a listing, following Link rel=next as Canvas gives it
   async list<T>(path: string): Promise<T[]> {
-    const first = new URL(path, this.options.url);
-    first.searchParams.set('per_page', '100');
     const all: T[] = [];
-    let next: string | undefined = first.href;
-    while (next) {
-      const res = await this.request(next);
-      all.push(...((await res.json()) as T[]));
-      const link = LinkHeader.parse(res.headers.get('link') ?? '');
-      next = link.rel('next')[0]?.uri;
+    let res = await this.http.get<T[]>(path, { params: { per_page: 100 } });
+    for (;;) {
+      all.push(...res.data);
+      const link = LinkHeader.parse(String(res.headers.link ?? ''));
+      const next = link.rel('next')[0]?.uri;
+      if (!next) return all;
+      res = await this.http.get<T[]>(next);
     }
-    return all;
   }
 
-  // A file's content. Its url redirects to where Canvas keeps files, on
-  // another origin, so fetch leaves the token behind.
-  async download(url: string) {
-    const res = await this.request(url);
-    // fetch's stream, typed as the DOM's
-    return Readable.fromWeb(res.body as ReadableStream<Uint8Array>);
+  // A file's content as it comes. Its url redirects to where Canvas keeps
+  // files, on another origin, which never gets the token.
+  async download(url: string): Promise<Readable> {
+    const { data } = await this.http.get<Readable>(url, {
+      responseType: 'stream',
+    });
+    const content = Readable.from(this.cutOff(data, url), {
+      objectMode: false,
+    });
+    // let go of unread, it lets go of the connection
+    content.once('close', () => data.destroy());
+    return content;
   }
 
-  private request(url: string) {
-    const { token, userAgent, signal } = this.options;
-    return pRetry(
-      async () => {
-        const res = await fetch(url, {
-          headers: {
-            authorization: `Bearer ${token}`,
-            'user-agent': userAgent,
-          },
-          signal,
-        });
-        if (!res.ok) throw await refusal(res, url);
-        await this.pace(res);
-        return res;
-      },
-      {
-        ...RETRY,
-        signal,
-        // what isn't Canvas's answer is the network's
-        shouldRetry: ({ error }) =>
-          !(error instanceof CanvasError) || error.transient,
-      },
-    );
+  // the connection dropping or stalling partway fails that one file
+  private async *cutOff(data: Readable, url: string) {
+    try {
+      yield* data;
+    } catch (error) {
+      this.options.signal.throwIfAborted();
+      throw new DownloadCutOffError(url, error);
+    }
   }
 
-  private async pace(res: Response) {
-    const left = res.headers.get('x-rate-limit-remaining');
-    if (left !== null && Number(left) < LOW_QUOTA)
+  private async pace(res: AxiosResponse) {
+    const left = res.headers['x-rate-limit-remaining'];
+    if (left != null && Number(left) < LOW_QUOTA)
       await setTimeout(PAUSE_MS, undefined, { signal: this.options.signal });
+    return res;
   }
 }
 
-async function refusal(res: Response, url: string) {
+// a download's refusal comes as a stream: read, to be told apart below
+async function readBody(error: unknown) {
+  if (axios.isAxiosError(error) && error.response?.data instanceof Readable)
+    error.response.data = await text(error.response.data).catch(() => '');
+  throw error;
+}
+
+// What Canvas answered instead of the data; nothing for what it didn't
+// answer, the network's failure
+function refusal(error: unknown) {
+  const res = axios.isAxiosError(error) ? error.response : undefined;
+  // a body cut off partway comes with the response it was of
+  if (!res || res.status < 300) return;
+  const { status, headers, data } = res;
+  const url = axios.getUri(res.config);
   // a token past its quota gets a 403 too, told apart by the body
-  const body = await res.text();
-  if (res.status === 403 && body.includes('Rate Limit Exceeded'))
+  const body = typeof data === 'string' ? data : JSON.stringify(data);
+  if (status === 403 && body?.includes('Rate Limit Exceeded'))
     return new CanvasError(403, url, true);
   // a 401 is also "not for you"; only a token Canvas doesn't take is asked
   // to authenticate
-  if (res.status === 401 && res.headers.has('www-authenticate'))
+  if (status === 401 && headers['www-authenticate'])
     return new TokenRejectedError(401, url);
-  if ([401, 403, 404].includes(res.status))
-    return new NotVisibleError(res.status, url);
-  return new CanvasError(res.status, url);
+  if ([401, 403, 404].includes(status)) return new NotVisibleError(status, url);
+  return new CanvasError(status, url);
 }
