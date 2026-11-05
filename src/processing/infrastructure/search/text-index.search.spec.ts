@@ -1,7 +1,12 @@
 import { PluginName } from '@app/kernel';
 import { sha256 } from '../../../../test/sha256.js';
 import { HIGHLIGHT } from '../../domain/chunks.js';
-import { contentHits, keywordBody } from './text-index.search.js';
+import {
+  contentHits,
+  hybridBody,
+  keywordBody,
+  searchRequest,
+} from './text-index.search.js';
 
 // On a small index a post_filter finds what the query's own filter does
 // (the e2e specs can't tell them apart), on a big one too few or none.
@@ -28,6 +33,68 @@ describe('keywordBody', () => {
       query: 'semafor',
       type: 'most_fields',
       fields: ['text', 'text.sr', 'text.en', 'text.code'],
+    });
+  });
+});
+
+describe('hybridBody', () => {
+  const hashes = [sha256('lecture'), sha256('exercises')];
+  const vector = [0.6, 0.8];
+  const body = hybridBody({ text: 'semafor', vector, hashes, size: 7 });
+
+  // a filter of knn's own would leave the words unfiltered, a bool around
+  // the hybrid query is refused: the hybrid query's filter goes to both
+  it('looks only through the contents named, in both parts, before knn picks its nearest', () => {
+    expect(body.query.hybrid.filter).toEqual({ terms: { hash: hashes } });
+    expect(body.query.hybrid.filter.terms.hash).toBe(hashes);
+    expect(body).not.toHaveProperty('post_filter');
+    expect(JSON.stringify(body.query.hybrid.queries)).not.toContain('filter');
+  });
+
+  it('asks by the words, as a keyword search does, and by the meaning, 100 deep', () => {
+    const [byWords, byMeaning] = body.query.hybrid.queries;
+
+    expect(body.query.hybrid.queries).toHaveLength(2);
+    expect(byWords).toEqual(
+      keywordBody({ text: 'semafor', hashes, size: 7 }).query.bool.must,
+    );
+    expect(byMeaning).toEqual({
+      knn: {
+        vector: { vector, k: 100, method_parameters: { ef_search: 256 } },
+      },
+    });
+    expect(body.query.hybrid.pagination_depth).toBe(100);
+  });
+
+  it('answers contents as a keyword search does', () => {
+    const { query: _words, ...rest } = keywordBody({
+      text: 'semafor',
+      hashes,
+      size: 7,
+    });
+    const { query: _both, ...same } = body;
+
+    expect(same).toEqual(rest);
+  });
+});
+
+describe('searchRequest', () => {
+  const query = { text: 'semafor', hashes: [sha256('lecture')], size: 7 };
+  const vector = [0.6, 0.8];
+
+  it('asks by the words and the meaning through the pipeline, given a vector and an index of them', () => {
+    expect(searchRequest({ ...query, vector }, 'unihub-hybrid')).toEqual({
+      search_pipeline: 'unihub-hybrid',
+      body: hybridBody({ ...query, vector }),
+    });
+  });
+
+  it('asks by the words alone without a vector, or in an index without vectors', () => {
+    expect(searchRequest(query, 'unihub-hybrid')).toEqual({
+      body: keywordBody(query),
+    });
+    expect(searchRequest({ ...query, vector }, null)).toEqual({
+      body: keywordBody(query),
     });
   });
 });

@@ -1,6 +1,6 @@
 import type { Types } from '@opensearch-project/opensearch';
 import type { ContentHash, PluginName } from '@app/kernel';
-import type { TextChunk } from '../../domain/chunks.js';
+import type { IndexedChunk } from '../../application/ports.js';
 import { keyId, type RepresentationKey } from '../../domain/representation.js';
 
 // What the index holds of a text: a document per chunk, and a manifest once
@@ -17,11 +17,11 @@ const fieldsOf = ({ hash, processor, version }: RepresentationKey) => ({
 // a bulk index action and its document, per chunk
 export const chunkDocs = (
   key: RepresentationKey,
-  chunks: readonly TextChunk[],
+  chunks: readonly IndexedChunk[],
 ) =>
-  chunks.map(({ page, chunk, text }) => [
+  chunks.map(({ page, chunk, text, vector }) => [
     { index: { _id: `${keyId(key)}__${page}__${chunk}` } },
-    { ...fieldsOf(key), page, chunk, text },
+    { ...fieldsOf(key), page, chunk, text, ...(vector && { vector }) },
   ]);
 
 export const manifest = (key: RepresentationKey, chunks: number) => ({

@@ -5,9 +5,37 @@ import type { API, Types } from '@opensearch-project/opensearch';
 // Postgres next to the old one.
 export const GENERATION = 1;
 
-// BM25 only, no vectors yet
-export const indexName = (prefix: string) =>
-  `${prefix}-texts-g${GENERATION}-bm25`;
+// the embedder whose vectors the index holds (EMBEDDING_MODEL and
+// EMBEDDING_DIMENSIONS); none for BM25 only
+export type Vectors = { model: string; dimensions: number } | null;
+
+// Another model, or the same one at another revision, is another index:
+// vectors of two models never mix in one.
+export const indexName = (prefix: string, vectors: Vectors) =>
+  `${prefix}-texts-g${GENERATION}-${vectors ? `${vectors.model}-${vectors.dimensions}` : 'bm25'}`;
+
+export const pipelineName = (prefix: string) => `${prefix}-hybrid`;
+
+// How a hybrid search's scores are put together: each part's made 0 to 1
+// over its hits (knn always gives its k nearest, so the best of them is 1
+// whatever it is), then their mean, a weight per part. Changed by putting
+// it again with a new version, no new generation.
+export const PIPELINE = {
+  description:
+    'UniHub hybrid: min_max, then arithmetic_mean of (words, meaning)',
+  version: 1,
+  phase_results_processors: [
+    {
+      'normalization-processor': {
+        normalization: { technique: 'min_max' },
+        combination: {
+          technique: 'arithmetic_mean',
+          parameters: { weights: [0.5, 0.5] },
+        },
+      },
+    },
+  ],
+} satisfies API.SearchPipeline_Put_Request['body'];
 
 // The same folding in every analyzer, so that Cyrillic, Latin and Latin
 // without č ć š ž đ give the same tokens. Stock lowercase and asciifolding
@@ -100,21 +128,28 @@ const analysis: Types.Indices_Common.IndexSettingsAnalysis = {
   },
 };
 
-// The text index without vectors (BM25 only): chunks of texts and a manifest
-// per text. The body of PUT /<index>.
-export const indexBody = () =>
+// Chunks of texts, with their vectors when there's an embedder, and a
+// manifest per text. The body of PUT /<index>; `_meta` says what made it.
+export const indexBody = (vectors: Vectors) =>
   ({
     settings: {
       index: {
         number_of_shards: 1,
         number_of_replicas: 0,
+        ...(vectors && { knn: true }),
         'highlight.max_analyzed_offset': 1_000_000,
       },
       analysis,
     },
     mappings: {
       dynamic: 'strict',
-      _meta: { generation: GENERATION },
+      _meta: {
+        generation: GENERATION,
+        ...(vectors && {
+          model: vectors.model,
+          dimensions: vectors.dimensions,
+        }),
+      },
       properties: {
         hash: { type: 'keyword' },
         processor: { type: 'keyword' },
@@ -136,6 +171,21 @@ export const indexBody = () =>
             },
           },
         },
+        ...(vectors && {
+          // HNSW in Lucene, which filters before it searches, so the
+          // contents' filter keeps knn's k nearest (m and ef_construction as
+          // recall was measured)
+          vector: {
+            type: 'knn_vector',
+            dimension: vectors.dimensions,
+            space_type: 'cosinesimil',
+            method: {
+              name: 'hnsw',
+              engine: 'lucene',
+              parameters: { m: 16, ef_construction: 100 },
+            },
+          },
+        }),
       },
     },
   }) satisfies API.Indices_Create_RequestBody;

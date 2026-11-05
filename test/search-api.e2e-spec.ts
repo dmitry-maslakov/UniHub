@@ -15,11 +15,15 @@ import { GrantCourseAccessCommand } from '../src/identity/contracts.js';
 import type { Mail } from '../src/identity/domain/mailer.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
 import { OPENSEARCH } from '../src/platform/search/opensearch.module.js';
+import {
+  EmbedderUnavailableError,
+  QueryEmbedder,
+} from '../src/processing/application/ports.js';
 import { keyId } from '../src/processing/domain/representation.js';
 import { indexName } from '../src/processing/infrastructure/search/text-index.mapping.js';
 import { accounts } from './accounts.js';
 import { bootApp } from './app.js';
-import { testEnv } from './env.js';
+import { testEnv, testVectors } from './env.js';
 import { FakePluginsModule } from './fake-plugins.js';
 import { portalIngest } from './ingest.js';
 
@@ -28,12 +32,15 @@ import { portalIngest } from './ingest.js';
 // on fakes (course-search.spec.ts), what the index answers on its own
 // (search.e2e-spec.ts). Here, what only the whole app shows: a file of a
 // course the user doesn't read never comes back however well it matches,
-// nor a removed one; a file comes once however many of its pages match; the
-// limit is one count for REST and MCP. Each search counts against it, so
-// each case has a user of its own.
+// by its words or its meaning (its text the query's, so its vector the
+// query's too), nor a removed one; a file comes once however many of its
+// pages match; the limit is one count for REST and MCP. Each search counts
+// against it, so each case has a user of its own. By meaning, knn always
+// has nearest files, so a search answers up to its limit: the cases check
+// the best ones, and the exact list by the words alone (byWordsNext).
 
 const PORTAL = 'search-api-test';
-const index = indexName(testEnv.OPENSEARCH_INDEX_PREFIX);
+const index = indexName(testEnv.OPENSEARCH_INDEX_PREFIX, testVectors);
 const fakeText = PluginName.parse('fake-text');
 
 interface Result {
@@ -56,6 +63,14 @@ describe('search API', { timeout: 60_000 }, () => {
     http().get('/api/search').query(query).set('cookie', cookie);
   const found = async (cookie: string, q: string, limit = 10) =>
     (await search(cookie, { q, limit }).expect(200)).body.results as Result[];
+  const ids = (results: Result[]) => results.map((r) => r.fileId);
+  // the next search by the words alone, as while the query embedder is away
+  const byWordsNext = () =>
+    vi
+      .spyOn(app.get(QueryEmbedder), 'embed')
+      .mockRejectedValueOnce(
+        new EmbedderUnavailableError('embedder.invalid: ENOTFOUND'),
+      );
   const tool = (key: string, args: object) =>
     http()
       .post('/api/mcp')
@@ -74,14 +89,17 @@ describe('search API', { timeout: 60_000 }, () => {
       );
 
   // a file of a portal course, there once its text is in the index in whole
-  // (its manifest) and searchable
+  // (its manifest) and searchable: realtime: false sees what a search does, a
+  // get finds it before the refresh
   const upload = async (externalId: string, course: string, text: string) => {
     await hub.file({ externalId, course, name: `${externalId}.txt` });
     const { hash } = await hub.content(externalId, Readable.from([text]));
     const id = keyId({ hash, processor: fakeText, version: 1 });
     await vi.waitFor(
       async () =>
-        expect((await opensearch.exists({ index, id })).body).toBe(true),
+        expect(
+          (await opensearch.exists({ index, id, realtime: false })).body,
+        ).toBe(true),
       { timeout: 20_000, interval: 200 },
     );
     files[externalId] = (
@@ -148,15 +166,25 @@ describe('search API', { timeout: 60_000 }, () => {
   }, 60_000);
 
   afterAll(() => app.close());
+  afterEach(() => vi.restoreAllMocks());
 
   it("finds nothing of a course the user doesn't read, however well it matches", async () => {
     const student = await reader('acl', 'ours');
 
     const results = await found(student, 'semafor tajna lozinka');
 
-    expect(results.map((r) => r.fileId)).toEqual([files.os]);
+    expect(ids(results)[0]).toBe(files.os);
+    // by the meaning alone, no word in common: knn looked through what the
+    // user reads, and nothing else
+    expect(ids(results)).toContain(files.networks);
+    expect(new Set(results.map((r) => r.course))).toEqual(new Set(['ours']));
     // its copy in the other course isn't named either
-    expect(results[0]).toMatchObject({ course: 'ours', sameContentIn: [] });
+    expect(results[0]).toMatchObject({ sameContentIn: [] });
+
+    byWordsNext();
+    expect(ids(await found(student, 'semafor tajna lozinka'))).toEqual([
+      files.os,
+    ]);
 
     // the next search counts the grant
     await grant('acl', 'theirs');
@@ -169,13 +197,16 @@ describe('search API', { timeout: 60_000 }, () => {
 
   it('finds nothing of a removed file from then on', async () => {
     const student = await reader('removed', 'ours');
-    const ids = async () =>
-      (await found(student, 'raspored ispita jun')).map((r) => r.fileId);
-    expect(await ids()).toEqual([files.exam, files.lectures]);
+    const exam = async () => ids(await found(student, 'raspored ispita jun'));
+    expect((await exam()).slice(0, 2)).toEqual([files.exam, files.lectures]);
 
     await hub.removeFile('exam');
 
-    expect(await ids()).toEqual([files.lectures]);
+    const after = await exam();
+    expect(after[0]).toBe(files.lectures);
+    expect(after).not.toContain(files.exam);
+    byWordsNext();
+    expect(await exam()).toEqual([files.lectures]);
   });
 
   it('answers a file once however many of its pages match, with its best three', async () => {
@@ -183,8 +214,8 @@ describe('search API', { timeout: 60_000 }, () => {
 
     const results = await found(student, 'protokol', 3);
 
-    expect(results.map((r) => r.fileId)).toHaveLength(3);
-    expect(new Set(results.map((r) => r.fileId)).size).toBe(3);
+    expect(ids(results)).toHaveLength(3);
+    expect(new Set(ids(results)).size).toBe(3);
     expect(results[0]).toMatchObject({ fileId: files.book });
     expect(results[0].pages).toHaveLength(3);
   });
@@ -195,7 +226,7 @@ describe('search API', { timeout: 60_000 }, () => {
 
     const rest = await found(student, 'mrežama');
     const mcp = await tool(key, { q: 'mrežama' });
-    expect(rest.map((r) => r.fileId)).toEqual([files.networks]);
+    expect(ids(rest)[0]).toBe(files.networks);
     expect(JSON.parse(mcp.content[0].text)).toEqual({ results: rest });
 
     await search(student, { q: 'a' }).expect(400);

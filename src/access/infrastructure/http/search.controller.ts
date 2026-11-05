@@ -25,7 +25,8 @@ export class SearchController {
   @Get()
   @ApiOkResponse({
     type: SearchResponse,
-    description: 'files of your courses whose text matches, best first',
+    description:
+      'files of your courses whose text matches, best first; with search by meaning on, up to `limit` even when none has the words, the nearest by meaning',
   })
   @ApiNotFoundResponse({ description: 'no course of yours by that slug' })
   @ApiServiceUnavailableResponse({ description: 'try again later' })

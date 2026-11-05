@@ -4,10 +4,16 @@ import { sha256 } from '../../../../test/sha256.js';
 import { TextIndexUnavailableError } from '../../application/ports.js';
 import { chunksOf, HIGHLIGHT } from '../../domain/chunks.js';
 import { OpenSearchTextIndex } from './opensearch-text-index.js';
-import { GENERATION, indexBody, indexName } from './text-index.mapping.js';
-import { keywordBody } from './text-index.search.js';
+import {
+  indexBody,
+  indexName,
+  PIPELINE,
+  type Vectors,
+} from './text-index.mapping.js';
+import { keywordBody, searchRequest } from './text-index.search.js';
 
-const index = indexName('unihub');
+const index = indexName('unihub', null);
+const vectors = { model: 'bge-m3-5617a9f6', dimensions: 3 };
 const key = {
   hash: sha256('%PDF lecture'),
   processor: PluginName.parse('office-text'),
@@ -16,9 +22,9 @@ const key = {
 const pages = (n: number) =>
   chunksOf(Array.from({ length: n }, (_, i) => `page ${i + 1}`));
 
-const refused = (statusCode: number, type: string) =>
+const refused = (statusCode: number, type: string, reason = `${type} here`) =>
   new errors.ResponseError({
-    body: { error: { type, reason: `${type} here` }, status: statusCode },
+    body: { error: { type, reason }, status: statusCode },
     statusCode,
   } as ConstructorParameters<typeof errors.ResponseError>[0]);
 const items = (...failed: [status: number, type: string][]) => ({
@@ -34,15 +40,21 @@ const query = { text: 'semafor', hashes: [key.hash], size: 10 };
 const none = { body: { hits: { hits: [] } } };
 
 // the calls OpenSearchTextIndex makes, answered as an index of this
-// generation that's there and takes every write
-function opensearch() {
+// generation (and these vectors) that's there and takes every write
+function opensearch(embedding: Vectors = null) {
+  const name = indexName('unihub', embedding);
   const client = {
     indices: {
       create: vi.fn<(params: object) => Promise<unknown>>(async () => ({
         body: { acknowledged: true },
       })),
       getMapping: vi.fn<(params: object) => Promise<unknown>>(async () => ({
-        body: { [index]: { mappings: { _meta: { generation: GENERATION } } } },
+        body: { [name]: { mappings: indexBody(embedding).mappings } },
+      })),
+    },
+    searchPipeline: {
+      put: vi.fn<(params: object) => Promise<unknown>>(async () => ({
+        body: { acknowledged: true },
       })),
     },
     bulk: vi.fn<(params: { body: unknown[] }) => Promise<unknown>>(
@@ -58,10 +70,17 @@ function opensearch() {
       body: { aggregations: { keys: { buckets: [] } } },
     })),
   };
-  const text = new OpenSearchTextIndex(client as unknown as Client, {
-    url: 'http://opensearch:9200',
-    prefix: 'unihub',
-  });
+  const text = new OpenSearchTextIndex(
+    client as unknown as Client,
+    { url: 'http://opensearch:9200', prefix: 'unihub' },
+    {
+      embedding: embedding && {
+        ...embedding,
+        url: 'http://embedder',
+        queryUrl: 'http://embedder',
+      },
+    },
+  );
   return { client, text };
 }
 
@@ -131,23 +150,67 @@ describe('OpenSearchTextIndex', () => {
     expect(client.indices.create).toHaveBeenCalledTimes(1);
     expect(client.indices.create).toHaveBeenCalledWith({
       index,
-      body: indexBody(),
+      body: indexBody(null),
     });
+    expect(client.searchPipeline.put).not.toHaveBeenCalled();
   });
 
-  it('refuses an index of another mapping', async () => {
-    const { client, text } = opensearch();
-    client.indices.getMapping.mockResolvedValue({
-      body: { [index]: { mappings: { _meta: { generation: 0 } } } },
+  it('puts the hybrid pipeline before it makes an index of vectors, named by their model', async () => {
+    const { client, text } = opensearch(vectors);
+
+    await text.ensure();
+
+    expect(client.searchPipeline.put).toHaveBeenCalledWith({
+      id: 'unihub-hybrid',
+      body: PIPELINE,
     });
+    expect(client.indices.create).toHaveBeenCalledWith({
+      index: 'unihub-texts-g1-bge-m3-5617a9f6-3',
+      body: indexBody(vectors),
+    });
+    expect(
+      client.searchPipeline.put.mock.invocationCallOrder[0] <
+        client.indices.create.mock.invocationCallOrder[0],
+    ).toBe(true);
+  });
 
-    const failed = text.put(key, pages(1));
+  it('refuses an index of another mapping or other vectors', async () => {
+    for (const [embedding, other] of [
+      [null, { generation: 0 }],
+      [vectors, { ...indexBody(vectors).mappings._meta, model: 'bge-m3' }],
+      [vectors, { ...indexBody(vectors).mappings._meta, dimensions: 1024 }],
+      [vectors, undefined],
+    ] as const) {
+      const { client, text } = opensearch(embedding);
+      const name = indexName('unihub', embedding);
+      client.indices.getMapping.mockResolvedValue({
+        body: { [name]: { mappings: { _meta: other } } },
+      });
 
-    await expect(failed).rejects.toThrow(
-      `index ${index} exists with another mapping`,
-    );
-    await expect(failed).rejects.not.toBeInstanceOf(TextIndexUnavailableError);
-    expect(client.bulk).not.toHaveBeenCalled();
+      const failed = text.put(key, pages(1));
+
+      await expect(failed).rejects.toThrow(
+        `index ${name} exists with another mapping`,
+      );
+      await expect(failed).rejects.not.toBeInstanceOf(
+        TextIndexUnavailableError,
+      );
+      expect(client.bulk).not.toHaveBeenCalled();
+    }
+  });
+
+  it("writes each chunk's vector with it", async () => {
+    const { client, text } = opensearch(vectors);
+
+    await text.put(key, [{ page: 1, chunk: 0, text: 'a', vector: [1, 0, 0] }]);
+
+    expect(client.bulk.mock.calls[0][0].body[1]).toEqual({
+      ...key,
+      page: 1,
+      chunk: 0,
+      text: 'a',
+      vector: [1, 0, 0],
+    });
   });
 
   it('asks again after making the index failed', async () => {
@@ -390,6 +453,60 @@ describe('OpenSearchTextIndex', () => {
 
     expect(await text.search(query)).toEqual([]);
     expect(client.indices.create).toHaveBeenCalledTimes(1);
+    expect(client.search).toHaveBeenCalledTimes(2);
+  });
+
+  it('searches through the pipeline in an index of vectors, with none in one without', async () => {
+    const vector = [0, 0.6, 0.8];
+    for (const [embedding, pipeline] of [
+      [vectors, 'unihub-hybrid'],
+      [null, null],
+    ] as const) {
+      const { client, text } = opensearch(embedding);
+      client.search.mockResolvedValueOnce(none);
+
+      await text.search({ ...query, vector });
+
+      expect(client.search).toHaveBeenCalledWith(
+        {
+          index: indexName('unihub', embedding),
+          ...searchRequest({ ...query, vector }, pipeline),
+        },
+        { requestTimeout: 5_000 },
+      );
+    }
+  });
+
+  it('puts the pipeline again when a search finds it gone, and asks once more', async () => {
+    const { client, text } = opensearch(vectors);
+    client.search
+      .mockRejectedValueOnce(
+        refused(
+          400,
+          'illegal_argument_exception',
+          'Pipeline unihub-hybrid is not defined',
+        ),
+      )
+      .mockResolvedValueOnce(none);
+
+    expect(await text.search({ ...query, vector: [1, 0, 0] })).toEqual([]);
+    expect(client.searchPipeline.put).toHaveBeenCalledTimes(1);
+    expect(client.search).toHaveBeenCalledTimes(2);
+  });
+
+  it('takes a pipeline gone again right after it was put for an outage', async () => {
+    const { client, text } = opensearch(vectors);
+    client.search.mockRejectedValue(
+      refused(
+        400,
+        'illegal_argument_exception',
+        'Pipeline unihub-hybrid is not defined',
+      ),
+    );
+
+    await expect(
+      text.search({ ...query, vector: [1, 0, 0] }),
+    ).rejects.toBeInstanceOf(TextIndexUnavailableError);
     expect(client.search).toHaveBeenCalledTimes(2);
   });
 

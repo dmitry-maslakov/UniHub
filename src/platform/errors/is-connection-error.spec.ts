@@ -18,6 +18,13 @@ describe('isConnectionError', () => {
     expect(isConnectionError(new Error('Connection is closed.'))).toBe(true);
   });
 
+  it("knows a server fetch couldn't reach, or that hung up", () => {
+    for (const code of ['UND_ERR_SOCKET', 'UND_ERR_CONNECT_TIMEOUT'])
+      expect(isConnectionError(Object.assign(new Error('x'), { code }))).toBe(
+        true,
+      );
+  });
+
   it("doesn't take a bug for an outage", () => {
     expect(isConnectionError(prismaError('P2002'))).toBe(false);
     expect(isConnectionError(new TypeError('x is undefined'))).toBe(false);

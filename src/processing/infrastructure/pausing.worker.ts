@@ -3,6 +3,7 @@ import { OnWorkerEvent, WorkerHost } from '@nestjs/bullmq';
 import type { PrismaHealthIndicator } from '@nestjs/terminus';
 import {
   RateLimitError,
+  WaitingError,
   type Job,
   type Queue,
   type WorkerOptions,
@@ -27,6 +28,11 @@ export const PAUSING = {
 // A worker that pauses its queue through an outage.
 export abstract class PausingWorker<T> extends WorkerHost {
   protected readonly logger = new Logger(this.constructor.name);
+  // Aborted at shutdown by a worker whose jobs take long, so closing doesn't
+  // wait them out: a job it stops goes back to wait without spending an
+  // attempt, and runs anew from the next start. One fetched while the worker
+  // closes gets it aborted already.
+  protected readonly shutdown = new AbortController();
 
   constructor(
     private readonly health: PrismaHealthIndicator,
@@ -36,17 +42,19 @@ export abstract class PausingWorker<T> extends WorkerHost {
     super();
   }
 
-  // the job itself
-  protected abstract work(job: Job<T>): Promise<unknown>;
+  // the job itself, stopped by the signal where it can be
+  protected abstract work(job: Job<T>, signal: AbortSignal): Promise<unknown>;
   // logs the pause that `err`, an outage, brought
   protected abstract outage(err: unknown): void;
   // what the log calls a job's work
   protected abstract nameOf(job: Job<T>): string;
 
-  async process(job: Job<T>) {
+  async process(job: Job<T>, token?: string) {
+    const { signal } = this.shutdown;
     try {
-      return await this.work(job);
+      return await this.work(job, signal);
     } catch (err) {
+      if (signal.aborted) return this.putBack(job, token);
       if (!(await this.away(err))) throw err;
       this.outage(err);
       return this.pause();
@@ -66,6 +74,11 @@ export abstract class PausingWorker<T> extends WorkerHost {
   private async pause(): Promise<never> {
     await this.queue.rateLimit(OUTAGE_PAUSE_MS);
     throw new RateLimitError();
+  }
+
+  private async putBack(job: Job<T>, token?: string): Promise<never> {
+    await job.moveToWait(token);
+    throw new WaitingError();
   }
 
   // BullMQ sets finishedOn only on a job that won't run again: out of
