@@ -1,11 +1,13 @@
 import {
   applyDecorators,
+  Injectable,
   UseGuards,
   type ExecutionContext,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ThrottlerGuard, type ThrottlerModuleOptions } from '@nestjs/throttler';
 import { userIdOf } from '../../identity/contracts.js';
+import { mcpRequestOf } from './mcp/mcp-user-id.js';
 
 // calls a minute per user, by limit
 const LIMITS = {
@@ -13,6 +15,10 @@ const LIMITS = {
   api: 1200,
   // MCP, per user, however many keys they make
   mcp: 600,
+  // REST and MCP together, per user: a search costs far more than a read,
+  // and 20 would keep the reranker (to come) busy half a minute at most, so
+  // no one user holds it
+  search: 20,
 };
 type Limit = keyof typeof LIMITS;
 
@@ -24,6 +30,21 @@ const LimitOf = Reflector.createDecorator<Limit>();
 // the global session guard; on MCP, ApiKeyAuth applies this after its own.
 export const Limited = (name: Limit) =>
   applyDecorators(LimitOf(name), UseGuards(ThrottlerGuard));
+
+// Throttler's way for a context other than HTTP: an MCP call's request is
+// the HTTP one it came in with, whose user ApiKeyAuth has found. No rate
+// headers: the response is the MCP transport's to write.
+@Injectable()
+class McpThrottlerGuard extends ThrottlerGuard {
+  protected getRequestResponse(context: ExecutionContext) {
+    return { req: mcpRequestOf(context), res: {} };
+  }
+}
+
+// A tool counted against a named limit, sharing its count with the routes
+// that are; over it, the call is a tool error (McpErrorsFilter).
+export const LimitedTool = (name: Limit) =>
+  applyDecorators(LimitOf(name), UseGuards(McpThrottlerGuard));
 
 // In one instance's memory: there is one.
 export const throttlerOptions = (

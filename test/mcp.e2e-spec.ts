@@ -131,7 +131,14 @@ describe('MCP', { timeout: 20_000 }, () => {
     const res = await rpc('tools/list', {}).expect(200);
     expect(
       res.body.result.tools.map((t: { name: string }) => t.name).sort(),
-    ).toEqual(['list_courses', 'list_files', 'list_items', 'read_file']);
+    ).toEqual([
+      'list_courses',
+      'list_files',
+      'list_items',
+      'read_file',
+      // search is on in the tests (search-off.e2e-spec.ts has it off)
+      'search',
+    ]);
     // per user and minute
     expect(res.headers['x-ratelimit-limit-mcp']).toBe('600');
   });
