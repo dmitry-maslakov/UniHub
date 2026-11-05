@@ -3,6 +3,7 @@ import { DiscoveryModule } from '@nestjs/core';
 import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule } from '@nestjs/config';
 import { IngestModule } from '../ingest/contracts.js';
+import { roleConfig } from '../platform/role/role.config.js';
 import { ConnectionDirectory } from './application/connection-directory.js';
 import { ConnectorSchedules } from './application/connector-schedules.js';
 import { PluginCatalog } from './application/plugin-catalog.js';
@@ -22,6 +23,7 @@ import { pluginsConfig } from './plugins.config.js';
 @Module({
   imports: [
     ConfigModule.forFeature(pluginsConfig),
+    ConfigModule.forFeature(roleConfig),
     DiscoveryModule,
     IngestModule,
     HubReaderModule,

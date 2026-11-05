@@ -37,4 +37,18 @@ describe('plugin specs', () => {
       'invalid connector portal: "A CS"',
     );
   });
+
+  it('take a poll schedule BullMQ can read, with seconds or an alias too', () => {
+    for (const good of ['0 * * * *', '*/30 * * * * *', '@hourly'])
+      expect(pollSpec({ portal: 'moodle', schedule: good }).schedule).toBe(
+        good,
+      );
+  });
+
+  it('refuse one it would refuse once the schedules are set', () => {
+    for (const bad of ['61 * * * *', '0 25 * * *', 'every hour', ''])
+      expect(() => pollSpec({ portal: 'moodle', schedule: bad })).toThrow(
+        new InvalidValueError('poll schedule', bad),
+      );
+  });
 });

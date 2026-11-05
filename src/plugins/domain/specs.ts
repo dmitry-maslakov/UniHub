@@ -1,4 +1,5 @@
 import { extname } from 'node:path';
+import { CronExpressionParser } from 'cron-parser';
 import type { z } from 'zod';
 import {
   InvalidValueError,
@@ -20,6 +21,24 @@ const valid = <S extends z.ZodType>(
   return parsed.data;
 };
 
+// A poll's schedule as BullMQ reads it: a pattern, one its own parser
+// (cron-parser) takes. Checked as plugins are found, so a bad one stops the
+// app at start, in every role, instead of failing once the schedules are set.
+const parses = (pattern: string) => {
+  try {
+    CronExpressionParser.parse(pattern);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const schedule = (pattern: string) => {
+  if (!pattern || !parses(pattern))
+    throw new InvalidValueError('poll schedule', pattern);
+  return pattern;
+};
+
 export interface PollSpec {
   portal: PortalId;
   schedule: string;
@@ -39,7 +58,7 @@ export const pollSpec = (options: {
   schedule: string;
 }): PollSpec => ({
   portal: valid(PortalId, 'connector portal', options.portal),
-  schedule: options.schedule,
+  schedule: schedule(options.schedule),
 });
 
 export const pushSpec = (options: { portal: string }): PushSpec => ({

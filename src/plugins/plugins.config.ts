@@ -9,7 +9,8 @@ export const pluginsSettings = z
   .object({
     // built-in plugins to turn on, by name: "office-text, moodle"
     PLUGINS: list.pipe(z.array(PluginName)),
-    // this instance starts push connectors (one instance should)
+    // this process starts push connectors, if it runs the background work
+    // (APP_ROLE): of several workers, one should
     RUN_CONNECTORS: z.stringbool().default(true),
     // a poll running longer is taken for hung: aborted, and the next one
     // goes on from the state it saved

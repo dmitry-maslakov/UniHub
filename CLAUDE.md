@@ -29,6 +29,7 @@ Declined:
 - repositories typed `TransactionHost<TransactionalAdapterPrisma<…>>` instead of `@InjectTransactionHost()`: the `PrismaTxHost` alias leaves DI no class to read, the decorator names it
 - one kind-to-answer table for HTTP and gRPC: each transport answers with its own exceptions
 - `auth:generate` without a valid `.env`: the CLI reads the same checked settings as the app (README: set the secret first)
+- `ConditionalModule.registerWhen` for `APP_ROLE`, to leave the workers out of an api process: it reads the environment once per process, so one e2e spec couldn't boot an api and a worker side by side. The libraries' own switches read the role per app instead (`BullRegistrar.register()`, the scheduler's options, the outbox's `relay.enabled`), and `ConnectorsWorker` and `SearchIndexWorker` check it before closing a worker that an api process never registered
 
 Put off:
 

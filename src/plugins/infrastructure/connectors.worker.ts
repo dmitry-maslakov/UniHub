@@ -4,6 +4,7 @@ import type { ConfigType } from '@nestjs/config';
 import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import type { Job } from 'bullmq';
 import { Connection } from '../../ingest/contracts.js';
+import { roleConfig } from '../../platform/role/role.config.js';
 import { ConnectionDirectory } from '../application/connection-directory.js';
 import { ConnectorSchedules } from '../application/connector-schedules.js';
 import { PluginCatalog } from '../application/plugin-catalog.js';
@@ -29,6 +30,8 @@ export class ConnectorsWorker extends WorkerHost implements OnModuleDestroy {
     private readonly schedules: ConnectorSchedules,
     @Inject(pluginsConfig.KEY)
     private readonly config: ConfigType<typeof pluginsConfig>,
+    @Inject(roleConfig.KEY)
+    private readonly role: ConfigType<typeof roleConfig>,
   ) {
     super();
   }
@@ -64,10 +67,11 @@ export class ConnectorsWorker extends WorkerHost implements OnModuleDestroy {
   // A poll can stop anywhere, the next one goes on from the state it saved.
   // Closed here rather than when Nest closes the workers, after every
   // module's shutdown: until then it would go on taking polls. The running
-  // ones are let go of at once, and so is one fetched meanwhile.
+  // ones are let go of at once, and so is one fetched meanwhile. An api
+  // process registered no worker (APP_ROLE), so it has none to close.
   async onModuleDestroy() {
     this.shutdown.abort('the app is shutting down');
-    await this.worker.close();
+    if (this.role.worker) await this.worker.close();
   }
 
   @OnWorkerEvent('failed')

@@ -3,6 +3,7 @@ import type { Job } from 'bullmq';
 import type { ConnectorContext } from '@app/plugin-sdk';
 import { catalogOf, poll } from '../../../test/discovered-plugins.js';
 import type { IngestService } from '../../ingest/contracts.js';
+import { roleSettings } from '../../platform/role/role.config.js';
 import { ConnectionDirectory } from '../application/connection-directory.js';
 import type { ConnectorSchedules } from '../application/connector-schedules.js';
 import type { pluginsConfig } from '../plugins.config.js';
@@ -12,18 +13,24 @@ import { ConnectorsWorker } from './connectors.worker.js';
 const job = (name: string, portal = 'moodle') =>
   ({ name, data: { portal, account: 'shared' } }) as Job<ConnectorJob>;
 
-function worker(polled: (ctx: ConnectorContext) => Promise<void>) {
+// in a process of `role`, which runs the workers unless it's an api one
+function worker(
+  polled: (ctx: ConnectorContext) => Promise<void>,
+  role = 'all',
+) {
   const pollNow = vi.fn(async () => {});
   const config = { pollTimeoutMs: 50 } as ConfigType<typeof pluginsConfig>;
+  const settings = roleSettings.parse({ APP_ROLE: role });
   const w = new ConnectorsWorker(
     catalogOf({ polls: [poll('moodle', { poll: polled })] }),
     new ConnectionDirectory({} as IngestService),
     { pollNow } as unknown as ConnectorSchedules,
     config,
+    settings,
   );
   // the BullMQ worker Nest would have made for it
   const close = vi.fn(async () => {});
-  Object.defineProperty(w, 'worker', { value: { close } });
+  if (settings.worker) Object.defineProperty(w, 'worker', { value: { close } });
   return { w, pollNow, close };
 }
 
@@ -81,5 +88,10 @@ describe('ConnectorsWorker', () => {
     await expect(w.process(job(POLL))).rejects.toThrow(/poll stopped/);
     expect(polled).toHaveBeenCalledTimes(1);
     expect(close).toHaveBeenCalled();
+  });
+
+  it('has no worker to close in an api process, which registers none', async () => {
+    const { w } = worker(async () => {}, 'api');
+    await expect(w.onModuleDestroy()).resolves.toBeUndefined();
   });
 });

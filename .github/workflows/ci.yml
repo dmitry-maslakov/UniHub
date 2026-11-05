@@ -74,5 +74,12 @@ jobs:
           SMTP_URL=smtp://u:p@localhost:587
           EOF
       - run: docker compose -f deploy/compose.yml up --build --wait app
+      # the same image as a worker (README, Running the API and the worker
+      # apart): it serves nothing, so it's up once it logs so
+      - run: |
+          docker compose -f deploy/compose.yml run --no-deps -d --name worker -e APP_ROLE=worker app
+          timeout 60 sh -c 'until docker logs worker 2>&1 | grep -q "worker started"; do sleep 1; done'
       - if: failure()
-        run: docker compose -f deploy/compose.yml logs
+        run: |
+          docker compose -f deploy/compose.yml logs
+          docker logs worker || true
