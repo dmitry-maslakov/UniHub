@@ -1,9 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { QueryBus } from '@nestjs/cqrs';
-import { ListVisibleContentQuery, type Slug } from '../../catalog/contracts.js';
+import {
+  ListVisibleContentQuery,
+  type CourseRef,
+} from '../../catalog/contracts.js';
 import { SearchTextsQuery } from '../../processing/contracts.js';
-import { readableCourses } from './course-reader.js';
-import { NotReadableError } from './errors.js';
+import { readableCourse, readableCourses } from './readable.js';
 import type { SearchRequest } from './search-request.js';
 import { searchResultView, type SearchView } from './views.js';
 
@@ -19,7 +21,9 @@ export class CourseSearch {
     userId: string,
     { q, course, limit }: SearchRequest,
   ): Promise<SearchView> {
-    const courses = await this.courses(userId, course);
+    const courses: CourseRef[] = course
+      ? [await readableCourse(this.queries, userId, course)]
+      : await readableCourses(this.queries, userId);
     if (!courses.length) return { results: [] };
     const files = await this.queries.execute(
       new ListVisibleContentQuery(courses.map(({ id }) => id)),
@@ -36,14 +40,5 @@ export class CourseSearch {
         searchResultView(hit, byContent.get(hit.hash)!, slugs),
       ),
     };
-  }
-
-  // the courses the user reads, or the one named if they read it
-  private async courses(userId: string, slug?: Slug) {
-    const readable = await readableCourses(this.queries, userId);
-    if (!slug) return readable;
-    const named = readable.filter((course) => course.slug === slug);
-    if (!named.length) throw new NotReadableError('course');
-    return named;
   }
 }

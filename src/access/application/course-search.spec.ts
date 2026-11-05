@@ -2,6 +2,7 @@ import { PluginName, type ContentHash } from '@app/kernel';
 import { FakeBus } from '../../../test/fake-bus.js';
 import { sha256 } from '../../../test/sha256.js';
 import {
+  FindCourseQuery,
   ListCoursesQuery,
   ListVisibleContentQuery,
   type VisibleContentDto,
@@ -50,6 +51,11 @@ function searching(reads = ['os-id', 'net-id']) {
   const queries = new FakeBus([
     [ReadScopeQuery, () => ({ allows: (id: string) => reads.includes(id) })],
     [ListCoursesQuery, () => courses],
+    [
+      FindCourseQuery,
+      ({ by }: FindCourseQuery) =>
+        courses.find((c) => 'slug' in by && c.slug === by.slug) ?? null,
+    ],
     [
       ListVisibleContentQuery,
       ({ courseIds }: ListVisibleContentQuery) =>
@@ -114,7 +120,7 @@ describe('CourseSearch', () => {
     });
   });
 
-  it('searches only the course named, which the user must read', async () => {
+  it('searches only the course named, found as the course routes find it, which the user must read', async () => {
     const { queries, search } = searching();
 
     const { results } = await search.search(
@@ -122,6 +128,7 @@ describe('CourseSearch', () => {
       request({ q: 'semafor', course: 'net' }),
     );
 
+    expect(sentOf(queries, ListCoursesQuery)).toEqual([]);
     expect(sentOf(queries, ListVisibleContentQuery)).toEqual([
       new ListVisibleContentQuery(['net-id']),
     ]);
