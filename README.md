@@ -142,7 +142,7 @@ The `canvas` connector (`libs/plugins/canvas`) polls a school's [Canvas LMS](htt
 To turn it on:
 
 - in Canvas, Account → Settings → Approved Integrations → New Access Token, with a purpose and an expiry date. Some schools don't let students make tokens or cap how long one lasts, and Canvas has revoked tokens in bulk before: the connector warns in the log 14 days before the token expires, and a run fails with "canvas token expired or was revoked" once Canvas no longer takes it
-- set `CANVAS_URL` (the school's Canvas, `https://canvas.example.edu`, https only as the token goes with every request: in `.env` or `deploy/.env`, never in the repo), `CANVAS_TOKEN` and, if you like, `CANVAS_USER_AGENT` (Canvas refuses requests without one; `UniHub canvas connector` by default), then add `canvas` to `PLUGINS`
+- set `CANVAS_URL` (the school's Canvas, `https://canvas.example.edu`, https only as the token goes with every request: in `.env` or `deploy/.env`, never in the repo), `CANVAS_TOKEN` and, if you like, `CANVAS_USER_AGENT` (Canvas refuses requests without one; `course-sync` by default, which names neither the hub nor you), then add `canvas` to `PLUGINS`
 
 What it reads, of the courses you're active in:
 
@@ -153,7 +153,7 @@ What it reads, of the courses you're active in:
 - only what the whole course sees: no announcements for some sections, no assignments for only some students, no group discussions, and no field that says how you stand (read, done, locked, your submission)
 - not discussion replies, quizzes, grades, submissions, the calendar, groups, finished courses, or files linked only from inside a page's text
 
-A record gone from a listing that went through to the end is removed. Nothing is removed for a listing that failed, was cut short or refused, or a tab hidden since. A course Canvas fails on (a listing still failing after the retries, a bad request) is skipped for that run and logged, the others go on, and the run is marked failed once they're through; a download it fails on is logged and tried again the next run. It sends one request at a time, 100 records a page; a throttled or failing request is tried again after 1, 2, 4, 8 and 16 seconds, and each waits 2 seconds while the token's quota is low. That's about ten requests per course an hour, and the files that changed.
+A record gone from a listing that went through to the end is removed. Nothing is removed for a listing that failed, was cut short or refused, or a tab hidden since. A course Canvas fails on (a listing still failing after the retries, a bad request) is skipped for that run and logged, the others go on, and the run is marked failed once they're through; a download it fails on, or one cut off partway, is logged and tried again the next run. It sends one request at a time, 100 records a page; a throttled or failing request, or one the network failed, is tried again after about 1, 2, 4, 8 and 16 seconds; a minute without an answer, or without a byte of a download, counts as a failure; and each request waits 2 seconds while the token's quota is low. The token goes to the school's Canvas only, never on to where a download redirects. That's about ten requests per course an hour, and the files that changed.
 
 ## External connectors
 
