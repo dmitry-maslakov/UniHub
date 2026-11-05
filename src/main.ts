@@ -15,7 +15,7 @@ async function bootstrap() {
     // the worker: a standalone app, with no HTTP or gRPC server
     const worker = await NestFactory.createApplicationContext(AppModule);
     worker.enableShutdownHooks();
-    Logger.log('worker started, serving no HTTP or gRPC', 'NestApplication');
+    Logger.log('worker started, serving no HTTP or gRPC', 'Worker');
     return;
   }
   const app = await NestFactory.create(AppModule, appOptions);
