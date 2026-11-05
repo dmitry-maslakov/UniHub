@@ -7,17 +7,12 @@ import { CourseReader } from '../../application/course-reader.js';
 import { pageSchema, textPage } from '../../application/page.js';
 import { McpErrorsFilter } from './mcp-errors.filter.js';
 import { McpUserId } from './mcp-user-id.js';
+import { json, readOnly } from './tool-results.js';
 
 const inCourse = pageSchema.extend({ course: Slug.describe('course slug') });
 const fileText = z.object({
   file: z.uuid().describe('file id from list_files'),
   page: textPage,
-});
-const readOnly = { readOnlyHint: true, openWorldHint: false };
-
-// what a tool hands back: JSON a model reads as text
-const json = (value: unknown) => ({
-  content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }],
 });
 
 // The same reads as the REST API, through the same CourseReader
