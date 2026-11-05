@@ -56,8 +56,10 @@ export interface TextHit {
 }
 
 // The contents among these whose newest texts match, best first, at most
-// `limit`, with their best pages. The index knows nothing of who reads
-// what: `hashes` are all it looks through.
+// `limit`, with their best pages. With an embedder, those nearest the
+// query's meaning too: knn always has nearest ones, so then there are up to
+// `limit` even when none has the words. The index knows nothing of who
+// reads what: `hashes` are all it looks through.
 export class SearchTextsQuery extends Query<TextHit[]> {
   constructor(
     public readonly text: string,

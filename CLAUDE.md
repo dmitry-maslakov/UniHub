@@ -44,5 +44,7 @@ Put off:
 - device sign-in: approval screen details and shorter device sessions, with the web portal
 - helmet's `Cross-Origin-Resource-Policy: same-origin` stops another origin embedding file content (`<img>`, `<iframe>`); `same-site` if the web portal lives on a sibling subdomain
 - grants of a deleted course: when catalog can delete courses (an event for identity)
+- a read alias for the search index, moved to a new one (another generation or model) once the reconcile has filled it: until then searches answer from the new one, partly filled (README, Search index)
+- a floor for the meaning part of a search (knn's `min_score`, a radial search): it needs a value measured per model; until then, with an embedder, a search answers up to `limit` files even when none has the words (README, Search)
 
 Done the standard way after all: global prefix, gRPC guard (#36).

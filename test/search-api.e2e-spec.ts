@@ -35,7 +35,9 @@ import { portalIngest } from './ingest.js';
 // by its words or its meaning (its text the query's, so its vector the
 // query's too), nor a removed one; a file comes once however many of its
 // pages match; the limit is one count for REST and MCP. Each search counts
-// against it, so each case has a user of its own.
+// against it, so each case has a user of its own. By meaning, knn always
+// has nearest files, so a search answers up to its limit: the cases check
+// the best ones, and the exact list by the words alone (byWordsNext).
 
 const PORTAL = 'search-api-test';
 const index = indexName(testEnv.OPENSEARCH_INDEX_PREFIX, testVectors);
