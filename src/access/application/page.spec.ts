@@ -1,4 +1,4 @@
-import { pageSchema, textPage } from './page.js';
+import { pageSchema, textPageSchema } from './page.js';
 
 describe('pageSchema', () => {
   it('reads a query string, with defaults', () => {
@@ -23,11 +23,20 @@ describe('pageSchema', () => {
   });
 });
 
-describe('textPage', () => {
-  it('starts at 1 and stays within what postgres takes', () => {
-    expect(textPage.parse(undefined)).toBe(1);
-    expect(textPage.parse('3')).toBe(3);
+describe('textPageSchema', () => {
+  it("reads a text's page and processor from a query string, the first text's page 1 by default", () => {
+    expect(textPageSchema.parse({})).toEqual({ page: 1 });
+    expect(textPageSchema.parse({ page: '3', processor: 'zz-ocr' })).toEqual({
+      page: 3,
+      processor: 'zz-ocr',
+    });
+  });
+
+  it('stays within what postgres takes, and takes one processor', () => {
     for (const page of ['0', '2147483648', ['1', '2']])
-      expect(textPage.safeParse(page).success).toBe(false);
+      expect(textPageSchema.safeParse({ page }).success).toBe(false);
+    expect(textPageSchema.safeParse({ processor: ['a', 'b'] }).success).toBe(
+      false,
+    );
   });
 });

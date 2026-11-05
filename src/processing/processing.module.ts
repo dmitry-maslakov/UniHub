@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
-import { ConditionalModule } from '@nestjs/config';
 import { TerminusModule } from '@nestjs/terminus';
+import { whenSearchOn } from '../platform/search/opensearch.config.js';
 import { PluginsModule } from '../plugins/contracts.js';
 import { StorageModule } from '../storage/contracts.js';
 import { DeliverMessage } from './application/deliver-message.js';
@@ -44,13 +44,9 @@ const DAY = 24 * 60 * 60;
     TerminusModule,
     StorageModule,
     PluginsModule,
-    // Search is on with OPENSEARCH_URL; without it nothing is indexed,
-    // ProcessContent queues nothing and SearchTexts answers it's off. The
-    // function form: a string one would load the module when the variable
-    // isn't set.
-    ConditionalModule.registerWhen(TextSearchModule, (env) =>
-      Boolean(env.OPENSEARCH_URL),
-    ),
+    // with search off nothing is indexed, ProcessContent queues nothing and
+    // SearchTexts answers it's off
+    whenSearchOn(TextSearchModule),
   ],
   providers: [
     ListTextsHandler,

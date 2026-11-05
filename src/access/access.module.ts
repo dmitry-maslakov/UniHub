@@ -6,6 +6,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { IdentityModule } from '../identity/contracts.js';
+import { whenSearchOn } from '../platform/search/opensearch.config.js';
 import { StorageModule } from '../storage/contracts.js';
 import { CourseGrants } from './application/course-grants.js';
 import { CourseReader } from './application/course-reader.js';
@@ -16,10 +17,12 @@ import { CourseTools } from './infrastructure/mcp/course.tools.js';
 import { McpHttpController } from './infrastructure/mcp/mcp-http.controller.js';
 import { McpRequestMiddleware } from './infrastructure/mcp/mcp-request.middleware.js';
 import { throttlerOptions } from './infrastructure/throttle.js';
+import { AccessSearchModule } from './search.module.js';
 
 // How users read the hub, the REST API and MCP, and how admins say who reads
 // which course. Over catalog and identity: every read goes through
-// CourseReader, every grant through CourseGrants.
+// CourseReader, every search through CourseSearch, every grant through
+// CourseGrants.
 @Module({
   imports: [
     // the named limits routes take with @Limited()
@@ -30,6 +33,8 @@ import { throttlerOptions } from './infrastructure/throttle.js';
     // MCP's @ApiKeyAuth() guard authenticates through it
     IdentityModule,
     StorageModule,
+    // the search route and tool, with processing's index
+    whenSearchOn(AccessSearchModule),
   ],
   controllers: [
     CoursesController,

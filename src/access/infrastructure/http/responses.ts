@@ -1,12 +1,19 @@
 import { ApiProperty } from '@nestjs/swagger';
 import type { Json, MediaType, PluginName, PortalId } from '@app/kernel';
-import type { TextInfo, TextPage } from '../../../processing/contracts.js';
+import type {
+  Snippet,
+  TextInfo,
+  TextPage,
+} from '../../../processing/contracts.js';
 import type {
   CourseView,
   FileDetailsView,
   FileView,
   ItemView,
   PortalCourseView,
+  SearchPageView,
+  SearchResultView,
+  SearchView,
 } from '../../application/views.js';
 
 // The views the REST API answers with, described for OpenAPI. A branded
@@ -77,4 +84,60 @@ export class FileDetailsResponse
 export class TextPageResponse extends TextInfoResponse implements TextPage {
   @ApiProperty({ example: 1 }) page!: number;
   @ApiProperty() text!: string;
+}
+
+export class SnippetResponse implements Snippet {
+  @ApiProperty({
+    description:
+      'up to 400 characters of the page as indexed: plain text, whatever HTML the file had included, so render it as text',
+  })
+  text!: string;
+  @ApiProperty({
+    description:
+      'where the words matched: [start, end) UTF-16 offsets into snippet.text; render as text',
+    type: 'array',
+    items: {
+      type: 'array',
+      items: { type: 'integer' },
+      minItems: 2,
+      maxItems: 2,
+    },
+    example: [[12, 18]],
+  })
+  highlights!: [start: number, end: number][];
+}
+
+export class SearchPageResponse implements SearchPageView {
+  @ApiProperty({ example: 3 }) page!: number;
+  @ApiProperty({
+    type: String,
+    example: 'office-text',
+    description: 'whose text it is, for GET /api/files/{id}/text',
+  })
+  processor!: PluginName;
+  @ApiProperty() snippet!: SnippetResponse;
+}
+
+export class SearchResultResponse implements SearchResultView {
+  @ApiProperty() fileId!: string;
+  @ApiProperty({ example: 'l5.pdf' }) name!: string;
+  @ApiProperty({ description: "folder in the portal, '' for the root" })
+  path!: string;
+  @ApiProperty({ example: 'os', description: "the course's slug" })
+  course!: string;
+  @ApiProperty({
+    type: [SearchPageResponse],
+    description: 'its best pages first, at most 3',
+  })
+  pages!: SearchPageResponse[];
+  @ApiProperty({
+    type: [String],
+    description: 'other files of your courses with the same content',
+  })
+  sameContentIn!: string[];
+}
+
+export class SearchResponse implements SearchView {
+  @ApiProperty({ type: [SearchResultResponse] })
+  results!: SearchResultResponse[];
 }

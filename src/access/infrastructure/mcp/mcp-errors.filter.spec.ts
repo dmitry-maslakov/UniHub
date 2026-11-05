@@ -1,4 +1,5 @@
 import { Logger, type ArgumentsHost } from '@nestjs/common';
+import { ThrottlerException } from '@nestjs/throttler';
 import { firstValueFrom, type Observable } from 'rxjs';
 import { NotFoundError, UnavailableError, type DomainError } from '@app/kernel';
 import { McpErrorsFilter } from './mcp-errors.filter.js';
@@ -11,7 +12,7 @@ class AwayError extends UnavailableError {
 }
 
 const host = { getType: () => 'rpc' } as unknown as ArgumentsHost;
-const answerTo = (error: DomainError) =>
+const answerTo = (error: DomainError | ThrottlerException) =>
   firstValueFrom(
     new McpErrorsFilter().catch(error, host) as Observable<never>,
   ).catch((e: unknown) => e);
@@ -24,6 +25,8 @@ describe('McpErrorsFilter', () => {
   it.each([
     new GoneError('page not found'),
     new AwayError('search is unavailable, try again later'),
+    // a tool's own limit (LimitedTool)
+    new ThrottlerException(),
   ])('hands the model the message, as a tool error', async (error) => {
     expect(await answerTo(error)).toEqual({
       status: 'error',
@@ -34,6 +37,7 @@ describe('McpErrorsFilter', () => {
   it('logs the kind that means the hub is failing, and no other', async () => {
     const away = new AwayError('search is unavailable, try again later');
     await answerTo(new GoneError('page not found'));
+    await answerTo(new ThrottlerException());
     await answerTo(away);
     expect(log.mock.calls).toEqual([[away]]);
   });

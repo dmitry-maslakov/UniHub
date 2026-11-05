@@ -131,7 +131,14 @@ describe('MCP', { timeout: 20_000 }, () => {
     const res = await rpc('tools/list', {}).expect(200);
     expect(
       res.body.result.tools.map((t: { name: string }) => t.name).sort(),
-    ).toEqual(['list_courses', 'list_files', 'list_items', 'read_file']);
+    ).toEqual([
+      'list_courses',
+      'list_files',
+      'list_items',
+      'read_file',
+      // search is on in the tests (search-off.e2e-spec.ts has it off)
+      'search',
+    ]);
     // per user and minute
     expect(res.headers['x-ratelimit-limit-mcp']).toBe('600');
   });
@@ -158,6 +165,21 @@ describe('MCP', { timeout: 20_000 }, () => {
     const page = await call('read_file', { file: fileId, page: 2 });
     expect(page.content[0].text).toContain('page 2 of 2');
     expect(page.content[0].text).toContain('mergesort');
+    // a page of the text named, as a search result names it, and none of a
+    // processor that made no text of the file
+    const named = await call('read_file', {
+      file: fileId,
+      page: 1,
+      processor: 'office-text',
+    });
+    expect(named.content[0].text).toContain('quicksort');
+    const none = await call('read_file', {
+      file: fileId,
+      page: 1,
+      processor: 'plain-text',
+    });
+    expect(none.isError).toBe(true);
+    expect(none.content[0].text).toContain('page not found');
   });
 
   it('answers with an error the model can read', async () => {
