@@ -19,6 +19,15 @@ import { NotReadableError } from './errors.js';
 import type { Page } from './page.js';
 import { courseView, fileView, itemView } from './views.js';
 
+// the courses the user's scope allows; both asked for at once
+export async function readableCourses(queries: QueryBus, userId: string) {
+  const [courses, scope] = await Promise.all([
+    queries.execute(new ListCoursesQuery()),
+    queries.execute(new ReadScopeQuery(userId)),
+  ]);
+  return courses.filter(({ id }) => scope.allows(id));
+}
+
 // What a user may read, for every way in (REST, MCP). The rules are the
 // owners': catalog finds only what a course shows, identity's ReadScope says
 // which courses the user reads. Here they are asked together, and whatever the
@@ -32,11 +41,7 @@ export class CourseReader {
   ) {}
 
   async courses(userId: string) {
-    const [courses, scope] = await Promise.all([
-      this.queries.execute(new ListCoursesQuery()),
-      this.queries.execute(new ReadScopeQuery(userId)),
-    ]);
-    return courses.filter(({ id }) => scope.allows(id)).map(courseView);
+    return (await readableCourses(this.queries, userId)).map(courseView);
   }
 
   async items(userId: string, slug: Slug, { offset, limit }: Page) {
