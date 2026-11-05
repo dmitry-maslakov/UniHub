@@ -3,10 +3,10 @@ import {
   type MiddlewareConsumer,
   type NestModule,
 } from '@nestjs/common';
-import { ConditionalModule } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { IdentityModule } from '../identity/contracts.js';
+import { whenSearchOn } from '../platform/search/opensearch.config.js';
 import { StorageModule } from '../storage/contracts.js';
 import { CourseGrants } from './application/course-grants.js';
 import { CourseReader } from './application/course-reader.js';
@@ -33,11 +33,8 @@ import { AccessSearchModule } from './search.module.js';
     // MCP's @ApiKeyAuth() guard authenticates through it
     IdentityModule,
     StorageModule,
-    // with OPENSEARCH_URL, as processing's index; the function form, as a
-    // string one would load the module when the variable isn't set
-    ConditionalModule.registerWhen(AccessSearchModule, (env) =>
-      Boolean(env.OPENSEARCH_URL),
-    ),
+    // the search route and tool, with processing's index
+    whenSearchOn(AccessSearchModule),
   ],
   controllers: [
     CoursesController,
