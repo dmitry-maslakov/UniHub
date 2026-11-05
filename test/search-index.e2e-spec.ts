@@ -52,7 +52,13 @@ const book = Array.from({ length: 250 }, (_, i) => `chapter ${i + 1}`).join(
 );
 const scan = '%PDF search index: a scan, no text';
 
-describe('search index', { timeout: 60_000 }, () => {
+// A job takes up to a second (its manifest waits for a refresh), and a
+// reconcile, the one at start too, queues every text the specs before left
+// in the index (some 30) ahead of a spec's own: a wait for one is given a
+// minute.
+const WAIT = { timeout: 60_000, interval: 200 };
+
+describe('search index', { timeout: 120_000 }, () => {
   let app: INestApplication;
   let hub: PortalIngest;
   let prisma: PrismaService;
@@ -70,7 +76,7 @@ describe('search index', { timeout: 60_000 }, () => {
     vi.waitFor(
       async () =>
         expect(await documents(hash)).toEqual(expected.toSorted(byId)),
-      { timeout: 20_000, interval: 200 },
+      WAIT,
     );
   // No job halfway through a text when the index is deleted: it would find
   // the index gone mid-request (503) and wait that out as an outage.
@@ -81,7 +87,7 @@ describe('search index', { timeout: 60_000 }, () => {
         expect(
           await queue.getJobCountByTypes('active', 'wait', 'delayed'),
         ).toBe(0),
-      { timeout: 20_000, interval: 200 },
+      WAIT,
     );
     await opensearch.indices.delete({ index }, { ignore: [404] });
   };
