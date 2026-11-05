@@ -138,7 +138,6 @@ describe('search', { timeout: 60_000 }, () => {
     ]);
   });
 
-  // OpenSearch marks its parts (camel, Case, Name) one by one
   // the hybrid query's raw scores come out far outside 0 to 1, a few huge
   // and negative, without the pipeline that normalizes them
   it('scores contents 0 to 1, through the hybrid pipeline', async () => {
@@ -166,6 +165,7 @@ describe('search', { timeout: 60_000 }, () => {
     ]);
   });
 
+  // OpenSearch marks its parts (camel, Case, Name) one by one
   it('highlights an identifier matched in parts as one', async () => {
     const [{ pages }] = await search('camelCaseName', [lecture]);
 
