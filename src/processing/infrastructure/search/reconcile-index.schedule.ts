@@ -23,13 +23,13 @@ export class ReconcileIndexSchedule implements OnModuleDestroy {
     this.stopped.abort();
   }
 
-  @Cron(CronExpression.EVERY_HOUR)
+  @Cron(CronExpression.EVERY_HOUR, { name: 'reconcile-index' })
   async reconcile() {
     await this.run().catch((err: unknown) => this.failed(err));
   }
 
   // once the app is up, so startup doesn't wait for OpenSearch
-  @Timeout(0)
+  @Timeout('reconcile-index-at-start', 0)
   async atStart() {
     await pRetry(() => this.run(), {
       retries: START_ATTEMPTS - 1,

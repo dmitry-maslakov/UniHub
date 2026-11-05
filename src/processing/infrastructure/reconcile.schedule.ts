@@ -12,12 +12,12 @@ export class ReconcileSchedule {
   constructor(private readonly reconciler: Reconcile) {}
 
   // once the app is up, so startup doesn't wait for a scan
-  @Timeout(0)
+  @Timeout('reconcile-at-start', 0)
   atStart() {
     return this.reconcile();
   }
 
-  @Cron(CronExpression.EVERY_DAY_AT_4AM)
+  @Cron(CronExpression.EVERY_DAY_AT_4AM, { name: 'reconcile' })
   async reconcile() {
     try {
       const queued = await this.reconciler.run();

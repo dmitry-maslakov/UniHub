@@ -38,7 +38,7 @@ export class PushConnections implements OnModuleDestroy {
     private readonly config: ConfigType<typeof pluginsConfig>,
   ) {}
 
-  @Timeout(0)
+  @Timeout('push-connections', 0)
   start() {
     if (!this.config.runConnectors) return;
     for (const { spec, instance } of this.catalog.pushConnectors)

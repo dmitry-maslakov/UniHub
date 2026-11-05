@@ -39,7 +39,7 @@ export class OutboxRetention implements OnModuleInit, OnModuleDestroy {
     this.subscription?.unsubscribe();
   }
 
-  @Cron(CronExpression.EVERY_DAY_AT_3AM)
+  @Cron(CronExpression.EVERY_DAY_AT_3AM, { name: 'outbox-retention' })
   async prune() {
     await this.deadLetters.purge({ failedBefore: Date.now() - 14 * DAY });
     await this.inbox.prune('30d');
