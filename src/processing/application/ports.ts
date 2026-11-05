@@ -108,3 +108,15 @@ export abstract class QueryEmbedder extends Embedder {}
 export class EmbedderUnavailableError extends UnavailableError {
   readonly reason = 'EMBEDDER_UNAVAILABLE';
 }
+
+// A model that reads the query and each text together, which scores how
+// well a text answers it better than the index does, but slowly: it takes
+// only a search's best `candidates`. null: busy with another query.
+export abstract class Reranker {
+  abstract readonly candidates: number;
+  // a score per text, in their order, the higher the better
+  abstract scores(
+    query: string,
+    texts: readonly string[],
+  ): Promise<number[] | null>;
+}

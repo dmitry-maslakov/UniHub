@@ -8,6 +8,7 @@ import { IndexText } from '../../application/index-text.js';
 import {
   Embedder,
   QueryEmbedder,
+  Reranker,
   TextIndex,
   TextIndexQueue,
 } from '../../application/ports.js';
@@ -21,6 +22,7 @@ import { ReconcileIndexSchedule } from './reconcile-index.schedule.js';
 import { SEARCH_INDEX_QUEUE } from './search-index.queue.js';
 import { SearchIndexWorker } from './search-index.worker.js';
 import { PASSAGE_TIMEOUT, QUERY_TIMEOUT, TeiEmbedder } from './tei-embedder.js';
+import { TeiReranker } from './tei-reranker.js';
 
 const DAY = 24 * 60 * 60;
 
@@ -68,12 +70,19 @@ const DAY = 24 * 60 * 60;
         embedding &&
         new TeiEmbedder(embedding, embedding.queryUrl, QUERY_TIMEOUT),
     },
+    // null without RERANK_URL: the index's order
+    {
+      provide: Reranker,
+      inject: [textSearchConfig.KEY],
+      useFactory: ({ rerank }: ConfigType<typeof textSearchConfig>) =>
+        rerank && new TeiReranker(rerank),
+    },
     IndexText,
     ReconcileIndex,
     SearchIndexWorker,
     ReconcileIndexSchedule,
   ],
   // to ProcessContent and SearchTexts, which do without them when it's off
-  exports: [TextIndex, TextIndexQueue, QueryEmbedder],
+  exports: [TextIndex, TextIndexQueue, QueryEmbedder, Reranker],
 })
 export class TextSearchModule {}
