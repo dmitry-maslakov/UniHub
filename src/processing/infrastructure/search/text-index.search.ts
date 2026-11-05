@@ -20,10 +20,17 @@ const SNIPPET_CHARS = 400;
 // every analysis of the text: exact forms, stems, identifiers
 const FIELDS = [
   'text',
-  ...Object.keys(indexBody().mappings.properties.text.fields).map(
+  ...Object.keys(indexBody(null).mappings.properties.text.fields).map(
     (field) => `text.${field}`,
   ),
 ];
+// the chunks knn takes, nearest first, and as many of the words' hits: past
+// the 50 contents a search answers at most, as a content's best chunks are
+// often several
+const DEPTH = 100;
+// how many candidates HNSW looks at: under a filter that keeps a tenth of
+// the chunks, 256 found all of the true nearest (100 found 97%)
+const EF_SEARCH = 256;
 
 // what's read of a chunk: the page it's on
 type PageDoc = Pick<RepresentationKey, 'processor' | 'version'> &
@@ -54,21 +61,55 @@ const collapse: Types.Core_Search.FieldCollapse = {
   },
 };
 
-// BM25 over the chunks of these contents only. The hashes filter the query
-// itself, as knn will need too: a post_filter would cut its k nearest down
-// afterwards, to few or none. Past 65,536 of them (index.max_terms_count)
-// OpenSearch refuses the query with a 400 that says so, which goes up as it
-// came.
+const words = (text: string) =>
+  ({
+    multi_match: { query: text, type: 'most_fields', fields: FIELDS },
+  }) satisfies Types.Common_QueryDsl.QueryContainer;
+
+// The chunks of these contents only, filtered in the query itself: a
+// post_filter would cut knn's k nearest down afterwards, to few or none.
+// Past 65,536 hashes (index.max_terms_count) OpenSearch refuses the query
+// with a 400 that says so, which goes up as it came.
+const among = (hashes: TextQuery['hashes']) => ({ terms: { hash: hashes } });
+
+// BM25 alone: no vector for the query, or an index without vectors
 export const keywordBody = ({ text, hashes, size }: TextQuery) =>
   ({
     size,
     _source: ['hash'],
+    query: { bool: { must: words(text), filter: among(hashes) } },
+    collapse,
+  }) satisfies API.Search_RequestBody;
+
+// The words and the meaning, scored apart and put together by the hybrid
+// pipeline (text-index.mapping.ts), a part each. The filter is the hybrid
+// query's own, which OpenSearch applies to both parts, knn's before it
+// picks its nearest.
+export const hybridBody = ({
+  text,
+  vector,
+  hashes,
+  size,
+}: TextQuery & { vector: number[] }) =>
+  ({
+    size,
+    _source: ['hash'],
     query: {
-      bool: {
-        must: {
-          multi_match: { query: text, type: 'most_fields', fields: FIELDS },
-        },
-        filter: { terms: { hash: hashes } },
+      hybrid: {
+        filter: among(hashes),
+        pagination_depth: DEPTH,
+        queries: [
+          words(text),
+          {
+            knn: {
+              vector: {
+                vector,
+                k: DEPTH,
+                method_parameters: { ef_search: EF_SEARCH },
+              },
+            },
+          },
+        ],
       },
     },
     collapse,
@@ -94,7 +135,7 @@ const bestPages = (chunks: Types.Core_Search.Hit<PageDoc>[]) =>
       };
     });
 
-// a content per hit, as keywordBody collapses them, its chunks the inner
+// a content per hit, as both bodies collapse them, its chunks the inner
 // hits named pages
 export const contentHits = (
   hits: Types.Core_Search.Hit<Pick<RepresentationKey, 'hash'>>[],

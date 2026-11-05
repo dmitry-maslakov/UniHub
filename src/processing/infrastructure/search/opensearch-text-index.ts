@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util';
 import { Inject, Injectable } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
 import type { Client, Types } from '@opensearch-project/opensearch';
@@ -5,13 +6,17 @@ import pRetry from 'p-retry';
 import type { ContentHash, PluginName } from '@app/kernel';
 import { opensearchConfig } from '../../../platform/search/opensearch.config.js';
 import { OPENSEARCH } from '../../../platform/search/opensearch.module.js';
-import { TextIndex, type TextQuery } from '../../application/ports.js';
-import type { TextChunk } from '../../domain/chunks.js';
+import {
+  TextIndex,
+  type IndexedChunk,
+  type TextQuery,
+} from '../../application/ports.js';
 import type { RepresentationKey } from '../../domain/representation.js';
+import { textSearchConfig } from '../../text-search.config.js';
 import {
   bulkError,
   isAlreadyThere,
-  isIndexMissing,
+  isGone,
   translated,
 } from './opensearch-errors.js';
 import {
@@ -20,8 +25,13 @@ import {
   manifestKeys,
   versionsOf,
 } from './text-index.documents.js';
-import { GENERATION, indexBody, indexName } from './text-index.mapping.js';
-import { contentHits, keywordBody } from './text-index.search.js';
+import {
+  indexBody,
+  indexName,
+  PIPELINE,
+  pipelineName,
+} from './text-index.mapping.js';
+import { contentHits, hybridBody, keywordBody } from './text-index.search.js';
 
 // documents per bulk request
 const BULK = 200;
@@ -36,21 +46,29 @@ interface KeysPage {
   after_key?: Types.Common_Aggregations.CompositeAggregateKey;
 }
 
-// The index made when first used, and made again when a write or a read
-// finds it gone (then tried once more), so the app starts while OpenSearch
-// is away and outlives a new volume or a deleted index.
+// The index, and with vectors the hybrid search pipeline, made when first
+// used, and made again when a write or a read finds either gone (then tried
+// once more), so the app starts while OpenSearch is away and outlives a new
+// volume or a deleted index or pipeline.
 @Injectable()
 export class OpenSearchTextIndex extends TextIndex {
   private readonly index: string;
+  private readonly body: ReturnType<typeof indexBody>;
+  // none without vectors: a keyword search takes no pipeline
+  private readonly pipeline: string | null;
   private ensured?: Promise<void>;
 
   constructor(
     @Inject(OPENSEARCH) private readonly client: Client,
     @Inject(opensearchConfig.KEY)
     { prefix }: ConfigType<typeof opensearchConfig>,
+    @Inject(textSearchConfig.KEY)
+    { embedding }: ConfigType<typeof textSearchConfig>,
   ) {
     super();
-    this.index = indexName(prefix);
+    this.index = indexName(prefix, embedding);
+    this.body = indexBody(embedding);
+    this.pipeline = embedding && pipelineName(prefix);
   }
 
   ensure() {
@@ -60,7 +78,7 @@ export class OpenSearchTextIndex extends TextIndex {
   // All in one try, so an index gone midway is filled anew. The manifest
   // comes only once every chunk is in (bulk isn't atomic), and its refresh
   // shows the chunks too.
-  put(key: RepresentationKey, chunks: readonly TextChunk[]) {
+  put(key: RepresentationKey, chunks: readonly IndexedChunk[]) {
     return this.onIndex(async () => {
       const docs = chunkDocs(key, chunks);
       for (let i = 0; i < docs.length; i += BULK) {
@@ -97,14 +115,23 @@ export class OpenSearchTextIndex extends TextIndex {
   }
 
   // Not after making sure of the index, which waits the client's 30 s on a
-  // stuck node (twice): a search finds the index gone by itself, answered at
-  // once, and only then makes it. One of another mapping is for the writes
-  // to refuse.
+  // stuck node (twice): a search finds the index or the pipeline gone by
+  // itself, answered at once, and only then makes them. One of another
+  // mapping is for the writes to refuse. By meaning too with the query's
+  // vector, into an index that has them.
   async search(query: TextQuery) {
+    const { vector } = query;
+    const request =
+      vector && this.pipeline
+        ? {
+            search_pipeline: this.pipeline,
+            body: hybridBody({ ...query, vector }),
+          }
+        : { body: keywordBody(query) };
     const { body } = await this.onIndex(
       () =>
         this.client.search(
-          { index: this.index, body: keywordBody(query) },
+          { index: this.index, ...request },
           { requestTimeout: SEARCH_TIMEOUT_MS },
         ),
       { first: false },
@@ -112,10 +139,16 @@ export class OpenSearchTextIndex extends TextIndex {
     return contentHits(body.hits.hits);
   }
 
-  // the index with this generation's mapping, made if missing
+  // the pipeline put (the same again is harmless) and the index with this
+  // generation's mapping, made if missing
   private async create() {
+    if (this.pipeline)
+      await this.client.searchPipeline.put({
+        id: this.pipeline,
+        body: PIPELINE,
+      });
     await this.client.indices
-      .create({ index: this.index, body: indexBody() })
+      .create({ index: this.index, body: this.body })
       .catch((err: unknown) => {
         if (!isAlreadyThere(err)) throw err;
       });
@@ -123,8 +156,14 @@ export class OpenSearchTextIndex extends TextIndex {
       index: this.index,
     });
     // made by hand, or by a write to a node left to create unihub-* indices
-    // (the compose files tell it not to): not this generation's analyzers
-    if (body[this.index]?.mappings._meta?.generation !== GENERATION)
+    // (the compose files tell it not to): not this generation's analyzers,
+    // nor this model's vectors
+    if (
+      !isDeepStrictEqual(
+        body[this.index]?.mappings._meta,
+        this.body.mappings._meta,
+      )
+    )
       throw new Error(
         `index ${this.index} exists with another mapping: delete it`,
       );
@@ -138,7 +177,8 @@ export class OpenSearchTextIndex extends TextIndex {
     return this.ensured;
   }
 
-  // the index made sure of `first`, or only once op finds it gone
+  // the index made sure of `first`, or only once op finds it (or the
+  // pipeline) gone
   private onIndex<T>(op: () => Promise<T>, { first = true } = {}) {
     return this.translating(() =>
       pRetry(
@@ -149,9 +189,9 @@ export class OpenSearchTextIndex extends TextIndex {
         {
           retries: 1,
           minTimeout: 0,
-          shouldRetry: ({ error }) => isIndexMissing(error),
+          shouldRetry: ({ error }) => isGone(error),
           onFailedAttempt: ({ error }) => {
-            if (isIndexMissing(error)) this.ensured = undefined;
+            if (isGone(error)) this.ensured = undefined;
           },
         },
       ),

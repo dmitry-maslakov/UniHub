@@ -1,19 +1,26 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, type ConfigType } from '@nestjs/config';
 import { TerminusModule } from '@nestjs/terminus';
 import { opensearchConfig } from '../../../platform/search/opensearch.config.js';
 import { OpenSearchModule } from '../../../platform/search/opensearch.module.js';
 import { IndexText } from '../../application/index-text.js';
-import { TextIndex, TextIndexQueue } from '../../application/ports.js';
+import {
+  Embedder,
+  QueryEmbedder,
+  TextIndex,
+  TextIndexQueue,
+} from '../../application/ports.js';
 import { ReconcileIndex } from '../../application/reconcile-index.js';
 import { RepresentationRepository } from '../../domain/representation.js';
+import { textSearchConfig } from '../../text-search.config.js';
 import { PrismaRepresentationRepository } from '../prisma-representation.repository.js';
 import { BullmqTextIndexQueue } from './bullmq-text-index-queue.js';
 import { OpenSearchTextIndex } from './opensearch-text-index.js';
 import { ReconcileIndexSchedule } from './reconcile-index.schedule.js';
 import { SEARCH_INDEX_QUEUE } from './search-index.queue.js';
 import { SearchIndexWorker } from './search-index.worker.js';
+import { PASSAGE_TIMEOUT, QUERY_TIMEOUT, TeiEmbedder } from './tei-embedder.js';
 
 const DAY = 24 * 60 * 60;
 
@@ -22,6 +29,7 @@ const DAY = 24 * 60 * 60;
 @Module({
   imports: [
     ConfigModule.forFeature(opensearchConfig),
+    ConfigModule.forFeature(textSearchConfig),
     OpenSearchModule,
     // the worker asks whether the database is up before blaming a job
     TerminusModule,
@@ -46,12 +54,26 @@ const DAY = 24 * 60 * 60;
     },
     { provide: TextIndex, useClass: OpenSearchTextIndex },
     { provide: TextIndexQueue, useClass: BullmqTextIndexQueue },
+    // null without EMBEDDING_URL: BM25 only
+    {
+      provide: Embedder,
+      inject: [textSearchConfig.KEY],
+      useFactory: ({ embedding }: ConfigType<typeof textSearchConfig>) =>
+        embedding && new TeiEmbedder(embedding, embedding.url, PASSAGE_TIMEOUT),
+    },
+    {
+      provide: QueryEmbedder,
+      inject: [textSearchConfig.KEY],
+      useFactory: ({ embedding }: ConfigType<typeof textSearchConfig>) =>
+        embedding &&
+        new TeiEmbedder(embedding, embedding.queryUrl, QUERY_TIMEOUT),
+    },
     IndexText,
     ReconcileIndex,
     SearchIndexWorker,
     ReconcileIndexSchedule,
   ],
   // to ProcessContent and SearchTexts, which do without them when it's off
-  exports: [TextIndex, TextIndexQueue],
+  exports: [TextIndex, TextIndexQueue, QueryEmbedder],
 })
 export class TextSearchModule {}

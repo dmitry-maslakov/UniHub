@@ -5,7 +5,10 @@ import { PluginName } from '@app/kernel';
 import { sha256 } from '../../../../test/sha256.js';
 import type { PrismaService } from '../../../platform/database/prisma.service.js';
 import type { IndexText } from '../../application/index-text.js';
-import { TextIndexUnavailableError } from '../../application/ports.js';
+import {
+  EmbedderUnavailableError,
+  TextIndexUnavailableError,
+} from '../../application/ports.js';
 import { OUTAGE_PAUSE_MS } from '../pausing.worker.js';
 import type { IndexJob } from './search-index.queue.js';
 import { SearchIndexWorker } from './search-index.worker.js';
@@ -49,6 +52,15 @@ describe('SearchIndexWorker', () => {
 
   it('waits out the index being away without spending an attempt', async () => {
     const { worker: w, queue } = worker(away);
+
+    await expect(w.process(job)).rejects.toBeInstanceOf(RateLimitError);
+    expect(queue.rateLimit).toHaveBeenCalledWith(OUTAGE_PAUSE_MS);
+  });
+
+  it('waits out the embedder being away', async () => {
+    const { worker: w, queue } = worker(async () => {
+      throw new EmbedderUnavailableError('http://embedder/embed: ECONNREFUSED');
+    });
 
     await expect(w.process(job)).rejects.toBeInstanceOf(RateLimitError);
     expect(queue.rateLimit).toHaveBeenCalledWith(OUTAGE_PAUSE_MS);
