@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Reranker } from '../../application/ports.js';
+import { Reranker, RerankerUnavailableError } from '../../application/ports.js';
 import { callTei } from './tei.js';
 
 // Someone waits on the search: past this it answers in the index's order.
@@ -11,8 +11,10 @@ const ranked = z.array(z.object({ index: z.int(), score: z.number() }));
 
 // A TEI server of a reranker, one query at a time: on a CPU a second query
 // would only wait behind the first in TEI's queue, so it gets null at once
-// (the app runs as one process, so a flag does). Any failure, the server
-// away too, is the search's to log, which keeps its order then.
+// (the app runs as one process, so a flag does). The server down, gone
+// mid-request or too busy is worth waiting out; anything else, a timeout
+// too, is the call's own failure. Either is the search's to log, which keeps
+// its order then.
 export class TeiReranker extends Reranker {
   readonly candidates: number;
   private readonly url: URL;
@@ -42,7 +44,7 @@ export class TeiReranker extends Reranker {
           }),
           signal: AbortSignal.timeout(TIMEOUT_MS),
         },
-        Error,
+        RerankerUnavailableError,
       );
       const byIndex = new Map(
         ranked.parse(answer).map(({ index, score }) => [index, score]),

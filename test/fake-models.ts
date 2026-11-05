@@ -37,13 +37,20 @@ export class FakeEmbedder extends Embedder {
 }
 
 // A text scores the number of the query's words it has, each once, so texts
-// with as many tie. Takes 20, as RERANK_CANDIDATES does by default.
+// with as many tie; busy, every query gets null, as TeiReranker's while
+// another is scored. Takes 20, as RERANK_CANDIDATES does by default.
 export class FakeReranker extends Reranker {
-  constructor(readonly candidates = 20) {
+  readonly candidates: number;
+  private readonly busy: boolean;
+
+  constructor({ candidates = 20, busy = false } = {}) {
     super();
+    this.candidates = candidates;
+    this.busy = busy;
   }
 
   async scores(query: string, texts: readonly string[]) {
+    if (this.busy) return null;
     const asked = new Set(wordsOf(query));
     return texts.map(
       (text) => new Set(wordsOf(text).filter((word) => asked.has(word))).size,

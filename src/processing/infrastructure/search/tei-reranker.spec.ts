@@ -1,6 +1,7 @@
 import { delay, http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { ZodError } from 'zod';
+import { RerankerUnavailableError } from '../../application/ports.js';
 import { TeiReranker } from './tei-reranker.js';
 
 const TEI = 'http://reranker.test';
@@ -100,28 +101,36 @@ describe('TeiReranker', () => {
   it('refuses an answer that leaves a text unscored', async () => {
     tei(() => HttpResponse.json([{ index: 0, score: 0.9 }]));
 
-    await expect(reranker().scores('semafor', ['a', 'b'])).rejects.toThrow(
-      ZodError,
-    );
+    const unscored = reranker().scores('semafor', ['a', 'b']);
+
+    await expect(unscored).rejects.toThrow(ZodError);
+    await expect(unscored).rejects.not.toBeInstanceOf(RerankerUnavailableError);
   });
 
-  it('fails while the server is away, too busy or refusing, naming it', async () => {
+  it('fails as unavailable while the server is away or too busy, naming it', async () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(
       unreachable('ECONNREFUSED'),
     );
-    await expect(reranker().scores('semafor', ['a'])).rejects.toThrow(
-      `${TEI}/rerank: ECONNREFUSED`,
-    );
+    const away = reranker().scores('semafor', ['a']);
+    await expect(away).rejects.toBeInstanceOf(RerankerUnavailableError);
+    await expect(away).rejects.toThrow(`${TEI}/rerank: ECONNREFUSED`);
 
     tei(() => new HttpResponse(null, { status: 429 }));
-    await expect(reranker().scores('semafor', ['a'])).rejects.toThrow(
-      `${TEI}/rerank answered 429`,
-    );
+    const busy = reranker().scores('semafor', ['a']);
+    await expect(busy).rejects.toBeInstanceOf(RerankerUnavailableError);
+    await expect(busy).rejects.toThrow(`${TEI}/rerank answered 429`);
+  });
 
+  // another model, or a request it won't take: not worth waiting out
+  it('fails otherwise when the server refuses, naming it and its answer', async () => {
     tei(() => new HttpResponse('too many texts', { status: 413 }));
-    await expect(reranker().scores('semafor', ['a'])).rejects.toThrow(
+
+    const refused = reranker().scores('semafor', ['a']);
+
+    await expect(refused).rejects.toThrow(
       `${TEI}/rerank answered 413: too many texts`,
     );
+    await expect(refused).rejects.not.toBeInstanceOf(RerankerUnavailableError);
   });
 
   it('gives a query 5 s, then fails', async () => {
@@ -134,9 +143,10 @@ describe('TeiReranker', () => {
       return HttpResponse.json([]);
     });
 
-    await expect(reranker().scores('semafor', ['a'])).rejects.toMatchObject({
-      name: 'TimeoutError',
-    });
+    const stuck = reranker().scores('semafor', ['a']);
+
+    await expect(stuck).rejects.toMatchObject({ name: 'TimeoutError' });
+    await expect(stuck).rejects.not.toBeInstanceOf(RerankerUnavailableError);
     expect(given).toHaveBeenCalledWith(5_000);
   });
 });

@@ -120,3 +120,8 @@ export abstract class Reranker {
     texts: readonly string[],
   ): Promise<number[] | null>;
 }
+
+// the reranker can't be reached now, or is too busy: as with the embedder
+export class RerankerUnavailableError extends UnavailableError {
+  readonly reason = 'RERANKER_UNAVAILABLE';
+}

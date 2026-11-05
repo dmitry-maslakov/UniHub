@@ -5,6 +5,7 @@ import { sha256 } from '../../../test/sha256.js';
 import { SearchOffError, SearchUnavailableError } from './errors.js';
 import {
   EmbedderUnavailableError,
+  RerankerUnavailableError,
   TextIndexUnavailableError,
   type QueryEmbedder,
   type Reranker,
@@ -147,7 +148,7 @@ describe('SearchTexts', () => {
   it('asks the index for as many as the reranker takes, and answers the limit', async () => {
     const hits = ['a', 'b', 'c'].map((text) => saying(text));
     const { index, search } = searching(hits, {
-      reranker: new FakeReranker(3),
+      reranker: new FakeReranker({ candidates: 3 }),
     });
 
     expect(
@@ -160,7 +161,7 @@ describe('SearchTexts', () => {
 
   // FakeReranker scores the query's words each text has
   it("puts the reranker's candidates in its order, by their best snippets, ties and the rest as they were", async () => {
-    const reranker = new FakeReranker(3);
+    const reranker = new FakeReranker({ candidates: 3 });
     const scores = vi.spyOn(reranker, 'scores');
     const one = saying('semafor', 'semafor tajna lozinka');
     const all = saying('semafor tajna lozinka');
@@ -210,13 +211,46 @@ describe('SearchTexts', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
-  // away, past its time, or answering what can't be read: it's the
-  // reranker running behind on a CPU, not the search failing
-  it("answers in the index's order when the reranker fails, saying so in a warning", async () => {
+  // away or past its time: the reranker running behind on a CPU, not the
+  // search failing
+  it("answers in the index's order while the reranker is away or slow, saying so in a warning", async () => {
     const warn = vi.spyOn(Logger.prototype, 'warn').mockReturnValue();
+    const error = vi.spyOn(Logger.prototype, 'error');
+    const reranker = new FakeReranker();
+    vi.spyOn(reranker, 'scores')
+      .mockRejectedValueOnce(
+        new RerankerUnavailableError('http://reranker/rerank: ECONNREFUSED'),
+      )
+      .mockRejectedValueOnce(
+        new DOMException(
+          'The operation was aborted due to timeout',
+          'TimeoutError',
+        ),
+      );
+    const hits = [saying('semafor'), saying('semafor tajna lozinka')];
+    const { search } = searching(hits, { reranker });
+    const asked = () =>
+      search.execute(
+        new SearchTextsQuery('semafor tajna lozinka', [notes], 10),
+      );
+
+    expect(await asked()).toEqual(hits);
+    expect(await asked()).toEqual(hits);
+    expect(warn.mock.calls).toEqual([
+      ["in the index's order: http://reranker/rerank: ECONNREFUSED"],
+      ["in the index's order: The operation was aborted due to timeout"],
+    ]);
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  // another model than a reranker, an answer that can't be read: someone
+  // has to look
+  it("answers in the index's order when the reranker fails otherwise, logging an error", async () => {
+    const error = vi.spyOn(Logger.prototype, 'error').mockReturnValue();
+    const warn = vi.spyOn(Logger.prototype, 'warn');
     const reranker = new FakeReranker();
     vi.spyOn(reranker, 'scores').mockRejectedValue(
-      new Error('http://reranker/rerank: ECONNREFUSED'),
+      new Error('http://reranker/rerank answered 424: not a reranker'),
     );
     const hits = [saying('semafor'), saying('semafor tajna lozinka')];
     const { search } = searching(hits, { reranker });
@@ -226,9 +260,11 @@ describe('SearchTexts', () => {
         new SearchTextsQuery('semafor tajna lozinka', [notes], 10),
       ),
     ).toEqual(hits);
-    expect(warn).toHaveBeenCalledWith(
-      "in the index's order: http://reranker/rerank: ECONNREFUSED",
+    expect(error).toHaveBeenCalledWith(
+      "in the index's order: http://reranker/rerank answered 424: not a reranker",
+      expect.any(String),
     );
+    expect(warn).not.toHaveBeenCalled();
   });
 
   it('answers an index away or stuck as search being unavailable', async () => {

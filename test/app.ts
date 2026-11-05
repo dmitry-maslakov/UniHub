@@ -12,7 +12,9 @@ import { testVectors } from './env.js';
 import { FakeEmbedder, FakeReranker } from './fake-models.js';
 
 // The app as main.ts sets it up, gRPC included, without listening: supertest
-// binds the HTTP server itself, and fakes stand in for the models.
+// binds the HTTP server itself, and fakes stand in for the models. The
+// reranker is busy, so a search answers in the index's order, which the
+// specs check; one that wants it reordered gives it scores.
 // `mails` gets what the Mailer would send, `imports` adds the spec's own
 // plugins.
 export async function bootApp({
@@ -27,7 +29,7 @@ export async function bootApp({
     .overrideProvider(QueryEmbedder)
     .useValue(new FakeEmbedder(testVectors.dimensions))
     .overrideProvider(Reranker)
-    .useValue(new FakeReranker());
+    .useValue(new FakeReranker({ busy: true }));
   if (mails)
     builder
       .overrideProvider(Mailer)

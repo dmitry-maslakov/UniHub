@@ -5,6 +5,7 @@ import {
   EmbedderUnavailableError,
   QueryEmbedder,
   Reranker,
+  RerankerUnavailableError,
   TextIndex,
   TextIndexUnavailableError,
 } from './ports.js';
@@ -57,16 +58,17 @@ export class SearchTexts implements IQueryHandler<SearchTextsQuery> {
     try {
       return (await this.embedder?.embed([text]))?.[0];
     } catch (err) {
-      const said = `searching by the words alone: ${(err as Error).message}`;
-      if (err instanceof EmbedderUnavailableError) this.logger.warn(said);
-      else this.logger.error(said, (err as Error).stack);
+      const away = err instanceof EmbedderUnavailableError;
+      this.failed(err, away, 'searching by the words alone');
       return undefined;
     }
   }
 
   // The reranker's candidates in its order, by their best snippets, ties as
-  // they were, and the rest after them. A failure is only a warning: on a
-  // CPU, it's the reranker running behind.
+  // they were, and the rest after them. When it fails, the index's order,
+  // which is logged: a warning while it's away or past its time (on a CPU,
+  // the reranker running behind), an error otherwise (another model, an
+  // answer that can't be read)
   private async reranked(query: string, hits: TextHit[]) {
     if (!this.reranker || hits.length < 2) return hits;
     const top = hits.slice(0, this.reranker.candidates);
@@ -76,11 +78,22 @@ export class SearchTexts implements IQueryHandler<SearchTextsQuery> {
         top.map(({ pages }) => pages[0].snippet.text),
       )
       .catch((err: unknown) => {
-        this.logger.warn(`in the index's order: ${(err as Error).message}`);
+        const behind =
+          err instanceof RerankerUnavailableError ||
+          (err as Error).name === 'TimeoutError';
+        this.failed(err, behind, "in the index's order");
         return null;
       });
     if (!scores) return hits;
     const order = top.map((_, i) => i).sort((a, b) => scores[b] - scores[a]);
     return [...order.map((i) => top[i]), ...hits.slice(top.length)];
+  }
+
+  // a model's failure, which the search does without: a warning while it's
+  // only away, an error with its stack when someone has to look
+  private failed(err: unknown, away: boolean, then: string) {
+    const said = `${then}: ${(err as Error).message}`;
+    if (away) this.logger.warn(said);
+    else this.logger.error(said, (err as Error).stack);
   }
 }

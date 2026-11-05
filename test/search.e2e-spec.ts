@@ -185,8 +185,7 @@ describe('search', { timeout: 60_000 }, () => {
   // in what order it puts them is SearchTexts' own (search-texts.spec.ts)
   it('has the reranker reorder the contents found, by their best snippets', async () => {
     const scores = vi.spyOn(app.get(Reranker), 'scores');
-    // busy: in the index's order
-    scores.mockResolvedValueOnce(null);
+    // busy, as bootApp's is: in the index's order
     const found = await search('mreža', [book, ...sheets]);
     // the index's best last
     scores.mockImplementationOnce(async (_, texts) => texts.map((_, i) => i));
