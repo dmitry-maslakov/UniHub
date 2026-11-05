@@ -18,7 +18,8 @@ import {
   indexName,
 } from '../src/processing/infrastructure/search/text-index.mapping.js';
 import { bootApp } from './app.js';
-import { testEnv } from './env.js';
+import { testEnv, testVectors } from './env.js';
+import { FakeEmbedder } from './fake-models.js';
 import { FakePluginsModule } from './fake-plugins.js';
 import { portalIngest } from './ingest.js';
 import { sha256 } from './sha256.js';
@@ -29,7 +30,7 @@ import { sha256 } from './sha256.js';
 // of its client (OpenSearchTextIndex).
 
 const portal = 'search-index-test';
-const index = indexName(testEnv.OPENSEARCH_INDEX_PREFIX);
+const index = indexName(testEnv.OPENSEARCH_INDEX_PREFIX, testVectors);
 // what fake-text (version 1) makes of content: a part per form feed, and
 // what fake-pdf does
 const text = (content: string, version = 1, processor = 'fake-text') => ({
@@ -98,15 +99,19 @@ describe('search index', { timeout: 60_000 }, () => {
 
   afterAll(() => app.close());
 
-  it('writes a processed text as a document per chunk and a manifest', async () => {
+  it("writes a processed text as a document per chunk, with the chunk's vector, and a manifest", async () => {
     await upload('notes.txt', notes);
 
+    const [manifest, first] = ids(text(notes), 2);
     await indexed(sha256(notes), ids(text(notes), 2));
-    const { body } = await opensearch.get({
-      index,
-      id: ids(text(notes), 0)[0],
-    });
+    const { body } = await opensearch.get({ index, id: manifest });
     expect(body._source).toEqual({ ...text(notes), chunks: 2 });
+    const chunk = (await opensearch.get({ index, id: first })).body._source!;
+    const [vector] = await new FakeEmbedder(testVectors.dimensions).embed([
+      'search index: page one',
+    ]);
+    // as float32
+    expect(chunk.vector).toEqual(vector.map((x) => expect.closeTo(x, 6)));
   });
 
   it('writes a text of more chunks than a bulk request takes', async () => {
@@ -160,7 +165,10 @@ describe('search index', { timeout: 60_000 }, () => {
 
     await indexed(sha256(after), ids(text(after), 1));
     const { body } = await opensearch.indices.getMapping({ index });
-    expect(body[index].mappings._meta).toEqual({ generation: GENERATION });
+    expect(body[index].mappings._meta).toEqual({
+      generation: GENERATION,
+      ...testVectors,
+    });
 
     // and a reconcile fills it anew
     await deleteIndex();

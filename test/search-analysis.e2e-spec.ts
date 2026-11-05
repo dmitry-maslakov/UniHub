@@ -26,7 +26,7 @@ describe('text index analyzers', () => {
       opensearchConfig.KEY,
     );
     index = `${prefix}-analysis`;
-    await opensearch.indices.create({ index, body: indexBody() });
+    await opensearch.indices.create({ index, body: indexBody(null) });
   });
 
   afterAll(() => module.close());
