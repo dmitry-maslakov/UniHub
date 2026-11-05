@@ -4,15 +4,14 @@ import { McpController, Tool } from '@rekog/mcp-nest';
 import { z } from 'zod';
 import { Slug } from '../../../catalog/contracts.js';
 import { CourseReader } from '../../application/course-reader.js';
-import { pageSchema, textPage } from '../../application/page.js';
+import { pageSchema, textPageSchema } from '../../application/page.js';
 import { McpErrorsFilter } from './mcp-errors.filter.js';
 import { McpUserId } from './mcp-user-id.js';
 import { json, readOnly } from './tool-results.js';
 
 const inCourse = pageSchema.extend({ course: Slug.describe('course slug') });
-const fileText = z.object({
-  file: z.uuid().describe('file id from list_files'),
-  page: textPage,
+const fileText = textPageSchema.extend({
+  file: z.uuid().describe('file id from list_files or search'),
 });
 
 // The same reads as the REST API, through the same CourseReader
@@ -63,15 +62,15 @@ export class CourseTools {
   @Tool({
     name: 'read_file',
     description:
-      'One page (slide, section) of the text made from a file, with how many pages there are. Read the next page with page + 1.',
+      'One page (slide, section) of the text made from a file, with how many pages there are. Read the next page with page + 1. A file can have a text per processor, each paged on its own: read a page from search with the processor it names.',
     parameters: fileText,
     annotations: readOnly,
   })
   async read(
-    @Payload() { file, page }: z.output<typeof fileText>,
+    @Payload() { file, page, processor }: z.output<typeof fileText>,
     @McpUserId() userId: string,
   ) {
-    const text = await this.reader.text(userId, file, page);
+    const text = await this.reader.text(userId, file, page, processor);
     return {
       content: [
         {

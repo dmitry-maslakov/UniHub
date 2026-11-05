@@ -18,8 +18,8 @@ import { create as contentDisposition } from 'content-disposition';
 import type { z } from 'zod';
 import { CurrentUserId } from '../../../identity/contracts.js';
 import { CourseReader } from '../../application/course-reader.js';
+import { textPageSchema } from '../../application/page.js';
 import { Limited } from '../throttle.js';
-import { textQuery } from './requests.js';
 import { FileDetailsResponse, TextPageResponse } from './responses.js';
 
 @ApiTags('files')
@@ -47,8 +47,8 @@ export class FilesController {
   text(
     @CurrentUserId() userId: string,
     @Param('id', ParseUUIDPipe) id: string,
-    @Query({ schema: textQuery })
-    { page, processor }: z.output<typeof textQuery>,
+    @Query({ schema: textPageSchema })
+    { page, processor }: z.output<typeof textPageSchema>,
   ): Promise<TextPageResponse> {
     return this.reader.text(userId, id, page, processor);
   }

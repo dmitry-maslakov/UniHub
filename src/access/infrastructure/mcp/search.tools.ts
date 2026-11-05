@@ -20,7 +20,7 @@ export class SearchTools {
   @Tool({
     name: 'search',
     description:
-      "Search the text of files in the user's courses by words (Latin or Cyrillic, with or without diacritics) and by code identifiers. Each result is a file with its best pages and snippets; read a page with read_file.",
+      "Search the text of files in the user's courses by words (Latin or Cyrillic, with or without diacritics) and by code identifiers. Each result is a file with its best pages and snippets; read a page with read_file, giving its processor.",
     parameters: searchRequest,
     annotations: readOnly,
   })

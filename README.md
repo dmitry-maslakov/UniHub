@@ -88,7 +88,7 @@ Admins set the courses up (`@Roles([ADMIN_ROLE])`):
 ```
 
 - a file per content, the first by folder and name of those the user reads; `sameContentIn` names the others with the same bytes
-- `pages`: its best pages first, up to 3, each by its best fragment; `GET /api/files/{fileId}/text?page=3&processor=office-text` reads the whole page
+- `pages`: its best pages first, up to 3, each by its best fragment; `GET /api/files/{fileId}/text?page=3&processor=office-text` (MCP: `read_file` with the same `page` and `processor`) reads the whole page, as a file can have a text per processor, each paged on its own
 - `snippet.text` is up to 400 characters of the page as indexed (letters composed, NFC), plain text with whatever HTML the file had: show it as text, never as HTML. `highlights` are `[start, end)` UTF-16 offsets into that text only (a page read whole may differ, when the file's letters weren't composed)
 - only the files the user reads right now are looked through, so a grant taken back or a file removed counts from the next search on. A course they don't read is a 404, as on the other routes; the search index away is a 503 (`SEARCH_UNAVAILABLE`)
 - with no `OPENSEARCH_URL` there's no search: the route is a 404 and the tool isn't listed
@@ -96,7 +96,7 @@ Admins set the courses up (`@Roles([ADMIN_ROLE])`):
 
 ## MCP
 
-`/api/mcp` serves the same reads to AI clients over streamable HTTP, as the tools `list_courses`, `list_items`, `list_files`, `read_file` (page by page) and `search` (as `GET /api/search`, its results as JSON; over its limit, a tool error). A client signs in with an API key (create one at `POST /api/auth/api-key/create`), sent as `X-API-Key` or `Authorization: Bearer`; 600 calls a minute per user, however many keys they have. A request carries one JSON-RPC message as JSON: other bodies get 415, batches 400.
+`/api/mcp` serves the same reads to AI clients over streamable HTTP, as the tools `list_courses`, `list_items`, `list_files`, `read_file` (page by page, of the processor named or the first one) and `search` (as `GET /api/search`, its results as JSON; over its limit, a tool error). A client signs in with an API key (create one at `POST /api/auth/api-key/create`), sent as `X-API-Key` or `Authorization: Bearer`; 600 calls a minute per user, however many keys they have. A request carries one JSON-RPC message as JSON: other bodies get 415, batches 400.
 
 ## Plugins
 
