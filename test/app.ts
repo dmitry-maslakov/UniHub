@@ -6,12 +6,15 @@ import { Mailer, type Mail } from '../src/identity/domain/mailer.js';
 import {
   Embedder,
   QueryEmbedder,
+  Reranker,
 } from '../src/processing/application/ports.js';
 import { testVectors } from './env.js';
-import { FakeEmbedder } from './fake-models.js';
+import { FakeEmbedder, FakeReranker } from './fake-models.js';
 
 // The app as main.ts sets it up, gRPC included, without listening: supertest
-// binds the HTTP server itself, and fakes stand in for the embedding model.
+// binds the HTTP server itself, and fakes stand in for the models. The
+// reranker is busy, so a search answers in the index's order, which the
+// specs check; one that wants it reordered gives it scores.
 // `mails` gets what the Mailer would send, `imports` adds the spec's own
 // plugins.
 export async function bootApp({
@@ -24,7 +27,9 @@ export async function bootApp({
     .overrideProvider(Embedder)
     .useValue(new FakeEmbedder(testVectors.dimensions))
     .overrideProvider(QueryEmbedder)
-    .useValue(new FakeEmbedder(testVectors.dimensions));
+    .useValue(new FakeEmbedder(testVectors.dimensions))
+    .overrideProvider(Reranker)
+    .useValue(new FakeReranker({ busy: true }));
   if (mails)
     builder
       .overrideProvider(Mailer)

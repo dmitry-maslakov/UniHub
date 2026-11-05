@@ -1,10 +1,18 @@
 import { createHash } from 'node:crypto';
-import { Embedder } from '../src/processing/application/ports.js';
+import { Embedder, Reranker } from '../src/processing/application/ports.js';
 
-// An embedder for the specs, no model: a text's words, letters folded
-// (diacritics off, lower case), counted into `dimensions` buckets by their
-// hash, then made unit length. Texts with the same words get the same
-// vector, texts of no common word ones far apart.
+// Models for the specs, none downloaded: they read a text as its words,
+// letters folded (diacritics off, lower case).
+const fold = (text: string) =>
+  text.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase();
+const wordsOf = (text: string) =>
+  fold(text)
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
+
+// A text's words counted into `dimensions` buckets by their hash, then made
+// unit length. Texts with the same words get the same vector, texts of no
+// common word ones far apart.
 export class FakeEmbedder extends Embedder {
   constructor(private readonly dimensions: number) {
     super();
@@ -15,16 +23,37 @@ export class FakeEmbedder extends Embedder {
   }
 
   private vectorOf(text: string) {
-    const folded = text.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase();
-    const words = folded.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+    const words = wordsOf(text);
     const vector = Array<number>(this.dimensions).fill(0);
     // a text of no words still gets a vector, cosine takes no zero one
-    for (const word of words.length ? words : [folded])
+    for (const word of words.length ? words : [fold(text)])
       vector[
         createHash('sha256').update(word).digest().readUInt32BE() %
           this.dimensions
       ]++;
     const length = Math.hypot(...vector);
     return vector.map((x) => x / length);
+  }
+}
+
+// A text scores the number of the query's words it has, each once, so texts
+// with as many tie; busy, every query gets null, as TeiReranker's while
+// another is scored. Takes 20, as RERANK_CANDIDATES does by default.
+export class FakeReranker extends Reranker {
+  readonly candidates: number;
+  private readonly busy: boolean;
+
+  constructor({ candidates = 20, busy = false } = {}) {
+    super();
+    this.candidates = candidates;
+    this.busy = busy;
+  }
+
+  async scores(query: string, texts: readonly string[]) {
+    if (this.busy) return null;
+    const asked = new Set(wordsOf(query));
+    return texts.map(
+      (text) => new Set(wordsOf(text).filter((word) => asked.has(word))).size,
+    );
   }
 }

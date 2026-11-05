@@ -10,6 +10,7 @@ import { OPENSEARCH } from '../src/platform/search/opensearch.module.js';
 import {
   EmbedderUnavailableError,
   QueryEmbedder,
+  Reranker,
 } from '../src/processing/application/ports.js';
 import { SearchTextsQuery } from '../src/processing/contracts.js';
 import { keyId } from '../src/processing/domain/representation.js';
@@ -26,10 +27,10 @@ import { sha256 } from './sha256.js';
 
 // What OpenSearch makes of SearchTextsQuery: the query's bodies, by the
 // words and the meaning (FakeEmbedder's) or by the words alone, their
-// filter, collapse and highlight, the hybrid pipeline, and how the answer is
-// read back. Which pages are shown of the chunks it answers, and the
-// bodies' parts, are checked on their own (text-index.search.spec.ts), the
-// rest of the query on fakes (SearchTexts).
+// filter, collapse and highlight, the hybrid pipeline, how the answer is
+// read back, and what of it the reranker gets. Which pages are shown of the
+// chunks it answers, and the bodies' parts, are checked on their own
+// (text-index.search.spec.ts), the rest of the query on fakes (SearchTexts).
 
 const portal = 'search-test';
 const index = indexName(testEnv.OPENSEARCH_INDEX_PREFIX, testVectors);
@@ -179,6 +180,24 @@ describe('search', { timeout: 60_000 }, () => {
     expect(new Set(found.map(({ hash }) => hash)).size).toBe(3);
     expect(found[0]).toMatchObject({ hash: sha256(book) });
     expect(found[0].pages).toHaveLength(3);
+  });
+
+  // in what order it puts them is SearchTexts' own (search-texts.spec.ts)
+  it('has the reranker reorder the contents found, by their best snippets', async () => {
+    const scores = vi.spyOn(app.get(Reranker), 'scores');
+    // busy, as bootApp's is: in the index's order
+    const found = await search('mreža', [book, ...sheets]);
+    // the index's best last
+    scores.mockImplementationOnce(async (_, texts) => texts.map((_, i) => i));
+
+    expect(await search('mreža', [book, ...sheets])).toEqual(
+      found.toReversed(),
+    );
+    expect(found).toHaveLength(4);
+    expect(scores).toHaveBeenLastCalledWith(
+      'mreža',
+      found.map(({ pages }) => pages[0].snippet.text),
+    );
   });
 
   it('puts the pipeline back when a search finds it gone, and finds all the same', async () => {

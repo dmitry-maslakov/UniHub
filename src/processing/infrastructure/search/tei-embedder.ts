@@ -1,9 +1,6 @@
 import { z } from 'zod';
-import {
-  AWAY_STATUSES,
-  isConnectionError,
-} from '../../../platform/errors/is-connection-error.js';
 import { Embedder, EmbedderUnavailableError } from '../../application/ports.js';
+import { callTei } from './tei.js';
 
 // Texts per embed: a bigger batch gets through no faster on a CPU, and a
 // search's query, on the same model, would wait longer behind it.
@@ -97,22 +94,7 @@ export class TeiEmbedder extends Embedder {
       );
   }
 
-  private async call(path: string, init: RequestInit): Promise<unknown> {
-    const url = new URL(path, this.url);
-    const res = await fetch(url, init).catch((err: unknown) => {
-      // fetch's TypeError says only 'fetch failed', its cause what kept it
-      const cause = (err as Error | undefined)?.cause as
-        NodeJS.ErrnoException | undefined;
-      if (!isConnectionError(cause)) throw err;
-      throw new EmbedderUnavailableError(
-        `${url}: ${cause?.code ?? cause?.message}`,
-        { cause: err },
-      );
-    });
-    if (AWAY_STATUSES.has(res.status))
-      throw new EmbedderUnavailableError(`${url} answered ${res.status}`);
-    if (!res.ok)
-      throw new Error(`${url} answered ${res.status}: ${await res.text()}`);
-    return res.json();
+  private call(path: string, init: RequestInit) {
+    return callTei(new URL(path, this.url), init, EmbedderUnavailableError);
   }
 }

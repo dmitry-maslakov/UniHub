@@ -5,7 +5,8 @@ import { settings } from '../platform/config/settings.js';
 const blank = <T extends z.ZodType>(schema: T) =>
   z.preprocess((v) => (v === '' ? undefined : v), schema.optional());
 
-// The search index's embedder, if any: without one it's BM25 only.
+// The search index's embedder, if any: without one it's BM25 only. And the
+// reranker, if any: without one a search answers in the index's order.
 export const textSearchSettings = z
   .object({
     // the TEI server that embeds the chunks being indexed
@@ -18,6 +19,11 @@ export const textSearchSettings = z
     // model is another index
     EMBEDDING_MODEL: blank(z.string().regex(/^[a-z0-9][a-z0-9-]*$/)),
     EMBEDDING_DIMENSIONS: blank(z.coerce.number().int().positive()),
+    // the TEI server of a reranker
+    RERANK_URL: blank(z.url()),
+    // the best contents it reorders: 20 short texts take it about 1.3 s on
+    // 6 arm cores; a search answers 50 at most
+    RERANK_CANDIDATES: z.coerce.number().int().min(1).max(50).default(20),
   })
   .refine(
     (env) =>
@@ -35,6 +41,9 @@ export const textSearchSettings = z
           model: env.EMBEDDING_MODEL!,
           dimensions: env.EMBEDDING_DIMENSIONS!,
         }
+      : null,
+    rerank: env.RERANK_URL
+      ? { url: env.RERANK_URL, candidates: env.RERANK_CANDIDATES }
       : null,
   }));
 

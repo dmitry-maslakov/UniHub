@@ -79,6 +79,7 @@ function opensearch(embedding: Vectors = null) {
         url: 'http://embedder',
         queryUrl: 'http://embedder',
       },
+      rerank: null,
     },
   );
   return { client, text };

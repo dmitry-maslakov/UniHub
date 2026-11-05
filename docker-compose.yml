@@ -51,6 +51,37 @@ services:
     ports: ['127.0.0.1:8081:80']
     volumes: [models:/data]
 
+  # puts the int8 reranker where TEI looks (onnx/model.onnx); a no-op,
+  # offline, once it's there. huggingface_hub's hf needs click, which the
+  # newest typer no longer brings: both pinned
+  reranker-init:
+    profiles: [models]
+    image: python:3.13-slim@sha256:ae14d4ce8771606477a81446e7ef429edd6762305fc50c84507c1041fa8285d1
+    command:
+      - sh
+      - -c
+      - >-
+        test -f /data/bge-reranker-v2-m3-int8/onnx/model.onnx && exit 0;
+        pip install --no-cache-dir --root-user-action=ignore -q
+        'huggingface_hub==1.10.2' 'typer==0.24.1' 'click==8.3.2' &&
+        hf download onnx-community/bge-reranker-v2-m3-ONNX --revision 6f5ff65298512715a1e669753bc754d2bc8f367b
+        --include '*.json' --include onnx/model_int8.onnx --local-dir /data/src/bge-reranker-v2-m3 &&
+        mkdir -p /data/bge-reranker-v2-m3-int8/onnx &&
+        cp /data/src/bge-reranker-v2-m3/*.json /data/bge-reranker-v2-m3-int8/ &&
+        ln -f /data/src/bge-reranker-v2-m3/onnx/model_int8.onnx /data/bge-reranker-v2-m3-int8/onnx/model.onnx
+    volumes: [models:/data]
+
+  # the int8 ONNX one: BAAI/bge-reranker-v2-m3 itself runs on candle on
+  # arm64, where 50 texts of 1 KB took 110 s
+  reranker:
+    profiles: [models]
+    image: ghcr.io/huggingface/text-embeddings-inference:${TEI_TAG:-cpu-1.9.4}
+    command: [--model-id, /data/bge-reranker-v2-m3-int8, --max-batch-tokens, '1024', --max-client-batch-size, '64',
+              --tokenization-workers, '2', --json-output]
+    ports: ['127.0.0.1:8082:80']
+    volumes: [models:/data:ro]
+    depends_on: { reranker-init: { condition: service_completed_successfully } }
+
 volumes:
   pgdata:
   redisdata:

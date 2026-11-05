@@ -1,12 +1,14 @@
 import { Logger } from '@nestjs/common';
 import { PluginName, type ContentHash } from '@app/kernel';
-import { FakeEmbedder } from '../../../test/fake-models.js';
+import { FakeEmbedder, FakeReranker } from '../../../test/fake-models.js';
 import { sha256 } from '../../../test/sha256.js';
 import { SearchOffError, SearchUnavailableError } from './errors.js';
 import {
   EmbedderUnavailableError,
+  RerankerUnavailableError,
   TextIndexUnavailableError,
   type QueryEmbedder,
+  type Reranker,
 } from './ports.js';
 import { InMemoryTextIndex } from './processing.fakes.js';
 import { SearchTextsQuery, type TextHit } from './queries.js';
@@ -25,11 +27,29 @@ const hit = (hash: ContentHash, ...pages: number[]): TextHit => ({
   })),
 });
 
-// by the words alone unless there's an embedder
-function searching(hits: TextHit[] = [], embedder?: QueryEmbedder) {
+// a content whose best page has this snippet, and whose others don't count
+const saying = (text: string, ...others: string[]): TextHit => ({
+  hash: sha256(text),
+  pages: [text, ...others].map((snippet, i) => ({
+    processor: PluginName.parse('office-text'),
+    version: 2,
+    page: i + 1,
+    snippet: { text: snippet, highlights: [] },
+  })),
+});
+
+// by the words alone unless there's an embedder, in the index's order
+// unless there's a reranker
+function searching(
+  hits: TextHit[] = [],
+  {
+    embedder,
+    reranker,
+  }: { embedder?: QueryEmbedder; reranker?: Reranker } = {},
+) {
   const index = new InMemoryTextIndex();
   index.hits = hits;
-  return { index, search: new SearchTexts(index, embedder) };
+  return { index, search: new SearchTexts(index, embedder, reranker) };
 }
 
 describe('SearchTexts', () => {
@@ -38,7 +58,7 @@ describe('SearchTexts', () => {
   it('answers none among no contents, without asking the index', async () => {
     const embedder = new FakeEmbedder(4);
     const embed = vi.spyOn(embedder, 'embed');
-    const { index, search } = searching([hit(lecture, 1)], embedder);
+    const { index, search } = searching([hit(lecture, 1)], { embedder });
 
     expect(
       await search.execute(new SearchTextsQuery('semafor', [], 10)),
@@ -60,7 +80,7 @@ describe('SearchTexts', () => {
   it('asks by the meaning too, of the words as NFC', async () => {
     const embedder = new FakeEmbedder(4);
     const embed = vi.spyOn(embedder, 'embed');
-    const { index, search } = searching([], embedder);
+    const { index, search } = searching([], { embedder });
 
     await search.execute(new SearchTextsQuery('C\u030Cac\u030Cak', [notes], 5));
 
@@ -82,7 +102,7 @@ describe('SearchTexts', () => {
       new EmbedderUnavailableError('http://embedder/info: ECONNREFUSED'),
     );
     const hits = [hit(notes, 4)];
-    const { index, search } = searching(hits, embedder);
+    const { index, search } = searching(hits, { embedder });
 
     expect(
       await search.execute(new SearchTextsQuery('semafor', [notes], 5)),
@@ -103,7 +123,7 @@ describe('SearchTexts', () => {
     vi.spyOn(embedder, 'embed').mockRejectedValue(
       new Error('EMBEDDING_MODEL is bge-m3-5617a9f6, the embedder at …'),
     );
-    const { index, search } = searching([], embedder);
+    const { index, search } = searching([], { embedder });
 
     await search.execute(new SearchTextsQuery('semafor', [notes], 5));
 
@@ -123,6 +143,128 @@ describe('SearchTexts', () => {
         new SearchTextsQuery('semafor', [lecture, notes], 10),
       ),
     ).toEqual(hits);
+  });
+
+  it('asks the index for as many as the reranker takes, and answers the limit', async () => {
+    const hits = ['a', 'b', 'c'].map((text) => saying(text));
+    const { index, search } = searching(hits, {
+      reranker: new FakeReranker({ candidates: 3 }),
+    });
+
+    expect(
+      await search.execute(new SearchTextsQuery('semafor', [notes], 2)),
+    ).toHaveLength(2);
+    await search.execute(new SearchTextsQuery('semafor', [notes], 5));
+
+    expect(index.searched.map(({ size }) => size)).toEqual([3, 5]);
+  });
+
+  // FakeReranker scores the query's words each text has
+  it("puts the reranker's candidates in its order, by their best snippets, ties and the rest as they were", async () => {
+    const reranker = new FakeReranker({ candidates: 3 });
+    const scores = vi.spyOn(reranker, 'scores');
+    const one = saying('semafor', 'semafor tajna lozinka');
+    const all = saying('semafor tajna lozinka');
+    const tie = saying('o semaforima: semafor');
+    const past = saying('semafor tajna lozinka, opet');
+    const { search } = searching([one, all, tie, past], { reranker });
+
+    expect(
+      await search.execute(
+        new SearchTextsQuery('semafor tajna lozinka', [notes], 10),
+      ),
+    ).toEqual([all, one, tie, past]);
+    expect(scores).toHaveBeenCalledWith('semafor tajna lozinka', [
+      'semafor',
+      'semafor tajna lozinka',
+      'o semaforima: semafor',
+    ]);
+  });
+
+  it('asks the reranker of the words as NFC, and not about one content', async () => {
+    const reranker = new FakeReranker();
+    const scores = vi.spyOn(reranker, 'scores');
+    const hits = [saying('Čačak'), saying('Cacak')];
+
+    await searching(hits, { reranker }).search.execute(
+      new SearchTextsQuery('Čačak', [notes], 5),
+    );
+    await searching(hits.slice(0, 1), { reranker }).search.execute(
+      new SearchTextsQuery('Čačak', [notes], 5),
+    );
+
+    expect(scores.mock.calls).toEqual([['Čačak', ['Čačak', 'Cacak']]]);
+  });
+
+  it("answers in the index's order while the reranker is busy with another query", async () => {
+    const warn = vi.spyOn(Logger.prototype, 'warn');
+    const reranker: Reranker = new FakeReranker();
+    vi.spyOn(reranker, 'scores').mockResolvedValue(null);
+    const hits = [saying('semafor'), saying('semafor tajna lozinka')];
+    const { search } = searching(hits, { reranker });
+
+    expect(
+      await search.execute(
+        new SearchTextsQuery('semafor tajna lozinka', [notes], 10),
+      ),
+    ).toEqual(hits);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  // away or past its time: the reranker running behind on a CPU, not the
+  // search failing
+  it("answers in the index's order while the reranker is away or slow, saying so in a warning", async () => {
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockReturnValue();
+    const error = vi.spyOn(Logger.prototype, 'error');
+    const reranker = new FakeReranker();
+    vi.spyOn(reranker, 'scores')
+      .mockRejectedValueOnce(
+        new RerankerUnavailableError('http://reranker/rerank: ECONNREFUSED'),
+      )
+      .mockRejectedValueOnce(
+        new DOMException(
+          'The operation was aborted due to timeout',
+          'TimeoutError',
+        ),
+      );
+    const hits = [saying('semafor'), saying('semafor tajna lozinka')];
+    const { search } = searching(hits, { reranker });
+    const asked = () =>
+      search.execute(
+        new SearchTextsQuery('semafor tajna lozinka', [notes], 10),
+      );
+
+    expect(await asked()).toEqual(hits);
+    expect(await asked()).toEqual(hits);
+    expect(warn.mock.calls).toEqual([
+      ["in the index's order: http://reranker/rerank: ECONNREFUSED"],
+      ["in the index's order: The operation was aborted due to timeout"],
+    ]);
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  // another model than a reranker, an answer that can't be read: someone
+  // has to look
+  it("answers in the index's order when the reranker fails otherwise, logging an error", async () => {
+    const error = vi.spyOn(Logger.prototype, 'error').mockReturnValue();
+    const warn = vi.spyOn(Logger.prototype, 'warn');
+    const reranker = new FakeReranker();
+    vi.spyOn(reranker, 'scores').mockRejectedValue(
+      new Error('http://reranker/rerank answered 424: not a reranker'),
+    );
+    const hits = [saying('semafor'), saying('semafor tajna lozinka')];
+    const { search } = searching(hits, { reranker });
+
+    expect(
+      await search.execute(
+        new SearchTextsQuery('semafor tajna lozinka', [notes], 10),
+      ),
+    ).toEqual(hits);
+    expect(error).toHaveBeenCalledWith(
+      "in the index's order: http://reranker/rerank answered 424: not a reranker",
+      expect.any(String),
+    );
+    expect(warn).not.toHaveBeenCalled();
   });
 
   it('answers an index away or stuck as search being unavailable', async () => {

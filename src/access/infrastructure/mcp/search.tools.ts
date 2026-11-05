@@ -20,7 +20,7 @@ export class SearchTools {
   @Tool({
     name: 'search',
     description:
-      "Search the text of files in the user's courses by words (Latin or Cyrillic, with or without diacritics), by code identifiers and, when the hub has an embedding model, by meaning. By meaning, up to `limit` files come back even when none has the words, the nearest first: a result doesn't prove the words are there, its snippets' highlights mark those found. Each result is a file with its best pages and snippets; read a page with read_file, giving its processor.",
+      "Search the text of files in the user's courses by words (Latin or Cyrillic, with or without diacritics), by code identifiers and, when the hub has an embedding model, by meaning. By meaning, up to `limit` files come back even when none has the words, the best first: a result doesn't prove the words are there, its snippets' highlights mark those found. Each result is a file with its best pages and snippets; read a page with read_file, giving its processor.",
     parameters: searchRequest,
     annotations: readOnly,
   })
