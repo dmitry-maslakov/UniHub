@@ -7,16 +7,41 @@ const embedder = {
 };
 
 describe('text search settings', () => {
-  it('take no embedder as BM25 only, empty values as unset', () => {
-    expect(textSearchSettings.parse({})).toEqual({ embedding: null });
+  it("take no embedder as BM25 only, no reranker as the index's order, empty values as unset", () => {
+    expect(textSearchSettings.parse({})).toEqual({
+      embedding: null,
+      rerank: null,
+    });
     expect(
       textSearchSettings.parse({
         EMBEDDING_URL: '',
         EMBEDDING_QUERY_URL: '',
         EMBEDDING_MODEL: '',
         EMBEDDING_DIMENSIONS: '',
+        RERANK_URL: '',
       }),
-    ).toEqual({ embedding: null });
+    ).toEqual({ embedding: null, rerank: null });
+  });
+
+  it('give the reranker the best 20 unless told how many, 1 to 50', () => {
+    const reranker = { RERANK_URL: 'http://reranker' };
+    expect(textSearchSettings.parse(reranker).rerank).toEqual({
+      url: 'http://reranker',
+      candidates: 20,
+    });
+    expect(
+      textSearchSettings.parse({ ...reranker, RERANK_CANDIDATES: '50' }).rerank
+        ?.candidates,
+    ).toBe(50);
+    for (const bad of [
+      { RERANK_URL: 'reranker' },
+      { RERANK_CANDIDATES: '0' },
+      { RERANK_CANDIDATES: '51' },
+      { RERANK_CANDIDATES: '2.5' },
+    ])
+      expect(
+        textSearchSettings.safeParse({ ...reranker, ...bad }).success,
+      ).toBe(false);
   });
 
   it('send queries to the same embedder unless they have their own', () => {
