@@ -73,7 +73,8 @@ describe('search', { timeout: 60_000 }, () => {
     await upload('book.txt', book);
     for (const [i, sheet] of sheets.entries())
       await upload(`sheet-${i}.txt`, sheet);
-  });
+    // the reconcile at start may queue the texts other specs left first
+  }, 60_000);
 
   afterAll(() => app.close());
 

@@ -143,7 +143,8 @@ describe('search API', { timeout: 60_000 }, () => {
     await upload('book', 'ours', book.join('\f'));
     for (const n of [1, 2, 3])
       await upload(`sheet-${n}`, 'ours', `protokol, list ${n}`);
-    // each file waits for its job: slower than a hook's 10 s on CI
+    // each file waits for its job, maybe behind the texts other specs left
+    // (the reconcile at start queues them): past a hook's 10 s on ci
   }, 60_000);
 
   afterAll(() => app.close());
