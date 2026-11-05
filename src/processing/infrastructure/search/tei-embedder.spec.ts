@@ -1,6 +1,7 @@
 import { createServer, type AddressInfo, type Server } from 'node:net';
 import { delay, http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
+import { ZodError } from 'zod';
 import { EmbedderUnavailableError } from '../../application/ports.js';
 import {
   modelName,
@@ -119,12 +120,53 @@ describe('TeiEmbedder', () => {
     expect(await restarted.embed(['a'])).toHaveLength(1);
   });
 
+  it('embeds eight texts at a time, each batch given its own time, the vectors in their order', async () => {
+    const asked = tei();
+    const timeout = vi.fn(() => 1_000);
+    const texts = Array.from({ length: 19 }, (_, i) => `page ${i + 1}`);
+
+    const vectors = await new TeiEmbedder(config, TEI, timeout).embed(texts);
+
+    expect(asked.slice(1).map((body) => (body as EmbedRequest).inputs)).toEqual(
+      [texts.slice(0, 8), texts.slice(8, 16), texts.slice(16)],
+    );
+    // the fake answers each text's place in its batch
+    expect(vectors.map(([i]) => i)).toEqual(texts.map((_, i) => i % 8));
+    expect(timeout.mock.calls).toEqual([[0], [8], [8], [3]]);
+  });
+
+  it('stops at the signal, asking for no batch after', async () => {
+    const stop = new AbortController();
+    const asked = tei({
+      embed: ({ inputs }) => {
+        stop.abort('the app is shutting down');
+        return HttpResponse.json(inputs.map(() => [0, 0, 1]));
+      },
+    });
+    const texts = Array.from({ length: 9 }, (_, i) => `page ${i + 1}`);
+
+    await expect(embedder().embed(texts, stop.signal)).rejects.toBe(
+      'the app is shutting down',
+    );
+    expect(asked).toHaveLength(2);
+  });
+
   it('refuses vectors of other than EMBEDDING_DIMENSIONS', async () => {
     tei({ embed: () => HttpResponse.json([[0.6, 0.8]]) });
 
     await expect(embedder().embed(['a'])).rejects.toThrow(
       'EMBEDDING_DIMENSIONS is 3, the model gives 2',
     );
+  });
+
+  // one missing would leave its chunk indexed with no vector, out of knn's
+  // reach
+  it('refuses an answer of other than a vector per text', async () => {
+    tei({ embed: () => HttpResponse.json([[0, 0, 1]]) });
+
+    const short = embedder().embed(['a', 'b']);
+    await expect(short).rejects.toBeInstanceOf(ZodError);
+    await expect(short).rejects.not.toBeInstanceOf(EmbedderUnavailableError);
   });
 
   it('takes a server down, not found yet or too busy for an outage', async () => {

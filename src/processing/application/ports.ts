@@ -91,9 +91,13 @@ export class TextIndexUnavailableError extends UnavailableError {
 }
 
 // An embedding model's server: a vector per text, in their order, all of
-// the model's dimensions.
+// the model's dimensions, cut into as many calls as the server wants. The
+// signal stops it partway (indexing, at shutdown).
 export abstract class Embedder {
-  abstract embed(texts: readonly string[]): Promise<number[][]>;
+  abstract embed(
+    texts: readonly string[],
+    signal?: AbortSignal,
+  ): Promise<number[][]>;
 }
 
 // the same model for queries, on a server of its own: a query never waits

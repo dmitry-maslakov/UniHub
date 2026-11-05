@@ -1,11 +1,10 @@
 import { errors, type Types } from '@opensearch-project/opensearch';
+import { AWAY_STATUSES } from '../../../platform/errors/is-connection-error.js';
 import { TextIndexUnavailableError } from '../../application/ports.js';
 
 // Which of OpenSearch's failures are an outage, worth waiting out, and which
-// say the index or the search pipeline went away.
-
-// a node down, stuck or busy (maxRetries: 0, the client doesn't hide these)
-const AWAY = new Set([429, 502, 503, 504]);
+// say the index or the search pipeline went away. A node down, stuck or busy
+// answers one of AWAY_STATUSES (maxRetries: 0, the client doesn't hide them).
 // a full disk: past the flood stage the indices are read-only (429 on a
 // write) and none can be created (403)
 const BLOCKS = new Set([
@@ -26,7 +25,7 @@ const isUnavailable = (err: unknown) =>
   err instanceof errors.TimeoutError ||
   err instanceof errors.NoLivingConnectionsError ||
   (err instanceof errors.ResponseError &&
-    (AWAY.has(err.statusCode) ||
+    (AWAY_STATUSES.has(err.statusCode) ||
       (err.statusCode === 403 && BLOCKS.has(typeOf(err) ?? ''))));
 
 export const isAlreadyThere = (err: unknown) =>

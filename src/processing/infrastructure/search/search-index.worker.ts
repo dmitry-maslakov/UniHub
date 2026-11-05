@@ -35,8 +35,8 @@ export class SearchIndexWorker
     super(health, prisma, queue);
   }
 
-  protected async work({ data }: Job<IndexJob>) {
-    await this.indexText.run(data.key);
+  protected async work({ data }: Job<IndexJob>, signal: AbortSignal) {
+    await this.indexText.run(data.key, signal);
     this.pauses = 0;
   }
 
@@ -56,8 +56,11 @@ export class SearchIndexWorker
 
   // Closed before any module shuts down, not where Nest closes workers, which
   // may come after the OpenSearch client: the client's close waits for the
-  // requests in flight, so a worker still taking jobs would hold it up.
+  // requests in flight, so a worker still taking jobs would hold it up. The
+  // text being embedded is let go of at once (a long one takes minutes, past
+  // the grace a restart gives), and goes back to wait.
   async onModuleDestroy() {
+    this.shutdown.abort('the app is shutting down');
     await this.worker.close();
   }
 

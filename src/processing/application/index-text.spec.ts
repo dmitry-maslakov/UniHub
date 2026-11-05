@@ -3,7 +3,7 @@ import { FakeEmbedder } from '../../../test/fake-models.js';
 import { sha256 } from '../../../test/sha256.js';
 import { chunksOf } from '../domain/chunks.js';
 import type { Representation } from '../domain/representation.js';
-import { EMBED_BATCH, IndexText } from './index-text.js';
+import { IndexText } from './index-text.js';
 import type { Embedder } from './ports.js';
 import {
   InMemoryRepresentations,
@@ -91,20 +91,18 @@ describe('IndexText', () => {
     expect(index.texts.size).toBe(0);
   });
 
-  it('embeds the chunks eight at a time, each indexed with its vector', async () => {
+  it("embeds the chunks in one call, the job's signal with it, each indexed with its vector", async () => {
     const embedder = new FakeEmbedder(4);
     const embed = vi.spyOn(embedder, 'embed');
     const parts = Array.from({ length: 19 }, (_, i) => `page ${i + 1}`);
     const { index, indexText } = await indexing([text(1, parts)], embedder);
+    const { signal } = new AbortController();
 
-    await indexText.run({ hash, processor, version: 1 });
+    await indexText.run({ hash, processor, version: 1 }, signal);
 
-    expect(embed.mock.calls.map(([texts]) => texts.length)).toEqual([
-      EMBED_BATCH,
-      EMBED_BATCH,
-      3,
+    expect(embed.mock.calls).toEqual([
+      [chunksOf(parts).map(({ text }) => text), signal],
     ]);
-    expect(EMBED_BATCH).toBe(8);
     const [{ chunks }] = index.texts.values();
     expect(chunks).toEqual(
       await Promise.all(
@@ -127,14 +125,14 @@ describe('IndexText', () => {
     expect([...index.texts.values()][0].chunks).toEqual([]);
   });
 
-  it('indexes nothing when a batch fails, the text there as it was', async () => {
+  it('indexes nothing when the embed fails or is stopped, the text there as it was', async () => {
     const embedder = new FakeEmbedder(4);
     const away = new Error('the embedder is away');
-    vi.spyOn(embedder, 'embed')
-      .mockResolvedValueOnce(Array(EMBED_BATCH).fill([1, 0, 0, 0]))
-      .mockRejectedValueOnce(away);
-    const parts = Array.from({ length: 9 }, (_, i) => `page ${i + 1}`);
-    const { index, indexText } = await indexing([text(2, parts)], embedder);
+    vi.spyOn(embedder, 'embed').mockRejectedValueOnce(away);
+    const { index, indexText } = await indexing(
+      [text(2, ['page 1', 'page 2'])],
+      embedder,
+    );
     await index.put({ hash, processor, version: 1 }, chunksOf(['before']));
 
     await expect(indexText.run({ hash, processor, version: 2 })).rejects.toBe(
