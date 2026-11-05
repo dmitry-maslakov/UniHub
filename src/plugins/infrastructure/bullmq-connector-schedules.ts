@@ -22,14 +22,16 @@ export class BullmqConnectorSchedules extends ConnectorSchedules {
     super();
   }
 
-  async replace(schedules: readonly Schedule[]) {
-    for (const { connection, pattern } of schedules)
-      await this.queue.upsertJobScheduler(
-        connection.key,
-        { pattern },
-        { name: TICK, data: jobOf(connection) },
-      );
-    const wanted = new Set(schedules.map((s) => s.connection.key));
+  async set({ connection, pattern }: Schedule) {
+    await this.queue.upsertJobScheduler(
+      connection.key,
+      { pattern },
+      { name: TICK, data: jobOf(connection) },
+    );
+  }
+
+  async keepOnly(connections: readonly Connection[]) {
+    const wanted = new Set(connections.map((c) => c.key));
     for (const { key } of await this.queue.getJobSchedulers())
       if (!wanted.has(key)) await this.queue.removeJobScheduler(key);
   }
