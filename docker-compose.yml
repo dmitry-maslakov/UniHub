@@ -48,7 +48,6 @@ services:
     image: ghcr.io/huggingface/text-embeddings-inference:${TEI_TAG:-cpu-1.9.4}
     command: [--model-id, '${EMBED_MODEL_ID:-BAAI/bge-m3}', --revision, '${EMBED_REVISION:-5617a9f61b028005a4858fdac845db406aefb181}',
               --max-batch-tokens, '2048', --max-client-batch-size, '64', --tokenization-workers, '2', --json-output]
-    cpus: 6
     ports: ['127.0.0.1:8081:80']
     volumes: [models:/data]
 
