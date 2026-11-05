@@ -33,3 +33,28 @@ export const KIND: Record<string, Kind> = {
   '.ipynb': 'notebook',
   'application/x-ipynb+json': 'notebook',
 };
+
+// Past these a file is skipped, not cut: no part could say the text goes on.
+// A notebook's pictures make it larger than the text it has.
+export const MAX_BYTES = 16 * 1024 * 1024;
+export const MAX_NOTEBOOK_BYTES = 64 * 1024 * 1024;
+export const maxBytes = (kind: Kind) =>
+  kind === 'notebook' ? MAX_NOTEBOOK_BYTES : MAX_BYTES;
+
+// a library's minified code (jquery.min.js, bootstrap.min.css) would turn up
+// in every course whose projects have it
+export const MINIFIED = /\.min\.(m?js|css)$/i;
+
+// What archive-text takes, and how each is unpacked: a tgz is a tar in a
+// gzip, and a .gz holds a tar when its name ends in .tar.gz, one file
+// otherwise. By extension only: a portal calls documents built on a zip
+// (docx, epub) application/zip too, and archive-text's name comes before
+// office-text's, so it would be the one a page is read from.
+export type ArchiveFormat = 'zip' | 'tar' | 'tgz' | 'gzip';
+
+export const ARCHIVE: Record<string, ArchiveFormat> = {
+  '.zip': 'zip',
+  '.tar': 'tar',
+  '.tgz': 'tgz',
+  '.gz': 'gzip',
+};

@@ -71,6 +71,8 @@
     "protobufjs": "^7.6.6",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "tar-stream": "^3.2.2",
+    "yauzl": "^3.4.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {
@@ -85,6 +87,8 @@
     "@types/nodemailer": "^8.0.2",
     "@types/pg": "^8.23.1",
     "@types/supertest": "^7.0.0",
+    "@types/yauzl": "^3.4.0",
+    "@types/yazl": "^3.3.1",
     "@vitest/coverage-v8": "^4.1.2",
     "auth": "^1.7.15",
     "dotenv": "^18.0.9",
@@ -101,6 +105,7 @@
     "typescript": "^6.0.2",
     "vite": "^8.0.0",
     "vitest": "^4.1.2",
-    "webpack-node-externals": "^3.0.0"
+    "webpack-node-externals": "^3.0.0",
+    "yazl": "^3.3.1"
   }
 }
