@@ -2,10 +2,12 @@ import { Readable } from 'node:stream';
 import type { INestApplication } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
 import { QueryBus } from '@nestjs/cqrs';
+import type { Mail } from '../src/identity/domain/mailer.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
 import { TextIndexQueue } from '../src/processing/application/ports.js';
 import { SearchTextsQuery } from '../src/processing/contracts.js';
 import { SEARCH_INDEX_QUEUE } from '../src/processing/infrastructure/search/search-index.queue.js';
+import { accounts } from './accounts.js';
 import { testEnv } from './env.js';
 import { FakePluginsModule } from './fake-plugins.js';
 import { portalIngest } from './ingest.js';
@@ -19,9 +21,11 @@ const { bootApp } = await import('./app.js');
 
 describe('search off', { timeout: 20_000 }, () => {
   let app: INestApplication;
+  const mails: Mail[] = [];
+  const { http, post, signUp } = accounts(() => app, mails);
 
   beforeAll(async () => {
-    app = await bootApp({ imports: [FakePluginsModule] });
+    app = await bootApp({ mails, imports: [FakePluginsModule] });
   });
 
   afterAll(async () => {
@@ -56,5 +60,23 @@ describe('search off', { timeout: 20_000 }, () => {
         .get(QueryBus)
         .execute(new SearchTextsQuery('semafor', [sha256('a')], 10)),
     ).rejects.toMatchObject({ kind: 'unavailable', reason: 'SEARCH_OFF' });
+  });
+
+  it('has no search route or tool', async () => {
+    const cookie = await signUp('off@search.test');
+    const { key } = (
+      await post('/api-key/create', { name: 'agent' }, cookie).expect(200)
+    ).body as { key: string };
+
+    await http().get('/api/search?q=semafor').set('cookie', cookie).expect(404);
+    const tools = await http()
+      .post('/api/mcp')
+      .set('accept', 'application/json, text/event-stream')
+      .set('x-api-key', key)
+      .send({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} })
+      .expect(200);
+    expect(
+      tools.body.result.tools.map((t: { name: string }) => t.name),
+    ).not.toContain('search');
   });
 });
