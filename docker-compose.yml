@@ -1,3 +1,5 @@
+# local development. deploy/compose.yml extends opensearch and the models'
+# services, so what they set here runs on the server too, all but the ports
 services:
   postgres:
     image: postgres:18
