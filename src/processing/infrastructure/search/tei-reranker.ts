@@ -3,8 +3,8 @@ import { Reranker, RerankerUnavailableError } from '../../application/ports.js';
 import { callTei } from './tei.js';
 
 // Someone waits on the search: past this it answers in the index's order.
-// 20 texts of 400 characters take about 1.3 s on 6 arm cores, 3 s on 8
-// amd64 ones (README, Deploying search).
+// 20 texts of 400 characters take about 1.3 s on 6 arm cores, 3 to 4 s on 8
+// to 4 amd64 ones (README, Deploying search).
 const TIMEOUT_MS = 5_000;
 
 // what TEI's /rerank answers: a score per text, by its place, best first

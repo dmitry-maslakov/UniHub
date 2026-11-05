@@ -22,8 +22,8 @@ export const textSearchSettings = z
     // the TEI server of a reranker
     RERANK_URL: blank(z.url()),
     // the best contents it reorders: 20 short texts take it about 1.3 s on
-    // 6 arm cores, 3 s on 8 amd64 ones (README, Deploying search); a search
-    // answers 50 at most
+    // 6 arm cores, 3 to 4 s on 8 to 4 amd64 ones (README, Deploying search);
+    // a search answers 50 at most
     RERANK_CANDIDATES: z.coerce.number().int().min(1).max(50).default(20),
   })
   .refine(

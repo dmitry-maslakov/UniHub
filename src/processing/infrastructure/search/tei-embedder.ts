@@ -7,8 +7,9 @@ import { callTei } from './tei.js';
 const BATCH = 8;
 
 // How long an embed may take, by its number of texts. Indexing: a batch of 8
-// passages takes about 3 s on 6 arm cores, given 34 s. A query: one short
-// text, which someone waits on.
+// passages takes about 3 s on 6 arm cores, 7 s on 4 amd64 ones (README,
+// Deploying search), given 34 s. A query: one short text, which someone
+// waits on.
 export const PASSAGE_TIMEOUT = (texts: number) => 10_000 + 3_000 * texts;
 export const QUERY_TIMEOUT = () => 3_000;
 

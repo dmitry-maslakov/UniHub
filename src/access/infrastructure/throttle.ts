@@ -15,9 +15,10 @@ const LIMITS = {
   api: 1200,
   // MCP, per user, however many keys they make
   mcp: 600,
-  // REST and MCP together, per user: a search costs far more than a read,
-  // and 20 would keep the reranker (to come) busy half a minute at most, so
-  // no one user holds it
+  // REST and MCP together, per user: a search costs far more than a read.
+  // 20 keep the reranker busy about half a minute on 6 arm cores, but the
+  // whole minute at its 20 candidates on amd64 (README, Deploying search):
+  // the others' searches meanwhile keep the index's order
   search: 20,
 };
 type Limit = keyof typeof LIMITS;
