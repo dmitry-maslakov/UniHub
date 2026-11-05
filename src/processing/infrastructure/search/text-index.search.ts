@@ -115,6 +115,15 @@ export const hybridBody = ({
     collapse,
   }) satisfies API.Search_RequestBody;
 
+// By meaning too with the query's vector, into an index that has them (one
+// with a pipeline); by the words alone otherwise
+export const searchRequest = (query: TextQuery, pipeline: string | null) => {
+  const { vector } = query;
+  return vector && pipeline
+    ? { search_pipeline: pipeline, body: hybridBody({ ...query, vector }) }
+    : { body: keywordBody(query) };
+};
+
 // A content's best chunks as its best pages, each by the best of its chunks
 // there. no_match_size gives every chunk a fragment.
 const bestPages = (chunks: Types.Core_Search.Hit<PageDoc>[]) =>

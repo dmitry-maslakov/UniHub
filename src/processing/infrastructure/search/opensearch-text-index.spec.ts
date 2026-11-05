@@ -10,11 +10,10 @@ import {
   PIPELINE,
   type Vectors,
 } from './text-index.mapping.js';
-import { hybridBody, keywordBody } from './text-index.search.js';
+import { keywordBody, searchRequest } from './text-index.search.js';
 
 const index = indexName('unihub', null);
 const vectors = { model: 'bge-m3-5617a9f6', dimensions: 3 };
-const withVectors = indexName('unihub', vectors);
 const key = {
   hash: sha256('%PDF lecture'),
   processor: PluginName.parse('office-text'),
@@ -457,37 +456,21 @@ describe('OpenSearchTextIndex', () => {
     expect(client.search).toHaveBeenCalledTimes(2);
   });
 
-  it('searches by meaning too with a vector, through the hybrid pipeline', async () => {
-    const { client, text } = opensearch(vectors);
-    client.search.mockResolvedValueOnce(none);
+  it('searches through the pipeline in an index of vectors, with none in one without', async () => {
     const vector = [0, 0.6, 0.8];
-
-    await text.search({ ...query, vector });
-
-    expect(client.search).toHaveBeenCalledWith(
-      {
-        index: withVectors,
-        search_pipeline: 'unihub-hybrid',
-        body: hybridBody({ ...query, vector }),
-      },
-      { requestTimeout: 5_000 },
-    );
-  });
-
-  it('searches by the words alone without a vector, or in an index without vectors', async () => {
-    for (const [embedding, vector] of [
-      [vectors, undefined],
-      [null, [0, 0.6, 0.8]],
+    for (const [embedding, pipeline] of [
+      [vectors, 'unihub-hybrid'],
+      [null, null],
     ] as const) {
       const { client, text } = opensearch(embedding);
       client.search.mockResolvedValueOnce(none);
 
-      await text.search({ ...query, vector: vector && [...vector] });
+      await text.search({ ...query, vector });
 
       expect(client.search).toHaveBeenCalledWith(
         {
           index: indexName('unihub', embedding),
-          body: keywordBody(query),
+          ...searchRequest({ ...query, vector }, pipeline),
         },
         { requestTimeout: 5_000 },
       );

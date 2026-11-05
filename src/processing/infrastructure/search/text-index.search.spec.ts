@@ -1,7 +1,12 @@
 import { PluginName } from '@app/kernel';
 import { sha256 } from '../../../../test/sha256.js';
 import { HIGHLIGHT } from '../../domain/chunks.js';
-import { contentHits, hybridBody, keywordBody } from './text-index.search.js';
+import {
+  contentHits,
+  hybridBody,
+  keywordBody,
+  searchRequest,
+} from './text-index.search.js';
 
 // On a small index a post_filter finds what the query's own filter does
 // (the e2e specs can't tell them apart), on a big one too few or none.
@@ -70,6 +75,27 @@ describe('hybridBody', () => {
     const { query: _both, ...same } = body;
 
     expect(same).toEqual(rest);
+  });
+});
+
+describe('searchRequest', () => {
+  const query = { text: 'semafor', hashes: [sha256('lecture')], size: 7 };
+  const vector = [0.6, 0.8];
+
+  it('asks by the words and the meaning through the pipeline, given a vector and an index of them', () => {
+    expect(searchRequest({ ...query, vector }, 'unihub-hybrid')).toEqual({
+      search_pipeline: 'unihub-hybrid',
+      body: hybridBody({ ...query, vector }),
+    });
+  });
+
+  it('asks by the words alone without a vector, or in an index without vectors', () => {
+    expect(searchRequest(query, 'unihub-hybrid')).toEqual({
+      body: keywordBody(query),
+    });
+    expect(searchRequest({ ...query, vector }, null)).toEqual({
+      body: keywordBody(query),
+    });
   });
 });
 

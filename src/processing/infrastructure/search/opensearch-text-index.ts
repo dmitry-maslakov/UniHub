@@ -31,7 +31,7 @@ import {
   PIPELINE,
   pipelineName,
 } from './text-index.mapping.js';
-import { contentHits, hybridBody, keywordBody } from './text-index.search.js';
+import { contentHits, searchRequest } from './text-index.search.js';
 
 // documents per bulk request
 const BULK = 200;
@@ -117,21 +117,12 @@ export class OpenSearchTextIndex extends TextIndex {
   // Not after making sure of the index, which waits the client's 30 s on a
   // stuck node (twice): a search finds the index or the pipeline gone by
   // itself, answered at once, and only then makes them. One of another
-  // mapping is for the writes to refuse. By meaning too with the query's
-  // vector, into an index that has them.
+  // mapping is for the writes to refuse.
   async search(query: TextQuery) {
-    const { vector } = query;
-    const request =
-      vector && this.pipeline
-        ? {
-            search_pipeline: this.pipeline,
-            body: hybridBody({ ...query, vector }),
-          }
-        : { body: keywordBody(query) };
     const { body } = await this.onIndex(
       () =>
         this.client.search(
-          { index: this.index, ...request },
+          { index: this.index, ...searchRequest(query, this.pipeline) },
           { requestTimeout: SEARCH_TIMEOUT_MS },
         ),
       { first: false },
