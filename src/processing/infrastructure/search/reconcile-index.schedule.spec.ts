@@ -32,7 +32,7 @@ describe('ReconcileIndexSchedule', () => {
       3,
     );
 
-    s.onApplicationBootstrap();
+    void s.atStart();
     await vi.advanceTimersByTimeAsync(OUTAGE_PAUSE_MS - 1);
     expect(run).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(2 * OUTAGE_PAUSE_MS);
@@ -47,7 +47,7 @@ describe('ReconcileIndexSchedule', () => {
     const error = vi.spyOn(Logger.prototype, 'error').mockReturnValue();
     const { run, schedule: s } = schedule(new Error('another mapping'));
 
-    s.onApplicationBootstrap();
+    void s.atStart();
     await vi.advanceTimersByTimeAsync(10 * OUTAGE_PAUSE_MS);
 
     expect(run).toHaveBeenCalledTimes(1);
@@ -64,7 +64,7 @@ describe('ReconcileIndexSchedule', () => {
       new TextIndexUnavailableError('starting'),
     );
 
-    s.onApplicationBootstrap();
+    void s.atStart();
     await vi.advanceTimersByTimeAsync(0);
     s.onModuleDestroy();
     await vi.advanceTimersByTimeAsync(10 * OUTAGE_PAUSE_MS);

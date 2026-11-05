@@ -20,7 +20,7 @@ describe('PollSchedule', () => {
       schedules,
     );
 
-    await schedule.onApplicationBootstrap();
+    await schedule.apply();
 
     expect(
       replaced[0].map(({ connection, pattern }) => [connection.key, pattern]),

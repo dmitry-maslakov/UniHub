@@ -1,10 +1,5 @@
-import {
-  Injectable,
-  Logger,
-  type OnApplicationBootstrap,
-  type OnModuleDestroy,
-} from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
+import { Cron, CronExpression, Timeout } from '@nestjs/schedule';
 import pRetry from 'p-retry';
 import { TextIndexUnavailableError } from '../../application/ports.js';
 import { ReconcileIndex } from '../../application/reconcile-index.js';
@@ -16,19 +11,13 @@ const START_ATTEMPTS = 20;
 // On start, OpenSearch may still be starting (the first time search is on),
 // so it's tried again while the index is away. Then every hour: cheap (a
 // composite scan, about 1.7 s per 30k keys), and it brings back a lost index.
+// Both are the scheduler's, so they run where the background work does.
 @Injectable()
-export class ReconcileIndexSchedule
-  implements OnApplicationBootstrap, OnModuleDestroy
-{
+export class ReconcileIndexSchedule implements OnModuleDestroy {
   private readonly logger = new Logger(ReconcileIndexSchedule.name);
   private readonly stopped = new AbortController();
 
   constructor(private readonly reconciler: ReconcileIndex) {}
-
-  onApplicationBootstrap() {
-    // not awaited, startup doesn't wait for OpenSearch
-    void this.atStart();
-  }
 
   onModuleDestroy() {
     this.stopped.abort();
@@ -39,7 +28,9 @@ export class ReconcileIndexSchedule
     await this.run().catch((err: unknown) => this.failed(err));
   }
 
-  private async atStart() {
+  // once the app is up, so startup doesn't wait for OpenSearch
+  @Timeout(0)
+  async atStart() {
     await pRetry(() => this.run(), {
       retries: START_ATTEMPTS - 1,
       factor: 1,

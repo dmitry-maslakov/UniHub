@@ -47,7 +47,7 @@ describe('PushConnections', () => {
       teams: { run: (ctx) => (seen.push(ctx), untilStopped(ctx)) },
     });
 
-    running.onApplicationBootstrap();
+    running.start();
     expect(seen.map((ctx) => ctx.connection)).toEqual([
       { portal: 'teams', account: 'shared' },
     ]);
@@ -62,7 +62,7 @@ describe('PushConnections', () => {
     connections(
       { teams: { run } },
       { ...config, runConnectors: false },
-    ).onApplicationBootstrap();
+    ).start();
     expect(run).not.toHaveBeenCalled();
   });
 
@@ -79,7 +79,7 @@ describe('PushConnections', () => {
       },
     });
 
-    running.onApplicationBootstrap();
+    running.start();
     await vi.waitFor(() => expect(runs).toBe(3));
     await running.onModuleDestroy();
     expect(runs).toBe(3);
@@ -103,7 +103,7 @@ describe('PushConnections', () => {
       { ...config, restartMaxMs: 60_000 },
     );
 
-    running.onApplicationBootstrap();
+    running.start();
     await vi.waitFor(() => expect(runs).toBe(4));
     const waits = wait.mock.calls.map(([ms]) => ms);
     await running.onModuleDestroy();
@@ -119,7 +119,7 @@ describe('PushConnections', () => {
       c: { run: never },
       d: { run: (ctx) => untilStopped(ctx).then(stopped) },
     });
-    running.onApplicationBootstrap();
+    running.start();
 
     const started = performance.now();
     await running.onModuleDestroy();

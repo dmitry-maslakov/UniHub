@@ -3,10 +3,10 @@ import {
   Inject,
   Injectable,
   Logger,
-  type OnApplicationBootstrap,
   type OnModuleDestroy,
 } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
+import { Timeout } from '@nestjs/schedule';
 import type { PushesFromPortal } from '@app/plugin-sdk';
 import type { Connection } from '../../ingest/contracts.js';
 import { pluginsConfig } from '../plugins.config.js';
@@ -20,14 +20,14 @@ interface Running {
   done: Promise<void>;
 }
 
-// Push connectors keep their connections, so one instance runs them (the one
-// with RUN_CONNECTORS), each connection in a run of its own. A run that ends
-// or fails is started again, a little later each time it ends soon again; at
-// shutdown they're all stopped at once, each given its time.
+// Push connectors keep their connections, so one process runs them: they
+// start with the scheduler, once the app is up, so only where the background
+// work runs, and of several such processes in the one with RUN_CONNECTORS.
+// Each connection gets a run of its own. A run that ends or fails is started
+// again, a little later each time it ends soon again; at shutdown they're
+// all stopped at once, each given its time.
 @Injectable()
-export class PushConnections
-  implements OnApplicationBootstrap, OnModuleDestroy
-{
+export class PushConnections implements OnModuleDestroy {
   private readonly logger = new Logger(PushConnections.name);
   private readonly running = new Map<string, Running>();
 
@@ -38,7 +38,8 @@ export class PushConnections
     private readonly config: ConfigType<typeof pluginsConfig>,
   ) {}
 
-  onApplicationBootstrap() {
+  @Timeout(0)
+  start() {
     if (!this.config.runConnectors) return;
     for (const { spec, instance } of this.catalog.pushConnectors)
       for (const connection of this.directory.connections(spec.portal)) {
