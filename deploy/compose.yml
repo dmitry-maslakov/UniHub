@@ -11,13 +11,16 @@ x-logging: &logging
       max-size: 20m
       max-file: '5'
 
-# the search profile's model servers, each a TEI on the CPU
+# the search profile's model servers: TEI on the CPU, extending
+# docker-compose.yml's, so the models, their revisions and TEI_TAG are pinned
+# there once. Each resets the ports it extends: a merge key drops the tag
 x-tei: &tei
   <<: *logging
   profiles: [search]
-  image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.4
   restart: unless-stopped
   mem_limit: 3g
+  # none unless set: docker refuses a limit past the server's cores
+  cpus: ${TEI_CPUS:-0}
   healthcheck: &tei-health
     test: ['CMD', 'curl', '-fsS', 'http://localhost/health']
     interval: 10s
@@ -124,26 +127,20 @@ services:
   # waits, and a search is a 503, or by the words alone while the embedders
   # are away
   opensearch:
+    extends: { file: ../docker-compose.yml, service: opensearch }
     <<: *logging
     profiles: [search]
-    image: opensearchproject/opensearch:3.9.0
     restart: unless-stopped
+    # only the compose network reaches it, like redis
+    ports: !reset []
     environment:
-      discovery.type: single-node
-      # only the compose network reaches it, like redis
-      DISABLE_SECURITY_PLUGIN: 'true'
-      DISABLE_INSTALL_DEMO_CONFIG: 'true'
+      # at most half its memory: the rest is for Lucene's files, the vectors'
+      # graphs among them
       OPENSEARCH_JAVA_OPTS: -Xms${OPENSEARCH_HEAP:-2g} -Xmx${OPENSEARCH_HEAP:-2g}
-      # a lost index fails the write instead of coming back with a dynamic mapping
-      action.auto_create_index: '-unihub-*,+*'
-    ulimits:
-      nofile: { soft: 65536, hard: 65536 }
-      memlock: { soft: -1, hard: -1 }
-    mem_limit: 4g
-    volumes:
-      - osdata:/usr/share/opensearch/data
+      # with the memlock ulimit, the heap is never swapped out
+      bootstrap.memory_lock: 'true'
+    mem_limit: ${OPENSEARCH_MEMORY:-4g}
     healthcheck:
-      test: ['CMD-SHELL', 'curl -fsS "http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=1s"']
       interval: 10s
       start_period: 60s
 
@@ -151,56 +148,35 @@ services:
   # start downloads the model (2.3 GB) into models first, and embedder-query
   # waits for it
   embedder:
+    extends: { file: ../docker-compose.yml, service: embedder }
     <<: *tei
-    command: &bge-m3 [--model-id, BAAI/bge-m3, --revision, 5617a9f61b028005a4858fdac845db406aefb181,
-                      --max-batch-tokens, '2048', --max-client-batch-size, '64', --tokenization-workers, '2', --json-output]
-    # docker refuses more than the server's cores
-    cpus: ${TEI_CPUS:-6}
-    volumes: [models:/data]
+    ports: !reset []
     healthcheck: { <<: *tei-health, start_period: 30m }
 
-  # queries: the embedder's command, so the same model, revision and
-  # EMBEDDING_MODEL, on a server of its own, so a search never waits behind
-  # indexing (TEI's queue is first come, first served). It starts once the
-  # embedder is up: a TEI that finds another downloading the weights into
-  # models gives up on them after 5 s and starts on another backend, from
-  # another copy (2.3 GB more), its vectors a little off
+  # queries: the embedder's model, revision and EMBEDDING_MODEL on a server of
+  # its own, so a search never waits behind indexing (TEI's queue is first
+  # come, first served). It starts once the embedder is up: a TEI that finds
+  # another downloading the weights into models gives up on them after 5 s and
+  # starts on another backend, from another copy (2.3 GB more), its vectors a
+  # little off
   embedder-query:
+    extends: { file: ../docker-compose.yml, service: embedder }
     <<: *tei
-    command: *bge-m3
-    cpus: 2
-    volumes: [models:/data]
+    ports: !reset []
     depends_on: { embedder: { condition: service_healthy } }
 
-  # puts the int8 reranker where TEI looks (onnx/model.onnx), as in
-  # docker-compose.yml; a no-op, offline, once it's there
+  # puts the int8 reranker where TEI looks; a no-op, offline, once it's there
   reranker-init:
+    extends: { file: ../docker-compose.yml, service: reranker-init }
     <<: *logging
     profiles: [search]
-    image: python:3.13-slim@sha256:ae14d4ce8771606477a81446e7ef429edd6762305fc50c84507c1041fa8285d1
-    command:
-      - sh
-      - -c
-      - >-
-        test -f /data/bge-reranker-v2-m3-int8/onnx/model.onnx && exit 0;
-        pip install --no-cache-dir --root-user-action=ignore -q
-        'huggingface_hub==1.10.2' 'typer==0.24.1' 'click==8.3.2' &&
-        hf download onnx-community/bge-reranker-v2-m3-ONNX --revision 6f5ff65298512715a1e669753bc754d2bc8f367b
-        --include '*.json' --include onnx/model_int8.onnx --local-dir /data/src/bge-reranker-v2-m3 &&
-        mkdir -p /data/bge-reranker-v2-m3-int8/onnx &&
-        cp /data/src/bge-reranker-v2-m3/*.json /data/bge-reranker-v2-m3-int8/ &&
-        ln -f /data/src/bge-reranker-v2-m3/onnx/model_int8.onnx /data/bge-reranker-v2-m3-int8/onnx/model.onnx
-    volumes: [models:/data]
 
-  # the int8 model reranker-init put there
+  # the int8 model reranker-init put there, once it has
   reranker:
+    extends: { file: ../docker-compose.yml, service: reranker }
     <<: *tei
-    command: [--model-id, /data/bge-reranker-v2-m3-int8, --max-batch-tokens, '1024', --max-client-batch-size, '64',
-              --tokenization-workers, '2', --json-output]
-    cpus: ${TEI_CPUS:-6}
-    volumes: [models:/data:ro]
+    ports: !reset []
     healthcheck: { <<: *tei-health, start_period: 120s }
-    depends_on: { reranker-init: { condition: service_completed_successfully } }
 
 volumes:
   caddydata:
