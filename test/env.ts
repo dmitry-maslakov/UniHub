@@ -9,7 +9,7 @@ const withPath = (url: string, path: string) => {
 };
 
 // the e2e specs' embedder: no model, FakeEmbedder (test/fake-models.ts)
-// stands in for it, at no address
+// stands in for it, at no address, as FakeReranker for the reranker
 export const testVectors = { model: 'fake', dimensions: 64 };
 
 // e2e tests get their own database, redis db, storage folder and search
@@ -24,6 +24,7 @@ export const testEnv = {
   EMBEDDING_URL: 'http://embedder.invalid',
   EMBEDDING_MODEL: testVectors.model,
   EMBEDDING_DIMENSIONS: String(testVectors.dimensions),
+  RERANK_URL: 'http://reranker.invalid',
   // small, so a test can go past it; the largest upload in the tests is 1 MB
   STORAGE_MAX_FILE_MB: '2',
   // real plugins are tested on their own; e2e use the fakes
