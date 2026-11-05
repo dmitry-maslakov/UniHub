@@ -10,7 +10,7 @@ describe('canvas settings', () => {
     expect(canvasSettings.parse(env)).toEqual({
       url: 'https://canvas.example.edu',
       token: '1~abc',
-      userAgent: 'UniHub canvas connector',
+      userAgent: 'course-sync',
     });
     expect(
       canvasSettings.parse({ ...env, CANVAS_USER_AGENT: 'hub of A. Student' })

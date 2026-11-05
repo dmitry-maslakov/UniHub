@@ -9,8 +9,9 @@ export const canvasSettings = z
     CANVAS_URL: z.url({ protocol: /^https$/ }),
     // a personal access token of the hub's owner (README, Plugins)
     CANVAS_TOKEN: z.string().min(1),
-    // Canvas refuses requests that come without one
-    CANVAS_USER_AGENT: z.string().min(1).default('UniHub canvas connector'),
+    // Canvas refuses requests that come without one; the default names
+    // neither the hub nor whoever runs it
+    CANVAS_USER_AGENT: z.string().min(1).default('course-sync'),
   })
   .transform((env) => ({
     url: env.CANVAS_URL,

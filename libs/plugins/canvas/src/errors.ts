@@ -22,6 +22,37 @@ export class TokenRejectedError extends CanvasError {
     'canvas token expired or was revoked: make a new one and set CANVAS_TOKEN';
 }
 
+// No answer from Canvas after the retries, or not a whole one: the network
+// failed, nothing came in time, or what came isn't the JSON asked for. The
+// path and the reason only, as above: axios's own error holds the token.
+export class NoAnswerError extends Error {
+  constructor(url: string, reason: string) {
+    super(`no answer from canvas to ${new URL(url).pathname}: ${reason}`);
+    this.name = new.target.name;
+  }
+}
+
+// A download with no answer after the retries, or cut off partway (the
+// connection dropped, or a minute went by without a byte read): that
+// file's failure, tried again the next run
+export class DownloadFailedError extends Error {
+  constructor(url: string, reason: string) {
+    super(`download of ${new URL(url).pathname} failed: ${reason}`);
+    this.name = new.target.name;
+  }
+}
+
+// A url Canvas gave (a file's, a next page) on another origin than the
+// school's Canvas: the token isn't sent there, and the run fails saying so
+export class OtherOriginError extends Error {
+  constructor(to: URL, canvas: string) {
+    super(
+      `not sending the canvas token to ${to.origin}${to.pathname}: it goes to ${canvas} only`,
+    );
+    this.name = new.target.name;
+  }
+}
+
 // what this account doesn't see is null, never an error
 export const visible = <T>(read: Promise<T>) =>
   read.catch((error: unknown) => {
@@ -29,7 +60,11 @@ export const visible = <T>(read: Promise<T>) =>
     throw error;
   });
 
-// What Canvas answered that fails one request, not the run: anything but a
-// token it no longer takes, which every request would get.
-export const skippable = (error: unknown): error is CanvasError =>
-  error instanceof CanvasError && !(error instanceof TokenRejectedError);
+// What fails one request, not the run: anything Canvas answered but a
+// token it no longer takes, which every request would get, and a download
+// that failed short of an answer.
+export const skippable = (
+  error: unknown,
+): error is CanvasError | DownloadFailedError =>
+  (error instanceof CanvasError && !(error instanceof TokenRejectedError)) ||
+  error instanceof DownloadFailedError;

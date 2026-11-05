@@ -1,14 +1,21 @@
 import { Logger } from '@nestjs/common';
-import { http, HttpResponse } from 'msw';
+import { http, HttpResponse, passthrough } from 'msw';
 import type { MockInstance } from 'vitest';
 import { PortalId } from '@app/plugin-sdk';
 import { CanvasConnector, WARN_BEFORE_MS } from './canvas.connector.js';
-import { CANVAS_URL, FakeCanvas, refusal, TOKEN } from './canvas.fakes.js';
+import {
+  CANVAS_URL,
+  CuttingFileStore,
+  FakeCanvas,
+  refusal,
+  TOKEN,
+} from './canvas.fakes.js';
 import { TokenRejectedError } from './errors.js';
 import { RecordingIngest } from './ingest.fakes.js';
 import { SyncState } from './listings.js';
 
 const canvas = new FakeCanvas().listen();
+const store = new CuttingFileStore().listen();
 const COURSE = '/api/v1/courses/101';
 const TOKEN_PATH = '/api/v1/users/self/tokens/1~abc';
 
@@ -72,7 +79,7 @@ describe('CanvasConnector', () => {
     canvas.server.events.removeAllListeners();
 
     expect(urls).toContain(
-      `${CANVAS_URL}${COURSE}/modules?include%5B%5D=items&per_page=100`,
+      `${CANVAS_URL}${COURSE}/modules?include[]=items&per_page=100`,
     );
     expect(urls.join(' ')).not.toContain('content_details');
   });
@@ -220,6 +227,22 @@ describe('CanvasConnector', () => {
       expect.stringContaining('answered 404'),
       expect.stringContaining('answered 422'),
     ]);
+  });
+
+  it('skips a file whose download is cut off partway, and goes on', async () => {
+    canvas.server.use(
+      http.get(`${CANVAS_URL}/files/3001/download`, () =>
+        HttpResponse.redirect(`${store.url}/3001`, 302),
+      ),
+      http.get(`${store.url}/*`, () => passthrough()),
+    );
+    const ingest = new RecordingIngest();
+    await run(ingest);
+
+    expect([...ingest.contents.keys()]).toEqual(['3002']);
+    expect(warn).toHaveBeenCalledWith(
+      'file 3001 skipped: download of /files/3001/download failed: aborted',
+    );
   });
 
   it('skips a course Canvas fails on, goes on, and fails the run at the end', async () => {

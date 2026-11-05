@@ -1,4 +1,7 @@
+import { EventEmitter, once } from 'node:events';
 import { readFileSync } from 'node:fs';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 
@@ -68,6 +71,52 @@ export class FakeCanvas {
     });
     afterEach(() => this.server.resetHandlers());
     afterAll(() => this.server.close());
+    return this;
+  }
+}
+
+// A file store on a socket of its own, for what msw can't fake: it sends
+// part of a file and ends the connection; under /held/ it keeps it open
+// instead, and under /silent/ it never answers. Behind msw, a spec lets it
+// through (passthrough()).
+export class CuttingFileStore {
+  url = '';
+  // the paths asked for, in order
+  readonly asked: string[] = [];
+  // its end of the last connection, once closed (not once(), which a reset
+  // would reject): the client gave up on the body by then
+  closed = Promise.resolve();
+  private readonly requests = new EventEmitter();
+  private readonly server = createServer((req, res) => {
+    this.asked.push(req.url ?? '');
+    this.requests.emit('request');
+    this.closed = new Promise((done) => req.socket.once('close', done));
+    if (req.url?.startsWith('/silent/')) return;
+    res.writeHead(200, { 'content-length': String(4 * 1024 * 1024) });
+    res.write(Buffer.alloc(64 * 1024));
+    if (!req.url?.startsWith('/held/')) req.socket.end();
+  });
+
+  // once this many requests have come
+  async requested(count: number) {
+    while (this.asked.length < count) await once(this.requests, 'request');
+  }
+
+  // for the tests of one spec
+  listen() {
+    beforeAll(async () => {
+      this.server.listen(0, '127.0.0.1');
+      await once(this.server, 'listening');
+      const { port } = this.server.address() as AddressInfo;
+      this.url = `http://127.0.0.1:${port}`;
+    });
+    beforeEach(() => {
+      this.asked.length = 0;
+    });
+    afterAll(() => {
+      this.server.closeAllConnections();
+      this.server.close();
+    });
     return this;
   }
 }
