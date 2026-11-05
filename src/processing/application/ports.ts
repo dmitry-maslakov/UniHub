@@ -41,9 +41,17 @@ export abstract class PluginJobQueue {
 // words to look for (NFC, as the chunks are), among these contents only
 export interface TextQuery {
   text: string;
+  // the words' meaning, by the embedder that made the chunks' vectors;
+  // without it, by the words alone
+  vector?: number[];
   hashes: readonly ContentHash[];
   // contents, at most
   size: number;
+}
+
+// a chunk as it's indexed: with its vector when there's an embedder
+export interface IndexedChunk extends TextChunk {
+  vector?: number[];
 }
 
 // The processors' texts in the search index. Made of postgres alone, so
@@ -55,7 +63,7 @@ export abstract class TextIndex {
   // (hash, processor), newer ones too
   abstract put(
     key: RepresentationKey,
-    chunks: readonly TextChunk[],
+    chunks: readonly IndexedChunk[],
   ): Promise<void>;
   // every version of what a processor made of this content
   abstract remove(of: {
@@ -80,4 +88,19 @@ export abstract class TextIndexQueue {
 // the index can't be reached now: worth waiting out, not the job's fault
 export class TextIndexUnavailableError extends UnavailableError {
   readonly reason = 'SEARCH_INDEX_UNAVAILABLE';
+}
+
+// An embedding model's server: a vector per text, in their order, all of
+// the model's dimensions.
+export abstract class Embedder {
+  abstract embed(texts: readonly string[]): Promise<number[][]>;
+}
+
+// the same model for queries, on a server of its own: a query never waits
+// behind indexing
+export abstract class QueryEmbedder extends Embedder {}
+
+// the embedder can't be reached now, or is too busy: as with the index
+export class EmbedderUnavailableError extends UnavailableError {
+  readonly reason = 'EMBEDDER_UNAVAILABLE';
 }
