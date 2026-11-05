@@ -41,7 +41,7 @@ npm run test:e2e
 ```
 
 - unit specs (`*.spec.ts`, next to the code) check the rules: the domain on its own, the use cases on in-memory fakes of their ports (`*.fakes.ts` beside them; `test/` has the shared ones: `FakeBus`, `InMemoryBlobs`, `sha256` of real content, plugins as discovery finds them)
-- e2e specs (`test/*.e2e-spec.ts`) check only what fakes can't: how records are written and read back, what the read queries find and in what order, the locks, the outbox rolling back with its transaction, BullMQ's deduplication, gRPC, each route and MCP tool once (and one bad request to each that declares a schema, since nothing else sees it is attached), the whole pipeline once (`plugins.e2e-spec.ts`), the search index's writes and their repair (`search-index.e2e-spec.ts`), what OpenSearch answers a search (`search.e2e-spec.ts`), the app with search off (`search-off.e2e-spec.ts`), and the text index's analyzers, whose rules live in OpenSearch (`search-analysis.e2e-spec.ts`: a word in Cyrillic, in Latin and without diacritics gives the same tokens, on the OpenSearch client alone). The others boot the app as `main.ts` sets it up (`bootApp()` in `test/app.ts`) on a database, redis db, folder and search indices (`unihub-e2e-*`) of their own (`test/env.ts`), made anew for every run, and wait for what they wait on (the outbox's events, a job's state), never for a while
+- e2e specs (`test/*.e2e-spec.ts`) check only what fakes can't: how records are written and read back, what the read queries find and in what order, the locks, the outbox rolling back with its transaction, BullMQ's deduplication, gRPC, each route and MCP tool once (and one bad request to each that declares a schema, since nothing else sees it is attached), the whole pipeline once (`plugins.e2e-spec.ts`), the search index's writes and their repair (`search-index.e2e-spec.ts`), what OpenSearch answers a search (`search.e2e-spec.ts`), who finds what through the search route and tool, and their shared limit (`search-api.e2e-spec.ts`), the app with search off (`search-off.e2e-spec.ts`), and the text index's analyzers, whose rules live in OpenSearch (`search-analysis.e2e-spec.ts`: a word in Cyrillic, in Latin and without diacritics gives the same tokens, on the OpenSearch client alone). The others boot the app as `main.ts` sets it up (`bootApp()` in `test/app.ts`) on a database, redis db, folder and search indices (`unihub-e2e-*`) of their own (`test/env.ts`), made anew for every run, and wait for what they wait on (the outbox's events, a job's state), never for a while
 
 ## Users
 
@@ -64,8 +64,9 @@ OpenAPI at `/api/docs`. A signed-in user reads the courses they were given:
 - `GET /api/files/{id}`: the file and the texts made from it
 - `GET /api/files/{id}/text?page=2`: one page, slide or section of a text
 - `GET /api/files/{id}/content`: the file itself
+- `GET /api/search?q=semafor&course=os&limit=10`: the files of their courses (or of the one named) whose text matches, best first (Search, below)
 
-Everything goes through `CourseReader` (`src/access`), which MCP shares; 1200 calls a minute per user.
+Everything goes through `CourseReader` and `CourseSearch` (`src/access`), which MCP shares; 1200 calls a minute per user, and searches apart, 20 a minute.
 
 Admins set the courses up (`@Roles([ADMIN_ROLE])`):
 
@@ -74,9 +75,28 @@ Admins set the courses up (`@Roles([ADMIN_ROLE])`):
 - `DELETE /api/portal-courses/{portal}/{externalId}/course`: unlinks it
 - `PUT /api/users/{userId}/courses/{courseId}`: the user reads the course, named by the id `POST /api/courses` answered (users' ids from Better Auth's `GET /api/auth/admin/list-users`); `DELETE` on the same path takes it back. An id no user has is a 404, and so is granting one no course has
 
+### Search
+
+`q` is 2 to 500 characters: words, a phrase or a code identifier, in Latin or Cyrillic, with or without diacritics; `limit` is 1 to 50 files, 10 by default. The answer:
+
+```json
+{ "results": [ {
+    "fileId": "3f0c…", "name": "l5.pdf", "path": "Predavanja", "course": "os",
+    "pages": [ { "page": 3, "processor": "office-text",
+                 "snippet": { "text": "…", "highlights": [[12, 18]] } } ],
+    "sameContentIn": ["9a1e…"] } ] }
+```
+
+- a file per content, the first by folder and name of those the user reads; `sameContentIn` names the others with the same bytes
+- `pages`: its best pages first, up to 3, each by its best fragment; `GET /api/files/{fileId}/text?page=3&processor=office-text` reads the whole page
+- `snippet.text` is up to 400 characters of the page as indexed (letters composed, NFC), plain text with whatever HTML the file had: show it as text, never as HTML. `highlights` are `[start, end)` UTF-16 offsets into that text only (a page read whole may differ, when the file's letters weren't composed)
+- only the files the user reads right now are looked through, so a grant taken back or a file removed counts from the next search on. A course they don't read is a 404, as on the other routes; the search index away is a 503 (`SEARCH_UNAVAILABLE`)
+- with no `OPENSEARCH_URL` there's no search: the route is a 404 and the tool isn't listed
+- 20 searches a minute per user, REST and MCP counted together (`X-RateLimit-*-search`)
+
 ## MCP
 
-`/api/mcp` serves the same reads to AI clients over streamable HTTP, as the tools `list_courses`, `list_items`, `list_files` and `read_file` (page by page). A client signs in with an API key (create one at `POST /api/auth/api-key/create`), sent as `X-API-Key` or `Authorization: Bearer`; 600 calls a minute per user, however many keys they have. A request carries one JSON-RPC message as JSON: other bodies get 415, batches 400.
+`/api/mcp` serves the same reads to AI clients over streamable HTTP, as the tools `list_courses`, `list_items`, `list_files`, `read_file` (page by page) and `search` (as `GET /api/search`, its results as JSON; over its limit, a tool error). A client signs in with an API key (create one at `POST /api/auth/api-key/create`), sent as `X-API-Key` or `Authorization: Bearer`; 600 calls a minute per user, however many keys they have. A request carries one JSON-RPC message as JSON: other bodies get 415, batches 400.
 
 ## Plugins
 
@@ -104,7 +124,7 @@ With `OPENSEARCH_URL` set, the texts also go into an OpenSearch index (`<OPENSEA
 - each page is cut into chunks of up to 1200 characters, at a paragraph, line or word break, its letters composed (NFC)
 - a `search-index` queue, one job at a time, writes the newest version of each text the processors store: its chunks, then a manifest that says the text is in whole, then it drops its other versions, a newer one postgres lost too. While OpenSearch or the database is away, or OpenSearch's disk is past its flood stage, the queue waits 30 s at a time without spending attempts, and logs it as an error every 10 minutes it goes on
 - a reconcile at startup (tried again every 30 s while OpenSearch is still starting, for 10 minutes) and every hour queues what the index lacks and what it still holds of other versions or removed texts
-- `SearchTextsQuery(text, hashes, limit)` (processing's contracts) looks through the contents it's given, and no others: the index knows nothing of who reads what. It answers those whose texts have the words in any analysis (exact forms, Serbian and English stems, code identifiers), best first, at most `limit`, each with its best pages (up to 3, each once, by the best of its chunks there) and a snippet of up to 400 characters. `highlights` are UTF-16 offsets into the snippet's own text, which comes from the page as indexed (NFC), plain text with whatever HTML the source had, to be shown as text. OpenSearch away, or a search past 5 s, is `SEARCH_UNAVAILABLE` (503); one that finds the index gone makes it again and finds nothing until the reconcile fills it
+- `SearchTextsQuery(text, hashes, limit)` (processing's contracts) looks through the contents it's given, and no others: the index knows nothing of who reads what (access's `CourseSearch` gives it the contents of the files the user reads). It answers those whose texts have the words in any analysis (exact forms, Serbian and English stems, code identifiers), best first, at most `limit`, each with its best pages (up to 3, each once, by the best of its chunks there) and a snippet of up to 400 characters. `highlights` are UTF-16 offsets into the snippet's own text, which comes from the page as indexed (NFC), plain text with whatever HTML the source had, to be shown as text. OpenSearch away, or a search past 5 s, is `SEARCH_UNAVAILABLE` (503); one that finds the index gone makes it again and finds nothing until the reconcile fills it
 - the index is made of postgres alone and needs no backup: one lost or deleted is made again by the next write and filled by the next reconcile. The `g1` in its name is its generation, raised when its mapping or the chunks change; the new one fills next to the old, which is then deleted by hand (`curl -X DELETE localhost:9200/unihub-texts-g1-bm25`)
 
 Without `OPENSEARCH_URL` none of this is loaded, and processing runs as it did; `SearchTextsQuery` answers `SEARCH_OFF` (503).
