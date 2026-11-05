@@ -141,14 +141,22 @@ describe('CourseSearch', () => {
       ).rejects.toThrowError(new NotReadableError('course'));
   });
 
-  it('asks nothing of the index for a user who reads no course, or courses without content', async () => {
-    for (const reads of [[], ['empty-id']]) {
-      const { queries, search } = searching(reads);
+  it('asks nothing of catalog or the index for a user who reads no course', async () => {
+    const { queries, search } = searching([]);
 
-      expect(await search.search('ana', request({ q: 'semafor' }))).toEqual({
-        results: [],
-      });
-      expect(sentOf(queries, SearchTextsQuery)).toEqual([]);
-    }
+    expect(await search.search('ana', request({ q: 'semafor' }))).toEqual({
+      results: [],
+    });
+    expect(sentOf(queries, ListVisibleContentQuery)).toEqual([]);
+    expect(sentOf(queries, SearchTextsQuery)).toEqual([]);
+  });
+
+  // SearchTexts answers nothing to look through without asking the index
+  it('finds nothing in courses without content', async () => {
+    const { search } = searching(['empty-id']);
+
+    expect(await search.search('ana', request({ q: 'semafor' }))).toEqual({
+      results: [],
+    });
   });
 });

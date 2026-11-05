@@ -30,7 +30,6 @@ export class CourseSearch {
     );
     // by folder and name within each content, as catalog lists them
     const byContent = Map.groupBy(files, ({ hash }) => hash);
-    if (!byContent.size) return { results: [] };
     const hits = await this.queries.execute(
       new SearchTextsQuery(q, [...byContent.keys()], limit),
     );
