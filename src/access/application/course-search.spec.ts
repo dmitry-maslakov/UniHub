@@ -8,7 +8,12 @@ import {
   type VisibleContentDto,
 } from '../../catalog/contracts.js';
 import { ReadScopeQuery } from '../../identity/contracts.js';
-import { SearchTextsQuery, type TextHit } from '../../processing/contracts.js';
+import {
+  ListContainedQuery,
+  SearchTextsQuery,
+  type ContainedMember,
+  type TextHit,
+} from '../../processing/contracts.js';
 import { CourseSearch } from './course-search.js';
 import { NotReadableError } from './errors.js';
 import { searchRequest } from './search-request.js';
@@ -17,6 +22,8 @@ const processor = PluginName.parse('office-text');
 const slides = sha256('%PDF slides');
 const notes = sha256('notes');
 const secret = sha256('%PDF exam answers');
+const labs = sha256('labs.zip');
+const code = sha256('int main;');
 // empty shows no file with content
 const courses = ['os', 'net', 'exam', 'empty'].map((slug) => ({
   id: `${slug}-id`,
@@ -32,6 +39,22 @@ const files: VisibleContentDto[] = [
   { fileId: 'f3', courseId: 'net-id', hash: slides, name: 'l1.pdf', path: 'c' },
   { fileId: 'f4', courseId: 'exam-id', hash: secret, name: 'x.pdf', path: '' },
 ];
+// an archive in os holds code, and the notes again; one in exam the answers
+const archives: VisibleContentDto[] = [
+  { fileId: 'f5', courseId: 'os-id', hash: labs, name: 'labs.zip', path: 'b' },
+  {
+    fileId: 'f6',
+    courseId: 'exam-id',
+    hash: sha256('x.zip'),
+    name: 'x.zip',
+    path: '',
+  },
+];
+const contained: ContainedMember[] = [
+  { container: labs, path: 'lab/main.c', hash: code },
+  { container: labs, path: 'lab/notes.txt', hash: notes },
+  { container: sha256('x.zip'), path: 'answers.pdf', hash: secret },
+];
 
 const hit = (hash: ContentHash, page: number): TextHit => ({
   hash,
@@ -46,8 +69,13 @@ const hit = (hash: ContentHash, page: number): TextHit => ({
 });
 
 // ana reads os and net; the index finds the notes first, then the slides,
-// of whatever contents it's asked to look through
-function searching(reads = ['os-id', 'net-id']) {
+// then the code, of whatever contents it's asked to look through
+function searching(
+  reads = ['os-id', 'net-id'],
+  withArchives: VisibleContentDto[] = [],
+  members = contained,
+) {
+  const visible = [...files, ...withArchives];
   const queries = new FakeBus([
     [ReadScopeQuery, () => ({ allows: (id: string) => reads.includes(id) })],
     [ListCoursesQuery, () => courses],
@@ -59,13 +87,18 @@ function searching(reads = ['os-id', 'net-id']) {
     [
       ListVisibleContentQuery,
       ({ courseIds }: ListVisibleContentQuery) =>
-        files.filter((f) => courseIds.includes(f.courseId)),
+        visible.filter((f) => courseIds.includes(f.courseId)),
+    ],
+    [
+      ListContainedQuery,
+      ({ hashes }: ListContainedQuery) =>
+        members.filter((m) => hashes.includes(m.container)),
     ],
     [
       SearchTextsQuery,
       ({ hashes }: SearchTextsQuery) =>
-        [hit(notes, 4), hit(slides, 2), hit(secret, 1)].filter((h) =>
-          hashes.includes(h.hash),
+        [hit(notes, 4), hit(slides, 2), hit(code, 1), hit(secret, 1)].filter(
+          (h) => hashes.includes(h.hash),
         ),
     ],
   ]);
@@ -101,6 +134,7 @@ describe('CourseSearch', () => {
           fileId: 'f2',
           name: 'n.txt',
           path: 'b',
+          member: null,
           course: 'os',
           pages: [
             {
@@ -158,5 +192,82 @@ describe('CourseSearch', () => {
     expect(await search.search('ana', request({ q: 'semafor' }))).toEqual({
       results: [],
     });
+  });
+
+  it('looks through the members with a text of the archives among them too', async () => {
+    const { queries, search } = searching(['os-id', 'net-id'], archives);
+
+    await search.search('ana', request({ q: 'semafor', limit: 5 }));
+
+    expect(sentOf(queries, ListContainedQuery)).toEqual([
+      new ListContainedQuery([slides, notes, labs]),
+    ]);
+    expect(sentOf(queries, SearchTextsQuery)).toEqual([
+      new SearchTextsQuery('semafor', [slides, notes, labs, code], 5),
+    ]);
+  });
+
+  it('answers a member as its archive and its path, after the files that hold the same', async () => {
+    const { search } = searching(['os-id', 'net-id'], archives);
+
+    const { results } = await search.search('ana', request({ q: 'semafor' }));
+
+    expect(results).toEqual([
+      // labs.zip holds the notes too, but as a member: no copy of them
+      expect.objectContaining({
+        fileId: 'f2',
+        member: null,
+        sameContentIn: [],
+      }),
+      expect.objectContaining({ fileId: 'f1', member: null }),
+      expect.objectContaining({
+        fileId: 'f5',
+        name: 'labs.zip',
+        member: 'lab/main.c',
+        course: 'os',
+        sameContentIn: [],
+      }),
+    ]);
+  });
+
+  it("finds no member of an archive in a course the user doesn't read", async () => {
+    const { queries, search } = searching(['os-id', 'net-id'], archives);
+
+    const { results } = await search.search('ana', request({ q: 'answers' }));
+
+    expect(results.map(({ fileId }) => fileId)).not.toContain('f6');
+    expect(sentOf(queries, SearchTextsQuery)[0].hashes).not.toContain(secret);
+  });
+
+  it('answers a member found in several archives, or twice in one, as its first place', async () => {
+    const copy = sha256('copy.zip');
+    const { search } = searching(
+      ['os-id', 'net-id'],
+      [
+        ...archives,
+        {
+          fileId: 'f7',
+          courseId: 'net-id',
+          hash: copy,
+          name: 'c.zip',
+          path: '',
+        },
+      ],
+      [
+        ...contained,
+        { container: labs, path: 'old/main.c', hash: code },
+        { container: copy, path: 'main.c', hash: code },
+      ],
+    );
+
+    const { results } = await search.search('ana', request({ q: 'main' }));
+
+    expect(results.at(-1)).toEqual(
+      expect.objectContaining({
+        fileId: 'f5',
+        member: 'lab/main.c',
+        sameContentIn: [],
+      }),
+    );
   });
 });

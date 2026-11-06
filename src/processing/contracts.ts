@@ -8,9 +8,11 @@ export { LEFT_OUT, type LeftOut } from './domain/unpacking.js';
 export {
   FindMemberQuery,
   GetTextPageQuery,
+  ListContainedQuery,
   ListMembersQuery,
   ListTextsQuery,
   SearchTextsQuery,
+  type ContainedMember,
   type MemberContent,
   type MemberInfo,
   type Snippet,

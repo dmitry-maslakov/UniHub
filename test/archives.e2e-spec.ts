@@ -6,7 +6,8 @@ import type { INestApplication } from '@nestjs/common';
 import { CommandBus } from '@nestjs/cqrs';
 import tar from 'tar-stream';
 import yazl from 'yazl';
-import { PortalId } from '@app/kernel';
+import type { Client } from '@opensearch-project/opensearch';
+import { PluginName, PortalId } from '@app/kernel';
 import { ArchivesModule } from '@app/plugins/archives';
 import { OfficeTextModule } from '@app/plugins/office-text';
 import { PlainTextModule } from '@app/plugins/plain-text';
@@ -16,19 +17,29 @@ import {
   LinkPortalCourseCommand,
   Slug,
 } from '../src/catalog/contracts.js';
+import { GrantCourseAccessCommand } from '../src/identity/contracts.js';
 import type { Mail } from '../src/identity/domain/mailer.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
+import { OPENSEARCH } from '../src/platform/search/opensearch.module.js';
+import {
+  EmbedderUnavailableError,
+  QueryEmbedder,
+} from '../src/processing/application/ports.js';
+import { keyId } from '../src/processing/domain/representation.js';
+import { indexName } from '../src/processing/infrastructure/search/text-index.mapping.js';
 import { accounts } from './accounts.js';
 import { bootApp } from './app.js';
+import { testEnv, testVectors } from './env.js';
 import { portalIngest } from './ingest.js';
 import { sha256 } from './sha256.js';
 
 // archives as the hub runs it: found among the plugins, the members of a
 // zip stored and each read by the processor that takes its name
 // (office-text the pdf), a tgz in it opened in the same walk, then read
-// through the API inside the file. What it makes of an archive is checked
-// in its unit specs, the walk's rules in processing's, who reads which
-// member on fakes (CourseReader).
+// through the API inside the file and found by search, only by a user who
+// reads its course. What it makes of an archive is checked in its unit
+// specs, the walk's rules in processing's, who reads and finds which member
+// on fakes (CourseReader, CourseSearch).
 
 const PORTAL = 'archives-test';
 const lecture = readFileSync(
@@ -38,6 +49,7 @@ const lecture = readFileSync(
   ),
 );
 const semafor = 'int semafor = 1;\n';
+const odgovor = 'int odgovor = 42;\n';
 const inner = 'int inner = 2;\n';
 
 async function zipOf(files: Record<string, string | Buffer>) {
@@ -61,10 +73,26 @@ describe('archives', { timeout: 60_000 }, () => {
   let prisma: PrismaService;
   let zip: Buffer;
   const mails: Mail[] = [];
-  const { http, signUp, makeAdmin } = accounts(() => app, mails);
+  const { http, signUp, makeAdmin, userId } = accounts(() => app, mails);
   let admin: string;
+  let student: string;
   let fileId: string;
-  const get = (path: string) => http().get(path).set('cookie', admin);
+  let secretId: string;
+  const get = (path: string, cookie = admin) =>
+    http().get(path).set('cookie', cookie);
+  // by the words alone, as while the query embedder is away: by meaning,
+  // knn finds the nearest files whatever the words
+  const searched = async (q: string, cookie: string, course = '') => {
+    vi.spyOn(app.get(QueryEmbedder), 'embed').mockRejectedValueOnce(
+      new EmbedderUnavailableError('embedder.invalid: ENOTFOUND'),
+    );
+    return (
+      await get(
+        `/api/search?q=${q}${course && `&course=${course}`}`,
+        cookie,
+      ).expect(200)
+    ).body.results as { fileId: string; member: string | null }[];
+  };
   // what a processor made of a member's content
   const text = async (content: string | Buffer, processor: string) => {
     const stored = await prisma.representation.findFirst({
@@ -87,26 +115,50 @@ describe('archives', { timeout: 60_000 }, () => {
       'lab/old.tgz': await tgzOf({ 'inner.c': inner }),
     });
     const ingest = portalIngest(app, PORTAL);
+    const idOf = async (externalId: string) =>
+      (
+        await prisma.file.findUniqueOrThrow({
+          where: { portal_externalId: { portal: PORTAL, externalId } },
+        })
+      ).id;
     await ingest.course({ externalId: 'c1', name: 'Arhitektura' });
     await ingest.file({ externalId: 'labs', course: 'c1', name: 'labs.zip' });
     await ingest.content('labs', Readable.from([zip]));
-    ({ id: fileId } = await prisma.file.findUniqueOrThrow({
-      where: { portal_externalId: { portal: PORTAL, externalId: 'labs' } },
-    }));
+    fileId = await idOf('labs');
+    // an archive in a course the student doesn't read
+    await ingest.course({ externalId: 'c2', name: 'Ispiti' });
+    await ingest.file({ externalId: 'exam', course: 'c2', name: 'exam.zip' });
+    await ingest.content(
+      'exam',
+      Readable.from([await zipOf({ 'odgovori.c': odgovor })]),
+    );
+    secretId = await idOf('exam');
 
     const commands = app.get(CommandBus);
-    await commands.execute(
-      new CreateCourseCommand(Slug.parse('ar'), CourseName.parse('AR')),
-    );
-    await commands.execute(
-      new LinkPortalCourseCommand(
-        Slug.parse('ar'),
-        { portal: PortalId.parse(PORTAL), externalId: 'c1' },
-        null,
-      ),
-    );
+    for (const [slug, externalId] of [
+      ['ar', 'c1'],
+      ['ispiti', 'c2'],
+    ]) {
+      await commands.execute(
+        new CreateCourseCommand(Slug.parse(slug), CourseName.parse(slug)),
+      );
+      await commands.execute(
+        new LinkPortalCourseCommand(
+          Slug.parse(slug),
+          { portal: PortalId.parse(PORTAL), externalId },
+          null,
+        ),
+      );
+    }
     admin = await signUp('admin@archives.test');
     await makeAdmin('admin@archives.test');
+    student = await signUp('student@archives.test');
+    const { id: ar } = await prisma.course.findUniqueOrThrow({
+      where: { slug: 'ar' },
+    });
+    await commands.execute(
+      new GrantCourseAccessCommand(await userId('student@archives.test'), ar),
+    );
   });
 
   afterAll(() => app.close());
@@ -193,5 +245,34 @@ describe('archives', { timeout: 60_000 }, () => {
     expect(content.headers['content-type']).toBe('application/octet-stream');
     expect(content.body.toString()).toBe(semafor);
     await get(`/api/files/${fileId}/text?member=lab/gone.c`).expect(404);
+  });
+
+  it('finds a member of an archive in a course the user reads, and never in one they do not', async () => {
+    // in the index in whole and searchable (realtime: false sees what a
+    // search does), each searched for once then: searches are limited
+    const opensearch = app.get<Client>(OPENSEARCH);
+    const index = indexName(testEnv.OPENSEARCH_INDEX_PREFIX, testVectors);
+    for (const text of [semafor, odgovor]) {
+      const id = keyId({
+        hash: sha256(text),
+        processor: PluginName.parse('plain-text'),
+        version: 1,
+      });
+      await vi.waitFor(
+        async () =>
+          expect(
+            (await opensearch.exists({ index, id, realtime: false })).body,
+          ).toBe(true),
+        { timeout: 45_000, interval: 500 },
+      );
+    }
+
+    expect(await searched('semafor', student)).toEqual([
+      expect.objectContaining({ fileId, member: 'lab/semafor.c' }),
+    ]);
+    expect(await searched('odgovor', admin, 'ispiti')).toEqual([
+      expect.objectContaining({ fileId: secretId, member: 'odgovori.c' }),
+    ]);
+    expect(await searched('odgovor', student)).toEqual([]);
   });
 });

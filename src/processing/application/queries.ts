@@ -77,6 +77,22 @@ export class FindMemberQuery extends Query<MemberContent | null> {
   }
 }
 
+// a member kept in the tree of a container content, that processors made
+// a text of
+export interface ContainedMember {
+  container: ContentHash;
+  path: string;
+  hash: ContentHash;
+}
+
+// the members with a text in the trees of these contents, each tree in its
+// order: what a search looks through besides the contents themselves
+export class ListContainedQuery extends Query<ContainedMember[]> {
+  constructor(public readonly hashes: readonly ContentHash[]) {
+    super();
+  }
+}
+
 // A fragment of a chunk's text and where in it the query's words are:
 // UTF-16 offsets into `text` (the chunk as indexed, NFC), each [start, end).
 // Plain text: whatever HTML the source had comes as it was.

@@ -84,13 +84,14 @@ Admins set the courses up (`@Roles([ADMIN_ROLE])`):
 
 ```json
 { "results": [ {
-    "fileId": "3f0c…", "name": "l5.pdf", "path": "Predavanja", "course": "os",
+    "fileId": "3f0c…", "name": "l5.pdf", "path": "Predavanja", "member": null, "course": "os",
     "pages": [ { "page": 3, "processor": "office-text",
                  "snippet": { "text": "…", "highlights": [[12, 18]] } } ],
     "sameContentIn": ["9a1e…"] } ] }
 ```
 
 - a file per content, the first by folder and name of those the user reads; `sameContentIn` names the others with the same bytes
+- the members of archives are looked through too, those with a text in the files the user reads: one found is its archive's file with the `member`'s path in it (`GET /api/files/{fileId}/text?member=…`, MCP: `read_file` with that `member`), after the files that hold the same bytes, and `member` is null for a file itself
 - `pages`: its best pages first, up to 3, each by its best fragment; `GET /api/files/{fileId}/text?page=3&processor=office-text` (MCP: `read_file` with the same `page` and `processor`) reads the whole page, as a file can have a text per processor, each paged on its own
 - `snippet.text` is up to 400 characters of the page as indexed (letters composed, NFC), plain text with whatever HTML the file had: show it as text, never as HTML. `highlights` are `[start, end)` UTF-16 offsets into that text only (a page read whole may differ, when the file's letters weren't composed)
 - with an embedder (Search index, below), a file is found by meaning too: a page about the same thing in other words, or in another language. Then a search answers up to `limit` files even when none has the words, the nearest by meaning, as knn always has nearest ones; `highlights` mark only the words found

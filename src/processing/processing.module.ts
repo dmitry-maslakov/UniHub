@@ -26,6 +26,7 @@ import {
 } from './infrastructure/read/texts.read.js';
 import {
   FindMemberHandler,
+  ListContainedHandler,
   ListMembersHandler,
 } from './infrastructure/read/members.read.js';
 import { ReconcileSchedule } from './infrastructure/reconcile.schedule.js';
@@ -61,6 +62,7 @@ const DAY = 24 * 60 * 60;
     GetTextPageHandler,
     ListMembersHandler,
     FindMemberHandler,
+    ListContainedHandler,
     SearchTexts,
     Dispatch,
     DeliverMessage,
