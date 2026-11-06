@@ -62,8 +62,8 @@ export class FsBlobStore extends BlobStore implements OnModuleInit {
     return join(this.root, hash.slice(0, 2), hash);
   }
 
-  async put(content: Readable) {
-    const { maxBytes } = this;
+  async put(content: Readable, limit = this.maxBytes) {
+    const maxBytes = Math.min(limit, this.maxBytes);
     const hasher = createHash('sha256');
     let size = 0;
     const tap = new Transform({

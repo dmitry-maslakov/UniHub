@@ -87,6 +87,16 @@ describe('FsBlobStore', () => {
     expect(await readdir(join(root, 'tmp'))).toEqual([]);
   });
 
+  it("refuses content past the limit it's given, and none past its own", async () => {
+    await expect(
+      store.put(Readable.from([content]), content.length - 1),
+    ).rejects.toThrow(ContentTooLargeError);
+    await expect(
+      store.put(Readable.from([content, content]), 2 * content.length),
+    ).rejects.toThrow(ContentTooLargeError);
+    expect(await readdir(root)).toEqual(['tmp']);
+  });
+
   it('removes only old temp files when it starts', async () => {
     // the first start: no temp folder yet
     await store.onModuleInit();

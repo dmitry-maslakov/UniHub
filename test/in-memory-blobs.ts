@@ -24,10 +24,10 @@ export class InMemoryBlobs extends BlobStore {
       this.stored.set(sha256(content), Buffer.from(content));
   }
 
-  async put(content: Readable) {
+  async put(content: Readable, limit = this.maxBytes) {
     const data = await buffer(content);
-    if (data.length > this.maxBytes)
-      throw new ContentTooLargeError(this.maxBytes);
+    const maxBytes = Math.min(limit, this.maxBytes);
+    if (data.length > maxBytes) throw new ContentTooLargeError(maxBytes);
     const hash = sha256(data);
     this.stored.set(hash, data);
     return { hash, size: data.length };
