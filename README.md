@@ -2,7 +2,7 @@
 
 A hub for learning materials: connectors bring in courses, posts and files from any portal, processors turn files into readable text, and students and AI agents read it all over REST and MCP.
 
-It runs at [unihub.rs](https://unihub.rs): sign in there, or add `https://unihub.rs/api/mcp` to an AI app as a connector (MCP, below).
+It runs at [unihub.rs](https://unihub.rs): read it in the browser there, or add `https://unihub.rs/api/mcp` to an AI app as a connector, which has you sign in to the hub (MCP, below).
 
 ## Running locally
 
