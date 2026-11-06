@@ -25,6 +25,14 @@ import {
 } from '../domain/portal-file/portal-file.js';
 import { PortalFileRepository } from '../domain/portal-file/portal-file.repository.js';
 import type { PortalRef } from '../domain/portal-ref.js';
+import type { Shown } from '../domain/publication.js';
+import type { Sighting, ViewChange } from '../domain/view/view.js';
+import {
+  ViewRepository,
+  type Kind,
+  type Stamp,
+  type VersionData,
+} from '../domain/view/view.repository.js';
 import {
   CreateCourseHandler,
   LinkPortalCourseHandler,
@@ -38,6 +46,12 @@ import {
 import { RemoveItemHandler, UpsertItemHandler } from './item.handlers.js';
 import { UpsertPortalCourseHandler } from './portal-course.handlers.js';
 import { References } from './references.js';
+import {
+  ForgetAccountHandler,
+  StoreBytesHandler,
+  ViewCourseHandler,
+  ViewCoursesHandler,
+} from './view.handlers.js';
 
 // In-memory ports for the handlers' unit tests: the records as last saved,
 // by the portal's id, and the events save() would have written to the
@@ -138,6 +152,116 @@ export class InMemoryLinks implements CourseLinkRepository {
   }
 }
 
+interface Version {
+  id: string;
+  kind: Kind;
+  recordId: string;
+  data: VersionData[Kind];
+  hash: string | null;
+}
+
+export interface Sight extends Shown {
+  open: boolean;
+  hiddenFrom: Date | null;
+}
+
+// users' accounts' views: versions by record and fingerprint, each
+// account's sights of them by the version's id
+export class InMemoryViews extends ViewRepository {
+  readonly records = new Map<string, string>();
+  readonly versions = new Map<string, Version>();
+  readonly sights = new Map<string, Map<string, Sight>>();
+  // versions made, by kind
+  readonly made: Version[] = [];
+
+  async recordIds(
+    kind: Kind,
+    portal: string,
+    externalIds: readonly string[],
+    make = true,
+  ) {
+    const ids = new Map<string, string>();
+    for (const externalId of externalIds) {
+      const key = `${kind}:${portal}:${externalId}`;
+      if (make && !this.records.has(key)) this.records.set(key, randomUUID());
+      const id = this.records.get(key);
+      if (id) ids.set(externalId, id);
+    }
+    return ids;
+  }
+
+  async versionOf<K extends Kind>(
+    kind: K,
+    recordId: string,
+    fingerprint: string,
+    data: VersionData[K],
+  ) {
+    const key = `${recordId}:${fingerprint}`;
+    const had = this.versions.get(key);
+    if (had) return had.id;
+    const version = { id: randomUUID(), kind, recordId, data, hash: null };
+    this.versions.set(key, version);
+    this.made.push(version);
+    return version.id;
+  }
+
+  // the account's sights, by version id
+  of(account: string) {
+    let sights = this.sights.get(account);
+    if (!sights) this.sights.set(account, (sights = new Map()));
+    return sights;
+  }
+
+  version(id: string) {
+    return [...this.versions.values()].find((v) => v.id === id)!;
+  }
+
+  async sightings(kind: Kind, account: string, course: string | null) {
+    return [...this.of(account)]
+      .filter(([id, sight]) => {
+        const { kind: k, data } = this.version(id);
+        const inCourse =
+          course === null ||
+          ('portalCourseId' in data && data.portalCourseId === course);
+        return k === kind && sight.hiddenFrom === null && inCourse;
+      })
+      .map(([versionId, { open }]): Sighting => ({
+        recordId: this.version(versionId).recordId,
+        versionId,
+        open,
+      }));
+  }
+
+  async apply(_: Kind, account: string, change: ViewChange, at: Shown) {
+    const sights = this.of(account);
+    for (const { versionId, open } of change.show)
+      sights.set(versionId, { open, ...at, hiddenFrom: null });
+    for (const { versionId, open } of change.reopen)
+      Object.assign(sights.get(versionId)!, { open, openFrom: at.openFrom });
+    for (const { versionId } of change.hide)
+      sights.get(versionId)!.hiddenFrom = at.shownFrom;
+  }
+
+  async forget(account: string) {
+    this.sights.delete(account);
+  }
+
+  async storeBytes(fileId: string, stamp: Stamp, hash: string) {
+    const waiting = [...this.versions.values()].filter((v) => {
+      const data = v.data as VersionData['file'];
+      return (
+        v.kind === 'file' &&
+        v.recordId === fileId &&
+        v.hash === null &&
+        data.size === stamp.size &&
+        data.sourceUpdatedAt?.getTime() === stamp.sourceUpdatedAt?.getTime()
+      );
+    });
+    for (const version of waiting) version.hash = hash;
+    return waiting.length > 0;
+  }
+}
+
 // catalog's command handlers on the fakes, behind a real CommandBus;
 // @Transactional() runs, without a database
 export async function onFakes() {
@@ -147,6 +271,7 @@ export async function onFakes() {
     portalCourses: new InMemoryPortalCourses(),
     courses: new InMemoryCourses(),
     links: new InMemoryLinks(),
+    views: new InMemoryViews(),
   };
   const module = await Test.createTestingModule({
     imports: [
@@ -173,6 +298,11 @@ export async function onFakes() {
       LinkPortalCourseHandler,
       UnlinkPortalCourseHandler,
       References,
+      ViewCoursesHandler,
+      ViewCourseHandler,
+      StoreBytesHandler,
+      ForgetAccountHandler,
+      { provide: ViewRepository, useValue: fakes.views },
       { provide: PortalFileRepository, useValue: fakes.files },
       { provide: ItemRepository, useValue: fakes.items },
       { provide: PortalCourseRepository, useValue: fakes.portalCourses },

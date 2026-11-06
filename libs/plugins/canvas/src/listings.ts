@@ -24,15 +24,26 @@ function settleSources(last: Sources = {}, now: Sources) {
   const sources = { ...last, ...now };
   const kept = new Set(Object.values(sources).flat());
   const had = new Set(Object.values(last).flat());
-  return { sources, gone: [...had].filter((id) => !kept.has(id)) };
+  const ending = Object.fromEntries(
+    Object.entries(sources).map(([source, ids]) => [
+      source,
+      [...new Set([...(last[source] ?? []), ...ids])],
+    ]),
+  );
+  return { sources, ending, gone: [...had].filter((id) => !kept.has(id)) };
 }
 
-// the listings to save once a course's run is through, and the ids gone
+// The listings to save once a course's pass has ended, and the ids gone:
+// what the pass's end() says is gone from the account's view. Until it has,
+// `ending`: each source with what it had and what it has, so the hub never
+// has what they don't, and what's gone is still named for the next run
+// should the end fail.
 export function settle(last: Listings | undefined, now: Listings) {
   const items = settleSources(last?.items, now.items);
   const files = settleSources(last?.files, now.files);
   return {
     listings: { items: items.sources, files: files.sources },
+    ending: { items: items.ending, files: files.ending },
     gone: { items: items.gone, files: files.gone },
   };
 }

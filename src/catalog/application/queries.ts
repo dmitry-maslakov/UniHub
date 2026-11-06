@@ -2,6 +2,7 @@ import { Query } from '@nestjs/cqrs';
 import type { ContentHash, Json, MediaType, PortalId } from '@app/kernel';
 import type { PortalRef } from '../domain/portal-ref.js';
 import type { CourseSlug } from '../domain/values.js';
+import type { Stamp } from '../domain/view/view.repository.js';
 
 // What other modules read from catalog: shapes of their own, so catalog's
 // records can change without breaking them. Read straight from the database
@@ -266,6 +267,19 @@ export class ListFilesWithContentQuery extends Query<FileDto[]> {
   constructor(
     public readonly after: string | null,
     public readonly limit: number,
+  ) {
+    super();
+  }
+}
+
+// For ingest's passes.
+
+// whether the hub has a file's bytes as the portal had them at `stamp`, in
+// a version any account sees of it
+export class HasBytesQuery extends Query<boolean> {
+  constructor(
+    public readonly file: PortalRef,
+    public readonly stamp: Stamp,
   ) {
     super();
   }

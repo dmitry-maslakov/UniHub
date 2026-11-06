@@ -1,58 +1,15 @@
 import { Readable } from 'node:stream';
-import type { Outbox } from '@nestjs/outbox';
-import { PortalId, type Json } from '@app/kernel';
-import { FakeBus } from '../../../test/fake-bus.js';
+import { PortalId } from '@app/kernel';
 import { InMemoryBlobs } from '../../../test/in-memory-blobs.js';
 import { sha256 } from '../../../test/sha256.js';
 import * as catalog from '../../catalog/contracts.js';
 import { Connection } from '../domain/connection.js';
-import {
-  MalformedRecordError,
-  RemovalNotAllowedError,
-} from '../domain/errors.js';
-import { SyncStateRepository } from '../domain/sync-state.js';
-import { IngestService } from './ingest.service.js';
+import { MalformedRecordError, SharedOnlyError } from '../domain/errors.js';
+import { ingest } from './ingest.fakes.js';
 
 const portal = PortalId.parse('canvas');
 const shared = Connection.shared(portal);
 const someone = Connection.of({ portal, account: 'someone' });
-
-class FakeStates extends SyncStateRepository {
-  private readonly byKey = new Map<string, Json>();
-
-  async get({ key }: Connection) {
-    return this.byKey.get(key) ?? null;
-  }
-
-  async save({ key }: Connection, state: Json) {
-    this.byKey.set(key, state);
-  }
-}
-
-// catalog answers every command with `changed`, and knows the files `known` names
-function ingest({ changed = true, known = ['f1'] } = {}) {
-  const commands = new FakeBus([
-    [Object, () => ({ id: 'id', changed, needsContent: true })],
-  ]);
-  const queries = new FakeBus([
-    [
-      catalog.FindFileQuery,
-      ({ file }: catalog.FindFileQuery) =>
-        known.includes(file.externalId) ? { id: 'id' } : null,
-    ],
-  ]);
-  // storage keeps up to 100 bytes of a file
-  const blobs = new InMemoryBlobs({ maxBytes: 100 });
-  const outbox = { notify: vi.fn() };
-  const service = new IngestService(
-    commands.commands,
-    queries.queries,
-    blobs,
-    new FakeStates(),
-    outbox as unknown as Outbox,
-  );
-  return { service, sent: commands.sent, blobs, outbox };
-}
 
 const stored = (blobs: InMemoryBlobs) => [...blobs.stored.values()].map(String);
 
@@ -154,11 +111,17 @@ describe('IngestService', () => {
     expect(stored(blobs)).toEqual([]);
   });
 
-  it('removes records only for the shared account', async () => {
+  it('takes records and removals one by one from the shared account alone', async () => {
     const { service, sent } = ingest();
-    await expect(service.removeItem(someone, 'p1')).rejects.toThrow(
-      RemovalNotAllowedError,
-    );
+    const post = { externalId: 'p1', kind: 'post', raw: {} };
+    for (const send of [
+      () => service.course(someone, { externalId: 'c1', name: 'OS' }),
+      () => service.item(someone, post),
+      () => service.file(someone, { externalId: 'f1', name: 'f.pdf' }),
+      () => service.content(someone, 'f1', Readable.from(['%PDF'])),
+      () => service.removeItem(someone, 'p1'),
+    ])
+      await expect(send()).rejects.toThrow(SharedOnlyError);
     await expect(service.removeFile(shared, '')).rejects.toThrow(
       /^invalid record: externalId: /,
     );
@@ -177,6 +140,8 @@ describe('IngestService', () => {
     await service.saveState(shared, { cursor: 5, cut: '\ud800' });
     expect(await service.state(shared)).toEqual({ cursor: 5, cut: '�' });
     expect(await service.state(someone)).toBeNull();
+    await service.forget(shared);
+    expect(await service.state(shared)).toBeNull();
     await expect(service.saveState(shared, new Date())).rejects.toThrow(
       MalformedRecordError,
     );

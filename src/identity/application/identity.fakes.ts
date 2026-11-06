@@ -1,3 +1,5 @@
+import { AccessTokens, type TokenCheck } from '../domain/access-tokens.js';
+import type { TokenRequest } from '../domain/agent-credential.js';
 import { ApiKeys } from '../domain/api-keys.js';
 import { CourseAccessRepository } from '../domain/course-access.js';
 import { ReaderRepository, type Reader } from '../domain/reader.js';
@@ -45,5 +47,16 @@ export class FakeApiKeys extends ApiKeys {
 
   async verify(key: string) {
     return this.byKey.get(key) ?? null;
+  }
+}
+
+// what each token checks as, by the Authorization it comes in
+export class FakeAccessTokens extends AccessTokens {
+  constructor(readonly byAuthorization = new Map<string, TokenCheck>()) {
+    super();
+  }
+
+  async verify({ authorization }: TokenRequest) {
+    return this.byAuthorization.get(authorization) ?? null;
   }
 }

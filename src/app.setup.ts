@@ -20,9 +20,13 @@ export async function configureApp(app: INestApplication) {
   // behind caddy, the client's address comes from X-Forwarded-For
   (app as NestExpressApplication).set('trust proxy', trustProxy);
   app.use(helmet());
-  // The auth module has already put /api/auth on the prefix's exclude list.
-  // Options here would replace that list: leave them out, or include it.
-  app.setGlobalPrefix('api');
+  // The auth module has already put /api/auth on the prefix's exclude list,
+  // which options here replace: so it's named again, beside OAuth's
+  // discovery documents, which clients look for at the root (identity's
+  // WellKnownController)
+  app.setGlobalPrefix('api', {
+    exclude: ['api/auth', 'api/auth/*path', '.well-known/*path'],
+  });
   // OpenAPI at /api/docs; sign in under /api/auth (Better Auth)
   SwaggerModule.setup('api/docs', app, () =>
     SwaggerModule.createDocument(

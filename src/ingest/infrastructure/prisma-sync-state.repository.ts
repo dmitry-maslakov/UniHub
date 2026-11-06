@@ -32,4 +32,8 @@ export class PrismaSyncStateRepository extends SyncStateRepository {
       update: { state: jsonInput(state) },
     });
   }
+
+  async remove({ portal, account }: Connection) {
+    await this.txHost.tx.syncState.deleteMany({ where: { portal, account } });
+  }
 }

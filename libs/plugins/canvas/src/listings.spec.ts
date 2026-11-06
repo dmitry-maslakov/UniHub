@@ -23,6 +23,13 @@ describe('listings', () => {
     };
     expect(settle(last, now)).toEqual({
       listings: now,
+      // till the end goes through, what's gone is still named
+      ending: {
+        items: {
+          assignments: ['assignment:1', 'assignment:2', 'assignment:3'],
+        },
+        files: { files: ['10', '11'] },
+      },
       gone: { items: ['assignment:1'], files: ['11'] },
     });
   });
@@ -35,6 +42,7 @@ describe('listings', () => {
     const now = { items: { assignments: ['assignment:1'] }, files: {} };
     expect(settle(last, now)).toEqual({
       listings: last,
+      ending: last,
       gone: { items: [], files: [] },
     });
   });

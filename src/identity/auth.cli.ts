@@ -2,6 +2,7 @@
 // npm run auth:create-admin. The app builds its auth in IdentityModule, from
 // the same settings.
 import 'dotenv/config';
+import { fetchClientMetadataResource } from '@better-auth/cimd/node';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/prisma/client.js';
 import { databaseConfig } from '../platform/database/database.config.js';
@@ -20,6 +21,8 @@ export const auth = createAuth({
   trustedOrigins: [],
   // so the schema covers Google accounts too
   google: { clientId: 'cli', clientSecret: 'cli' },
+  // it fetches no OAuth clients
+  fetchClientMetadata: fetchClientMetadataResource,
   // it deletes no users
   onUserDeleted: () => {},
 });

@@ -2,22 +2,32 @@ import { Logger } from '@nestjs/common';
 import {
   InvalidRecordError,
   UnknownReferenceError,
+  type CoursePass,
   type PortalIngest,
 } from '@app/plugin-sdk';
 import type { CanvasApi } from './canvas-api.js';
 import type { Course } from './canvas.types.js';
 import type { FoundFile } from './course-files.js';
-import { CourseWalk, type CourseContent } from './course-walk.js';
+import { CourseWalk, type CourseContent, type View } from './course-walk.js';
 import { skippable } from './errors.js';
-import { settle, SyncState, type Listings } from './listings.js';
+import { settle, SyncState } from './listings.js';
 import { courseRecord } from './records.js';
 
-// One run: every open course the token's user is in. Its records go to the
-// hub, then what is gone from it is removed and its listings saved, so a
-// run cut short goes on from the courses it got through. A course no
-// longer listed keeps its records, and its listings for when it's back. A
-// course Canvas fails on, or whose record the hub refuses, keeps them too:
-// the others go on, and the run fails once they're through.
+// One run: every open course the token's user is in, sent as the hub's
+// courses, then each one's records in a pass of its own, ended with what's
+// gone from a listing that went through (only what one had before and no
+// longer has: a listing that failed, or one never saved, takes nothing
+// away); then, once every pass has ended, the files the hub asked for are
+// downloaded, so when a pass ends says nothing of what the hub had of
+// another course's files. Before the end the listings are saved with what
+// they had too, so the hub never has what they don't, and an end that
+// fails leaves what's gone for the next run to name; once it's through,
+// as they are. A run cut short goes on from the courses it got through. A
+// course no longer listed is gone from a user's account's view, and keeps
+// its records for the shared account, its listings kept for when it's
+// back. A course Canvas fails on, or whose record the hub refuses, keeps
+// what its view had: the others go on, and the run fails once they're
+// through.
 export class CanvasSync {
   private readonly logger = new Logger(CanvasSync.name);
 
@@ -26,22 +36,36 @@ export class CanvasSync {
     private readonly ingest: PortalIngest,
     // the school's Canvas, for links into it
     private readonly base: string,
+    private readonly view: View = 'whole',
   ) {}
 
   async run() {
     const state = SyncState.parse(await this.ingest.state());
-    const courses = await this.api.list<Course>(
+    const listed = await this.api.list<Course>(
       '/api/v1/courses?enrollment_state=active&include[]=term',
     );
-    const skipped: number[] = [];
+    // not open to its students yet: only its id comes
+    const open = listed.filter((c) => !c.access_restricted_by_date);
+    const { refused } = await this.ingest.courses(
+      open.map((c) => courseRecord(this.base, c)),
+    );
+    const skipped = refused.map(({ externalId, error }) => {
+      this.logger.warn(`course ${externalId} skipped: ${error.message}`);
+      return Number(externalId);
+    });
+    const courses = open.filter((c) => !skipped.includes(c.id));
+    const ended: { pass: CoursePass; fetch: FoundFile[] }[] = [];
     for (const course of courses) {
-      // not open to its students yet: only its id comes
-      if (course.access_restricted_by_date) continue;
-      const synced = await this.skipRefused(`course ${course.id}`, () =>
-        this.sync(course, state),
+      const synced = await this.skipRefused(`course ${course.id}`, async () =>
+        ended.push(await this.sync(course, state)),
       );
       if (!synced) skipped.push(course.id);
     }
+    for (const { pass, fetch } of ended)
+      for (const { record, download } of fetch)
+        await this.skipRefused(`file ${record.externalId}`, async () =>
+          pass.content(record.externalId, await this.api.download(download)),
+        );
     if (skipped.length)
       throw new Error(
         `canvas courses ${skipped.join(', ')} skipped this run, see the warnings`,
@@ -49,38 +73,34 @@ export class CanvasSync {
   }
 
   private async sync(course: Course, state: SyncState) {
-    await this.ingest.course(courseRecord(this.base, course));
-    const walk = new CourseWalk(this.api, this.base, course.id);
-    const last = state.courses[course.id];
-    state.courses[course.id] = await this.write(await walk.read(), last);
-    await this.ingest.saveState(state);
-  }
-
-  // the course's records, then what is gone from it; the listings to keep
-  private async write(content: CourseContent, last?: Listings) {
-    for (const item of content.items)
-      await this.skipRefused(`item ${item.externalId}`, () =>
-        this.ingest.item(item),
-      );
-    for (const file of content.files)
-      await this.skipRefused(`file ${file.record.externalId}`, () =>
-        this.file(file),
-      );
-    const { listings, gone } = settle(last, content.listings);
-    for (const id of gone.items) await this.ingest.removeItem(id);
-    for (const id of gone.files) await this.ingest.removeFile(id);
-    return listings;
-  }
-
-  // what the file is, every run; its content only when the hub asks
-  private async file({ record, download }: FoundFile) {
-    const { needsContent } = await this.ingest.file(record);
-    // locked for the token's user for now: the next run tries again
-    if (!needsContent || !download) return;
-    await this.ingest.content(
-      record.externalId,
-      await this.api.download(download),
+    const walk = new CourseWalk(this.api, this.base, course.id, this.view);
+    const content = await walk.read();
+    const pass = await this.ingest.pass(String(course.id));
+    const { listings, ending, gone } = settle(
+      state.courses[course.id],
+      content.listings,
     );
+    const fetch = await this.send(pass, content);
+    state.courses[course.id] = ending;
+    await this.ingest.saveState(state);
+    await pass.end(gone);
+    state.courses[course.id] = listings;
+    await this.ingest.saveState(state);
+    return { pass, fetch };
+  }
+
+  // the course's records; the files whose content the hub asks for
+  private async send(pass: CoursePass, content: CourseContent) {
+    for (const item of content.items)
+      await this.skipRefused(`item ${item.externalId}`, () => pass.item(item));
+    const fetch: FoundFile[] = [];
+    for (const file of content.files)
+      await this.skipRefused(`file ${file.record.externalId}`, async () => {
+        // locked for the token's user for now: a later run tries again
+        const seen = { locked: !file.download };
+        if ((await pass.file(file.record, seen)).fetch) fetch.push(file);
+      });
+    return fetch;
   }
 
   // A record the hub refuses, or a request Canvas refuses or fails (a

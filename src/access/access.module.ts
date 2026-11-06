@@ -31,7 +31,8 @@ import { AccessSearchModule } from './search.module.js';
       inject: [Reflector],
       useFactory: throttlerOptions,
     }),
-    // MCP's @ApiKeyAuth() guard authenticates through it
+    // MCP's @McpAuth() guard authenticates through it, and its Origin check
+    // takes the hub's trusted origins
     IdentityModule,
     StorageModule,
     // the search route and tool, with processing's index

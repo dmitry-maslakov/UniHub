@@ -5,4 +5,6 @@ import type { Connection } from './connection.js';
 export abstract class SyncStateRepository {
   abstract get(connection: Connection): Promise<Json | null>;
   abstract save(connection: Connection, state: Json): Promise<void>;
+  // the connection's gone: a user's account unlinked or replaced
+  abstract remove(connection: Connection): Promise<void>;
 }
