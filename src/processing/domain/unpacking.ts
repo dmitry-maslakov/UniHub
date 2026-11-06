@@ -12,8 +12,13 @@ export interface UnpackingKey {
 }
 
 // why a member was listed but not kept, or a container in it not opened
-export type LeftOut =
-  'TOO_LARGE' | 'OVER_BUDGET' | 'DUPLICATE_PATH' | 'TOO_DEEP';
+export const LEFT_OUT = [
+  'TOO_LARGE',
+  'OVER_BUDGET',
+  'DUPLICATE_PATH',
+  'TOO_DEEP',
+] as const;
+export type LeftOut = (typeof LEFT_OUT)[number];
 
 export interface Member {
   path: string;

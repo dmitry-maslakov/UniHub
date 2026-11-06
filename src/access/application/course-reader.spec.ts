@@ -14,7 +14,9 @@ import {
 } from '../../catalog/contracts.js';
 import { ReadScopeQuery } from '../../identity/contracts.js';
 import {
+  FindMemberQuery,
   GetTextPageQuery,
+  ListMembersQuery,
   ListTextsQuery,
 } from '../../processing/contracts.js';
 import { CourseReader } from './course-reader.js';
@@ -47,6 +49,16 @@ const text = {
   version: 2,
   pages: 3,
 };
+// f1 holds an archive too, with this member kept
+const code = 'int main;';
+const cMime = MediaType.parse('text/x-c');
+const main = {
+  path: 'lab/main.c',
+  size: code.length,
+  mime: cMime,
+  leftOut: null,
+  texts: [text],
+};
 
 // ana reads os; catalog has os and net, three files and a text of f1
 function reader() {
@@ -75,13 +87,21 @@ function reader() {
         files.find((f) => f.id === fileId) ?? null,
     ],
     [ListTextsQuery, () => [text]],
+    [ListMembersQuery, () => [main]],
+    [
+      FindMemberQuery,
+      ({ hash: container, path }: FindMemberQuery) =>
+        container === hash && path === main.path
+          ? { hash: sha256(code), mime: cMime }
+          : null,
+    ],
     [
       GetTextPageQuery,
       ({ page }: GetTextPageQuery) =>
         page <= text.pages ? { ...text, page, text: `page ${page}` } : null,
     ],
   ]);
-  const blobs = new InMemoryBlobs({ holding: [content] });
+  const blobs = new InMemoryBlobs({ holding: [content, code] });
   return { queries, reader: new CourseReader(queries.queries, blobs) };
 }
 
@@ -138,18 +158,64 @@ describe('CourseReader', () => {
 
   it('reads text and content only of a file that has some', async () => {
     const { reader: r } = reader();
-    expect(await r.text('ana', 'f1', 2)).toEqual(
+    expect(await r.text('ana', 'f1', { page: 2 })).toEqual(
       expect.objectContaining({ page: 2, text: 'page 2' }),
     );
-    await expect(r.text('ana', 'f1', 4)).rejects.toThrowError(
+    await expect(r.text('ana', 'f1', { page: 4 })).rejects.toThrowError(
       new NotReadableError('page'),
     );
-    await expect(r.text('ana', 'f3', 1)).rejects.toThrowError(
+    await expect(r.text('ana', 'f3', { page: 1 })).rejects.toThrowError(
       new NotReadableError('file'),
     );
 
     const { stream, name } = await r.content('ana', 'f1');
     expect(name).toBe('f1.pdf');
     expect((await stream.toArray()).join('')).toBe(content);
+  });
+
+  it('pages the members of a file it may read', async () => {
+    const { reader: r, queries } = reader();
+
+    expect(await r.members('ana', 'f1', { offset: 5, limit: 10 })).toEqual([
+      main,
+    ]);
+    expect(queries.sent).toContainEqual(new ListMembersQuery(hash, 5, 10));
+    await expect(
+      r.members('ana', 'f2', { offset: 0, limit: 10 }),
+    ).rejects.toThrowError(new NotReadableError('file'));
+    // no content yet, so no members
+    expect(await r.members('ana', 'f3', { offset: 0, limit: 10 })).toEqual([]);
+  });
+
+  it('reads a member kept in a file it may read, by its path', async () => {
+    const { reader: r, queries } = reader();
+
+    expect(
+      await r.text('ana', 'f1', { page: 1, member: 'lab/main.c' }),
+    ).toEqual(expect.objectContaining({ text: 'page 1' }));
+    // looked up in the tree of the file's own content, and no other
+    expect(queries.sent).toContainEqual(
+      new FindMemberQuery(hash, 'lab/main.c'),
+    );
+    expect(queries.sent).toContainEqual(
+      new GetTextPageQuery(sha256(code), 1, undefined),
+    );
+    const { stream, name, mime } = await r.content('ana', 'f1', 'lab/main.c');
+    expect({ name, mime }).toEqual({ name: 'main.c', mime: cMime });
+    expect((await stream.toArray()).join('')).toBe(code);
+  });
+
+  it('finds no member not kept, and looks up none in a file it may not read', async () => {
+    const { reader: r, queries } = reader();
+
+    await expect(
+      r.text('ana', 'f1', { page: 1, member: 'lab/gone.c' }),
+    ).rejects.toThrowError(new NotReadableError('member'));
+    await expect(r.content('ana', 'f2', 'lab/main.c')).rejects.toThrowError(
+      new NotReadableError('file'),
+    );
+    expect(
+      queries.sent.filter((q) => q instanceof FindMemberQuery),
+    ).toHaveLength(1);
   });
 });

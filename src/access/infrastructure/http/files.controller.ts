@@ -15,12 +15,22 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { create as contentDisposition } from 'content-disposition';
-import type { z } from 'zod';
 import { CurrentUserId } from '../../../identity/contracts.js';
 import { CourseReader } from '../../application/course-reader.js';
-import { textPageSchema } from '../../application/page.js';
+import {
+  memberSchema,
+  pageSchema,
+  textPageSchema,
+  type MemberAt,
+  type Page,
+  type TextAt,
+} from '../../application/page.js';
 import { Limited } from '../throttle.js';
-import { FileDetailsResponse, TextPageResponse } from './responses.js';
+import {
+  FileDetailsResponse,
+  MemberResponse,
+  TextPageResponse,
+} from './responses.js';
 
 @ApiTags('files')
 @ApiBearerAuth()
@@ -39,30 +49,49 @@ export class FilesController {
     return this.reader.file(userId, id);
   }
 
+  @Get(':id/members')
+  @ApiOkResponse({
+    type: [MemberResponse],
+    description:
+      'the files inside an archive (zip, tar, gz) the file is, in the order it lists them; none for another file',
+  })
+  members(
+    @CurrentUserId() userId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query({ schema: pageSchema }) page: Page,
+  ): Promise<MemberResponse[]> {
+    return this.reader.members(userId, id, page);
+  }
+
   @Get(':id/text')
   @ApiOkResponse({
     type: TextPageResponse,
-    description: 'one page, slide or section of the text made from the file',
+    description:
+      'one page, slide or section of the text made from the file, or from a file inside it',
   })
   text(
     @CurrentUserId() userId: string,
     @Param('id', ParseUUIDPipe) id: string,
-    @Query({ schema: textPageSchema })
-    { page, processor }: z.output<typeof textPageSchema>,
+    @Query({ schema: textPageSchema }) at: TextAt,
   ): Promise<TextPageResponse> {
-    return this.reader.text(userId, id, page, processor);
+    return this.reader.text(userId, id, at);
   }
 
   @Get(':id/content')
   @ApiProduces('application/octet-stream')
-  @ApiOkResponse({ description: 'the file as the portal had it' })
-  // the type is the portal's word; a browser must not guess another
+  @ApiOkResponse({
+    description:
+      'the file as the portal had it, or a file inside it as its archive had it',
+  })
+  // the type is the portal's word, or the archive's; a browser must not
+  // guess another
   @Header('X-Content-Type-Options', 'nosniff')
   async content(
     @CurrentUserId() userId: string,
     @Param('id', ParseUUIDPipe) id: string,
+    @Query({ schema: memberSchema }) { member }: MemberAt,
   ) {
-    const file = await this.reader.content(userId, id);
+    const file = await this.reader.content(userId, id, member);
     return new StreamableFile(file.stream, {
       // a media type's essence is type/subtype, which a header carries
       type: file.mime ?? 'application/octet-stream',
