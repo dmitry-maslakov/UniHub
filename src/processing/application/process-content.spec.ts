@@ -9,6 +9,7 @@ import {
   FakeFiles,
   FakeTextIndexQueue,
   InMemoryRepresentations,
+  namesOf,
 } from './processing.fakes.js';
 
 const lecture = '%PDF lecture';
@@ -29,10 +30,16 @@ function run(
   const blobs = new InMemoryBlobs({ holding: [lecture] });
   const representations = new InMemoryRepresentations();
   const textIndex = new FakeTextIndexQueue();
+  const plugins = catalogOf({
+    processors: [processor('pdf', ['.pdf'], instance, version)],
+  });
   const process = new ProcessContent(
-    catalogOf({ processors: [processor('pdf', ['.pdf'], instance, version)] }),
-    new FakeFiles(
-      new Map(files.map((f, i) => [`f${i}`, { mime, hash, ...f }])),
+    plugins,
+    namesOf(
+      new FakeFiles(
+        new Map(files.map((f, i) => [`f${i}`, { mime, hash, ...f }])),
+      ),
+      plugins,
     ),
     blobs,
     representations,
@@ -118,9 +125,15 @@ describe('ProcessContent', () => {
 
   it('stores the same with search off, without the queue', async () => {
     const representations = new InMemoryRepresentations();
+    const plugins = catalogOf({
+      processors: [processor('pdf', ['.pdf'], parts('text'))],
+    });
     const process = new ProcessContent(
-      catalogOf({ processors: [processor('pdf', ['.pdf'], parts('text'))] }),
-      new FakeFiles(new Map([['f0', { name: 'a.pdf', mime, hash }]])),
+      plugins,
+      namesOf(
+        new FakeFiles(new Map([['f0', { name: 'a.pdf', mime, hash }]])),
+        plugins,
+      ),
       new InMemoryBlobs({ holding: [lecture] }),
       representations,
     );
@@ -132,9 +145,10 @@ describe('ProcessContent', () => {
 
   it('skips a processor turned off since the job was queued', async () => {
     const representations = new InMemoryRepresentations();
+    const plugins = catalogOf({});
     const process = new ProcessContent(
-      catalogOf({}),
-      new FakeFiles(),
+      plugins,
+      namesOf(new FakeFiles(), plugins),
       new InMemoryBlobs(),
       representations,
     );

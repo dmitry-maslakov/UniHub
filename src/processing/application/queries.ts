@@ -25,7 +25,9 @@ export class ListTextsQuery extends Query<TextInfo[]> {
 }
 
 // one page (from 1) of the newest text made of some content; the first
-// processor's unless one is named. null if there's no such page
+// processor's unless one is named. null if there's no such page. An
+// archive's text is its entries' (content-texts.ts), each page headed by
+// the entry's path
 export class GetTextPageQuery extends Query<TextPage | null> {
   constructor(
     public readonly hash: ContentHash,
@@ -50,13 +52,17 @@ export interface TextHit {
   pages: {
     processor: PluginName;
     version: number;
+    // of the content's text, as GetTextPageQuery pages it
     page: number;
     snippet: Snippet;
+    // the entry it's in, for a page of an archive's entry
+    path?: string;
   }[];
 }
 
 // The contents among these whose newest texts match, best first, at most
-// `limit`, with their best pages. With an embedder, those nearest the
+// `limit`, with their best pages; an archive by its entries' texts too.
+// With an embedder, those nearest the
 // query's meaning too: knn always has nearest ones, so then there are up to
 // `limit` even when none has the words. The index knows nothing of who
 // reads what: `hashes` are all it looks through.

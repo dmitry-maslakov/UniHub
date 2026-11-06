@@ -8,8 +8,10 @@ import { PortalId } from '@app/kernel';
 import {
   aggregator,
   catalogOf,
+  expander,
   processor,
 } from '../../../test/discovered-plugins.js';
+import { MAX_DEPTH } from '../domain/expansion.js';
 import { Dispatch } from './dispatch.js';
 import { jobId } from './plugin-job.js';
 import { sha256 } from '../../../test/sha256.js';
@@ -26,6 +28,7 @@ const stored = (fileId: string, content = hash): Message => ({
 function dispatch() {
   const plugins = catalogOf({
     processors: [processor('pdf', ['.pdf']), processor('slides', ['.pptx'])],
+    expanders: [expander('archives', ['.zip'])],
     aggregators: [
       aggregator('feed', [ITEM_INGESTED, ITEM_REMOVED]),
       aggregator('files', [FILE_CONTENT_STORED]),
@@ -72,6 +75,26 @@ describe('Dispatch', () => {
   it('queues no processing of content the file holds no more', async () => {
     const jobs = await dispatch().jobsFor('m1', stored('a', sha256('old')));
     expect(jobs.map((job) => job.kind)).toEqual(['handle']);
+  });
+
+  it("gives a name's content to the expanders that take it, while it's less than MAX_DEPTH deep", async () => {
+    const d = dispatch();
+    const named = (depth: number) => ({
+      name: 'lab/labs.zip',
+      mime: null,
+      hash,
+      depth,
+    });
+
+    expect(d.jobs(named(MAX_DEPTH - 1))).toEqual([
+      { kind: 'expand', key: { hash, expander: 'archives', version: 1 } },
+    ]);
+    expect(d.jobs(named(MAX_DEPTH))).toEqual([]);
+    expect(
+      d.jobs({ name: 'lab/l1.pdf', mime: null, hash, depth: MAX_DEPTH }),
+    ).toEqual([
+      { kind: 'process', key: { hash, processor: 'pdf', version: 1 } },
+    ]);
   });
 
   it('gives the same work one id, from any message or file', async () => {

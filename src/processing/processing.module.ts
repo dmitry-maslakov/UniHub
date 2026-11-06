@@ -5,21 +5,24 @@ import { whenSearchOn } from '../platform/search/opensearch.config.js';
 import { PluginsModule } from '../plugins/contracts.js';
 import { StorageModule } from '../storage/contracts.js';
 import { DeliverMessage } from './application/deliver-message.js';
+import { ContentMembers } from './application/content-members.js';
+import { ContentNames } from './application/content-names.js';
 import { Dispatch } from './application/dispatch.js';
-import { FileFacts, PluginJobQueue } from './application/ports.js';
+import { ExpandContent } from './application/expand-content.js';
+import { FileFacts, PluginJobQueue, TextReads } from './application/ports.js';
 import { ProcessContent } from './application/process-content.js';
 import { Reconcile } from './application/reconcile.js';
 import { SearchTexts } from './application/search-texts.js';
+import { GetTextPage, ListTexts } from './application/texts.js';
+import { ExpansionRepository } from './domain/expansion.js';
 import { RepresentationRepository } from './domain/representation.js';
 import { BullmqPluginJobQueue } from './infrastructure/bullmq-plugin-job-queue.js';
 import { CatalogFileFacts } from './infrastructure/catalog-file-facts.js';
 import { PLUGINS_QUEUE } from './infrastructure/plugins.queue.js';
 import { PluginsWorker } from './infrastructure/plugins.worker.js';
+import { PrismaExpansionRepository } from './infrastructure/prisma-expansion.repository.js';
 import { PrismaRepresentationRepository } from './infrastructure/prisma-representation.repository.js';
-import {
-  GetTextPageHandler,
-  ListTextsHandler,
-} from './infrastructure/read/texts.read.js';
+import { PrismaTextReads } from './infrastructure/read/texts.read.js';
 import { ReconcileSchedule } from './infrastructure/reconcile.schedule.js';
 import { TextSearchModule } from './infrastructure/search/text-search.module.js';
 
@@ -49,12 +52,15 @@ const DAY = 24 * 60 * 60;
     whenSearchOn(TextSearchModule),
   ],
   providers: [
-    ListTextsHandler,
-    GetTextPageHandler,
+    ListTexts,
+    GetTextPage,
+    ContentMembers,
     SearchTexts,
     Dispatch,
     DeliverMessage,
+    ContentNames,
     ProcessContent,
+    ExpandContent,
     Reconcile,
     PluginsWorker,
     ReconcileSchedule,
@@ -62,7 +68,9 @@ const DAY = 24 * 60 * 60;
       provide: RepresentationRepository,
       useClass: PrismaRepresentationRepository,
     },
+    { provide: ExpansionRepository, useClass: PrismaExpansionRepository },
     { provide: FileFacts, useClass: CatalogFileFacts },
+    { provide: TextReads, useClass: PrismaTextReads },
     { provide: PluginJobQueue, useClass: BullmqPluginJobQueue },
   ],
   // for PluginsOutboxTransport: the outbox makes it, with this module's

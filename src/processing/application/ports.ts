@@ -5,6 +5,7 @@ import {
   type PluginName,
 } from '@app/kernel';
 import type { TextChunk } from '../domain/chunks.js';
+import type { StoredText } from '../domain/content-texts.js';
 import type { RepresentationKey } from '../domain/representation.js';
 import type { PluginJob } from './plugin-job.js';
 import type { TextHit } from './queries.js';
@@ -25,6 +26,19 @@ export abstract class FileFacts {
   abstract holding(hash: ContentHash): Promise<FileFact[]>;
   // every file that has content and isn't removed
   abstract withContent(): AsyncIterable<FileFact & { hash: ContentHash }>;
+}
+
+// the processors' texts as stored, the newest version of each
+export abstract class TextReads {
+  // of these contents, each processor's newest text, without its parts
+  abstract newest(hashes: readonly ContentHash[]): Promise<StoredText[]>;
+  // a page (from 1) of a processor's newest text of a content; null past
+  // its last
+  abstract page(
+    hash: ContentHash,
+    processor: PluginName,
+    page: number,
+  ): Promise<string | null>;
 }
 
 export abstract class PluginJobQueue {

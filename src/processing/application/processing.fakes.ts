@@ -1,17 +1,25 @@
 import type { ContentHash, PluginName } from '@app/kernel';
+import type { PluginCatalog } from '../../plugins/contracts.js';
 import type { TextChunk } from '../domain/chunks.js';
+import {
+  ExpansionRepository,
+  type Expansion,
+  type ExpansionKey,
+} from '../domain/expansion.js';
 import {
   keyId,
   RepresentationRepository,
   type Representation,
   type RepresentationKey,
 } from '../domain/representation.js';
+import { ContentNames } from './content-names.js';
 import type { PluginJob } from './plugin-job.js';
 import {
   FileFacts,
   PluginJobQueue,
   TextIndex,
   TextIndexQueue,
+  TextReads,
   type FileFact,
   type TextQuery,
 } from './ports.js';
@@ -40,6 +48,51 @@ export class FakeFiles extends FileFacts {
     yield* this.files.values();
   }
 }
+
+const sameKey = (a: ExpansionKey, b: ExpansionKey) =>
+  a.hash === b.hash && a.expander === b.expander && a.version === b.version;
+
+export class InMemoryExpansions extends ExpansionRepository {
+  readonly saved: Expansion[] = [];
+
+  async exists(key: ExpansionKey) {
+    return (await this.find(key)) !== null;
+  }
+
+  async find(key: ExpansionKey) {
+    return this.saved.find((saved) => sameKey(saved, key)) ?? null;
+  }
+
+  async newestOf(hashes: readonly ContentHash[]) {
+    return this.saved.filter(
+      (saved) =>
+        hashes.includes(saved.hash) &&
+        !this.saved.some(
+          (other) =>
+            other.hash === saved.hash &&
+            other.expander === saved.expander &&
+            other.version > saved.version,
+        ),
+    );
+  }
+
+  async naming(hash: ContentHash) {
+    return (await this.newestOf(this.saved.map((saved) => saved.hash))).filter(
+      ({ entries }) => entries.some((entry) => entry.hash === hash),
+    );
+  }
+
+  async save(expansion: Expansion) {
+    if (!(await this.exists(expansion))) this.saved.push(expansion);
+  }
+}
+
+// the names of the files' contents, and of the entries of these expansions
+export const namesOf = (
+  files: FileFacts,
+  plugins: PluginCatalog,
+  expansions: ExpansionRepository = new InMemoryExpansions(),
+) => new ContentNames(files, expansions, plugins);
 
 export class FakeQueue extends PluginJobQueue {
   readonly enqueued: PluginJob[] = [];
@@ -86,6 +139,31 @@ export class InMemoryRepresentations extends RepresentationRepository {
 
   async save(representation: Representation) {
     this.saved.push(representation);
+  }
+}
+
+// the newest texts of what these representations saved
+export class InMemoryTextReads extends TextReads {
+  constructor(readonly representations = new InMemoryRepresentations()) {
+    super();
+  }
+
+  async newest(hashes: readonly ContentHash[]) {
+    const texts = [];
+    for await (const key of this.representations.newestKeys())
+      if (hashes.includes(key.hash)) {
+        const { parts } = (await this.representations.newest(
+          key.hash,
+          key.processor,
+        ))!;
+        texts.push({ ...key, pages: parts.length });
+      }
+    return texts;
+  }
+
+  async page(hash: ContentHash, processor: PluginName, page: number) {
+    const newest = await this.representations.newest(hash, processor);
+    return newest?.parts[page - 1] ?? null;
   }
 }
 

@@ -10,3 +10,18 @@ model Representation {
 
   @@id([hash, processor, version])
 }
+
+// What a content expander made of some content (an archive): its entries,
+// [{ path, hash, size }], each stored as a content of its own. Keyed as
+// Representation is.
+model Expansion {
+  hash      String
+  expander  String
+  version   Int
+  entries   Json
+  createdAt DateTime @default(now())
+
+  @@id([hash, expander, version])
+  // the expansions with an entry holding a content (entries @> ...)
+  @@index([entries(ops: JsonbPathOps)], type: Gin)
+}

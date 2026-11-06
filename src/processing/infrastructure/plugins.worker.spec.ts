@@ -5,6 +5,7 @@ import { PluginName } from '@app/kernel';
 import { sha256 } from '../../../test/sha256.js';
 import type { PrismaService } from '../../platform/database/prisma.service.js';
 import type { DeliverMessage } from '../application/deliver-message.js';
+import type { ExpandContent } from '../application/expand-content.js';
 import type { PluginJob } from '../application/plugin-job.js';
 import type { ProcessContent } from '../application/process-content.js';
 import { OUTAGE_PAUSE_MS } from './pausing.worker.js';
@@ -38,6 +39,7 @@ function worker(database: 'up' | 'down') {
     worker: new PluginsWorker(
       {} as DeliverMessage,
       processContent,
+      {} as ExpandContent,
       health,
       {} as PrismaService,
       queue as unknown as Queue<PluginJob>,

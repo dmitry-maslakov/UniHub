@@ -10,7 +10,13 @@ import {
   type QueryEmbedder,
   type Reranker,
 } from './ports.js';
-import { InMemoryTextIndex } from './processing.fakes.js';
+import { ContentMembers } from './content-members.js';
+import {
+  InMemoryExpansions,
+  InMemoryRepresentations,
+  InMemoryTextIndex,
+  InMemoryTextReads,
+} from './processing.fakes.js';
 import { SearchTextsQuery, type TextHit } from './queries.js';
 import { SearchTexts } from './search-texts.js';
 
@@ -49,7 +55,16 @@ function searching(
 ) {
   const index = new InMemoryTextIndex();
   index.hits = hits;
-  return { index, search: new SearchTexts(index, embedder, reranker) };
+  return {
+    index,
+    search: new SearchTexts(
+      new ContentMembers(new InMemoryExpansions()),
+      new InMemoryTextReads(),
+      index,
+      embedder,
+      reranker,
+    ),
+  };
 }
 
 describe('SearchTexts', () => {
@@ -74,7 +89,6 @@ describe('SearchTexts', () => {
     await search.execute(new SearchTextsQuery('C\u030Cac\u030Cak', hashes, 5));
 
     expect(index.searched).toEqual([{ text: 'Čačak', hashes, size: 5 }]);
-    expect(index.searched[0].hashes).toBe(hashes);
   });
 
   it('asks by the meaning too, of the words as NFC', async () => {
@@ -284,7 +298,10 @@ describe('SearchTexts', () => {
   });
 
   it('answers search being off without an index, whatever it is asked', async () => {
-    const search = new SearchTexts();
+    const search = new SearchTexts(
+      new ContentMembers(new InMemoryExpansions()),
+      new InMemoryTextReads(),
+    );
 
     for (const hashes of [[notes], []]) {
       const failed = search.execute(
@@ -306,5 +323,111 @@ describe('SearchTexts', () => {
     await expect(
       search.execute(new SearchTextsQuery('semafor', [notes], 10)),
     ).rejects.toBe(bug);
+  });
+});
+
+describe('SearchTexts in archives', () => {
+  const labs = sha256('labs.zip');
+  const main = sha256('main.c');
+  const slides = sha256('slides.pdf');
+  const plain = PluginName.parse('plain-text');
+  const office = PluginName.parse('office-text');
+
+  const page = (
+    processor: PluginName,
+    number: number,
+  ): TextHit['pages'][number] => ({
+    processor,
+    version: 1,
+    page: number,
+    snippet: { text: `page ${number}`, highlights: [] },
+  });
+
+  // labs.zip holds lab/main.c (plain-text, 2 pages) and slides.pdf
+  // (office-text, 3 pages, and plain-text, 1)
+  async function searchingIn(hits: TextHit[]) {
+    const expansions = new InMemoryExpansions();
+    await expansions.save({
+      hash: labs,
+      expander: PluginName.parse('archives'),
+      version: 1,
+      entries: [
+        { path: 'lab/main.c', hash: main, size: 10 },
+        { path: 'slides.pdf', hash: slides, size: 100 },
+      ],
+    });
+    const representations = new InMemoryRepresentations();
+    for (const [hash, processor, parts] of [
+      [main, plain, ['a', 'b']],
+      [slides, office, ['1', '2', '3']],
+      [slides, plain, ['x']],
+    ] as const)
+      await representations.save({
+        hash,
+        processor,
+        version: 1,
+        parts: [...parts],
+      });
+    const index = new InMemoryTextIndex();
+    index.hits = hits;
+    const search = new SearchTexts(
+      new ContentMembers(expansions),
+      new InMemoryTextReads(representations),
+      index,
+    );
+    return { index, search };
+  }
+
+  it("looks through an archive's entries too", async () => {
+    const { index, search } = await searchingIn([]);
+
+    await search.execute(new SearchTextsQuery('main', [labs], 5));
+
+    expect(index.searched[0].hashes).toEqual([labs, main, slides]);
+  });
+
+  it("finds an entry as its archive, on the page of the archive's text, with the entry's path", async () => {
+    const { search } = await searchingIn([
+      { hash: slides, pages: [page(plain, 1), page(office, 2)] },
+    ]);
+
+    expect(await search.execute(new SearchTextsQuery('x', [labs], 5))).toEqual([
+      {
+        hash: labs,
+        pages: [
+          { ...page(plain, 1), page: 3, path: 'slides.pdf' },
+          { ...page(office, 2), path: 'slides.pdf' },
+        ],
+      },
+    ]);
+  });
+
+  it("puts an archive's entries together where the first came, at most 3 pages", async () => {
+    const { search } = await searchingIn([
+      { hash: main, pages: [page(plain, 2), page(plain, 1)] },
+      hit(notes, 1),
+      { hash: slides, pages: [page(office, 1), page(office, 3)] },
+    ]);
+
+    const found = await search.execute(
+      new SearchTextsQuery('x', [labs, notes], 5),
+    );
+
+    expect(found.map(({ hash }) => hash)).toEqual([labs, notes]);
+    expect(found[0].pages.map(({ path, page }) => [path, page])).toEqual([
+      ['lab/main.c', 2],
+      ['lab/main.c', 1],
+      ['slides.pdf', 1],
+    ]);
+  });
+
+  it('finds an entry asked for itself as itself', async () => {
+    const { search } = await searchingIn([
+      { hash: main, pages: [page(plain, 2)] },
+    ]);
+
+    expect(
+      await search.execute(new SearchTextsQuery('x', [labs, main], 5)),
+    ).toEqual([{ hash: main, pages: [page(plain, 2)] }]);
   });
 });
