@@ -25,6 +25,27 @@ async function zipOf(
   return buffer(zip.outputStream);
 }
 
+// The zip without the flag that says its names are UTF-8, as macOS writes
+// one, each name's bytes replaced by those given of the same length: in the
+// local and the central headers both
+function unflagged(zip: Buffer, names: [string, Buffer][] = []) {
+  const out = Buffer.from(zip);
+  for (const [signature, flag] of [
+    ['PK\x03\x04', 6],
+    ['PK\x01\x02', 8],
+  ] as const)
+    for (
+      let at = out.indexOf(signature, 0, 'latin1');
+      at !== -1;
+      at = out.indexOf(signature, at + 4, 'latin1')
+    )
+      out.writeUInt16LE(out.readUInt16LE(at + flag) & ~0x800, at + flag);
+  for (const [name, bytes] of names)
+    for (let at = out.indexOf(name); at !== -1; at = out.indexOf(name, at + 1))
+      bytes.copy(out, at);
+  return out;
+}
+
 // these files, then entries of other types
 async function tarOf(
   files: Record<string, string>,
@@ -84,7 +105,7 @@ describe('membersOf', () => {
     ]);
   });
 
-  it('yields the names a zip gives, for the hub to make safe, and leaves out what it packs other than by deflate', async () => {
+  it('yields the names a zip gives, for the hub to make safe, and leaves out what it packs other than stored or deflated', async () => {
     // made with Python's zipfile, which writes any name: ../escape.c,
     // /etc/abs.c, lab/../../up.c, lab\win.c, lab/bzip2.c (bzip2), lab/fine.c
     const hostile = readFileSync(
@@ -95,18 +116,31 @@ describe('membersOf', () => {
       '../escape.c',
       '/etc/abs.c',
       'lab/../../up.c',
-      'lab/win.c',
+      // the hub's to turn into lab/win.c
+      'lab\\win.c',
       'lab/fine.c',
     ]);
   });
 
-  it('leaves out a zip entry packed past the ratio', async () => {
-    const zip = await zipOf({
-      'zeros.txt': '0'.repeat(1024 * 1024),
-      'notes.txt': 'notes\n',
-    });
+  it('reads names in UTF-8 that a zip, made on a Mac, says nothing of, and the rest in CP437', async () => {
+    const zip = await zipOf({ 'Vežbe/čas.c': 'a', 'cafX.c': 'b' });
 
-    expect(paths(await read('labs.zip', zip))).toEqual(['notes.txt']);
+    expect(
+      paths(
+        await read(
+          'labs.zip',
+          unflagged(zip, [['cafX.c', Buffer.from('caf\x82.c', 'latin1')]]),
+        ),
+      ),
+    ).toEqual(['Vežbe/čas.c', 'café.c']);
+  });
+
+  it('yields an entry however far it packs: the hub counts what it unpacks to', async () => {
+    const zip = await zipOf({ 'zeros.txt': '0'.repeat(1024 * 1024) });
+
+    expect(await read('labs.zip', zip)).toEqual([
+      { path: 'zeros.txt', size: 1024 * 1024, text: '0'.repeat(1024 * 1024) },
+    ]);
   });
 
   it('fails on a zip past its limit, or what is no zip', async () => {
@@ -132,6 +166,20 @@ describe('membersOf', () => {
       { path: './lab/main.c', size: 10, text: 'int main;\n' },
       { path: '../escape.c', size: 13, text: 'int escaped;\n' },
     ]);
+  });
+
+  it('closes what it read when the hub stops asking', async () => {
+    const data = gzipSync(await tarOf({ 'a.c': 'a', 'b.c': 'b' }));
+    const source = Readable.from([data]);
+    const members = membersOf(
+      { ...input('labs.tgz', data), content: async () => source },
+      LIMITS,
+    );
+
+    await members.next();
+    await members.return(undefined);
+
+    await vi.waitFor(() => expect(source.destroyed).toBe(true));
   });
 
   it('goes on past the members the hub lets go of partway, or reads none of', async () => {
