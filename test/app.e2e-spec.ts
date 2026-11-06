@@ -38,6 +38,8 @@ describe('the HTTP app', () => {
         '/api/search',
         '/api/users/{userId}/courses/{courseId}',
         '/api/portal-courses/{portal}/{externalId}/course',
+        '/api/me/portals',
+        '/api/me/portals/{portal}/token',
       ]),
     );
     expect(doc.paths['/api/courses/{slug}/items'].get.parameters).toEqual(
@@ -54,5 +56,11 @@ describe('the HTTP app', () => {
       doc.paths['/api/courses'].post.requestBody.content['application/json']
         .schema,
     ).toMatchObject({ properties: { slug: {}, name: {} } });
+    // set, never read back
+    expect(
+      doc.paths['/api/me/portals/{portal}/token'].put.requestBody.content[
+        'application/json'
+      ].schema,
+    ).toMatchObject({ properties: { token: { writeOnly: true } } });
   });
 });

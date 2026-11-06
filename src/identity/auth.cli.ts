@@ -20,4 +20,6 @@ export const auth = createAuth({
   trustedOrigins: [],
   // so the schema covers Google accounts too
   google: { clientId: 'cli', clientSecret: 'cli' },
+  // it deletes no users
+  onUserDeleted: () => {},
 });

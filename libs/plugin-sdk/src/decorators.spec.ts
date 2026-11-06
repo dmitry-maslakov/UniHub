@@ -1,3 +1,4 @@
+import type { Credential } from './accounts.js';
 import type { ConnectorContext } from './connectors.js';
 import {
   Aggregator,
@@ -53,6 +54,41 @@ describe('plugin decorators', () => {
       UnpackerWithoutUnpack,
       Fine,
     ]).toHaveLength(6);
+  });
+
+  it('fit a connector that names links only if it identifies accounts', () => {
+    // @ts-expect-error links by token, but can't say whose a token is
+    @PollConnector({ portal: 'k', schedule: '* * * * *', links: ['token'] })
+    class PollWithoutIdentify {
+      async poll() {}
+    }
+
+    // @ts-expect-error the same for a push connector
+    @PushConnector({ portal: 'l', links: ['token'] })
+    class PushWithoutIdentify {
+      async run() {}
+    }
+
+    // @ts-expect-error a link no connector can take
+    @PushConnector({ portal: 'm', links: ['password'] })
+    class UnknownLink {
+      async run() {}
+    }
+
+    @PollConnector({ portal: 'n', schedule: '* * * * *', links: ['token'] })
+    class Identifies {
+      async poll() {}
+      async identify({ token }: Credential) {
+        return { id: token.reveal().length.toString(), expiresAt: null };
+      }
+    }
+
+    expect([
+      PollWithoutIdentify,
+      PushWithoutIdentify,
+      UnknownLink,
+      Identifies,
+    ]).toHaveLength(4);
   });
 
   it('give an aggregator the messages of its topics', () => {

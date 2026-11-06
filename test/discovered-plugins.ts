@@ -1,4 +1,5 @@
 import type {
+  AccountLink,
   HandlesMessages,
   PollsPortal,
   ProcessesContent,
@@ -21,15 +22,19 @@ import {
 // Plugins as discovery would find them, for the unit specs of plugins and
 // of processing, which reads them through PluginCatalog.
 
+// `links`: what the connector names in its decorator, which then lets only
+// an instance that identifies accounts through
 export const poll = (
   portal: string,
   instance: PollsPortal = { poll: async () => {} },
-) => ({ spec: pollSpec({ portal, schedule: '0 0 1 1 *' }), instance });
+  links: AccountLink[] = [],
+) => ({ spec: pollSpec({ portal, schedule: '0 0 1 1 *', links }), instance });
 
-export const push = (portal: string, instance: PushesFromPortal) => ({
-  spec: pushSpec({ portal }),
-  instance,
-});
+export const push = (
+  portal: string,
+  instance: PushesFromPortal,
+  links: AccountLink[] = [],
+) => ({ spec: pushSpec({ portal, links }), instance });
 
 export const processor = (
   name: string,

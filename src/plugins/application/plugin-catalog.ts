@@ -1,6 +1,6 @@
 import { Injectable, type OnModuleInit } from '@nestjs/common';
-import type { Topic } from '@app/plugin-sdk';
-import type { MediaType, PluginName, PortalId } from '@app/kernel';
+import type { IdentifiesAccounts, Topic } from '@app/plugin-sdk';
+import type { AccountLink, MediaType, PluginName, PortalId } from '@app/kernel';
 import { ConnectorTokens } from '../../ingest/contracts.js';
 import { PluginSet } from '../domain/plugin-set.js';
 import { PluginDiscovery, type Found } from './plugin-discovery.js';
@@ -69,6 +69,20 @@ export class PluginCatalog implements OnModuleInit {
 
   pollConnector(portal: PortalId) {
     return this.set.plugins.polls.find((c) => c.spec.portal === portal);
+  }
+
+  // The connector that links users' own accounts of the portal by `link`,
+  // null if none here does: it names other links or none, or the portal is
+  // served over gRPC, or by nothing at all.
+  linker(portal: PortalId, link: AccountLink): IdentifiesAccounts | null {
+    const { polls, pushes } = this.set.plugins;
+    const connector = [...polls, ...pushes].find(
+      (c) => c.spec.portal === portal,
+    );
+    if (!connector?.spec.links.includes(link)) return null;
+    // its decorator lets only a connector that identifies accounts name
+    // links, as it lets only a poll connector be found as one
+    return connector.instance as unknown as IdentifiesAccounts;
   }
 
   get pollConnectors() {

@@ -17,14 +17,17 @@ export class Reader {
     return this.ban?.activeAt(now) ?? false;
   }
 
+  // may do what only admins may: an admin, and not banned
+  adminAt(now = new Date()) {
+    return !this.bannedAt(now) && this.roles.includes(ADMIN_ROLE);
+  }
+
   // Admins read every course, everyone else the ones granted to them. A ban
   // ends sessions, but anything that found the user earlier (an API key)
   // must not read either.
   scope(granted: Iterable<string>, now = new Date()) {
     if (this.bannedAt(now)) return ReadScope.none();
-    return this.roles.includes(ADMIN_ROLE)
-      ? ReadScope.all()
-      : ReadScope.of(granted);
+    return this.adminAt(now) ? ReadScope.all() : ReadScope.of(granted);
   }
 }
 

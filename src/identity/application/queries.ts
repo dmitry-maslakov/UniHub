@@ -7,3 +7,11 @@ export class ReadScopeQuery extends Query<ReadScope> {
     super();
   }
 }
+
+// whether the user may do what only admins may, now: an admin, not banned;
+// UnknownUserError for an id no user has
+export class IsAdminQuery extends Query<boolean> {
+  constructor(public readonly userId: string) {
+    super();
+  }
+}

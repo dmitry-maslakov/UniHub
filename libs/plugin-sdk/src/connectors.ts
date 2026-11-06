@@ -1,5 +1,6 @@
 import type { Readable } from 'node:stream';
 import type { ContentHash, Json, PortalId } from '@app/kernel';
+import type { AccountLink } from '@app/kernel';
 import type { CourseRecord, FileRecord, ItemRecord } from './records.js';
 
 // Connectors bring data in from a portal. One is written for one account;
@@ -9,15 +10,22 @@ import type { CourseRecord, FileRecord, ItemRecord } from './records.js';
 // push: the connector keeps its own connection (websocket, long poll...) in
 //       run(). Webhooks will come with the first connector that needs them.
 
-export interface PollConnectorOptions {
+interface ConnectorOptions<L extends AccountLink> {
   portal: string;
+  // how users may link accounts of their own on the portal, besides the
+  // shared one; a connector that names any implements IdentifiesAccounts
+  links?: readonly L[];
+}
+
+export interface PollConnectorOptions<
+  L extends AccountLink = AccountLink,
+> extends ConnectorOptions<L> {
   // a cron pattern, e.g. '*/15 * * * *'
   schedule: string;
 }
 
-export interface PushConnectorOptions {
-  portal: string;
-}
+export type PushConnectorOptions<L extends AccountLink = AccountLink> =
+  ConnectorOptions<L>;
 
 export interface ConnectorContext {
   // account is 'shared' for portals everyone sees the same; per-user later

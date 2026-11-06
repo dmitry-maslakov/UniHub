@@ -53,6 +53,17 @@ export class OtherOriginError extends Error {
   }
 }
 
+// A request that would change something on Canvas: the connector only
+// reads, and a token a user pasted has no scopes to keep it to that
+export class NotAReadError extends Error {
+  constructor(method: string, to: URL) {
+    super(
+      `not sending the canvas token with a ${method.toUpperCase()} to ${to.pathname}: it only reads`,
+    );
+    this.name = new.target.name;
+  }
+}
+
 // what this account doesn't see is null, never an error
 export const visible = <T>(read: Promise<T>) =>
   read.catch((error: unknown) => {

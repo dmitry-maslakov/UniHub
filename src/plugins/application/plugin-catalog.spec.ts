@@ -86,6 +86,26 @@ describe('PluginCatalog', () => {
     ).toEqual([]);
   });
 
+  it('finds the connector that links accounts of a portal by a mode', () => {
+    const identifies = {
+      poll: async () => {},
+      identify: async () => ({ id: '7', expiresAt: null }),
+    };
+    const links = catalogOf({
+      polls: [poll('canvas', identifies, ['token']), poll('moodle')],
+      pushes: [
+        push('teams', { ...identifies, run: async () => {} }, ['token']),
+      ],
+    });
+    const portal = (id: string) => PortalId.parse(id);
+
+    expect(links.linker(portal('canvas'), 'token')).toBe(identifies);
+    expect(links.linker(portal('teams'), 'token')).not.toBeNull();
+    // one that names no links, and a portal no connector here serves
+    expect(links.linker(portal('moodle'), 'token')).toBeNull();
+    expect(links.linker(portal('elsewhere'), 'token')).toBeNull();
+  });
+
   it('stops the app on plugins that break the rules', () => {
     expect(() => catalogOf({ polls: [poll('moodle')] }, ['moodle'])).toThrow(
       PortalHasTwoWritersError,

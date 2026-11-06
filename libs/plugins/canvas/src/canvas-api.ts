@@ -12,6 +12,7 @@ import {
   CanvasError,
   DownloadFailedError,
   NoAnswerError,
+  NotAReadError,
   NotVisibleError,
   OtherOriginError,
   TokenRejectedError,
@@ -44,6 +45,8 @@ export const PAUSE_MS = 2_000;
 // again, a download fails its file) rather than at the poll's timeout. A
 // long download that keeps coming isn't cut.
 const TIMEOUT_MS = 60_000;
+// what a request may do with the token: read
+const READS = new Set(['get', 'head']);
 
 // Canvas's REST API, one request at a time.
 export class CanvasApi {
@@ -62,9 +65,14 @@ export class CanvasApi {
       signal,
       timeout: timeoutMs,
     });
-    // whatever url Canvas gives, the token goes to the school's Canvas only
+    // Whatever url Canvas gives, the token goes to the school's Canvas only,
+    // and only to read: a token a user pastes has no scopes, so it would let
+    // a request do anything its user may. axios has made the method lower
+    // case by now.
     this.http.interceptors.request.use((config) => {
       const to = new URL(axios.getUri(config));
+      const method = config.method ?? 'get';
+      if (!READS.has(method)) throw new NotAReadError(method, to);
       if (to.origin !== canvas) throw new OtherOriginError(to, canvas);
       return config;
     });
