@@ -59,7 +59,10 @@ class LinkingPluginsModule {}
 describe('portal accounts', { timeout: 20_000 }, () => {
   let app: INestApplication;
   const mails: Mail[] = [];
-  const { http, post, signUp, userId, makeAdmin } = accounts(() => app, mails);
+  const { http, post, signIn, signUp, userId, makeAdmin } = accounts(
+    () => app,
+    mails,
+  );
   const tokenOf = (portal: string) => `/api/me/portals/${portal}/token`;
   const put = (cookie: string, portal: string, token: unknown) =>
     http().put(tokenOf(portal)).set('cookie', cookie).send({ token });
@@ -132,7 +135,7 @@ describe('portal accounts', { timeout: 20_000 }, () => {
     keep(await put(bo, 'linked', TOKENS.bad).expect(400));
     keep(
       await http()
-        .put(tokenOf('Not A Portal'))
+        .put(tokenOf('NotAPortal'))
         .set('cookie', bo)
         .send({ token: TOKENS.good })
         .expect(400),
@@ -178,8 +181,9 @@ describe('portal accounts', { timeout: 20_000 }, () => {
     const fy = await signUp('fy@portals.test');
     await put(fy, 'linked', TOKENS.good).expect(204);
     const id = await userId('fy@portals.test');
-    const admin = await signUp('gu@portals.test');
+    await signUp('gu@portals.test');
     await makeAdmin('gu@portals.test');
+    const admin = await signIn('gu@portals.test', 'correct horse 1');
 
     await post('/admin/remove-user', { userId: id }, admin).expect(200);
     const prisma = app.get(PrismaService);
@@ -203,7 +207,7 @@ describe('portal accounts', { timeout: 20_000 }, () => {
       stored.push(
         JSON.stringify(
           await prisma.$queryRawUnsafe(
-            `SELECT row_to_json(r)::text AS row FROM "${s}"."${t}" r`,
+            `SELECT row_to_json(r)::text AS line FROM "${s}"."${t}" r`,
           ),
         ),
       );
