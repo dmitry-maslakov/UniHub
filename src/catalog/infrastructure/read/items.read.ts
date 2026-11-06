@@ -10,40 +10,43 @@ import {
   ListVisibleItemsQuery,
   type ItemDto,
 } from '../../application/queries.js';
-import { itemValues } from '../rows.js';
+import { itemValues, liveSights, portalOf, recordRef, seen } from '../rows.js';
 import { visibleItem } from './visibility.js';
 
+// a version, with its record's ids and whether any account sees it
 const select = {
   id: true,
-  portal: true,
-  externalId: true,
   portalCourseId: true,
   kind: true,
   title: true,
   url: true,
   publishedAt: true,
   raw: true,
-  removedAt: true,
   updatedAt: true,
-} satisfies Prisma.ItemSelect;
+  item: recordRef,
+  sights: liveSights,
+} satisfies Prisma.ItemVersionSelect;
 
 // the course a visible item shows in (see visibleItem)
 const withCourse = {
   portalCourse: { select: { link: { select: { courseId: true } } } },
-} satisfies Prisma.ItemSelect;
+} satisfies Prisma.ItemVersionSelect;
 
 const newestFirst = [
   { publishedAt: { sort: 'desc', nulls: 'last' } },
   { id: 'asc' },
-] satisfies Prisma.ItemOrderByWithRelationInput[];
+] satisfies Prisma.ItemVersionOrderByWithRelationInput[];
 
 const toDto = ({
-  removedAt,
+  item,
+  sights,
   ...row
-}: Prisma.ItemGetPayload<{ select: typeof select }>): ItemDto => ({
+}: Prisma.ItemVersionGetPayload<{ select: typeof select }>): ItemDto => ({
   ...row,
   ...itemValues(row),
-  removed: removedAt !== null,
+  portal: portalOf(item),
+  externalId: item.externalId,
+  removed: sights.length === 0,
 });
 
 @QueryHandler(ListCourseItemsQuery)
@@ -51,7 +54,7 @@ export class ListCourseItemsHandler implements IQueryHandler<ListCourseItemsQuer
   constructor(@InjectTransactionHost() private readonly txHost: PrismaTxHost) {}
 
   async execute({ courseId, offset, limit }: ListCourseItemsQuery) {
-    const rows = await this.txHost.tx.item.findMany({
+    const rows = await this.txHost.tx.itemVersion.findMany({
       where: visibleItem({ courseId }),
       orderBy: newestFirst,
       skip: offset,
@@ -67,7 +70,7 @@ export class GetItemHandler implements IQueryHandler<GetItemQuery> {
   constructor(@InjectTransactionHost() private readonly txHost: PrismaTxHost) {}
 
   async execute({ id }: GetItemQuery) {
-    const row = await this.txHost.tx.item.findUnique({
+    const row = await this.txHost.tx.itemVersion.findUnique({
       where: { id },
       select,
     });
@@ -80,7 +83,7 @@ export class GetCourseItemHandler implements IQueryHandler<GetCourseItemQuery> {
   constructor(@InjectTransactionHost() private readonly txHost: PrismaTxHost) {}
 
   async execute({ itemId }: GetCourseItemQuery) {
-    const row = await this.txHost.tx.item.findFirst({
+    const row = await this.txHost.tx.itemVersion.findFirst({
       where: { AND: [{ id: itemId }, visibleItem()] },
       select: { ...select, ...withCourse },
     });
@@ -96,7 +99,7 @@ export class ListVisibleItemsHandler implements IQueryHandler<ListVisibleItemsQu
   constructor(@InjectTransactionHost() private readonly txHost: PrismaTxHost) {}
 
   async execute({ courseIds }: ListVisibleItemsQuery) {
-    const rows = await this.txHost.tx.item.findMany({
+    const rows = await this.txHost.tx.itemVersion.findMany({
       where: visibleItem({ courseId: { in: [...courseIds] } }),
       orderBy: newestFirst,
       select: {
@@ -122,8 +125,8 @@ export class ListItemsHandler implements IQueryHandler<ListItemsQuery> {
   constructor(@InjectTransactionHost() private readonly txHost: PrismaTxHost) {}
 
   async execute({ after, limit }: ListItemsQuery) {
-    const rows = await this.txHost.tx.item.findMany({
-      where: { removedAt: null, ...(after && { id: { gt: after } }) },
+    const rows = await this.txHost.tx.itemVersion.findMany({
+      where: { sights: seen, ...(after && { id: { gt: after } }) },
       orderBy: { id: 'asc' },
       take: limit,
       select: { id: true, updatedAt: true },

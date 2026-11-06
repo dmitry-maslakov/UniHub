@@ -57,19 +57,21 @@ describe('canvas', { timeout: 30_000 }, () => {
 
     const prisma = app.get(PrismaService);
     expect(
-      await prisma.file.findUnique({
-        where: { portal_externalId: { portal, externalId: '3001' } },
+      await prisma.fileVersion.findFirst({
+        where: { file: { portal, externalId: '3001' } },
       }),
     ).toMatchObject({
       path: 'Lectures',
       contentHash: sha256('%PDF lecture one'),
     });
     expect(
-      await prisma.portalCourse.findMany({
-        where: { portal },
-        select: { externalId: true, name: true },
+      await prisma.courseVersion.findMany({
+        where: { portalCourse: { portal } },
+        select: { portalCourse: { select: { externalId: true } }, name: true },
       }),
-    ).toEqual([{ externalId: '101', name: 'Operating Systems' }]);
+    ).toEqual([
+      { portalCourse: { externalId: '101' }, name: 'Operating Systems' },
+    ]);
     const items = await prisma.item.findMany({
       where: { portal },
       select: { externalId: true },

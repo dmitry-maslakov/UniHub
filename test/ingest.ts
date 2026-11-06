@@ -1,9 +1,9 @@
 import type { INestApplicationContext } from '@nestjs/common';
+import { SHARED_ACCOUNT } from '@app/kernel';
 import {
   Connection,
   IngestService,
   SdkPortalIngest,
-  SHARED_ACCOUNT,
 } from '../src/ingest/contracts.js';
 
 // what a connector of this portal gets as ctx.ingest, in a run never stopped

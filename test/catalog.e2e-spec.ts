@@ -93,6 +93,59 @@ describe('catalog', { timeout: 20_000 }, () => {
     expect(renamed).toEqual({ id: first.id, changed: true });
   });
 
+  it("keeps a record as the shared account's version of it, seen through its sight", async () => {
+    const post = item({ externalId: 'post-seen' });
+    const { id } = await commands.execute(new UpsertItemCommand(post));
+    await commands.execute(new UpsertItemCommand({ ...post, title: 'Moved' }));
+    const sights = () =>
+      prisma.itemSight.findMany({ where: { version: { itemId: id } } });
+    const [shown] = await sights();
+
+    // one version, under the record's id, changed in place
+    expect(
+      await prisma.itemVersion.findMany({
+        where: { item: ref('post-seen') },
+        select: { id: true, itemId: true, title: true },
+      }),
+    ).toEqual([{ id, itemId: id, title: 'Moved' }]);
+    expect(shown).toMatchObject({
+      account: 'shared',
+      versionId: id,
+      open: true,
+      openFrom: shown.shownFrom,
+      hiddenFrom: null,
+    });
+    await commands.execute(new RemoveItemCommand(ref('post-seen')));
+    const [hidden] = await sights();
+    expect(hidden.hiddenFrom).toEqual(expect.any(Date));
+    expect(hidden.shownFrom).toEqual(shown.shownFrom);
+    await commands.execute(new UpsertItemCommand(post));
+    expect(await sights()).toEqual([shown]);
+  });
+
+  it('refuses what an app from before versions writes to the old columns', async () => {
+    const { id } = await commands.execute(
+      new UpsertItemCommand(item({ externalId: 'post-old-app' })),
+    );
+    // as a write conflict, which that app's queries take for one (P2034)
+    const conflict = {
+      meta: { driverAdapterError: { cause: { originalCode: '40001' } } },
+    };
+
+    await expect(
+      prisma.$executeRaw`UPDATE "Item" SET title = 'edited' WHERE id = ${id}`,
+    ).rejects.toMatchObject(conflict);
+    await expect(
+      prisma.$executeRaw`INSERT INTO "Item" (id, portal, "externalId", kind, raw, "updatedAt") VALUES ('old-app', ${portal}, 'old-app', 'post', '{}', now())`,
+    ).rejects.toMatchObject(conflict);
+    await expect(
+      prisma.$executeRaw`INSERT INTO "File" (id, portal, "externalId", name, "updatedAt") VALUES ('old-app', ${portal}, 'old-app', 'a.pdf', now())`,
+    ).rejects.toMatchObject(conflict);
+    await expect(
+      prisma.$executeRaw`UPDATE "PortalCourse" SET name = 'x' WHERE portal = ${portal}`,
+    ).rejects.toMatchObject(conflict);
+  });
+
   it('reads json back as the same item, whatever order jsonb keeps its keys in', async () => {
     await commands.execute(
       new UpsertItemCommand(item({ raw: { guid: 'post-1', title: 'Exam' } })),
@@ -117,7 +170,7 @@ describe('catalog', { timeout: 20_000 }, () => {
 
     expect(cleared.changed).toBe(true);
     expect(again.changed).toBe(false);
-    const row = await prisma.item.findUniqueOrThrow({
+    const row = await prisma.itemVersion.findUniqueOrThrow({
       where: { id: again.id },
     });
     expect(row.url).toBeNull();
@@ -133,8 +186,8 @@ describe('catalog', { timeout: 20_000 }, () => {
     expect(await commands.execute(new UpsertItemCommand(odd))).toMatchObject({
       changed: false,
     });
-    const row = await prisma.item.findUniqueOrThrow({
-      where: { portal_externalId: ref('post-null') },
+    const row = await prisma.itemVersion.findFirstOrThrow({
+      where: { item: ref('post-null') },
     });
     expect(row.raw).toBeNull();
   });
@@ -208,7 +261,7 @@ describe('catalog', { timeout: 20_000 }, () => {
       await commands.execute(new UpsertFileCommand(changed)),
     ).toMatchObject({ changed: false, needsContent: false });
     expect(
-      await prisma.file.findUniqueOrThrow({ where: { id } }),
+      await prisma.fileVersion.findUniqueOrThrow({ where: { id } }),
     ).toMatchObject({
       size: 4_000_000n,
       contentHash: sha256('%PDF v2'),
@@ -246,9 +299,7 @@ describe('catalog', { timeout: 20_000 }, () => {
       ),
     ).toMatchObject({ changed: false });
     const [row, course, post] = await Promise.all([
-      prisma.file.findUniqueOrThrow({
-        where: { portal_externalId: ref('attached') },
-      }),
+      prisma.fileVersion.findFirstOrThrow({ where: { file: ref('attached') } }),
       prisma.portalCourse.findUniqueOrThrow({
         where: { portal_externalId: ref('course-a') },
       }),
@@ -376,8 +427,8 @@ describe('catalog', { timeout: 20_000 }, () => {
 
     expect(await stored).toEqual({ changed: true });
     expect(
-      await prisma.file.findUniqueOrThrow({
-        where: { portal_externalId: ref('racing') },
+      await prisma.fileVersion.findFirstOrThrow({
+        where: { file: ref('racing') },
       }),
     ).toMatchObject({
       size: 2n,

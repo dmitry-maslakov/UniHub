@@ -103,9 +103,11 @@ describe('gRPC ingest', () => {
     return answer;
   };
 
+  // as the shared account sees it, the account a connector's token is
   const file = (externalId: string) =>
-    prisma.file.findUniqueOrThrow({
-      where: { portal_externalId: { portal: PORTAL, externalId } },
+    prisma.fileVersion.findFirstOrThrow({
+      where: { file: { portal: PORTAL, externalId } },
+      include: { sights: true },
     });
 
   beforeAll(async () => {
@@ -151,8 +153,8 @@ describe('gRPC ingest', () => {
       changed: true,
     });
 
-    const item = await prisma.item.findUniqueOrThrow({
-      where: { portal_externalId: { portal: PORTAL, externalId: 'p1' } },
+    const item = await prisma.itemVersion.findFirstOrThrow({
+      where: { item: { portal: PORTAL, externalId: 'p1' } },
     });
     expect(item.raw).toEqual({ guid: 'p1' });
     expect(item.publishedAt).toEqual(new Date('2026-10-29T14:12:00.500Z'));
@@ -161,7 +163,12 @@ describe('gRPC ingest', () => {
     expect(await call('RemoveFile', { externalId: 'f1' })).toEqual({
       changed: true,
     });
-    expect((await file('f1')).removedAt).not.toBeNull();
+    expect((await file('f1')).sights).toEqual([
+      expect.objectContaining({
+        account: 'shared',
+        hiddenFrom: expect.any(Date),
+      }),
+    ]);
   });
 
   it('stores nothing from an upload that was cut off', async () => {

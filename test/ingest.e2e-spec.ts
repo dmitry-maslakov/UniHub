@@ -57,7 +57,9 @@ describe('ingest', () => {
 
     const [, , , content] = await sync('%PDF slides v2');
     expect(content).toEqual({ hash: sha256('%PDF slides v2'), changed: true });
-    const file = await prisma.file.findFirstOrThrow({ where: { portal } });
+    const file = await prisma.fileVersion.findFirstOrThrow({
+      where: { file: { portal } },
+    });
     expect(file.contentHash).toBe(sha256('%PDF slides v2'));
   });
 
@@ -72,10 +74,10 @@ describe('ingest', () => {
     expect(await hub.removeItem('post-1')).toEqual({ changed: true });
     expect(await hub.removeItem('post-1')).toEqual({ changed: false });
     expect(await hub.item(post)).toEqual({ changed: true });
-    const row = await prisma.item.findFirstOrThrow({
-      where: { portal, externalId: 'post-1' },
+    const row = await prisma.itemSight.findFirstOrThrow({
+      where: { version: { item: { portal, externalId: 'post-1' } } },
     });
-    expect(row.removedAt).toBeNull();
+    expect(row.hiddenFrom).toBeNull();
   });
 
   it('takes -0 and lone surrogates as postgres keeps them', async () => {
@@ -96,8 +98,8 @@ describe('ingest', () => {
     expect(await hub.file(file)).toMatchObject({ changed: true });
     expect(await hub.file(file)).toMatchObject({ changed: false });
 
-    const row = await prisma.item.findFirstOrThrow({
-      where: { portal, externalId: 'post-odd' },
+    const row = await prisma.itemVersion.findFirstOrThrow({
+      where: { item: { portal, externalId: 'post-odd' } },
     });
     expect(row.title).toBe('half an emoji �');
     expect(row.raw).toEqual({ score: 0, 'cut � here': [0] });

@@ -53,6 +53,10 @@ export type PluginName = z.output<typeof PluginName>;
 export const LinkMode = z.enum(['shared', 'token']);
 export type LinkMode = z.output<typeof LinkMode>;
 
+// the account a shared portal is read by, the one its plugin's settings
+// give: what catalog keeps as everyone's view of it, and readers read
+export const SHARED_ACCOUNT = 'shared';
+
 // a mode a user links an account of their own by: any but shared
 export const AccountLink = LinkMode.exclude(['shared']);
 export type AccountLink = z.output<typeof AccountLink>;
