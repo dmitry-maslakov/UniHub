@@ -1,5 +1,5 @@
 import type { AccountLink } from '@app/kernel';
-import type { IdentifiesAccounts } from './accounts.js';
+import type { IdentifiesAccounts, LinksByOAuth } from './accounts.js';
 import type { AggregatorOptions, HandlesMessages } from './aggregators.js';
 import type {
   PollConnectorOptions,
@@ -32,10 +32,12 @@ import type {
 
 type Class<T> = abstract new (...args: any[]) => T;
 
-// what a connector implements for the links it names: none, nothing more
+// what a connector implements for the links it names: none, nothing more;
+// OAuth, its server and how it revokes too
 type Linking<L extends AccountLink> = [L] extends [never]
   ? unknown
-  : IdentifiesAccounts;
+  : IdentifiesAccounts &
+      ([Extract<L, 'oauth'>] extends [never] ? unknown : LinksByOAuth);
 
 export function PollConnector<L extends AccountLink = never>(
   options: PollConnectorOptions<L>,

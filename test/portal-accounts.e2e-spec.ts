@@ -3,6 +3,7 @@ import { Injectable, Module, type INestApplication } from '@nestjs/common';
 import type { Redis } from 'ioredis';
 import type { Response } from 'supertest';
 import {
+  bearerOf,
   CredentialRejectedError,
   PollConnector,
   type Credential,
@@ -41,8 +42,8 @@ const EXPIRES_AT = '2026-12-30T08:00:00.000Z';
 abstract class Linking implements PollsPortal, IdentifiesAccounts {
   async poll() {}
 
-  async identify({ token }: Credential): Promise<PortalUser> {
-    const pasted = token.reveal();
+  async identify(credential: Credential): Promise<PortalUser> {
+    const pasted = bearerOf(credential).reveal();
     if (pasted.startsWith('refused~')) throw new CredentialRejectedError();
     if (pasted.startsWith('away~')) throw new Error('the portal is away');
     const id = pasted.startsWith('other~') ? '5151' : '4242';

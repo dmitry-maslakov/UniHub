@@ -45,8 +45,10 @@ export const PAUSE_MS = 2_000;
 // again, a download fails its file) rather than at the poll's timeout. A
 // long download that keeps coming isn't cut.
 const TIMEOUT_MS = 60_000;
-// what a request may do with the token: read
+// what a request may do with the token: read; and take back a token the
+// hub got by Canvas's consent page, its one other request
 const READS = new Set(['get', 'head']);
+const LOGOUT = '/login/oauth2/token';
 
 // Canvas's REST API, one request at a time.
 export class CanvasApi {
@@ -72,7 +74,8 @@ export class CanvasApi {
     this.http.interceptors.request.use((config) => {
       const to = new URL(axios.getUri(config));
       const method = config.method ?? 'get';
-      if (!READS.has(method)) throw new NotAReadError(method, to);
+      const logout = method === 'delete' && to.pathname === LOGOUT;
+      if (!READS.has(method) && !logout) throw new NotAReadError(method, to);
       if (to.origin !== canvas) throw new OtherOriginError(to, canvas);
       return config;
     });
@@ -99,6 +102,14 @@ export class CanvasApi {
   async get<T>(path: string): Promise<T> {
     const { data } = await this.http.get<T>(path);
     return data;
+  }
+
+  // Canvas's own revocation of the token the requests go with (not RFC
+  // 7009's): one it no longer takes is taken back already
+  async logout() {
+    await this.http.delete(LOGOUT).catch((error: unknown) => {
+      if (!(error instanceof TokenRejectedError)) throw error;
+    });
   }
 
   // every page of a listing, following Link rel=next as Canvas gives it

@@ -23,7 +23,7 @@ const links = list.transform((entries, ctx) => {
       ctx.addIssue({
         code: 'custom',
         message:
-          'portal=mode or portal=mode/admins, each portal once; the modes are shared and token (/admins for token only)',
+          'portal=mode or portal=mode/admins, each portal once; the modes are shared, token and oauth (/admins for the last two only)',
       });
       return z.NEVER;
     }
@@ -75,6 +75,9 @@ export const accountsSettings = z
     // any listed opens. A version taken off leaves what it sealed unreadable,
     // old backups' copies too.
     PORTAL_CREDENTIALS_SECRETS: keys,
+    // where users reach the hub (identity's too): a portal's consent page
+    // sends them back to it
+    BETTER_AUTH_URL: z.url().default('http://localhost:3000'),
   })
   .superRefine((env, ctx) => {
     const tokens = [...env.PORTAL_LINKS.values()].some(
@@ -84,12 +87,13 @@ export const accountsSettings = z
       ctx.addIssue({
         code: 'custom',
         path: ['PORTAL_CREDENTIALS_SECRETS'],
-        message: 'needed once a portal links accounts by token',
+        message: 'needed once a portal links accounts by token or OAuth',
       });
   })
   .transform((env) => ({
     links: env.PORTAL_LINKS,
     keys: env.PORTAL_CREDENTIALS_SECRETS,
+    publicUrl: env.BETTER_AUTH_URL,
   }));
 
 export const accountsConfig = settings('accounts', accountsSettings);

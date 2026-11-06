@@ -1,4 +1,5 @@
-import type { PortalId, Secret } from '@app/kernel';
+import type { OAuthServer } from '@app/plugin-sdk';
+import { Secret, type PortalId } from '@app/kernel';
 import { CredentialVault, type SealedFor } from '../domain/credential-vault.js';
 import { UnreadableCredentialError } from '../domain/errors.js';
 import {
@@ -6,6 +7,8 @@ import {
   PortalAccountRepository,
   type PortalAccountState,
 } from '../domain/portal-account.js';
+import { OAuthRefusedError } from './errors.js';
+import { ConsentStates, OAuthClient, type PendingConsent } from './oauth.js';
 
 // In-memory ports for the application's unit tests.
 
@@ -46,6 +49,12 @@ export class InMemoryAccounts extends PortalAccountRepository {
     const row = this.rows.get(`${userId}:${portal}`);
     if (row?.account.id === account.id)
       row.account = { ...row.account, status };
+  }
+
+  async reseal(account: PortalAccount, sealed: string) {
+    const { userId, portal } = account.snapshot;
+    const row = this.rows.get(`${userId}:${portal}`);
+    if (row?.account.id === account.id) row.sealed = sealed;
   }
 
   async save(account: PortalAccount, sealed: string) {
@@ -90,5 +99,74 @@ export class FakeVault extends CredentialVault {
     const kept = this.kept[Number(sealed.slice('sealed-'.length))];
     if (kept?.boundTo !== key(account)) throw new UnreadableCredentialError();
     return kept.credential;
+  }
+}
+
+// A portal's OAuth server: consents by a counter, a code per consent that
+// gives "access-<n>" and "refresh-<n>" for an hour, refresh tokens renewed
+// to "access-<n>.<renewals>"; refusing whatever `refuses` names
+export class FakeOAuthClient extends OAuthClient {
+  consents = 0;
+  renewals = 0;
+  readonly refuses = new Set<'code' | 'refresh'>();
+  // the portal away
+  away = false;
+  readonly exchanged: { answer: URLSearchParams; verifier: string }[] = [];
+
+  async consent(server: OAuthServer, redirectUri: string) {
+    const n = ++this.consents;
+    const url = new URL(server.authorizationEndpoint);
+    url.search = new URLSearchParams({
+      redirect_uri: redirectUri,
+      state: `state-${n}`,
+    }).toString();
+    return { url, state: `state-${n}`, verifier: `verifier-${n}` };
+  }
+
+  async exchange(
+    _: OAuthServer,
+    __: string,
+    answer: URLSearchParams,
+    { state, verifier }: { state: string; verifier: string },
+  ) {
+    if (this.away) throw new Error('ECONNREFUSED');
+    if (answer.get('state') !== state || this.refuses.has('code'))
+      throw new OAuthRefusedError();
+    this.exchanged.push({ answer, verifier });
+    const n = answer.get('code');
+    return this.tokens(`access-${n}`, `refresh-${n}`);
+  }
+
+  async refresh(_: OAuthServer, refreshToken: Secret) {
+    if (this.refuses.has('refresh')) throw new OAuthRefusedError();
+    this.renewals++;
+    const n = refreshToken.reveal().replace('refresh-', '');
+    return {
+      ...this.tokens(`access-${n}.${this.renewals}`),
+      refreshToken: null,
+    };
+  }
+
+  private tokens(access: string, refresh?: string) {
+    return {
+      accessToken: new Secret(access),
+      refreshToken: refresh ? new Secret(refresh) : null,
+      expiresAt: new Date(Date.now() + 60 * 60_000),
+    };
+  }
+}
+
+// consents on their way, taken once
+export class InMemoryConsents extends ConsentStates {
+  readonly pending = new Map<string, PendingConsent>();
+
+  async put(state: string, pending: PendingConsent) {
+    this.pending.set(state, pending);
+  }
+
+  async take(state: string) {
+    const pending = this.pending.get(state) ?? null;
+    this.pending.delete(state);
+    return pending;
   }
 }

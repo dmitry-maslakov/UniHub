@@ -2,6 +2,9 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, type ConfigType } from '@nestjs/config';
 import { PluginsModule } from '../plugins/contracts.js';
 import { accountsConfig } from './accounts.config.js';
+import { Credentials } from './application/credentials.js';
+import { ConsentStates, OAuthClient } from './application/oauth.js';
+import { OAuthLinking } from './application/oauth-linking.js';
 import {
   AccountCredentialHandler,
   AccountRejectedHandler,
@@ -15,11 +18,14 @@ import { PortalAccountRepository } from './domain/portal-account.js';
 import { PortalLinks } from './domain/portal-links.js';
 import { AesGcmVault } from './infrastructure/aes-gcm.vault.js';
 import { PortalAccountsController } from './infrastructure/http/portal-accounts.controller.js';
+import { OpenIdOAuthClient } from './infrastructure/openid-oauth.client.js';
 import { PrismaPortalAccountRepository } from './infrastructure/prisma-portal-account.repository.js';
+import { RedisConsentStates } from './infrastructure/redis-consent-states.js';
 
 // Users' own accounts of portals (README, Portal accounts): how each
-// portal's are linked (PORTAL_LINKS), the token a user sets, sealed apart
-// from the account, and who that is on the portal, as its connector says
+// portal's are linked (PORTAL_LINKS), the token a user sets or the tokens
+// the portal's consent page gives (openid-client, its consents in Redis),
+// sealed apart from the account, and who that is on the portal, as its connector says
 // (plugins), and which of them a user reads through (ViewingAccountsQuery,
 // for access); every portal is shared unless PORTAL_LINKS says otherwise.
 // Answers plugins which accounts a portal's runs are for, with their
@@ -41,7 +47,11 @@ import { PrismaPortalAccountRepository } from './infrastructure/prisma-portal-ac
       provide: PortalAccountRepository,
       useClass: PrismaPortalAccountRepository,
     },
+    { provide: OAuthClient, useClass: OpenIdOAuthClient },
+    { provide: ConsentStates, useClass: RedisConsentStates },
+    Credentials,
     PortalAccounts,
+    OAuthLinking,
     UserDeletedHandler,
     ViewingAccountsHandler,
     PortalReadersHandler,

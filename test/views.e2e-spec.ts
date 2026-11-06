@@ -6,6 +6,7 @@ import { getQueueToken } from '@nestjs/bullmq';
 import type { Client } from '@opensearch-project/opensearch';
 import type { Queue } from 'bullmq';
 import {
+  bearerOf,
   PollConnector,
   type ConnectorContext,
   type CoursePass,
@@ -82,13 +83,13 @@ class LmsPortal implements PollsPortal, IdentifiesAccounts {
   async poll({ account }: ConnectorContext) {
     const token =
       account.kind === 'user'
-        ? (await account.credential()).token.reveal()
+        ? bearerOf(await account.credential()).reveal()
         : '';
     polled.push({ account: account.kind, token });
   }
 
-  async identify({ token }: Credential): Promise<PortalUser> {
-    return { id: token.reveal().split('~')[0], expiresAt: null };
+  async identify(credential: Credential): Promise<PortalUser> {
+    return { id: bearerOf(credential).reveal().split('~')[0], expiresAt: null };
   }
 }
 

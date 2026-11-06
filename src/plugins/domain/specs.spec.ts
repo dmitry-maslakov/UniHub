@@ -72,13 +72,13 @@ describe('plugin specs', () => {
 
   it('take the links a connector names, once each, and no other', () => {
     expect(
-      pushSpec({ portal: 'moodle', links: ['token', 'token'] }).links,
-    ).toEqual(['token']);
+      pushSpec({ portal: 'moodle', links: ['token', 'oauth', 'token'] }).links,
+    ).toEqual(['token', 'oauth']);
     expect(pollSpec({ portal: 'moodle', schedule: '@hourly' }).links).toEqual(
       [],
     );
     // shared isn't a link: every connector serves it
-    for (const bad of ['shared', 'oauth', 'TOKEN'])
+    for (const bad of ['shared', 'connector', 'TOKEN'])
       expect(() => pushSpec({ portal: 'moodle', links: [bad] })).toThrow(
         new InvalidValueError('connector link', bad),
       );

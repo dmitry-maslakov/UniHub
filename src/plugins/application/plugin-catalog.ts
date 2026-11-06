@@ -1,5 +1,5 @@
 import { Injectable, type OnModuleInit } from '@nestjs/common';
-import type { IdentifiesAccounts, Topic } from '@app/plugin-sdk';
+import type { IdentifiesAccounts, LinksByOAuth, Topic } from '@app/plugin-sdk';
 import type { AccountLink, MediaType, PluginName, PortalId } from '@app/kernel';
 import { ConnectorTokens } from '../../ingest/contracts.js';
 import { PluginSet } from '../domain/plugin-set.js';
@@ -83,6 +83,13 @@ export class PluginCatalog implements OnModuleInit {
     // its decorator lets only a connector that identifies accounts name
     // links, as it lets only a poll connector be found as one
     return connector.instance as unknown as IdentifiesAccounts;
+  }
+
+  // the connector that links accounts of the portal by OAuth, with where
+  // its server is, null if none here does
+  oauthLinker(portal: PortalId): (IdentifiesAccounts & LinksByOAuth) | null {
+    return this.linker(portal, 'oauth') as
+      (IdentifiesAccounts & LinksByOAuth) | null;
   }
 
   get pollConnectors() {

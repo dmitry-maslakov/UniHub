@@ -20,3 +20,9 @@ export const tokenRequest = z
       }),
   })
   .transform(({ token }) => new Secret(token));
+
+// What the portal's consent page sends the user back with, as it is: the
+// code and the state, or an error; checked by the OAuth client
+export const consentAnswer = z
+  .record(z.string(), z.string().max(4096))
+  .transform((query) => new URLSearchParams(query));

@@ -364,6 +364,10 @@ describe('CanvasApi', () => {
 
     server.use(http.head(`${CANVAS}/api/v1/x`, () => new HttpResponse(null)));
     expect((await client.head('/api/v1/x')).status).toBe(200);
+    // its one other request takes its own token back, there alone
+    await expect(
+      client.request({ method: 'delete', url: '/login/oauth2/tokens' }),
+    ).rejects.toThrow(NotAReadError);
   });
 
   // msw errors on any request it has no handler for: none goes out

@@ -1,7 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
 import { QueryBus } from '@nestjs/cqrs';
-import type { ConnectorContext } from '@app/plugin-sdk';
+import {
+  CredentialRejectedError,
+  type ConnectorContext,
+  type Credential,
+} from '@app/plugin-sdk';
 import type { PortalId } from '@app/kernel';
 import { publication } from '../../catalog/contracts.js';
 import {
@@ -53,17 +57,27 @@ export class ConnectionDirectory {
         account: { kind: 'shared' },
         ingest: new SdkPortalIngest(this.ingest, connection, signal),
       };
-    const credential = await this.queries.execute(
-      new AccountCredentialQuery(account),
-    );
-    if (!credential) return null;
+    const credentialOf = () =>
+      this.queries.execute(new AccountCredentialQuery(account));
+    let first: Credential | null = await credentialOf();
+    if (!first) return null;
     const slot = slotOf(start, this.gridOf(connection));
     const run: Run = {
       shown: (ended) => publication(slot, ended, this.config.publishing),
     };
     return {
       ...base,
-      account: { kind: 'user', credential: async () => credential },
+      // asked anew after the first time, so a run that goes on gets its
+      // OAuth access token renewed; one no longer there is rejected
+      account: {
+        kind: 'user',
+        credential: async () => {
+          const credential = first ?? (await credentialOf());
+          first = null;
+          if (!credential) throw new CredentialRejectedError();
+          return credential;
+        },
+      },
       ingest: new SdkPortalIngest(this.ingest, connection, signal, run),
     };
   }

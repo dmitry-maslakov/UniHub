@@ -1,4 +1,4 @@
-import type { Credential } from './accounts.js';
+import { bearerOf, type Credential } from './accounts.js';
 import type { ConnectorContext } from './connectors.js';
 import {
   Aggregator,
@@ -78,9 +78,33 @@ describe('plugin decorators', () => {
     @PollConnector({ portal: 'n', schedule: '* * * * *', links: ['token'] })
     class Identifies {
       async poll() {}
-      async identify({ token }: Credential) {
-        return { id: token.reveal().length.toString(), expiresAt: null };
+      async identify(credential: Credential) {
+        return {
+          id: bearerOf(credential).reveal().length.toString(),
+          expiresAt: null,
+        };
       }
+    }
+
+    // @ts-expect-error one that links by OAuth names its server and revokes
+    @PollConnector({ portal: 'o', schedule: '* * * * *', links: ['oauth'] })
+    class OAuthWithoutServer {
+      async poll() {}
+      async identify() {
+        return { id: '1', expiresAt: null };
+      }
+    }
+
+    @PollConnector({ portal: 'p', schedule: '* * * * *', links: ['oauth'] })
+    class LinksByOAuth {
+      async poll() {}
+      async identify() {
+        return { id: '1', expiresAt: null };
+      }
+      oauthServer() {
+        return null;
+      }
+      async revoke() {}
     }
 
     expect([
@@ -88,7 +112,9 @@ describe('plugin decorators', () => {
       PushWithoutIdentify,
       UnknownLink,
       Identifies,
-    ]).toHaveLength(4);
+      OAuthWithoutServer,
+      LinksByOAuth,
+    ]).toHaveLength(6);
   });
 
   it('give an aggregator the messages of its topics', () => {

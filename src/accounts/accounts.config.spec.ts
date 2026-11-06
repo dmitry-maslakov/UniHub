@@ -24,9 +24,23 @@ describe('PORTAL_LINKS', () => {
     ]);
   });
 
+  it("takes the portal's consent page as a mode, for admins alone too", () => {
+    expect([...links('canvas=oauth, moodle=oauth/admins').data!.links]).toEqual(
+      [
+        ['canvas', { mode: 'oauth', adminsOnly: false }],
+        ['moodle', { mode: 'oauth', adminsOnly: true }],
+      ],
+    );
+  });
+
+  it("sends a portal's consent page back to where users reach the hub", () => {
+    expect(
+      parse({ BETTER_AUTH_URL: 'https://hub.example.test' }).data,
+    ).toMatchObject({ publicUrl: 'https://hub.example.test' });
+  });
+
   it('refuses a mode there is none of yet, or an entry it would misread', () => {
     for (const bad of [
-      'canvas=oauth',
       'canvas=connector',
       'canvas',
       'Canvas=token',

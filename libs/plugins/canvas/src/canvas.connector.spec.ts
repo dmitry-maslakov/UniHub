@@ -20,8 +20,11 @@ const COURSE = '/api/v1/courses/101';
 const TOKEN_PATH = '/api/v1/users/self/tokens/1~abc';
 
 const portal = PortalId.parse('canvas');
-const connector = (token: string | null = TOKEN) =>
-  new CanvasConnector({ url: CANVAS_URL, token, userAgent: 'test' });
+const KEY = { clientId: '10000000000001', clientSecret: new Secret('key') };
+const connector = (
+  token: string | null = TOKEN,
+  oauth: typeof KEY | null = null,
+) => new CanvasConnector({ url: CANVAS_URL, token, userAgent: 'test', oauth });
 // the shared account's run, on the owner's token
 const run = (
   ingest: RecordingIngest,
@@ -442,15 +445,66 @@ describe("CanvasConnector, on a user's own token", () => {
   });
 });
 
+describe("CanvasConnector, by Canvas's consent page", () => {
+  const oauth = { kind: 'oauth' as const, accessToken: new Secret(TOKEN) };
+  const signal = () => new AbortController().signal;
+
+  it("names Canvas's consent page and token endpoint, with the developer key, once the settings have one", () => {
+    expect(connector(null).oauthServer()).toBeNull();
+    expect(connector(null, KEY).oauthServer()).toEqual({
+      issuer: CANVAS_URL,
+      authorizationEndpoint: `${CANVAS_URL}/login/oauth2/auth`,
+      tokenEndpoint: `${CANVAS_URL}/login/oauth2/token`,
+      ...KEY,
+    });
+  });
+
+  it('says whose its token is, which lasts as long as the hub renews it', async () => {
+    expect(await connector(null, KEY).identify(oauth, signal())).toEqual({
+      id: '4242',
+      expiresAt: null,
+    });
+    expect(canvas.asked).toEqual(['/api/v1/users/self']);
+  });
+
+  it('reads as the user with its access token', async () => {
+    const ingest = new RecordingIngest();
+    await connector(null, KEY).poll({
+      connection: { portal, account: 'a-1' },
+      account: { kind: 'user', credential: async () => oauth },
+      ingest,
+      signal: signal(),
+    });
+    expect(ingest.listedCourses.size).toBe(1);
+  });
+
+  it("takes the token back Canvas's way, one Canvas no longer takes as taken back already", async () => {
+    const revoked: (string | null)[] = [];
+    canvas.server.use(
+      http.delete(`${CANVAS_URL}/login/oauth2/token`, ({ request }) => {
+        revoked.push(request.headers.get('authorization'));
+        return revoked.length === 1
+          ? HttpResponse.json({})
+          : HttpResponse.json(
+              { errors: [{ message: 'Invalid access token.' }] },
+              {
+                status: 401,
+                headers: { 'www-authenticate': 'Bearer realm="canvas-lms"' },
+              },
+            );
+      }),
+    );
+    await connector(null, KEY).revoke(oauth, signal());
+    await connector(null, KEY).revoke(oauth, signal());
+    expect(revoked).toEqual([`Bearer ${TOKEN}`, `Bearer ${TOKEN}`]);
+  });
+});
+
 describe('CanvasConnector, as a user links a token', () => {
   // the owner's token is another, which Canvas doesn't take: each goes
   // with its own requests
   const identify = (token = TOKEN) =>
-    new CanvasConnector({
-      url: CANVAS_URL,
-      token: '1~the-owners-own',
-      userAgent: 'test',
-    }).identify(
+    connector('1~the-owners-own').identify(
       { kind: 'token', token: new Secret(token) },
       new AbortController().signal,
     );

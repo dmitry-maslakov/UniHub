@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import type { Job } from 'bullmq';
 import type { CommandBus } from '@nestjs/cqrs';
 import {
+  bearerOf,
   CredentialRejectedError,
   Secret,
   type ConnectorContext,
@@ -169,7 +170,7 @@ describe('ConnectorsWorker', () => {
     const [{ account }] = seen;
     expect(account.kind).toBe('user');
     if (account.kind === 'user')
-      expect((await account.credential()).token.reveal()).toBe('ana~1');
+      expect(bearerOf(await account.credential()).reveal()).toBe('ana~1');
     expect(remove).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ key: 'lms__bo' }),
     );

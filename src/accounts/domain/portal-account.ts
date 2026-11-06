@@ -96,6 +96,8 @@ export abstract class PortalAccountRepository {
   ): Promise<{ account: PortalAccount; sealed: string } | null>;
   // its status as it now is, nothing else of it
   abstract saveStatus(account: PortalAccount): Promise<void>;
+  // its credential sealed anew (renewed), if the account is still there
+  abstract reseal(account: PortalAccount, sealed: string): Promise<void>;
   // The account and its sealed credential, at once, in place of any account
   // the user had of the portal and its credential
   abstract save(account: PortalAccount, sealed: string): Promise<void>;

@@ -49,8 +49,9 @@ export type PluginName = z.output<typeof PluginName>;
 
 // How a portal's accounts are linked (README, Portal accounts): `shared`,
 // the one account its plugin's settings give, read by whoever an admin lets
-// read its courses; `token`, each user's own, by a token they paste
-export const LinkMode = z.enum(['shared', 'token']);
+// read its courses; `token`, each user's own, by a token they paste;
+// `oauth`, each user's own, by the portal's consent page
+export const LinkMode = z.enum(['shared', 'token', 'oauth']);
 export type LinkMode = z.output<typeof LinkMode>;
 
 // the account a shared portal is read by, the one its plugin's settings

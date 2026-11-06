@@ -69,6 +69,13 @@ export class PrismaPortalAccountRepository extends PortalAccountRepository {
     });
   }
 
+  async reseal(account: PortalAccount, sealed: string) {
+    await this.txHost.tx.portalCredential.updateMany({
+      where: { accountId: account.id },
+      data: { sealed },
+    });
+  }
+
   // One upsert per (user, portal), so two at once leave one account: a new
   // account's id takes the old one's place, its credential carried along by
   // the key (ON UPDATE CASCADE), then given the new seal.

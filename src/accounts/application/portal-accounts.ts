@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { CredentialRejectedError, type Credential } from '@app/plugin-sdk';
 import {
   StoredText,
+  type AccountLink,
   type LinkMode,
   type PortalId,
   type Secret,
@@ -14,7 +15,6 @@ import {
   PluginCatalog,
   type PortalReaders,
 } from '../../plugins/contracts.js';
-import { CredentialVault } from '../domain/credential-vault.js';
 import { NotLinkableError } from '../domain/errors.js';
 import {
   PortalAccount,
@@ -22,16 +22,16 @@ import {
   type AccountStatus,
 } from '../domain/portal-account.js';
 import { PortalLinks } from '../domain/portal-links.js';
-import { PortalUnavailableError, TokenRefusedError } from './errors.js';
+import { Credentials } from './credentials.js';
+import {
+  nameOf,
+  OAuthRefusedError,
+  PortalUnavailableError,
+  TokenRefusedError,
+} from './errors.js';
 
 // how long linking waits for the portal to say whose a token is
 export const IDENTIFY_TIMEOUT_MS = 30_000;
-
-// a plugin error's name, as a class names it; nothing else of the error
-const nameOf = (error: unknown) => {
-  const name = error instanceof Error ? error.name : typeof error;
-  return /^[A-Za-z][\w$]{0,63}$/.test(name) ? name : 'Error';
-};
 
 // what the hub keeps of a connector's answer; anything else is the
 // connector failing
@@ -57,27 +57,31 @@ export interface PortalView {
 }
 
 // Each user's own accounts of the portals that link them (PortalLinks),
-// linked by a token the user pastes, which is never read back: it's sealed
-// for the account (CredentialVault), and only a run of the account opens
-// it. Who it is on the portal comes from the portal's connector
-// (identify), asked as the user. Plugins run each account that reads, and
-// are told as accounts are linked and go.
+// linked by a token the user pastes or by the portal's consent page
+// (OAuthLinking), never read back: it's sealed for the account
+// (Credentials), and only a run of the account opens it. Who it is on the
+// portal comes from the portal's connector (identify), asked as the user.
+// Plugins run each account that reads, and are told as accounts are linked
+// and go; a consent is taken back at the portal as its account goes.
 @Injectable()
 export class PortalAccounts implements OnApplicationBootstrap {
   constructor(
     private readonly links: PortalLinks,
     private readonly accounts: PortalAccountRepository,
-    private readonly vault: CredentialVault,
+    private readonly credentials: Credentials,
     private readonly plugins: PluginCatalog,
     private readonly queries: QueryBus,
     private readonly commands: CommandBus,
   ) {}
 
   // A mode no connector here takes stops the app at startup, once every
-  // module has started: the plugins have been found by then.
+  // module has started: the plugins have been found by then. OAuth needs
+  // the connector's client there too.
   onApplicationBootstrap() {
-    this.links.checkAgainst(
-      (portal, mode) => this.plugins.linker(portal, mode) !== null,
+    this.links.checkAgainst((portal, mode) =>
+      mode === 'oauth'
+        ? !!this.plugins.oauthLinker(portal)?.oauthServer()
+        : this.plugins.linker(portal, mode) !== null,
     );
   }
 
@@ -125,7 +129,8 @@ export class PortalAccounts implements OnApplicationBootstrap {
     return { shared: false, accounts: accounts.map(({ id }) => id) };
   }
 
-  // The credential of an account that reads now, opened for its run
+  // The credential of an account that reads now, opened for its run. One
+  // whose renewal the portal refuses is revoked, and reads nothing.
   async credential(id: string, now = new Date()): Promise<Credential | null> {
     const found = await this.accounts.withCredential(id);
     if (!found) return null;
@@ -134,44 +139,115 @@ export class PortalAccounts implements OnApplicationBootstrap {
       this.links.of(account.portal).mode === account.snapshot.mode &&
       account.statusAt(now) === 'linked';
     if (!reads) return null;
-    return { kind: 'token', token: this.vault.open(sealed, account.snapshot) };
+    try {
+      return await this.credentials.open(account, sealed, now);
+    } catch (error) {
+      if (!(error instanceof OAuthRefusedError)) throw error;
+      await this.revoked(account);
+      return null;
+    }
   }
 
-  // a run found the portal no longer takes the account's credential
+  // A run found the portal no longer takes the account's credential: it's
+  // revoked, unless it was only an access token run out, renewed now.
   async rejected(id: string) {
     const found = await this.accounts.withCredential(id);
     if (!found) return;
-    found.account.revoke();
-    await this.accounts.saveStatus(found.account);
+    const { account, sealed } = found;
+    if (!(await this.credentials.renewed(account, sealed)))
+      await this.revoked(account);
+  }
+
+  // NotLinkableError unless the user may link an account of the portal so
+  async checkLinkable(userId: string, portal: PortalId, mode: AccountLink) {
+    this.links.check(portal, mode, await this.isAdmin(userId));
   }
 
   // The user's account of the portal, linked by the token once the portal
-  // takes it: the same portal user's account as before stays, another's
-  // takes its place.
+  // takes it.
   async setToken(userId: string, portal: PortalId, token: Secret) {
-    this.links.check(portal, 'token', await this.isAdmin(userId));
-    const user = await this.identify(portal, token);
-    const had = await this.accounts.find(userId, portal);
+    await this.checkLinkable(userId, portal, 'token');
+    const user = await this.identify(portal, { kind: 'token', token });
+    await this.link(userId, portal, 'token', user, token);
+  }
+
+  // The user's account of the portal, linked by `mode` as `user`: the same
+  // portal user's account as before stays, another's takes its place. The
+  // consent it was linked by before is taken back at the portal, the new
+  // credential sealed in its place.
+  async link(
+    userId: string,
+    portal: PortalId,
+    mode: AccountLink,
+    user: { id: string; expiresAt: Date | null },
+    secret: Secret,
+  ) {
+    const had = await this.withCredential(userId, portal);
     const account = PortalAccount.link(
-      had,
-      { userId, portal, mode: 'token' },
+      had?.account ?? null,
+      { userId, portal, mode },
       user,
     );
-    await this.accounts.save(account, this.vault.seal(token, account.snapshot));
-    const replaced = had && had.id !== account.id ? [had.id] : [];
+    await this.accounts.save(account, this.credentials.seal(account, secret));
+    if (had) await this.credentials.revoke(had.account, had.sealed);
+    const replaced =
+      had && had.account.id !== account.id ? [had.account.id] : [];
     await this.changed(portal, { linked: [account.id], gone: replaced });
   }
 
-  // the account and its credential, whatever the portal's mode is now
+  // the account and its credential, whatever the portal's mode is now,
+  // its consent taken back at the portal first
   async unlink(userId: string, portal: PortalId) {
+    const had = await this.withCredential(userId, portal);
+    if (had) await this.credentials.revoke(had.account, had.sealed);
     const gone = await this.accounts.remove(userId, portal);
     if (gone) await this.changed(portal, { gone: [gone] });
   }
 
   // a deleted user's, all of them
   async removeAllOf(userId: string) {
+    for (const account of await this.accounts.ofUser(userId)) {
+      const found = await this.accounts.withCredential(account.id);
+      if (found) await this.credentials.revoke(found.account, found.sealed);
+    }
     for (const { id, portal } of await this.accounts.removeAllOf(userId))
       await this.changed(portal, { gone: [id] });
+  }
+
+  // Whose a credential is, as the portal's connector says, asked as the
+  // user. The portal not taking it is TokenRefusedError or
+  // OAuthRefusedError, as it was linked.
+  async identify(portal: PortalId, credential: Credential) {
+    const mode = credential.kind;
+    const linker = this.plugins.linker(portal, mode);
+    if (!linker) throw new NotLinkableError(portal, mode);
+    let answer: unknown;
+    try {
+      answer = await linker.identify(
+        credential,
+        AbortSignal.timeout(IDENTIFY_TIMEOUT_MS),
+      );
+    } catch (error) {
+      if (error instanceof CredentialRejectedError)
+        throw mode === 'token'
+          ? new TokenRefusedError()
+          : new OAuthRefusedError();
+      throw new PortalUnavailableError(portal, nameOf(error));
+    }
+    const user = portalUser.safeParse(answer);
+    // without the answer, which may name the user
+    if (!user.success) throw new PortalUnavailableError(portal, 'its answer');
+    return user.data;
+  }
+
+  private async withCredential(userId: string, portal: PortalId) {
+    const had = await this.accounts.find(userId, portal);
+    return had && this.accounts.withCredential(had.id);
+  }
+
+  private async revoked(account: PortalAccount) {
+    account.revoke();
+    await this.accounts.saveStatus(account);
   }
 
   private changed(
@@ -183,25 +259,5 @@ export class PortalAccounts implements OnApplicationBootstrap {
 
   private isAdmin(userId: string) {
     return this.queries.execute(new IsAdminQuery(userId));
-  }
-
-  private async identify(portal: PortalId, token: Secret) {
-    const linker = this.plugins.linker(portal, 'token');
-    if (!linker) throw new NotLinkableError(portal, 'token');
-    let answer: unknown;
-    try {
-      answer = await linker.identify(
-        { kind: 'token', token },
-        AbortSignal.timeout(IDENTIFY_TIMEOUT_MS),
-      );
-    } catch (error) {
-      if (error instanceof CredentialRejectedError)
-        throw new TokenRefusedError();
-      throw new PortalUnavailableError(portal, nameOf(error));
-    }
-    const user = portalUser.safeParse(answer);
-    // without the answer, which may name the user
-    if (!user.success) throw new PortalUnavailableError(portal, 'its answer');
-    return user.data;
   }
 }

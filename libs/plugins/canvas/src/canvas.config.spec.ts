@@ -11,6 +11,7 @@ describe('canvas settings', () => {
       url: 'https://canvas.example.edu',
       token: '1~abc',
       userAgent: 'course-sync',
+      oauth: null,
     });
     expect(
       canvasSettings.parse({ ...env, CANVAS_USER_AGENT: 'hub of A. Student' })
@@ -23,6 +24,22 @@ describe('canvas settings', () => {
       expect(
         canvasSettings.parse({ ...env, CANVAS_TOKEN: token }).token,
       ).toBeNull();
+  });
+
+  it('take a developer key for the consent page, its id and key both or neither', () => {
+    const key = {
+      CANVAS_OAUTH_CLIENT_ID: '10000000000001',
+      CANVAS_OAUTH_CLIENT_SECRET: 'the-key',
+    };
+    const { oauth } = canvasSettings.parse({ ...env, ...key });
+    expect(oauth?.clientId).toBe('10000000000001');
+    expect(oauth?.clientSecret.reveal()).toBe('the-key');
+    expect(canvasSettings.parse(env).oauth).toBeNull();
+    for (const half of [
+      { CANVAS_OAUTH_CLIENT_ID: '1' },
+      { CANVAS_OAUTH_CLIENT_SECRET: 'k' },
+    ])
+      expect(canvasSettings.safeParse({ ...env, ...half }).success).toBe(false);
   });
 
   it('refuse an address that is no https one', () => {

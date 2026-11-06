@@ -1,11 +1,14 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
 import {
+  bearerOf,
   CredentialRejectedError,
   PollConnector,
   type ConnectorContext,
   type Credential,
   type IdentifiesAccounts,
+  type LinksByOAuth,
+  type OAuthServer,
   type PollsPortal,
   type PortalUser,
 } from '@app/plugin-sdk';
@@ -35,11 +38,18 @@ async function expiryOf(api: CanvasApi, token: string) {
 // Canvas courses read as shared: as the hub owner sees them, every hour, on
 // the owner's own token, what the whole course sees, so the owner sees to
 // it that they may show the hub's readers what they see (README). Read
-// with users' own tokens (README, Portal accounts): each user's account as
-// it sees its courses, on its own grid.
-@PollConnector({ portal: 'canvas', schedule: '0 * * * *', links: ['token'] })
+// with users' own tokens (README, Portal accounts), pasted or by Canvas's
+// consent page: each user's account as it sees its courses, on its own
+// grid.
+@PollConnector({
+  portal: 'canvas',
+  schedule: '0 * * * *',
+  links: ['token', 'oauth'],
+})
 @Injectable()
-export class CanvasConnector implements PollsPortal, IdentifiesAccounts {
+export class CanvasConnector
+  implements PollsPortal, IdentifiesAccounts, LinksByOAuth
+{
   private readonly logger = new Logger(CanvasConnector.name);
 
   constructor(
@@ -58,13 +68,9 @@ export class CanvasConnector implements PollsPortal, IdentifiesAccounts {
       await this.warnOfExpiry(api, token);
       return new CanvasSync(api, ingest, this.config.url).run();
     }
-    // the user's: its expiry is theirs to see to
-    const { token } = await account.credential();
-    const api = new CanvasApi({
-      ...this.config,
-      token: token.reveal(),
-      signal,
-    });
+    // the user's: its expiry is theirs to see to, or the hub's to renew
+    const token = bearerOf(await account.credential()).reveal();
+    const api = new CanvasApi({ ...this.config, token, signal });
     try {
       await new CanvasSync(api, ingest, this.config.url, 'own').run();
     } catch (error) {
@@ -74,17 +80,20 @@ export class CanvasConnector implements PollsPortal, IdentifiesAccounts {
     }
   }
 
-  // Whose a pasted token is, by Canvas's id for its user (nothing else of
-  // what Canvas answers about them), and when it expires. A token Canvas
-  // doesn't take, or whose user it won't show, is rejected.
-  async identify({ token }: Credential, signal: AbortSignal) {
-    const pasted = token.reveal();
-    const api = new CanvasApi({ ...this.config, token: pasted, signal });
+  // Whose a token is, pasted or by the consent page, by Canvas's id for its
+  // user (nothing else of what Canvas answers about them), and when a
+  // pasted one expires. A token Canvas doesn't take, or whose user it won't
+  // show, is rejected.
+  async identify(credential: Credential, signal: AbortSignal) {
+    const token = bearerOf(credential).reveal();
+    const api = new CanvasApi({ ...this.config, token, signal });
     try {
       const user = await api.get<User>('/api/v1/users/self');
       const found: PortalUser = {
         id: String(user.id),
-        expiresAt: await expiryOf(api, pasted),
+        // one by the consent page lasts as long as the hub renews it
+        expiresAt:
+          credential.kind === 'token' ? await expiryOf(api, token) : null,
       };
       return found;
     } catch (error) {
@@ -95,6 +104,25 @@ export class CanvasConnector implements PollsPortal, IdentifiesAccounts {
         throw new CredentialRejectedError();
       throw error;
     }
+  }
+
+  // Canvas's consent page and token endpoint, and the hub's developer key
+  // there, once the settings name one
+  oauthServer(): OAuthServer | null {
+    const { url, oauth } = this.config;
+    if (!oauth) return null;
+    return {
+      issuer: url,
+      authorizationEndpoint: new URL('/login/oauth2/auth', url).href,
+      tokenEndpoint: new URL('/login/oauth2/token', url).href,
+      ...oauth,
+    };
+  }
+
+  // a token by the consent page taken back, Canvas's way
+  async revoke(credential: Credential, signal: AbortSignal) {
+    const token = bearerOf(credential).reveal();
+    await new CanvasApi({ ...this.config, token, signal }).logout();
   }
 
   // A token Canvas doesn't find by its hint, or won't show, goes unchecked;

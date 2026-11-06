@@ -68,7 +68,9 @@ Put off:
 - a user's token's expiry is the one the portal gave at linking: a run doesn't renew it (the design's `expiresAt(at)`), and finds it `revoked` once the portal refuses it
 - a fetch lease isn't released: a run that took one and failed the download keeps that version's bytes from the other accounts' runs for the lease's hour
 - `CONNECTOR_CONCURRENCY` is per worker process and for every portal at once, not per portal
-- OAuth as a link mode: the portal's consent page, the access and refresh tokens sealed as a pasted token is (Canvas needs a developer key from the school)
+- a consent's revoke on unlink, replace or a deleted user is as best it can, logged by the error's name: the account goes anyway, so one the portal was away for stays granted there until the user takes it back (Canvas's Approved Integrations); a queued revoke tried again, once it matters
+- the Canvas consent asks for no scopes (`OAuthServer.scope` unset): the token gets what the developer key allows. A `CANVAS_OAUTH_SCOPES` setting, for a key that enforces scopes, once a school's needs it
+- token requests to a portal's OAuth server go with openid-client's own `User-Agent` (oauth4webapi's name and version, nothing of the hub), not `CANVAS_USER_AGENT`: a `customFetch` per server, should a portal refuse it
 - connector keys (#33) bound to a user's account, accounts over gRPC and the `connector` mode
 - a deleted user's accounts go by an event Better Auth's delete hook sends once the delete has committed, on the in-process bus: a crash in between leaves them, unreachable (no session is the user's); a sweep against identity's users, once something reads with accounts
 - a malformed JSON body's 400 quotes a few characters of it (V8's `JSON.parse` message, which Nest answers with): a token sent so shows a part of itself to its own sender, and isn't logged

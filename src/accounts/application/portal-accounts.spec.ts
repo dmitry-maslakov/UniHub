@@ -1,6 +1,7 @@
 import { inspect } from 'node:util';
 import { Logger } from '@nestjs/common';
 import {
+  bearerOf,
   CredentialRejectedError,
   type Credential,
   type PortalUser,
@@ -10,20 +11,48 @@ import { IsAdminQuery } from '../../identity/contracts.js';
 import { catalogOf, poll } from '../../../test/discovered-plugins.js';
 import { FakeBus } from '../../../test/fake-bus.js';
 import { NotLinkableError, UnsupportedLinkError } from '../domain/errors.js';
+import { grantOf, RENEW_BEFORE_MS } from '../domain/oauth-grant.js';
 import { PortalLinks, type PortalLink } from '../domain/portal-links.js';
 import { AccountsChangedCommand } from '../../plugins/contracts.js';
-import { FakeVault, InMemoryAccounts } from './accounts.fakes.js';
-import { PortalUnavailableError, TokenRefusedError } from './errors.js';
+import { accountsSettings } from '../accounts.config.js';
+import {
+  FakeOAuthClient,
+  FakeVault,
+  InMemoryAccounts,
+  InMemoryConsents,
+} from './accounts.fakes.js';
+import { Credentials } from './credentials.js';
+import { OAuthLinking } from './oauth-linking.js';
+import {
+  ConsentUnknownError,
+  OAuthRefusedError,
+  PortalUnavailableError,
+  TokenRefusedError,
+} from './errors.js';
 import { PortalAccounts } from './portal-accounts.js';
 
 const TOKEN = '1~ana-pasted-token';
 const portal = (id: string) => PortalId.parse(id);
-const [CANVAS, MOODLE, TEAMS] = ['canvas', 'moodle', 'teams'].map(portal);
+const [CANVAS, MOODLE, TEAMS, LMS] = ['canvas', 'moodle', 'teams', 'lms'].map(
+  portal,
+);
 
-// canvas for admins, moodle for everyone, teams shared; bo is an admin
-const LINKS: Record<string, PortalLink> = {
+// canvas for admins, moodle for everyone, teams shared, lms by its consent
+// page; bo is an admin
+const TOKEN_LINKS: Record<string, PortalLink> = {
   canvas: { mode: 'token', adminsOnly: true },
   moodle: { mode: 'token', adminsOnly: false },
+};
+const LINKS: Record<string, PortalLink> = {
+  ...TOKEN_LINKS,
+  lms: { mode: 'oauth', adminsOnly: false },
+};
+export const LMS_SERVER = {
+  issuer: 'https://lms.example.test',
+  authorizationEndpoint: 'https://lms.example.test/authorize',
+  tokenEndpoint: 'https://lms.example.test/token',
+  clientId: 'hub',
+  clientSecret: new Secret('hub-secret'),
 };
 
 type Identify = (credential: Credential) => Promise<PortalUser>;
@@ -33,11 +62,18 @@ function accounts({
   links = LINKS,
 }: { identify?: Identify; links?: Record<string, PortalLink> } = {}) {
   const asked: Credential[] = [];
+  const revoked: string[] = [];
+  let revokes: () => Promise<void> = async () => {};
   const connector = {
     poll: async () => {},
     identify: async (credential: Credential) => {
       asked.push(credential);
       return identify(credential);
+    },
+    oauthServer: () => LMS_SERVER,
+    revoke: async (credential: Credential) => {
+      await revokes();
+      revoked.push(bearerOf(credential).reveal());
     },
   };
   const plugins = catalogOf({
@@ -45,6 +81,7 @@ function accounts({
       poll('canvas', connector, ['token']),
       poll('moodle', connector, ['token']),
       poll('teams'),
+      poll('lms', connector, ['oauth']),
     ],
   });
   const queries = new FakeBus([
@@ -53,21 +90,52 @@ function accounts({
   const commands = new FakeBus();
   const store = new InMemoryAccounts();
   const vault = new FakeVault();
+  const client = new FakeOAuthClient();
+  const consents = new InMemoryConsents();
+  const credentials = new Credentials(vault, store, plugins, client);
   const policy = new PortalLinks(
     new Map(Object.entries(links).map(([id, link]) => [portal(id), link])),
   );
   const service = new PortalAccounts(
     policy,
     store,
-    vault,
+    credentials,
     plugins,
     queries.queries,
     commands.commands,
   );
   service.onApplicationBootstrap();
+  const config = accountsSettings.parse({
+    BETTER_AUTH_URL: 'https://hub.example.test',
+  });
+  const oauth = new OAuthLinking(
+    service,
+    credentials,
+    client,
+    consents,
+    config,
+  );
   const setToken = (userId: string, p: PortalId, token = TOKEN) =>
     service.setToken(userId, p, new Secret(token));
-  return { service, store, vault, asked, setToken, told: commands.sent };
+  // a user through the consent page: sent there, back with the code
+  const consent = async (userId: string, code = '1', p = LMS) => {
+    const state = (await oauth.start(userId, p)).searchParams.get('state')!;
+    await oauth.finish(userId, p, new URLSearchParams({ code, state }));
+  };
+  return {
+    service,
+    store,
+    vault,
+    asked,
+    setToken,
+    told: commands.sent,
+    oauth,
+    client,
+    consents,
+    consent,
+    revoked,
+    revoking: (failing: () => Promise<void>) => (revokes = failing),
+  };
 }
 
 describe('PortalAccounts', () => {
@@ -78,7 +146,7 @@ describe('PortalAccounts', () => {
     });
     await setToken('ana', MOODLE);
 
-    expect(asked.map((c) => [c.kind, c.token.reveal()])).toEqual([
+    expect(asked.map((c) => [c.kind, bearerOf(c).reveal()])).toEqual([
       ['token', TOKEN],
     ]);
     const [{ account, sealed }] = store.rows.values();
@@ -240,6 +308,7 @@ describe('PortalAccounts', () => {
     const past = new Date('2026-01-01T00:00:00Z');
     const { service, store, setToken } = accounts({
       identify: async () => ({ id: '4242', expiresAt: past }),
+      links: TOKEN_LINKS,
     });
     await setToken('bo', CANVAS);
     await setToken('bo', MOODLE);
@@ -280,6 +349,7 @@ describe('PortalAccounts', () => {
     const until = new Date('2026-12-30T08:00:00Z');
     const { service, store, setToken } = accounts({
       identify: async () => ({ id: '4242', expiresAt: until }),
+      links: TOKEN_LINKS,
     });
     await setToken('ana', MOODLE);
     await setToken('bo', CANVAS);
@@ -353,9 +423,9 @@ describe('PortalAccounts', () => {
       shared: false,
       accounts: [id('ana'), id('bo')],
     });
-    expect((await service.credential(id('bo'), before))?.token.reveal()).toBe(
-      '1~bo-pasted-token',
-    );
+    expect(
+      bearerOf((await service.credential(id('bo'), before))!).reveal(),
+    ).toBe('1~bo-pasted-token');
     // past its expiry, or one the portal rejected since: none
     expect(await service.readers(MOODLE, until)).toEqual({
       shared: false,
@@ -388,5 +458,175 @@ describe('PortalAccounts', () => {
         accounts({ links: { [p]: { mode: 'token', adminsOnly: false } } }),
       ).toThrow(new UnsupportedLinkError(portal(p), 'token'));
     expect(() => accounts({ links: {} })).not.toThrow();
+  });
+});
+
+describe("PortalAccounts, by the portal's consent page", () => {
+  const grantOfRow = (
+    store: InMemoryAccounts,
+    vault: FakeVault,
+    key: string,
+  ) => {
+    const { account, sealed } = store.rows.get(key)!;
+    return grantOf(vault.open(sealed, account));
+  };
+
+  it('sends the user to the consent page and links the account by the tokens its code gives, sealed as one grant', async () => {
+    const { oauth, store, vault, asked, client, told } = accounts();
+    const url = await oauth.start('ana', LMS);
+
+    expect(url.origin + url.pathname).toBe(
+      'https://lms.example.test/authorize',
+    );
+    expect(url.searchParams.get('redirect_uri')).toBe(
+      'https://hub.example.test/api/me/portals/lms/oauth/callback',
+    );
+    const state = url.searchParams.get('state')!;
+    await oauth.finish('ana', LMS, new URLSearchParams({ code: '7', state }));
+
+    expect(client.exchanged.map((e) => e.verifier)).toEqual(['verifier-1']);
+    expect(asked.map((c) => [c.kind, bearerOf(c).reveal()])).toEqual([
+      ['oauth', 'access-7'],
+    ]);
+    expect(store.rows.get('ana:lms')!.account).toMatchObject({
+      mode: 'oauth',
+      portalUser: '4242',
+      status: 'linked',
+    });
+    const grant = grantOfRow(store, vault, 'ana:lms');
+    expect([grant.accessToken.reveal(), grant.refreshToken?.reveal()]).toEqual([
+      'access-7',
+      'refresh-7',
+    ]);
+    expect(told).toEqual([
+      new AccountsChangedCommand(LMS, {
+        linked: [store.rows.get('ana:lms')!.account.id],
+        gone: [],
+      }),
+    ]);
+  });
+
+  it("takes a consent's state once, and only from the user and the portal it was asked for", async () => {
+    const { oauth, store } = accounts();
+    const state = (await oauth.start('ana', LMS)).searchParams.get('state')!;
+    const answer = new URLSearchParams({ code: '1', state });
+
+    await expect(oauth.finish('bo', LMS, answer)).rejects.toThrow(
+      ConsentUnknownError,
+    );
+    // taken by bo's try: ana starts again
+    await expect(oauth.finish('ana', LMS, answer)).rejects.toThrow(
+      ConsentUnknownError,
+    );
+    const again = (await oauth.start('ana', LMS)).searchParams.get('state')!;
+    await expect(
+      oauth.finish(
+        'ana',
+        MOODLE,
+        new URLSearchParams({ code: '1', state: again }),
+      ),
+    ).rejects.toThrow(ConsentUnknownError);
+    await expect(
+      oauth.finish('ana', LMS, new URLSearchParams({ code: '1' })),
+    ).rejects.toThrow(ConsentUnknownError);
+    expect(store.rows.size).toBe(0);
+  });
+
+  it('links nothing when the portal says no, and answers try again later when it is away', async () => {
+    const { oauth, client, store } = accounts();
+    client.refuses.add('code');
+    const first = (await oauth.start('ana', LMS)).searchParams.get('state')!;
+    await expect(
+      oauth.finish(
+        'ana',
+        LMS,
+        new URLSearchParams({ code: '1', state: first }),
+      ),
+    ).rejects.toThrow(OAuthRefusedError);
+
+    client.refuses.clear();
+    client.away = true;
+    const second = (await oauth.start('ana', LMS)).searchParams.get('state')!;
+    const away = await oauth
+      .finish('ana', LMS, new URLSearchParams({ code: '1', state: second }))
+      .catch((e: unknown) => e);
+    expect(away).toBeInstanceOf(PortalUnavailableError);
+    expect(away).toMatchObject({ failure: 'Error' });
+    expect(store.rows.size).toBe(0);
+  });
+
+  it('starts no consent of a portal not linked by OAuth, nor for admins alone to anyone else', async () => {
+    const { oauth } = accounts({
+      links: { ...LINKS, lms: { mode: 'oauth', adminsOnly: true } },
+    });
+    for (const [userId, p] of [
+      ['ana', LMS],
+      ['bo', MOODLE],
+    ] as const)
+      await expect(oauth.start(userId, p)).rejects.toThrow(
+        new NotLinkableError(p, 'oauth'),
+      );
+    await expect(oauth.start('bo', LMS)).resolves.toBeInstanceOf(URL);
+  });
+
+  it('renews the access token before it runs out, keeping the refresh token, and revokes the account once the portal refuses', async () => {
+    const { service, consent, store, vault, client } = accounts();
+    await consent('ana');
+    const { id } = store.rows.get('ana:lms')!.account;
+    const soon = new Date(Date.now() + 60 * 60_000 - RENEW_BEFORE_MS + 1);
+
+    expect(bearerOf((await service.credential(id))!).reveal()).toBe('access-1');
+    expect(bearerOf((await service.credential(id, soon))!).reveal()).toBe(
+      'access-1.1',
+    );
+    expect(grantOfRow(store, vault, 'ana:lms').refreshToken?.reveal()).toBe(
+      'refresh-1',
+    );
+
+    client.refuses.add('refresh');
+    expect(
+      await service.credential(id, new Date(Date.now() + 2 * 60 * 60_000)),
+    ).toBeNull();
+    expect(store.rows.get('ana:lms')!.account.status).toBe('revoked');
+  });
+
+  it('takes an access token a run found refused for one run out when it renews, and revokes the account when it does not', async () => {
+    const { service, consent, store, client } = accounts();
+    await consent('ana');
+    const { id } = store.rows.get('ana:lms')!.account;
+
+    await service.rejected(id);
+    expect(client.renewals).toBe(1);
+    expect(store.rows.get('ana:lms')!.account.status).toBe('linked');
+
+    client.refuses.add('refresh');
+    await service.rejected(id);
+    expect(store.rows.get('ana:lms')!.account.status).toBe('revoked');
+  });
+
+  it('takes the consent back at the portal on unlink and when another replaces it, and unlinks even when the portal fails to', async () => {
+    const error = vi.spyOn(Logger.prototype, 'warn').mockReturnValue();
+    const { service, consent, revoked, revoking, store } = accounts();
+    await consent('ana', '1');
+    await consent('ana', '2');
+    expect(revoked).toEqual(['access-1']);
+
+    revoking(async () => {
+      throw new Error('portal away with access-2 in its message');
+    });
+    await service.unlink('ana', LMS);
+    expect(store.rows.size).toBe(0);
+    expect(error).toHaveBeenCalledWith(
+      'an account of lms was not revoked there: Error',
+    );
+    error.mockRestore();
+  });
+
+  it("takes a deleted user's consents back at the portal", async () => {
+    const { service, consent, setToken, revoked } = accounts();
+    await consent('ana', '3');
+    await setToken('ana', MOODLE);
+    await service.removeAllOf('ana');
+    expect(revoked).toEqual(['access-3']);
   });
 });

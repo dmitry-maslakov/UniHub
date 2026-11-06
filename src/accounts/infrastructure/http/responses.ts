@@ -9,9 +9,9 @@ import type { PortalView } from '../../application/portal-accounts.js';
 export class PortalResponse implements PortalView {
   @ApiProperty({ type: String, example: 'canvas' }) portal!: PortalId;
   @ApiProperty({
-    enum: ['shared', 'token'],
+    enum: ['shared', 'token', 'oauth'],
     description:
-      'how its accounts are linked: shared, the one the hub reads with; token, your own',
+      "how its accounts are linked: shared, the one the hub reads with; token, your own by a token you paste; oauth, your own by the portal's consent page",
   })
   mode!: LinkMode;
   @ApiProperty({ description: 'you have an account of it linked' })
