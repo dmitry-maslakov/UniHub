@@ -106,10 +106,11 @@ describe('MCP', { timeout: 20_000 }, () => {
       ],
       cutShort: null,
     });
+    // of the one processor on here
     await prisma.representation.create({
       data: {
         hash: notes,
-        processor: 'plain-text',
+        processor: 'office-text',
         version: 1,
         parts: ['heapsort'],
       },

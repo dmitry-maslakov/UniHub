@@ -6,7 +6,8 @@ import type { INestApplication } from '@nestjs/common';
 import { CommandBus } from '@nestjs/cqrs';
 import tar from 'tar-stream';
 import yazl from 'yazl';
-import { PortalId } from '@app/kernel';
+import type { Client } from '@opensearch-project/opensearch';
+import { PluginName, PortalId } from '@app/kernel';
 import { ArchivesModule } from '@app/plugins/archives';
 import { OfficeTextModule } from '@app/plugins/office-text';
 import { PlainTextModule } from '@app/plugins/plain-text';
@@ -19,12 +20,16 @@ import {
 import { GrantCourseAccessCommand } from '../src/identity/contracts.js';
 import type { Mail } from '../src/identity/domain/mailer.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
+import { OPENSEARCH } from '../src/platform/search/opensearch.module.js';
 import {
   EmbedderUnavailableError,
   QueryEmbedder,
 } from '../src/processing/application/ports.js';
+import { keyId } from '../src/processing/domain/representation.js';
+import { indexName } from '../src/processing/infrastructure/search/text-index.mapping.js';
 import { accounts } from './accounts.js';
 import { bootApp } from './app.js';
+import { testEnv, testVectors } from './env.js';
 import { portalIngest } from './ingest.js';
 import { sha256 } from './sha256.js';
 
@@ -44,6 +49,7 @@ const lecture = readFileSync(
   ),
 );
 const semafor = 'int semafor = 1;\n';
+const odgovor = 'int odgovor = 42;\n';
 const inner = 'int inner = 2;\n';
 
 async function zipOf(files: Record<string, string | Buffer>) {
@@ -124,7 +130,7 @@ describe('archives', { timeout: 60_000 }, () => {
     await ingest.file({ externalId: 'exam', course: 'c2', name: 'exam.zip' });
     await ingest.content(
       'exam',
-      Readable.from([await zipOf({ 'odgovori.c': 'int odgovor = 42;\n' })]),
+      Readable.from([await zipOf({ 'odgovori.c': odgovor })]),
     );
     secretId = await idOf('exam');
 
@@ -242,25 +248,31 @@ describe('archives', { timeout: 60_000 }, () => {
   });
 
   it('finds a member of an archive in a course the user reads, and never in one they do not', async () => {
-    const found = await vi.waitFor(
-      async () => {
-        const results = await searched('semafor', student);
-        expect(results).toEqual([
-          expect.objectContaining({ fileId, member: 'lab/semafor.c' }),
-        ]);
-        return results;
-      },
-      { timeout: 30_000, interval: 500 },
-    );
-    expect(found).toHaveLength(1);
+    // in the index in whole and searchable (realtime: false sees what a
+    // search does), each searched for once then: searches are limited
+    const opensearch = app.get<Client>(OPENSEARCH);
+    const index = indexName(testEnv.OPENSEARCH_INDEX_PREFIX, testVectors);
+    for (const text of [semafor, odgovor]) {
+      const id = keyId({
+        hash: sha256(text),
+        processor: PluginName.parse('plain-text'),
+        version: 1,
+      });
+      await vi.waitFor(
+        async () =>
+          expect(
+            (await opensearch.exists({ index, id, realtime: false })).body,
+          ).toBe(true),
+        { timeout: 45_000, interval: 500 },
+      );
+    }
 
-    await vi.waitFor(
-      async () =>
-        expect(await searched('odgovor', admin, 'ispiti')).toEqual([
-          expect.objectContaining({ fileId: secretId, member: 'odgovori.c' }),
-        ]),
-      { timeout: 30_000, interval: 500 },
-    );
+    expect(await searched('semafor', student)).toEqual([
+      expect.objectContaining({ fileId, member: 'lab/semafor.c' }),
+    ]);
+    expect(await searched('odgovor', admin, 'ispiti')).toEqual([
+      expect.objectContaining({ fileId: secretId, member: 'odgovori.c' }),
+    ]);
     expect(await searched('odgovor', student)).toEqual([]);
   });
 });

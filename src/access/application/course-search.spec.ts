@@ -70,8 +70,12 @@ const hit = (hash: ContentHash, page: number): TextHit => ({
 
 // ana reads os and net; the index finds the notes first, then the slides,
 // then the code, of whatever contents it's asked to look through
-function searching(reads = ['os-id', 'net-id'], withArchives = false) {
-  const visible = withArchives ? [...files, ...archives] : files;
+function searching(
+  reads = ['os-id', 'net-id'],
+  withArchives: VisibleContentDto[] = [],
+  members = contained,
+) {
+  const visible = [...files, ...withArchives];
   const queries = new FakeBus([
     [ReadScopeQuery, () => ({ allows: (id: string) => reads.includes(id) })],
     [ListCoursesQuery, () => courses],
@@ -88,7 +92,7 @@ function searching(reads = ['os-id', 'net-id'], withArchives = false) {
     [
       ListContainedQuery,
       ({ hashes }: ListContainedQuery) =>
-        contained.filter((m) => hashes.includes(m.container)),
+        members.filter((m) => hashes.includes(m.container)),
     ],
     [
       SearchTextsQuery,
@@ -191,7 +195,7 @@ describe('CourseSearch', () => {
   });
 
   it('looks through the members with a text of the archives among them too', async () => {
-    const { queries, search } = searching(['os-id', 'net-id'], true);
+    const { queries, search } = searching(['os-id', 'net-id'], archives);
 
     await search.search('ana', request({ q: 'semafor', limit: 5 }));
 
@@ -204,15 +208,16 @@ describe('CourseSearch', () => {
   });
 
   it('answers a member as its archive and its path, after the files that hold the same', async () => {
-    const { search } = searching(['os-id', 'net-id'], true);
+    const { search } = searching(['os-id', 'net-id'], archives);
 
     const { results } = await search.search('ana', request({ q: 'semafor' }));
 
     expect(results).toEqual([
+      // labs.zip holds the notes too, but as a member: no copy of them
       expect.objectContaining({
         fileId: 'f2',
         member: null,
-        sameContentIn: ['f5'],
+        sameContentIn: [],
       }),
       expect.objectContaining({ fileId: 'f1', member: null }),
       expect.objectContaining({
@@ -226,11 +231,43 @@ describe('CourseSearch', () => {
   });
 
   it("finds no member of an archive in a course the user doesn't read", async () => {
-    const { queries, search } = searching(['os-id', 'net-id'], true);
+    const { queries, search } = searching(['os-id', 'net-id'], archives);
 
     const { results } = await search.search('ana', request({ q: 'answers' }));
 
     expect(results.map(({ fileId }) => fileId)).not.toContain('f6');
     expect(sentOf(queries, SearchTextsQuery)[0].hashes).not.toContain(secret);
+  });
+
+  it('answers a member found in several archives, or twice in one, as its first place', async () => {
+    const copy = sha256('copy.zip');
+    const { search } = searching(
+      ['os-id', 'net-id'],
+      [
+        ...archives,
+        {
+          fileId: 'f7',
+          courseId: 'net-id',
+          hash: copy,
+          name: 'c.zip',
+          path: '',
+        },
+      ],
+      [
+        ...contained,
+        { container: labs, path: 'old/main.c', hash: code },
+        { container: copy, path: 'main.c', hash: code },
+      ],
+    );
+
+    const { results } = await search.search('ana', request({ q: 'main' }));
+
+    expect(results.at(-1)).toEqual(
+      expect.objectContaining({
+        fileId: 'f5',
+        member: 'lab/main.c',
+        sameContentIn: [],
+      }),
+    );
   });
 });

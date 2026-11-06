@@ -7,8 +7,8 @@ export { PluginsOutboxTransport } from './infrastructure/plugins-outbox.transpor
 export { LEFT_OUT, type LeftOut } from './domain/unpacking.js';
 export {
   FindMemberQuery,
-  ListContainedQuery,
   GetTextPageQuery,
+  ListContainedQuery,
   ListMembersQuery,
   ListTextsQuery,
   SearchTextsQuery,

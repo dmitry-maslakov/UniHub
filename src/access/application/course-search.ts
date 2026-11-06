@@ -32,6 +32,7 @@ export class CourseSearch {
     const files = await this.queries.execute(
       new ListVisibleContentQuery(courses.map(({ id }) => id)),
     );
+    if (!files.length) return { results: [] };
     const contained = await this.queries.execute(
       new ListContainedQuery([...new Set(files.map(({ hash }) => hash))]),
     );

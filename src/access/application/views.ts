@@ -78,7 +78,8 @@ export interface SearchResultView {
   // the course's slug
   course: string;
   pages: SearchPageView[];
-  // the other files the user reads that hold the same content
+  // the other files the user reads that hold the same content, themselves:
+  // not those that hold it as a member
   sameContentIn: string[];
 }
 
@@ -159,7 +160,7 @@ export function placesOf(
 }
 
 // what search found of a content, as the first of its places, the other
-// files holding it named with it
+// files holding it themselves named with it
 export const searchResultView = (
   { pages }: TextHit,
   [{ fileId, name, path, member, courseId }, ...others]: Place[],
@@ -175,9 +176,7 @@ export const searchResultView = (
     processor,
     snippet,
   })),
-  sameContentIn: [
-    ...new Set(
-      others.map(({ fileId }) => fileId).filter((id) => id !== fileId),
-    ),
-  ],
+  sameContentIn: others
+    .filter(({ member }) => member === null)
+    .map(({ fileId }) => fileId),
 });
