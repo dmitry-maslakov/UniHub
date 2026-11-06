@@ -23,6 +23,12 @@ import { PortalUnavailableError, TokenRefusedError } from './errors.js';
 // how long linking waits for the portal to say whose a token is
 export const IDENTIFY_TIMEOUT_MS = 30_000;
 
+// a plugin error's name, as a class names it; nothing else of the error
+const nameOf = (error: unknown) => {
+  const name = error instanceof Error ? error.name : typeof error;
+  return /^[A-Za-z][\w$]{0,63}$/.test(name) ? name : 'Error';
+};
+
 // what the hub keeps of a connector's answer; anything else is the
 // connector failing
 const portalUser = z.object({
@@ -95,7 +101,7 @@ export class PortalAccounts implements OnApplicationBootstrap {
       { userId, portal, mode: 'token' },
       user,
     );
-    await this.accounts.save(account, this.vault.seal(token, account.id));
+    await this.accounts.save(account, this.vault.seal(token, account.snapshot));
   }
 
   // the account and its credential, whatever the portal's mode is now
@@ -119,11 +125,11 @@ export class PortalAccounts implements OnApplicationBootstrap {
     } catch (error) {
       if (error instanceof CredentialRejectedError)
         throw new TokenRefusedError();
-      throw new PortalUnavailableError(portal, { cause: error });
+      throw new PortalUnavailableError(portal, nameOf(error));
     }
     const user = portalUser.safeParse(answer);
     // without the answer, which may name the user
-    if (!user.success) throw new PortalUnavailableError(portal);
+    if (!user.success) throw new PortalUnavailableError(portal, 'its answer');
     return user.data;
   }
 }

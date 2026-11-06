@@ -10,6 +10,8 @@ import {
   type PollsPortal,
   type PortalUser,
 } from '@app/plugin-sdk';
+import { CredentialVault } from '../src/accounts/domain/credential-vault.js';
+import type { PortalAccountState } from '../src/accounts/domain/portal-account.js';
 import type { Mail } from '../src/identity/domain/mailer.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
 import { REDIS } from '../src/platform/redis/redis.module.js';
@@ -26,6 +28,8 @@ import { accounts } from './accounts.js';
 const mark = () => randomBytes(12).toString('hex');
 const TOKENS = {
   good: `good~${mark()}`,
+  // another portal user's
+  other: `other~${mark()}`,
   refused: `refused~${mark()}`,
   away: `away~${mark()}`,
   // not one the schema takes
@@ -41,7 +45,8 @@ abstract class Linking implements PollsPortal, IdentifiesAccounts {
     const pasted = token.reveal();
     if (pasted.startsWith('refused~')) throw new CredentialRejectedError();
     if (pasted.startsWith('away~')) throw new Error('the portal is away');
-    return { id: '4242', expiresAt: new Date(EXPIRES_AT) };
+    const id = pasted.startsWith('other~') ? '5151' : '4242';
+    return { id, expiresAt: new Date(EXPIRES_AT) };
   }
 }
 
@@ -124,6 +129,30 @@ describe('portal accounts', { timeout: 20_000 }, () => {
       expect.objectContaining({ portal: 'linked', linked: false }),
     ]);
     expect(await prisma.portalCredential.count()).toBe(0);
+  });
+
+  it("puts another portal user's account in the old one's place, its credential with it", async () => {
+    const hu = await signUp('hu@portals.test');
+    const prisma = app.get(PrismaService);
+    const where = { userId: await userId('hu@portals.test') };
+    await put(hu, 'linked', TOKENS.good).expect(204);
+    const first = await prisma.portalAccount.findFirstOrThrow({ where });
+
+    keep(await put(hu, 'linked', TOKENS.other).expect(204));
+    const rows = await prisma.portalAccount.findMany({
+      where,
+      include: { credential: true },
+    });
+    expect(rows).toHaveLength(1);
+    const [{ credential, ...row }] = rows;
+    expect(row.id).not.toBe(first.id);
+    expect(row.portalUser).toBe('5151');
+    expect(credential?.accountId).toBe(row.id);
+    // sealed for the row as it is now, holding the second token
+    const opened = app
+      .get(CredentialVault)
+      .open(credential!.sealed, row as PortalAccountState);
+    expect(opened.reveal()).toBe(TOKENS.other);
   });
 
   it("answers 422 for a token the portal doesn't take, 503 while it's away, 400 for one that's none", async () => {

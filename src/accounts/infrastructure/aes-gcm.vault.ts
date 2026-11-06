@@ -3,7 +3,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
 import { Secret } from '@app/kernel';
 import { accountsConfig, type VaultKey } from '../accounts.config.js';
-import { CredentialVault } from '../domain/credential-vault.js';
+import { CredentialVault, type SealedFor } from '../domain/credential-vault.js';
 import { UnreadableCredentialError } from '../domain/errors.js';
 
 const CIPHER = 'aes-256-gcm';
@@ -14,9 +14,15 @@ const TAG_BYTES = 16;
 const text = (bytes: Buffer) => bytes.toString('base64url');
 const bytes = (text: string) => Buffer.from(text, 'base64url');
 
+// the additional data: none of the three holds a NUL (stored text, a
+// portal id, a uuid), so joined by one they're told apart
+const boundTo = ({ id, userId, portal }: SealedFor) =>
+  Buffer.from([id, userId, portal].join('\0'));
+
 // AES-256-GCM from node:crypto, under PORTAL_CREDENTIALS_SECRETS: sealed
-// as "version.iv.ciphertext.tag" (base64url), by the newest key, the
-// account's id the additional data it's bound to. Opens any listed version.
+// as "version.iv.ciphertext.tag" (base64url), by the newest key, bound to
+// the account's id, user and portal as additional data. Opens any listed
+// version.
 @Injectable()
 export class AesGcmVault extends CredentialVault {
   private readonly keys: readonly VaultKey[];
@@ -28,14 +34,14 @@ export class AesGcmVault extends CredentialVault {
     this.keys = keys;
   }
 
-  seal(credential: Secret, accountId: string) {
+  seal(credential: Secret, account: SealedFor) {
     // the settings refuse token links without a key
     const [{ version, key }] = this.keys;
     const iv = randomBytes(IV_BYTES);
     const cipher = createCipheriv(CIPHER, key, iv, {
       authTagLength: TAG_BYTES,
     });
-    cipher.setAAD(Buffer.from(accountId));
+    cipher.setAAD(boundTo(account));
     const sealed = Buffer.concat([
       cipher.update(credential.reveal(), 'utf8'),
       cipher.final(),
@@ -48,7 +54,7 @@ export class AesGcmVault extends CredentialVault {
     ].join('.');
   }
 
-  open(sealed: string, accountId: string) {
+  open(sealed: string, account: SealedFor) {
     const [version, iv, data, tag, ...more] = sealed.split('.');
     const key = this.keys.find((k) => String(k.version) === version)?.key;
     if (!key || tag === undefined || more.length)
@@ -57,7 +63,7 @@ export class AesGcmVault extends CredentialVault {
       const decipher = createDecipheriv(CIPHER, key, bytes(iv), {
         authTagLength: TAG_BYTES,
       });
-      decipher.setAAD(Buffer.from(accountId));
+      decipher.setAAD(boundTo(account));
       decipher.setAuthTag(bytes(tag));
       const opened = Buffer.concat([
         decipher.update(bytes(data)),
@@ -65,7 +71,7 @@ export class AesGcmVault extends CredentialVault {
       ]);
       return new Secret(opened.toString('utf8'));
     } catch {
-      // a wrong key, account or tag: GCM tells them apart from nothing
+      // a wrong key, account, user, portal or tag: GCM tells none apart
       throw new UnreadableCredentialError();
     }
   }

@@ -1,4 +1,5 @@
 import { inspect } from 'node:util';
+import { Logger } from '@nestjs/common';
 import {
   CredentialRejectedError,
   type Credential,
@@ -86,7 +87,7 @@ describe('PortalAccounts', () => {
       status: 'linked',
       expiresAt: until,
     });
-    expect(vault.open(sealed, account.id).reveal()).toBe(TOKEN);
+    expect(vault.open(sealed, account).reveal()).toBe(TOKEN);
   });
 
   it("keeps the account for the same portal user's token, not for another's", async () => {
@@ -153,7 +154,7 @@ describe('PortalAccounts', () => {
       },
     });
     await expect(failing.setToken('ana', MOODLE)).rejects.toThrow(
-      new PortalUnavailableError(MOODLE, { cause: away }),
+      new PortalUnavailableError(MOODLE, 'Error'),
     );
 
     // an answer the hub can't keep is the connector failing
@@ -171,6 +172,57 @@ describe('PortalAccounts', () => {
       expect(odd.store.rows.size).toBe(0);
     }
     expect(failing.store.rows.size).toBe(0);
+  });
+
+  it("keeps nothing of a plugin's error but its name, whatever of the token it holds", async () => {
+    const prefix = TOKEN.slice(0, 5);
+    // as an axios error would come, and a careless message
+    const leaky = Object.assign(
+      new Error(`GET /api/v1/users/self/tokens/${prefix} failed: ${TOKEN}`),
+      {
+        name: 'AxiosError',
+        config: { headers: { Authorization: `Bearer ${TOKEN}` } },
+      },
+    );
+    const named = Object.assign(new Error('x'), { name: TOKEN });
+    for (const [thrown, failure] of [
+      [leaky, 'AxiosError'],
+      [named, 'Error'],
+      [TOKEN, 'string'],
+    ] as const) {
+      const { setToken } = accounts({
+        identify: async () => {
+          throw thrown;
+        },
+      });
+      const error = (await setToken('ana', MOODLE).catch(
+        (e: unknown) => e,
+      )) as PortalUnavailableError;
+      expect(error).toMatchObject({ portal: MOODLE, failure });
+      expect(error.cause).toBeUndefined();
+
+      // as the global filter logs an unavailable one
+      const written: string[] = [];
+      const write = (chunk: unknown) => {
+        written.push(String(chunk));
+        return true;
+      };
+      const out = vi.spyOn(process.stdout, 'write').mockImplementation(write);
+      const err = vi.spyOn(process.stderr, 'write').mockImplementation(write);
+      try {
+        new Logger('DomainErrorFilter').error(error);
+      } finally {
+        out.mockRestore();
+        err.mockRestore();
+      }
+      for (const shown of [
+        written.join(''),
+        inspect(error, { depth: Infinity, showHidden: true }),
+        JSON.stringify(error),
+      ])
+        expect(shown).not.toContain(prefix);
+      expect(written.join('')).toContain(failure);
+    }
   });
 
   it('lists the portals open to the user and their own links, nothing of anyone else', async () => {

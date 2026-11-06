@@ -11,14 +11,17 @@ export class TokenRefusedError extends InvalidError {
 }
 
 // The portal couldn't say whose a credential is, for now: away, slow, or
-// its connector failing. Try again later.
+// its connector failing. Try again later. Of what failed only a name is
+// kept (the plugin error's, as `failure`), never the error: a user's secret
+// was in play, and a plugin's error may hold it (its request's headers, a
+// url). What's logged of it is this much.
 export class PortalUnavailableError extends UnavailableError {
   readonly reason = 'PORTAL_UNAVAILABLE';
 
   constructor(
     readonly portal: PortalId,
-    options?: ErrorOptions,
+    readonly failure: string,
   ) {
-    super(`portal "${portal}" could not be asked whose the token is`, options);
+    super(`portal "${portal}" could not be asked whose the token is`);
   }
 }

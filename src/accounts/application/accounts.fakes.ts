@@ -1,5 +1,5 @@
 import type { PortalId, Secret } from '@app/kernel';
-import { CredentialVault } from '../domain/credential-vault.js';
+import { CredentialVault, type SealedFor } from '../domain/credential-vault.js';
 import { UnreadableCredentialError } from '../domain/errors.js';
 import {
   PortalAccount,
@@ -46,18 +46,21 @@ export class InMemoryAccounts extends PortalAccountRepository {
   }
 }
 
+// what a sealed credential is bound to, as one key
+const key = ({ id, userId, portal }: SealedFor) => `${id}:${userId}:${portal}`;
+
 // seals as "sealed-<n>", keeping what each was, for its account only
 export class FakeVault extends CredentialVault {
-  private readonly kept: { credential: Secret; accountId: string }[] = [];
+  private readonly kept: { credential: Secret; boundTo: string }[] = [];
 
-  seal(credential: Secret, accountId: string) {
-    this.kept.push({ credential, accountId });
+  seal(credential: Secret, account: SealedFor) {
+    this.kept.push({ credential, boundTo: key(account) });
     return `sealed-${this.kept.length - 1}`;
   }
 
-  open(sealed: string, accountId: string) {
+  open(sealed: string, account: SealedFor) {
     const kept = this.kept[Number(sealed.slice('sealed-'.length))];
-    if (kept?.accountId !== accountId) throw new UnreadableCredentialError();
+    if (kept?.boundTo !== key(account)) throw new UnreadableCredentialError();
     return kept.credential;
   }
 }

@@ -32,7 +32,6 @@ const LimitOf = Reflector.createDecorator<Limit>();
 // limit, so each one skips the routes that aren't its own. The count is per
 // user, so the guard that finds the user must run first: on REST routes it's
 // the global session guard; on MCP, ApiKeyAuth applies this after its own.
-// On a route or on its controller, not both: the guard would count it twice.
 // On a route or its controller, not both: the guard would count it twice.
 export const Limited = (name: Limit) =>
   applyDecorators(LimitOf(name), UseGuards(ThrottlerGuard));

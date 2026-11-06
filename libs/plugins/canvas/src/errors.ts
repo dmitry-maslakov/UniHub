@@ -1,5 +1,10 @@
-// What Canvas answered instead of the data. Messages name the path, not the
-// url: a download's query has the file's verifier, a key to the file.
+// The path a message names, never the url: a download's query has the
+// file's verifier, a key to the file. Nor a token's hint, the start of the
+// token, by which Canvas finds it (/users/self/tokens/{hint}).
+const shown = (url: string | URL) =>
+  new URL(url).pathname.replace(/(\/users\/[^/]+\/tokens\/)[^/]+/, '$1{hint}');
+
+// What Canvas answered instead of the data, naming the path it showed.
 export class CanvasError extends Error {
   constructor(
     readonly status: number,
@@ -7,7 +12,7 @@ export class CanvasError extends Error {
     // throttled or failing for now: worth another try after a while
     readonly transient = status === 429 || status >= 500,
   ) {
-    super(`canvas answered ${status} to ${new URL(url).pathname}`);
+    super(`canvas answered ${status} to ${shown(url)}`);
     this.name = new.target.name;
   }
 }
@@ -24,10 +29,11 @@ export class TokenRejectedError extends CanvasError {
 
 // No answer from Canvas after the retries, or not a whole one: the network
 // failed, nothing came in time, or what came isn't the JSON asked for. The
-// path and the reason only, as above: axios's own error holds the token.
+// path shown and the reason only, as above: axios's own error holds the
+// token.
 export class NoAnswerError extends Error {
   constructor(url: string, reason: string) {
-    super(`no answer from canvas to ${new URL(url).pathname}: ${reason}`);
+    super(`no answer from canvas to ${shown(url)}: ${reason}`);
     this.name = new.target.name;
   }
 }
@@ -37,7 +43,7 @@ export class NoAnswerError extends Error {
 // file's failure, tried again the next run
 export class DownloadFailedError extends Error {
   constructor(url: string, reason: string) {
-    super(`download of ${new URL(url).pathname} failed: ${reason}`);
+    super(`download of ${shown(url)} failed: ${reason}`);
     this.name = new.target.name;
   }
 }
@@ -47,7 +53,7 @@ export class DownloadFailedError extends Error {
 export class OtherOriginError extends Error {
   constructor(to: URL, canvas: string) {
     super(
-      `not sending the canvas token to ${to.origin}${to.pathname}: it goes to ${canvas} only`,
+      `not sending the canvas token to ${to.origin}${shown(to)}: it goes to ${canvas} only`,
     );
     this.name = new.target.name;
   }
@@ -58,7 +64,7 @@ export class OtherOriginError extends Error {
 export class NotAReadError extends Error {
   constructor(method: string, to: URL) {
     super(
-      `not sending the canvas token with a ${method.toUpperCase()} to ${to.pathname}: it only reads`,
+      `not sending the canvas token with a ${method.toUpperCase()} to ${shown(to)}: it only reads`,
     );
     this.name = new.target.name;
   }

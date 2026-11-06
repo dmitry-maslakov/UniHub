@@ -216,6 +216,29 @@ describe('CanvasApi', () => {
     );
   });
 
+  it("names a token's path without its hint, the token's start", async () => {
+    const path = '/api/v1/users/self/tokens/1~abc';
+    server.use(
+      http.get(`${CANVAS}${path}`, () => status(500)()),
+      http.get(`${CANVAS}/api/v1/users/self/tokens/2~xyz`, () =>
+        HttpResponse.error(),
+      ),
+    );
+    vi.useFakeTimers();
+
+    const failed = await failure(api().get(path));
+    expect(failed).toHaveProperty(
+      'message',
+      'canvas answered 500 to /api/v1/users/self/tokens/{hint}',
+    );
+    const unanswered = await failure(
+      api().get('/api/v1/users/self/tokens/2~xyz'),
+    );
+    expect(unanswered).toBeInstanceOf(NoAnswerError);
+    expect(inspect(unanswered)).toContain('/api/v1/users/self/tokens/{hint}');
+    expect(inspect([failed, unanswered])).not.toMatch(/1~abc|2~xyz/);
+  });
+
   it('fails just that file for a download that gets no answer, and holds neither the token nor the url', async () => {
     let asked = 0;
     server.use(
