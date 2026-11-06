@@ -7,7 +7,7 @@ import {
 } from 'better-auth/api';
 import { admin, bearer, deviceAuthorization, jwt } from 'better-auth/plugins';
 import { apiKey } from '@better-auth/api-key';
-import { cimd } from '@better-auth/cimd';
+import { createCimdClientDiscovery } from '@better-auth/cimd';
 import { mcp } from '@better-auth/mcp';
 import type { ClientMetadataResourceFetch } from '@better-auth/oauth-provider';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
@@ -228,14 +228,22 @@ export function createAuth({
         // per address and path: Claude's and ChatGPT's backends refresh all
         // their users' tokens from a few addresses
         rateLimit: { token: { window: 60, max: 300 } },
-      }),
-      // An app registers by its Client ID Metadata Document alone: its
-      // client_id is the https URL of it, fetched when it first comes and
-      // again after an hour. No dynamic registration, which would make a
-      // client per connection anyone may ask for
-      cimd({
-        fetchClientMetadataResource: fetchClientMetadata,
-        metadataProfile: 'mcp-2026-07-28',
+        // An app registers by its Client ID Metadata Document alone: its
+        // client_id is the https URL of it, fetched when it first comes and
+        // again after an hour. No dynamic registration, which would make a
+        // client per connection anyone may ask for. Given to the provider
+        // here, the way @better-auth/cimd documents beside its cimd()
+        // plugin: the plugin hands the provider a new extension each time it
+        // starts, which the provider refuses as a second CIMD when the CLI
+        // starts the auth again from its options
+        extensions: [
+          {
+            clientDiscovery: createCimdClientDiscovery({
+              fetchClientMetadataResource: fetchClientMetadata,
+              metadataProfile: 'mcp-2026-07-28',
+            }),
+          },
+        ],
       }),
     ],
   });
