@@ -21,6 +21,7 @@ import { BetterAuthApiKeys } from './infrastructure/better-auth-api-keys.js';
 import { MailModule } from './infrastructure/mail.module.js';
 import { PrismaCourseAccessRepository } from './infrastructure/prisma-course-access.repository.js';
 import { PrismaReaderRepository } from './infrastructure/prisma-reader.repository.js';
+import { SignInMethodsController } from './infrastructure/http/sign-in-methods.controller.js';
 
 // Users, sign-in and who may read what. Better Auth serves /api/auth/* and
 // guards every HTTP route; a route that needs no user says @AllowAnonymous().
@@ -29,6 +30,8 @@ import { PrismaReaderRepository } from './infrastructure/prisma-reader.repositor
 // as an event to whichever keeps something of them (accounts).
 @Module({
   imports: [
+    // for the sign-in methods route
+    ConfigModule.forFeature(identityConfig),
     AuthModule.forRootAsync({
       imports: [MailModule, ConfigModule.forFeature(identityConfig)],
       inject: [PrismaService, identityConfig.KEY, Mailer, EventBus],
@@ -48,9 +51,13 @@ import { PrismaReaderRepository } from './infrastructure/prisma-reader.repositor
           onUserDeleted: (userId) =>
             events.publish(new UserDeletedEvent(userId)),
         }),
+        // the hub's own routes take JSON only, which no form on another
+        // site can send with the user's cookie (Better Auth checks Origin)
+        bodyParser: { urlencoded: { enabled: false } },
       }),
     }),
   ],
+  controllers: [SignInMethodsController],
   providers: [
     GrantCourseAccessHandler,
     RevokeCourseAccessHandler,
