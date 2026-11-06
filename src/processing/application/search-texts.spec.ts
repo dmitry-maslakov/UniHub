@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { PluginName, type ContentHash } from '@app/kernel';
+import { catalogOf, processor } from '../../../test/discovered-plugins.js';
 import { FakeEmbedder, FakeReranker } from '../../../test/fake-models.js';
 import { sha256 } from '../../../test/sha256.js';
 import { SearchOffError, SearchUnavailableError } from './errors.js';
@@ -16,6 +17,14 @@ import { SearchTexts } from './search-texts.js';
 
 const lecture = sha256('%PDF lecture');
 const notes = sha256('notes');
+// the processors on
+const plugins = catalogOf({
+  processors: [
+    processor('office-text', ['.pdf']),
+    processor('plain-text', ['.txt']),
+  ],
+});
+const processors = ['office-text', 'plain-text'];
 
 const hit = (hash: ContentHash, ...pages: number[]): TextHit => ({
   hash,
@@ -49,7 +58,10 @@ function searching(
 ) {
   const index = new InMemoryTextIndex();
   index.hits = hits;
-  return { index, search: new SearchTexts(index, embedder, reranker) };
+  return {
+    index,
+    search: new SearchTexts(plugins, index, embedder, reranker),
+  };
 }
 
 describe('SearchTexts', () => {
@@ -67,13 +79,27 @@ describe('SearchTexts', () => {
     expect(embed).not.toHaveBeenCalled();
   });
 
-  it('asks the index for that many among the contents given, the words NFC', async () => {
+  it('answers none with no processor on, without asking the index', async () => {
+    const index = new InMemoryTextIndex();
+    index.hits = [hit(lecture, 1)];
+    const search = new SearchTexts(catalogOf({}), index);
+
+    expect(
+      await search.execute(new SearchTextsQuery('semafor', [lecture], 10)),
+    ).toEqual([]);
+    expect(index.searched).toEqual([]);
+  });
+
+  // a processor turned off keeps its texts in the index, out of sight
+  it('asks the index for that many among the contents given, by the processors on, the words NFC', async () => {
     const { index, search } = searching();
     const hashes = [lecture, notes];
 
     await search.execute(new SearchTextsQuery('C\u030Cac\u030Cak', hashes, 5));
 
-    expect(index.searched).toEqual([{ text: 'Čačak', hashes, size: 5 }]);
+    expect(index.searched).toEqual([
+      { text: 'Čačak', hashes, processors, size: 5 },
+    ]);
     expect(index.searched[0].hashes).toBe(hashes);
   });
 
@@ -90,6 +116,7 @@ describe('SearchTexts', () => {
         text: 'Čačak',
         vector: (await embedder.embed(['Čačak']))[0],
         hashes: [notes],
+        processors,
         size: 5,
       },
     ]);
@@ -108,7 +135,7 @@ describe('SearchTexts', () => {
       await search.execute(new SearchTextsQuery('semafor', [notes], 5)),
     ).toEqual(hits);
     expect(index.searched).toEqual([
-      { text: 'semafor', hashes: [notes], size: 5 },
+      { text: 'semafor', hashes: [notes], processors, size: 5 },
     ]);
     expect(index.searched[0].vector).toBeUndefined();
     expect(warn).toHaveBeenCalledWith(
@@ -284,7 +311,7 @@ describe('SearchTexts', () => {
   });
 
   it('answers search being off without an index, whatever it is asked', async () => {
-    const search = new SearchTexts();
+    const search = new SearchTexts(plugins);
 
     for (const hashes of [[notes], []]) {
       const failed = search.execute(

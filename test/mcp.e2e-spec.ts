@@ -14,6 +14,7 @@ import type { Mail } from '../src/identity/domain/mailer.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
 import { bootApp } from './app.js';
 import { accounts } from './accounts.js';
+import { processorsOn } from './fake-plugins.js';
 import { portalIngest } from './ingest.js';
 
 // Each tool once, behind the API key, the request checks and the limit.
@@ -52,7 +53,7 @@ describe('MCP', { timeout: 20_000 }, () => {
   };
 
   beforeAll(async () => {
-    app = await bootApp({ mails });
+    app = await bootApp({ mails, imports: [processorsOn('office-text')] });
     const prisma = app.get(PrismaService);
     const commands = app.get(CommandBus);
 
@@ -166,7 +167,7 @@ describe('MCP', { timeout: 20_000 }, () => {
     expect(page.content[0].text).toContain('page 2 of 2');
     expect(page.content[0].text).toContain('mergesort');
     // a page of the text named, as a search result names it, and none of a
-    // processor that made no text of the file
+    // processor that's off and made no text of the file
     const named = await call('read_file', {
       file: fileId,
       page: 1,

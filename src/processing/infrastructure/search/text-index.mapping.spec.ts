@@ -1,3 +1,4 @@
+import { PluginName } from '@app/kernel';
 import { sha256 } from '../../../../test/sha256.js';
 import { CHUNK_CHARS } from '../../domain/chunks.js';
 import {
@@ -15,7 +16,11 @@ describe('text index mapping', () => {
   // indices of a generation hold documents analysed by its body and cut by
   // its chunker: a change to either, seen here, comes with a new GENERATION
   it('changes with its generation only', () => {
-    expect({ GENERATION, CHUNK_CHARS, body: indexBody(null) }).toMatchSnapshot();
+    expect({
+      GENERATION,
+      CHUNK_CHARS,
+      body: indexBody(null),
+    }).toMatchSnapshot();
   });
 
   it('changes with its generation only, with vectors too', () => {
@@ -40,6 +45,7 @@ describe('text index mapping', () => {
       text: 'semafor',
       vector: [1],
       hashes: [sha256('lecture')],
+      processors: [PluginName.parse('office-text')],
       size: 10,
     }).query.hybrid;
 

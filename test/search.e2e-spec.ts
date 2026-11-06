@@ -6,14 +6,19 @@ import type { Queue } from 'bullmq';
 import type { API, Client } from '@opensearch-project/opensearch';
 import type { PortalIngest } from '@app/plugin-sdk';
 import { PluginName } from '@app/kernel';
+import { PrismaService } from '../src/platform/database/prisma.service.js';
 import { OPENSEARCH } from '../src/platform/search/opensearch.module.js';
+import { IndexText } from '../src/processing/application/index-text.js';
 import {
   EmbedderUnavailableError,
   QueryEmbedder,
   Reranker,
 } from '../src/processing/application/ports.js';
 import { SearchTextsQuery } from '../src/processing/contracts.js';
-import { keyId } from '../src/processing/domain/representation.js';
+import {
+  keyId,
+  type RepresentationKey,
+} from '../src/processing/domain/representation.js';
 import { SEARCH_INDEX_QUEUE } from '../src/processing/infrastructure/search/search-index.queue.js';
 import {
   indexName,
@@ -68,21 +73,23 @@ describe('search', { timeout: 60_000 }, () => {
   };
   // in whole once its manifest is there, and searchable once a search sees
   // it (realtime: false): a get finds it before the refresh does
+  const searchable = (key: RepresentationKey) =>
+    vi.waitFor(
+      async () =>
+        expect(
+          (await opensearch.exists({ index, id: keyId(key), realtime: false }))
+            .body,
+        ).toBe(true),
+      { timeout: 20_000, interval: 200 },
+    );
   const upload = async (name: string, content: string) => {
     await hub.file({ externalId: name, name });
     await hub.content(name, Readable.from([content]));
-    const id = keyId({
+    await searchable({
       hash: sha256(content),
       processor: fakeText,
       version: 1,
     });
-    await vi.waitFor(
-      async () =>
-        expect(
-          (await opensearch.exists({ index, id, realtime: false })).body,
-        ).toBe(true),
-      { timeout: 20_000, interval: 200 },
-    );
   };
 
   beforeAll(async () => {
@@ -164,6 +171,27 @@ describe('search', { timeout: 60_000 }, () => {
     expect(await byWords(elsewhere, [lecture, book])).toEqual([
       expect.objectContaining({ hash: sha256(lecture) }),
     ]);
+  });
+
+  // its words only in the text of a processor that's off, still indexed
+  it('finds nothing in the text of a processor that is off, by the words or the meaning', async () => {
+    const off = {
+      hash: sha256(lecture),
+      processor: PluginName.parse('zz-off'),
+      version: 1,
+    };
+    await app.get(PrismaService).representation.create({
+      data: { ...off, parts: ['kvantna mehanika'] },
+    });
+    await app.get(IndexText).run(off);
+    await searchable(off);
+
+    expect(await byWords('kvantna', [lecture])).toEqual([]);
+    // knn always has nearest ones: the lecture, by fake-text's pages alone
+    const [{ pages }] = await search('kvantna', [lecture]);
+    expect(new Set(pages.map(({ processor }) => processor))).toEqual(
+      new Set([fakeText]),
+    );
   });
 
   // OpenSearch marks its parts (camel, Case, Name) one by one

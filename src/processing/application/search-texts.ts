@@ -1,5 +1,6 @@
 import { Inject, Logger, Optional } from '@nestjs/common';
 import { QueryHandler, type IQueryHandler } from '@nestjs/cqrs';
+import { PluginCatalog } from '../../plugins/contracts.js';
 import { SearchOffError, SearchUnavailableError } from './errors.js';
 import {
   EmbedderUnavailableError,
@@ -15,12 +16,14 @@ import { SearchTextsQuery, type TextHit } from './queries.js';
 // embedder is away or failing; the best contents then in the reranker's
 // order, or in the index's while it's busy, away or failing: a search
 // answers all the same. The hashes go to the index as they came: they are
-// what the caller may read, and the index has no other say.
+// what the caller may read, and the index has no other say. Only the texts
+// of the processors on are looked through, as only they are read.
 @QueryHandler(SearchTextsQuery)
 export class SearchTexts implements IQueryHandler<SearchTextsQuery> {
   private readonly logger = new Logger(SearchTexts.name);
 
   constructor(
+    private readonly plugins: PluginCatalog,
     // none when search is off
     @Optional() private readonly index?: TextIndex,
     // none when search is off, null for BM25 only
@@ -35,14 +38,15 @@ export class SearchTexts implements IQueryHandler<SearchTextsQuery> {
 
   async execute({ text, hashes, limit }: SearchTextsQuery) {
     if (!this.index) throw new SearchOffError();
-    if (!hashes.length) return [];
+    const processors = this.plugins.processorNames;
+    if (!hashes.length || !processors.length) return [];
     // the chunks are NFC, which the analyzers fold; a query has to be too
     const words = text.normalize('NFC');
     const vector = await this.meaningOf(words);
     // as many as the reranker takes, whatever the limit
     const size = Math.max(limit, this.reranker?.candidates ?? 0);
     const hits = await this.index
-      .search({ text: words, vector, hashes, size })
+      .search({ text: words, vector, hashes, processors, size })
       .catch((err: unknown) => {
         throw err instanceof TextIndexUnavailableError
           ? new SearchUnavailableError({ cause: err })
