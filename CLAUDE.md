@@ -37,7 +37,7 @@ Put off:
 - failed API key attempts limited per address, counting only failures: each costs a database lookup (caddy has no rate limits without a plugin). Not a limit on all calls per address. The named limits are access's, a route counted against one by `@Limited(name)` while the others skip it (`skipIf`); this one would join them with a tracker of its own
 - Better Auth's rate limits in Redis (`secondaryStorage`): in memory is right for the one instance there is; with a second one, they'd need sharing
 - Better Auth reads the client's address from `X-Forwarded-For` regardless of `TRUST_PROXY`: right behind caddy, which overwrites it; in production the app runs only behind it
-- monitoring: NestJS Observe (see AGENTS.md), alerts on downtime, disk space and dead letters; failed jobs only reach the logs now
+- monitoring: traces, errors and logs go to NestJS Observe (see AGENTS.md), on OpenTelemetry's global providers; the metrics stay on the app's own `MeterProvider`, served only to a scraper on `METRICS_PORT` (README, Metrics), so neither gets the other's. Alerts on them (downtime, dead letters, a connector's last success) are the scraper's to set; disk space isn't among them
 - connector API keys, and moving the "portal both built-in and external" check to key creation (#33)
 - cursor paging for MCP, if agents need it
 - OAuth for MCP clients (claude.ai connectors need it); API keys until then
@@ -56,7 +56,7 @@ Put off:
 - paging search results: one window of up to 50 contents now
 - a CI job on real TEI servers with small models: the adapters are checked against msw's answers, the e2e specs run on fake models
 - random access for unpackers, a container's size and a ranged `content()` over its blob (yauzl's `RandomAccessReader`): an unpacker gets a stream from the start, as a processor does, so a zip, its directory at its end, is read whole into memory up to the unpacker's limit; when memory calls for it
-- search in health and monitoring (`/api/health/search`, the `search-index` queue's backlog, OpenSearch's disk): `/api/health` leaves search out, so an index away doesn't take down the app caddy waits on
+- search in health and monitoring (`/api/health/search`, OpenSearch's disk; the `search-index` queue's backlog and its outages are metrics now): `/api/health` leaves search out, so an index away doesn't take down the app caddy waits on
 - trees keyed by content and unpacker, with a second unpacker: one tree per content now, so the same bytes in files two unpackers take (`x.zip`, `x.epub`) would be walked by turns, each seeing the other's tree as not current
 
 Done the standard way after all: global prefix, gRPC guard (#36).
