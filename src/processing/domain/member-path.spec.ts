@@ -25,6 +25,7 @@ describe('memberPath', () => {
     ['up a folder, back in', 'src/../main.c'],
     ['with a control character', 'main\u0000.c'],
     ['with an escape', 'main\u001b[2J.c'],
+    ['turning text around', 'notes\u202Etxt.exe'],
     ['a folder', 'src/'],
     ['no name', './'],
   ])('leaves out a path %s', (_, raw) => {

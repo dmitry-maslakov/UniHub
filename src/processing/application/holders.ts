@@ -20,9 +20,16 @@ export class Holders {
       mime,
     }));
     const members: FileFact[] = [];
-    for (const { container, path, mime } of await this.unpackings.holding(hash))
-      if ((await this.files.holding(container)).length)
-        members.push({ name: basename(path), mime });
+    // a content common to many trees (an empty __init__.py) is often in
+    // one container more than once
+    const live = new Map<ContentHash, boolean>();
+    for (const { container, path, mime } of await this.unpackings.holding(
+      hash,
+    )) {
+      if (!live.has(container))
+        live.set(container, (await this.files.holding(container)).length > 0);
+      if (live.get(container)) members.push({ name: basename(path), mime });
+    }
     return [...files, ...members];
   }
 }

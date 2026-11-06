@@ -31,6 +31,20 @@ export interface Unpacking extends UnpackingKey {
   cutShort: string | null;
 }
 
+// A size as a container declares it, a whole number of bytes or none: the
+// container's bytes are anyone's
+export const declaredSize = (size: number | undefined) =>
+  size !== undefined && Number.isSafeInteger(size) && size >= 0 ? size : null;
+
+const MAX_REASON = 500;
+
+// Why a walk was cut short at `where`, from an error that a container's
+// bytes may have worded: one line, as long as a reader needs
+export const cutShortBy = (where: string, err: unknown) =>
+  `${where}: ${err instanceof Error ? err.message : String(err)}`
+    .replace(/\p{Cc}+/gu, ' ')
+    .slice(0, MAX_REASON);
+
 // a member kept, with its content
 export const kept = (members: readonly Member[]) =>
   members.filter(

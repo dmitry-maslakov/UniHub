@@ -1,6 +1,13 @@
 import { PluginName } from '@app/kernel';
 import { sha256 } from '../../../test/sha256.js';
-import { isCurrent, kept, type Member, type Unpacking } from './unpacking.js';
+import {
+  cutShortBy,
+  declaredSize,
+  isCurrent,
+  kept,
+  type Member,
+  type Unpacking,
+} from './unpacking.js';
 
 const unpacker = PluginName.parse('archives');
 const hash = sha256('lab.zip');
@@ -36,5 +43,19 @@ describe('Unpacking', () => {
     expect(
       isCurrent(tree, { ...key, unpacker: PluginName.parse('other') }, 1),
     ).toBe(false);
+  });
+
+  it('takes a declared size of a whole number of bytes only', () => {
+    expect(
+      [3e9, 0, -1, 1.5, Number.NaN, 2 ** 60, undefined].map(declaredSize),
+    ).toEqual([3e9, 0, null, null, null, null, null]);
+  });
+
+  it("says why a walk was cut short in one line, however the container's bytes word it", () => {
+    expect(
+      cutShortBy('lab.zip', new Error('bad name\u0000\u0007in\r\nit')),
+    ).toBe('lab.zip: bad name in it');
+    expect(cutShortBy('the container', 'thrown')).toBe('the container: thrown');
+    expect(cutShortBy('x', new Error('y'.repeat(1000)))).toHaveLength(500);
   });
 });

@@ -30,6 +30,7 @@ Declined:
 - one kind-to-answer table for HTTP and gRPC: each transport answers with its own exceptions
 - `auth:generate` without a valid `.env`: the CLI reads the same checked settings as the app (README: set the secret first)
 - `ConditionalModule.registerWhen` for `APP_ROLE`, to leave the workers out of an api process: it reads the environment once per process, so one e2e spec couldn't boot an api and a worker side by side. The libraries' own switches read the role per app instead (`BullRegistrar.register()`, the scheduler's options, the outbox's `relay.enabled`), and `ConnectorsWorker` and `SearchIndexWorker` check it before closing a worker that an api process never registered
+- racing an unpacker's `next()` against the walk's signal: an unpacker passes the signal to every wait (the sdk says so), and a race would only leave one that stalls anyway behind, still holding what it opened: `return()` waits for the `next()` before it
 
 Put off:
 
@@ -56,5 +57,6 @@ Put off:
 - a CI job on real TEI servers with small models: the adapters are checked against msw's answers, the e2e specs run on fake models
 - random access for unpackers, a container's size and a ranged `content()` over its blob (yauzl's `RandomAccessReader`): an unpacker gets a stream from the start, as a processor does, so a zip, its directory at its end, is read whole into memory up to the unpacker's limit; when memory calls for it
 - search in health and monitoring (`/api/health/search`, the `search-index` queue's backlog, OpenSearch's disk): `/api/health` leaves search out, so an index away doesn't take down the app caddy waits on
+- trees keyed by content and unpacker, with a second unpacker: one tree per content now, so the same bytes in files two unpackers take (`x.zip`, `x.epub`) would be walked by turns, each seeing the other's tree as not current
 
 Done the standard way after all: global prefix, gRPC guard (#36).

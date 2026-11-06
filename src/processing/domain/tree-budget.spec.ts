@@ -6,23 +6,23 @@ describe('TreeBudget', () => {
   it("gives a member the bytes left, at most one member's", () => {
     const budget = new TreeBudget(1000, limits);
 
-    expect(budget.admit(null)).toBe(40);
+    expect(budget.list(null)).toBe(40);
     budget.spent(70);
-    expect(budget.admit(10)).toBe(30);
+    expect(budget.list(10)).toBe(30);
   });
 
   it("takes storage's limit for a member when that's less", () => {
-    expect(new TreeBudget(25, limits).admit(null)).toBe(25);
+    expect(new TreeBudget(25, limits).list(null)).toBe(25);
   });
 
   it('leaves out unread a member declared past its limits', () => {
     const budget = new TreeBudget(1000, limits);
 
-    expect(budget.admit(41)).toBe('TOO_LARGE');
+    expect(budget.list(41)).toBe('TOO_LARGE');
     budget.spent(80);
-    expect(budget.admit(21)).toBe('OVER_BUDGET');
+    expect(budget.list(21)).toBe('OVER_BUDGET');
     budget.spent(20);
-    expect(budget.admit(null)).toBe('OVER_BUDGET');
+    expect(budget.list(null)).toBe('OVER_BUDGET');
   });
 
   it('says why a member that came out past what it was given is left out', () => {
@@ -34,11 +34,11 @@ describe('TreeBudget', () => {
 
   it('is full once as many members are listed as it allows', () => {
     const budget = new TreeBudget(1000, limits);
-    budget.admit(41);
-    budget.admit(null);
+    budget.list(41);
+    budget.list(null);
     expect(budget.full).toBe(false);
 
-    budget.admit(null);
+    budget.list(null);
 
     expect(budget.full).toBe(true);
   });

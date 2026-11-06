@@ -9,7 +9,7 @@ import {
 } from '../domain/unpacking.js';
 
 // Keys, hashes, media types and reasons were checked on the way in, they're
-// read back as them.
+// read back as them; sizes went in as safe integers, they come back as numbers.
 @Injectable()
 export class PrismaUnpackingRepository extends UnpackingRepository {
   constructor(@InjectTransactionHost() private readonly txHost: PrismaTxHost) {
@@ -22,13 +22,13 @@ export class PrismaUnpackingRepository extends UnpackingRepository {
       include: { members: { orderBy: { position: 'asc' } } },
     });
     if (!row) return null;
-    const { members, createdAt: _, ...tree } = row;
+    const { members, updatedAt: _, ...tree } = row;
     return {
       ...tree,
       members: members.map(({ path, content, size, mime, leftOut }) => ({
         path,
         hash: content as ContentHash | null,
-        size,
+        size: size === null ? null : Number(size),
         mime: mime as MediaType | null,
         leftOut: leftOut as LeftOut | null,
       })),

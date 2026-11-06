@@ -187,7 +187,12 @@ describe('processing', { timeout: 20_000 }, () => {
       version: 2,
       members: [
         member('b.c', 'b'),
-        { ...member('big.c', ''), hash: null, leftOut: 'TOO_LARGE' as const },
+        {
+          ...member('big.c', ''),
+          hash: null,
+          size: 3e9,
+          leftOut: 'TOO_LARGE' as const,
+        },
       ],
       cutShort: 'the container: bad header',
     });
@@ -197,7 +202,7 @@ describe('processing', { timeout: 20_000 }, () => {
       version: 2,
       members: [
         member('b.c', 'b'),
-        { ...member('big.c', ''), hash: null, leftOut: 'TOO_LARGE' },
+        { ...member('big.c', ''), hash: null, size: 3e9, leftOut: 'TOO_LARGE' },
       ],
       cutShort: 'the container: bad header',
     });

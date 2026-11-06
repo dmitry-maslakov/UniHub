@@ -15,9 +15,10 @@ export type ContentUnpackerOptions = ContentProcessorOptions;
 // The container as a stream from its start, as a processor gets content: a
 // format with its index at the end (zip's central directory) is read whole.
 export interface UnpackerInput extends ProcessorInput {
-  // Aborts past the hub's time for a container, or at shutdown. return()
-  // can't reach a generator waiting on a read, so pass it to every wait
-  // (pipeline, once) and throw its reason; the hub then fails the job.
+  // Aborts past the hub's time for a container (the job fails) or at
+  // shutdown (it goes back to wait). return() can't reach a generator
+  // waiting on a read, so pass it to every wait (pipeline, once) and throw
+  // its reason: nothing else stops one that stalls.
   signal: AbortSignal;
 }
 

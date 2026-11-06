@@ -54,4 +54,25 @@ describe('Holders', () => {
       ),
     ).toHaveLength(2);
   });
+
+  it('asks once whether a container is held, however often it holds the content', async () => {
+    const files = new FakeFiles(
+      new Map([
+        ['z', { name: 'lab.zip', mime: null, hash: sha256('lab.zip') }],
+      ]),
+    );
+    const unpackings = new InMemoryUnpackings();
+    await unpackings.save({
+      hash: sha256('lab.zip'),
+      unpacker: PluginName.parse('archives'),
+      version: 1,
+      policy: 1,
+      members: [holding('a/notes.md'), holding('b/notes.md')],
+      cutShort: null,
+    });
+    const asked = vi.spyOn(files, 'holding');
+
+    expect(await holdersOf(files, unpackings).of(notes)).toHaveLength(2);
+    expect(asked).toHaveBeenCalledTimes(2);
+  });
 });

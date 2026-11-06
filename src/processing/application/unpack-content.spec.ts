@@ -10,7 +10,7 @@ import {
 import { FakeUnpacker } from '../../../test/fake-plugins.js';
 import { InMemoryBlobs } from '../../../test/in-memory-blobs.js';
 import { sha256 } from '../../../test/sha256.js';
-import { LIMITS } from '../domain/tree-budget.js';
+import { LIMITS, TreeBudget } from '../domain/tree-budget.js';
 import { Dispatch } from './dispatch.js';
 import type { UnpackJob } from './plugin-job.js';
 import {
@@ -132,6 +132,7 @@ describe('UnpackContent', () => {
 
   it('lists a member past its limit unstored, by its size or by its bytes', async () => {
     const declared = text('big');
+    const spent = vi.spyOn(TreeBudget.prototype, 'spent');
     const { unpack, job, tree, blobs } = run(
       lab,
       listing(
@@ -164,6 +165,23 @@ describe('UnpackContent', () => {
     ]);
     expect(declared.destroyed).toBe(true);
     expect(blobs.stored.size).toBe(1);
+    // what it read of the liar counts, though nothing's kept
+    expect(spent.mock.calls).toEqual([[1024]]);
+  });
+
+  it('keeps of a size a container declares only a whole number of bytes', async () => {
+    const { unpack, job, tree } = run(
+      lab,
+      listing(
+        { path: 'video.mp4', size: 3e9 },
+        { path: 'a.c', size: -1 },
+        { path: 'b.c', size: 1.5 },
+      ),
+    );
+
+    await unpack.run(job);
+
+    expect(tree()?.members.map(({ size }) => size)).toEqual([3e9, 4, 4]);
   });
 
   it('lists a path the container has twice, the second unstored', async () => {
@@ -228,14 +246,14 @@ describe('UnpackContent', () => {
     const { unpack, job, tree, listed } = run(lab, {
       async *unpack() {
         yield { path: 'a.c', content: text('a') };
-        throw new Error('bad header');
+        throw new Error('bad header\u0000in\na.c');
       },
     });
 
     await unpack.run(job);
 
     expect(listed()).toEqual(['a.c']);
-    expect(tree()?.cutShort).toBe('the container: bad header');
+    expect(tree()?.cutShort).toBe('the container: bad header in a.c');
   });
 
   it("cuts the tree short when a member's bytes break", async () => {
@@ -282,15 +300,36 @@ describe('UnpackContent', () => {
     expect(tree()?.cutShort).toBe(`past ${LIMITS.members} members`);
   });
 
+  // a pipeline that fails writing destroys the member with the write's error
   it("fails when the store does, saving no tree for a try that's retried", async () => {
+    const full = Object.assign(new Error('ENOSPC: no space left on device'), {
+      code: 'ENOSPC',
+      syscall: 'write',
+    });
     const { unpack, job, blobs, tree } = run();
-    vi.spyOn(blobs, 'put').mockRejectedValue(new Error('disk full'));
+    vi.spyOn(blobs, 'put').mockImplementation(async (content) => {
+      content.destroy(full);
+      throw full;
+    });
 
-    await expect(unpack.run(job)).rejects.toThrow('disk full');
+    await expect(unpack.run(job)).rejects.toBe(full);
     expect(tree()).toBeUndefined();
   });
 
-  it('fails at shutdown, saving no tree', async () => {
+  it("fails when the container's bytes can't be read from the store", async () => {
+    const lost = Object.assign(new Error('EIO: i/o error, read'), {
+      code: 'EIO',
+      syscall: 'read',
+    });
+    const { unpack, job, blobs, tree } = run();
+    vi.spyOn(blobs, 'get').mockRejectedValue(lost);
+
+    await expect(unpack.run(job)).rejects.toBe(lost);
+    expect(tree()).toBeUndefined();
+  });
+
+  it('stops at its signal, saving no tree', async () => {
+    const stopping = new AbortController();
     const { unpack, job, tree } = run(lab, {
       async *unpack({ signal }) {
         await once(new EventEmitter(), 'never', { signal });
@@ -298,11 +337,27 @@ describe('UnpackContent', () => {
       },
     });
 
-    const running = unpack.run(job);
-    unpack.onApplicationShutdown();
+    const running = unpack.run(job, stopping.signal);
+    stopping.abort('the app is shutting down');
 
-    await expect(running).rejects.toThrow(/abort/i);
+    await expect(running).rejects.toBe('the app is shutting down');
     expect(tree()).toBeUndefined();
+  });
+
+  it("stops a member's bytes that stall at its signal", async () => {
+    const stopping = new AbortController();
+    const stalled = new Readable({ read() {} });
+    const { unpack, job } = run(
+      lab,
+      listing({ path: 'a.c', content: stalled }),
+    );
+
+    const running = unpack.run(job, stopping.signal);
+    await vi.waitFor(() => expect(stalled.readableFlowing).not.toBeNull());
+    stopping.abort('the app is shutting down');
+
+    await expect(running).rejects.toBe('the app is shutting down');
+    expect(stalled.destroyed).toBe(true);
   });
 
   it('walks a current tree no more, queueing its processing again', async () => {

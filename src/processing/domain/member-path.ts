@@ -5,7 +5,9 @@ import { posix } from 'node:path';
 // these keep paths readable and unambiguous rather than the disk safe.
 
 const MAX_PATH = 1024;
-const CONTROL = /\p{Cc}/u;
+// control characters, and those that turn text around (a name that reads
+// as another one)
+const CONTROL = /[\p{Cc}\p{Bidi_Control}]/u;
 const DRIVE = /^[a-z]:/i;
 // Folders of tools, libraries and builds rather than the course's: npm's
 // packages, a Mac's resource forks, Visual Studio's output, and whatever's
@@ -15,7 +17,7 @@ const NOISE = new Set(['node_modules', '__MACOSX', 'bin', 'obj']);
 // A member's path within its container's (null for the root's): '/' between
 // folders (a Windows backslash too), letters composed (NFC), no '.' or empty
 // steps; null for one that can't be made safe: absolute, on a drive, with a
-// '..' or a control character, a folder, or past 1024 characters in all.
+// '..', a control or bidi character, a folder, or past 1024 characters in all.
 export function memberPath(within: string | null, raw: string) {
   const slashed = raw.replaceAll('\\', '/');
   if (

@@ -5,7 +5,7 @@ CREATE TABLE "Unpacking" (
     "version" INTEGER NOT NULL,
     "policy" INTEGER NOT NULL,
     "cutShort" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "Unpacking_pkey" PRIMARY KEY ("hash")
 );
@@ -16,7 +16,7 @@ CREATE TABLE "Member" (
     "position" INTEGER NOT NULL,
     "path" TEXT NOT NULL,
     "content" TEXT,
-    "size" INTEGER,
+    "size" BIGINT,
     "mime" TEXT,
     "leftOut" TEXT,
 

@@ -37,9 +37,9 @@ export class TreeBudget {
     return this.listed >= this.limits.members;
   }
 
-  // Counts a member as listed: the bytes it may take, or why it's left out
-  // unread by the size it declares.
-  admit(declared: number | null): number | LeftOut {
+  // Lists a member: the bytes it may take, or why it's left out unread by
+  // the size it declares.
+  list(declared: number | null): number | LeftOut {
     this.listed++;
     const left = this.limits.bytes - this.stored;
     if (declared !== null && declared > this.most) return 'TOO_LARGE';
@@ -48,11 +48,12 @@ export class TreeBudget {
     return Math.min(this.most, left);
   }
 
-  // why a member that came out past what admit() gave is left out
+  // why a member that came out past what list() gave is left out
   past(limit: number): LeftOut {
     return limit < this.most ? 'OVER_BUDGET' : 'TOO_LARGE';
   }
 
+  // what storing a member took, kept or not: the bytes written
   spent(bytes: number) {
     this.stored += bytes;
   }
