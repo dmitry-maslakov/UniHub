@@ -9,7 +9,9 @@ import {
   aggregator,
   catalogOf,
   processor,
+  unpacker,
 } from '../../../test/discovered-plugins.js';
+import { LIMITS } from '../domain/tree-budget.js';
 import { Dispatch } from './dispatch.js';
 import { jobId } from './plugin-job.js';
 import { sha256 } from '../../../test/sha256.js';
@@ -26,6 +28,7 @@ const stored = (fileId: string, content = hash): Message => ({
 function dispatch() {
   const plugins = catalogOf({
     processors: [processor('pdf', ['.pdf']), processor('slides', ['.pptx'])],
+    unpackers: [unpacker('bundle', ['.bundle'])],
     aggregators: [
       aggregator('feed', [ITEM_INGESTED, ITEM_REMOVED]),
       aggregator('files', [FILE_CONTENT_STORED]),
@@ -35,6 +38,7 @@ function dispatch() {
     new Map([
       ['a', { name: 'a.pdf', mime: null, hash }],
       ['b', { name: 'b.pdf', mime: null, hash }],
+      ['c', { name: 'c.bundle', mime: null, hash }],
     ]),
   );
   return new Dispatch(plugins, files);
@@ -62,6 +66,17 @@ describe('Dispatch', () => {
         message: stored('a'),
       },
     ]);
+  });
+
+  it('gives stored content to the unpacker that takes the file', async () => {
+    const [unpack] = await dispatch().jobsFor('m1', stored('c'));
+
+    expect(unpack).toEqual({
+      kind: 'unpack',
+      key: { hash, unpacker: 'bundle', version: 1 },
+      policy: LIMITS.policy,
+    });
+    expect(jobId(unpack)).toBe(`${hash}__bundle__1__${LIMITS.policy}`);
   });
 
   it('queues no processing for a file that is gone', async () => {

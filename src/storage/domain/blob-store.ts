@@ -12,10 +12,14 @@ export class ContentTooLargeError extends InvalidError {
 
 // File content addressed by its sha256, the same bytes are stored once no
 // matter how many files point to them. put() rejects with
-// ContentTooLargeError past maxBytes, and keeps nothing then.
+// ContentTooLargeError past maxBytes, or past the limit it's given when
+// that's less (what a caller's budget leaves), and keeps nothing then.
 export abstract class BlobStore {
   // public, so nobody is asked for content that would only be refused
   abstract readonly maxBytes: number;
-  abstract put(content: Readable): Promise<{ hash: ContentHash; size: number }>;
+  abstract put(
+    content: Readable,
+    maxBytes?: number,
+  ): Promise<{ hash: ContentHash; size: number }>;
   abstract get(hash: ContentHash): Promise<Readable>;
 }

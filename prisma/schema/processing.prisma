@@ -10,3 +10,34 @@ model Representation {
 
   @@id([hash, processor, version])
 }
+
+// What an unpacker listed of a container content (an archive): one tree per
+// content, made again for another unpacker version or policy (the hub's
+// limits it was made under). cutShort says why it wasn't read to its end.
+model Unpacking {
+  hash      String   @id
+  unpacker  String
+  version   Int
+  policy    Int
+  cutShort  String?
+  createdAt DateTime @default(now())
+  members   Member[]
+}
+
+// A member of a container's tree, in the order listed, a nested
+// container's under its path; content is its hash when kept, else leftOut
+// says why not.
+model Member {
+  hash      String
+  position  Int
+  path      String
+  content   String?
+  size      Int?
+  mime      String?
+  leftOut   String?
+  unpacking Unpacking @relation(fields: [hash], references: [hash], onDelete: Cascade)
+
+  @@id([hash, position])
+  // the members holding a content
+  @@index([content])
+}

@@ -1,11 +1,13 @@
 import type { ContentHash, PluginName } from '@app/kernel';
 import type { TextChunk } from '../domain/chunks.js';
+import { UnpackingRepository, type Unpacking } from '../domain/unpacking.js';
 import {
   keyId,
   RepresentationRepository,
   type Representation,
   type RepresentationKey,
 } from '../domain/representation.js';
+import { Holders } from './holders.js';
 import type { PluginJob } from './plugin-job.js';
 import {
   FileFacts,
@@ -40,6 +42,33 @@ export class FakeFiles extends FileFacts {
     yield* this.files.values();
   }
 }
+
+// one tree per content, as saved
+export class InMemoryUnpackings extends UnpackingRepository {
+  readonly trees = new Map<ContentHash, Unpacking>();
+
+  async current(hash: ContentHash) {
+    return this.trees.get(hash) ?? null;
+  }
+
+  async save(unpacking: Unpacking) {
+    this.trees.set(unpacking.hash, unpacking);
+  }
+
+  async holding(hash: ContentHash) {
+    return [...this.trees.values()].flatMap(({ hash: container, members }) =>
+      members
+        .filter((member) => member.hash === hash)
+        .map(({ path, mime }) => ({ container, path, mime })),
+    );
+  }
+}
+
+// the files' holders, and the members of these trees
+export const holdersOf = (
+  files: FileFacts,
+  unpackings: UnpackingRepository = new InMemoryUnpackings(),
+) => new Holders(files, unpackings);
 
 export class FakeQueue extends PluginJobQueue {
   readonly enqueued: PluginJob[] = [];

@@ -7,6 +7,7 @@ import type { PrismaService } from '../../platform/database/prisma.service.js';
 import type { DeliverMessage } from '../application/deliver-message.js';
 import type { PluginJob } from '../application/plugin-job.js';
 import type { ProcessContent } from '../application/process-content.js';
+import type { UnpackContent } from '../application/unpack-content.js';
 import { OUTAGE_PAUSE_MS } from './pausing.worker.js';
 import { PluginsWorker } from './plugins.worker.js';
 
@@ -38,6 +39,7 @@ function worker(database: 'up' | 'down') {
     worker: new PluginsWorker(
       {} as DeliverMessage,
       processContent,
+      {} as UnpackContent,
       health,
       {} as PrismaService,
       queue as unknown as Queue<PluginJob>,

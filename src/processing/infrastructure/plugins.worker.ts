@@ -5,6 +5,7 @@ import { PrismaService } from '../../platform/database/prisma.service.js';
 import { DeliverMessage } from '../application/deliver-message.js';
 import { pluginOf, type PluginJob } from '../application/plugin-job.js';
 import { ProcessContent } from '../application/process-content.js';
+import { UnpackContent } from '../application/unpack-content.js';
 import { OUTAGE_PAUSE_MS, PAUSING, PausingWorker } from './pausing.worker.js';
 import { PLUGINS_QUEUE } from './plugins.queue.js';
 
@@ -14,6 +15,7 @@ export class PluginsWorker extends PausingWorker<PluginJob> {
   constructor(
     private readonly deliver: DeliverMessage,
     private readonly processContent: ProcessContent,
+    private readonly unpackContent: UnpackContent,
     health: PrismaHealthIndicator,
     prisma: PrismaService,
     @InjectQueue(PLUGINS_QUEUE) queue: Queue<PluginJob>,
@@ -22,9 +24,9 @@ export class PluginsWorker extends PausingWorker<PluginJob> {
   }
 
   protected work({ data }: Job<PluginJob>) {
-    return data.kind === 'handle'
-      ? this.deliver.run(data)
-      : this.processContent.run(data);
+    if (data.kind === 'handle') return this.deliver.run(data);
+    if (data.kind === 'process') return this.processContent.run(data);
+    return this.unpackContent.run(data);
   }
 
   protected outage() {
