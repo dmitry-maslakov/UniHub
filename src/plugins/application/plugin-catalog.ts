@@ -42,13 +42,16 @@ export class PluginCatalog implements OnModuleInit {
     });
   }
 
-  // the one unpacker that takes this file, with the entry it matched; null
-  // if none does
+  // The unpacker that takes this file, with the entry it matched; null if
+  // none does. Its extension first, of all of them: one unpacker may take
+  // the file's extension and another its media type (an .epub a portal
+  // calls application/zip).
   unpackerFor(file: { name: string; mime: MediaType | null }) {
-    for (const unpacker of this.set.plugins.unpackers) {
-      const matched = unpacker.spec.match(file);
-      if (matched !== null) return { unpacker, matched };
-    }
+    for (const by of [{ name: file.name, mime: null }, file])
+      for (const unpacker of this.set.plugins.unpackers) {
+        const matched = unpacker.spec.match(by);
+        if (matched !== null) return { unpacker, matched };
+      }
     return null;
   }
 

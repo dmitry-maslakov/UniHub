@@ -32,9 +32,10 @@ export class PluginSet<F extends Found> {
         (p) => p.spec.name,
       ),
     );
+    // one unpacker may list a format twice ('.zip', '.ZIP')
     unique(
       'unpacked format',
-      found.unpackers.flatMap((u) => u.spec.takes),
+      found.unpackers.flatMap((u) => [...new Set(u.spec.takes)]),
     );
     unique(
       'connector portal',

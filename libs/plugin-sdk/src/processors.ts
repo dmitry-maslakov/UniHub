@@ -7,7 +7,8 @@ export interface ContentProcessorOptions {
   name: string;
   // bump it when the output changes, so stored results get redone
   version: number;
-  // media types ('application/pdf') or extensions ('.pdf'), any case
+  // media types ('application/pdf') or extensions ('.pdf'), any case; an
+  // extension is a file's last ('.gz' of labs.tar.gz), so '.tar.gz' is refused
   accepts: readonly string[];
 }
 

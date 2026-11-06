@@ -80,8 +80,16 @@ interface Accepted {
   as: string;
 }
 
+// A file's extension is what follows its last dot (labs.tar.gz's is .gz),
+// so an extension of two (.tar.gz) would never match: refused.
+const EXTENSION = /^\.[^.]+$/;
+
 const accepted = (entry: string): Accepted => {
-  if (entry.startsWith('.')) return { entry, as: entry.toLowerCase() };
+  if (entry.startsWith('.')) {
+    if (!EXTENSION.test(entry))
+      throw new InvalidValueError('accepts entry', entry);
+    return { entry, as: entry.toLowerCase() };
+  }
   const type = MediaType.safeParse(entry);
   // neither an extension nor a media type
   if (!type.success) throw new InvalidValueError('accepts entry', entry);
