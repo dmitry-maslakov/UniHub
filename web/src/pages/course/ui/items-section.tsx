@@ -1,6 +1,7 @@
 import { Anchor, Button, Loader, Stack, Text, Title } from '@mantine/core';
 import { api } from '@/shared/api';
 import { day, webAddress } from '../lib/format';
+import { useDeepLink } from '../lib/use-deep-link';
 import classes from './course.module.css';
 
 const PAGE = 50;
@@ -19,6 +20,14 @@ export function ItemsSection({ slug }: { slug: string }) {
     },
   );
   const rows = items.data?.pages.flat() ?? [];
+  useDeepLink(
+    'item-',
+    rows.map((row) => row.id),
+    {
+      ...items,
+      pages: items.data?.pages.length ?? 0,
+    },
+  );
 
   return (
     <Stack component="section" gap="xs" aria-labelledby="posts">

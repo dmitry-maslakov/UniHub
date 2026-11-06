@@ -74,3 +74,20 @@ describe('search', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/Slow down/);
   });
 });
+
+describe('search words', () => {
+  it('are trimmed before the search is asked for', async () => {
+    signedIn();
+    let asked: string | null = null;
+    search(({ request }) => {
+      asked = new URL(request.url).searchParams.get('q');
+      return HttpResponse.json({ results: [] });
+    });
+    renderApp('/search?q=%20%20stack%20');
+
+    expect(
+      await screen.findByText(/Nothing in your courses matches/),
+    ).toBeVisible();
+    expect(asked).toBe('stack');
+  });
+});

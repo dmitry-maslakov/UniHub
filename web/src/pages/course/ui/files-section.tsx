@@ -1,6 +1,7 @@
 import { Anchor, Button, Loader, Stack, Text, Title } from '@mantine/core';
 import { api } from '@/shared/api';
 import { fileSize } from '../lib/format';
+import { useDeepLink } from '../lib/use-deep-link';
 import classes from './course.module.css';
 
 const PAGE = 50;
@@ -21,6 +22,14 @@ export function FilesSection({ slug }: { slug: string }) {
     },
   );
   const rows = files.data?.pages.flat() ?? [];
+  useDeepLink(
+    'file-',
+    rows.map((row) => row.id),
+    {
+      ...files,
+      pages: files.data?.pages.length ?? 0,
+    },
+  );
 
   return (
     <Stack component="section" gap="xs" aria-labelledby="files">

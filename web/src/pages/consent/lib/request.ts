@@ -6,6 +6,8 @@ export interface ConsentRequest {
   returnTo: string;
   // the return address is on this computer
   loopback: boolean;
+  // an http: address that isn't this computer's: the answer goes unencrypted
+  insecure: boolean;
 }
 
 const web = (url: URL) => url.protocol === 'https:' || url.protocol === 'http:';
@@ -22,6 +24,7 @@ const parse = (value: string | undefined) => {
 export function isLoopback(hostname: string) {
   return (
     hostname === 'localhost' ||
+    hostname === '0.0.0.0' ||
     hostname.endsWith('.localhost') ||
     hostname === '[::1]' ||
     /^127(\.\d{1,3}){3}$/.test(hostname)
@@ -38,10 +41,13 @@ export function readConsentRequest(search: {
   const client = parse(search.client_id);
   const redirect = parse(search.redirect_uri);
   if (!search.sig || !client || !web(client) || !redirect) return undefined;
+  const loopback = web(redirect) && isLoopback(redirect.hostname);
   return {
     requester: client.host,
-    clientId: client.href,
+    // as it came: the lookup is by the id the client was fetched under
+    clientId: search.client_id!,
     returnTo: web(redirect) ? redirect.host : `${redirect.protocol}//`,
-    loopback: web(redirect) && isLoopback(redirect.hostname),
+    loopback,
+    insecure: redirect.protocol === 'http:' && !loopback,
   };
 }

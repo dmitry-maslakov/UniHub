@@ -2,6 +2,7 @@ import { Alert, Loader, Text } from '@mantine/core';
 import { getRouteApi } from '@tanstack/react-router';
 import { api } from '@/shared/api';
 import { PageTitle } from '@/shared/ui';
+import { resultKey } from '../lib/result-key';
 import { searchErrorText } from '../lib/search-error';
 import classes from './search.module.css';
 import { ResultRow } from './result-row';
@@ -44,8 +45,8 @@ export function SearchPage() {
         )}
         {results && results.length > 0 && !search.isFetching && (
           <ul className={classes.list} aria-label="Results">
-            {results.map((result, i) => (
-              <ResultRow key={i} result={result} />
+            {results.map((result) => (
+              <ResultRow key={resultKey(result)} result={result} />
             ))}
           </ul>
         )}

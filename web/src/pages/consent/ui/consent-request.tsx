@@ -43,6 +43,7 @@ export function ConsentRequestView({ request }: { request: ConsentRequest }) {
         </Stack>
         <Text>
           You'll return to <strong>{request.returnTo}</strong>
+          {request.insecure && ' (not encrypted)'}
         </Text>
         {request.loopback && (
           <Alert
