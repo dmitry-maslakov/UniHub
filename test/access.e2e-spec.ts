@@ -14,6 +14,7 @@ import type { Mail } from '../src/identity/domain/mailer.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
 import { bootApp } from './app.js';
 import { accounts, ORIGIN } from './accounts.js';
+import { processorsOn } from './fake-plugins.js';
 import { portalIngest } from './ingest.js';
 import { sha256 } from './sha256.js';
 
@@ -47,7 +48,10 @@ describe('REST API', { timeout: 20_000 }, () => {
   const slides = Buffer.from('%PDF slides about processes');
 
   beforeAll(async () => {
-    app = await bootApp({ mails });
+    app = await bootApp({
+      mails,
+      imports: [processorsOn('office-text', 'zz-ocr')],
+    });
     const prisma = app.get(PrismaService);
     const commands = app.get(CommandBus);
 
@@ -126,11 +130,13 @@ describe('REST API', { timeout: 20_000 }, () => {
     await ingest.removeFile('removed');
     await ingest.removeItem('gone-later');
 
-    // two versions of one processor's text and another processor's
+    // two versions of one processor's text, another processor's, and the
+    // text of one that's off, first by name
     for (const [processor, version, parts] of [
       ['office-text', 1, ['page one', 'page two']],
       ['office-text', 2, ['v2 one', 'v2 two', 'v2 three']],
       ['zz-ocr', 1, ['ocr text']],
+      ['aa-off', 1, ['off one', 'off two']],
     ] as const)
       await prisma.representation.create({
         data: { hash: sha256(slides), processor, version, parts: [...parts] },
@@ -228,7 +234,7 @@ describe('REST API', { timeout: 20_000 }, () => {
 
   it('reads a file as text page by page', async () => {
     const file = await get(`/api/files/${ids.slides}`, student).expect(200);
-    // each processor's last version
+    // each processor's last version, of those on
     expect(file.body.texts).toEqual([
       { processor: 'office-text', version: 2, pages: 3 },
       { processor: 'zz-ocr', version: 1, pages: 1 },
@@ -250,6 +256,11 @@ describe('REST API', { timeout: 20_000 }, () => {
       student,
     ).expect(200);
     expect(ocr.body.text).toBe('ocr text');
+    // a processor turned off keeps its text, unread: neither listed above,
+    // nor the first one's page, nor read by its name
+    await get(`/api/files/${ids.slides}/text?processor=aa-off`, student).expect(
+      404,
+    );
   });
 
   it('downloads a file', async () => {

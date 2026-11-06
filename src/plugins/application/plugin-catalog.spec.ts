@@ -79,6 +79,13 @@ describe('PluginCatalog', () => {
     expect(catalog.pollConnector(PortalId.parse('teams'))).toBeUndefined();
   });
 
+  it('names the processors on, and none of the other kinds', () => {
+    expect(catalog.processorNames).toEqual(['pdf', 'slides']);
+    expect(
+      catalogOf({ unpackers: [unpacker('archives', ['.zip'])] }).processorNames,
+    ).toEqual([]);
+  });
+
   it('stops the app on plugins that break the rules', () => {
     expect(() => catalogOf({ polls: [poll('moodle')] }, ['moodle'])).toThrow(
       PortalHasTwoWritersError,

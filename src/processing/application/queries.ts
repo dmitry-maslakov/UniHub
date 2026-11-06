@@ -16,16 +16,17 @@ export interface TextPage extends TextInfo {
   text: string;
 }
 
-// what processors made of some content: the newest version of each, with
-// its number of pages (slides, sections), without the text
+// what the processors on made of some content: the newest version of each,
+// with its number of pages (slides, sections), without the text
 export class ListTextsQuery extends Query<TextInfo[]> {
   constructor(public readonly hash: ContentHash) {
     super();
   }
 }
 
-// one page (from 1) of the newest text made of some content; the first
-// processor's unless one is named. null if there's no such page
+// one page (from 1) of the newest text made of some content, by the
+// processor named or else the first one on. null if there's no such page,
+// or its processor is off
 export class GetTextPageQuery extends Query<TextPage | null> {
   constructor(
     public readonly hash: ContentHash,
@@ -55,11 +56,11 @@ export interface TextHit {
   }[];
 }
 
-// The contents among these whose newest texts match, best first, at most
-// `limit`, with their best pages. With an embedder, those nearest the
-// query's meaning too: knn always has nearest ones, so then there are up to
-// `limit` even when none has the words. The index knows nothing of who
-// reads what: `hashes` are all it looks through.
+// The contents among these whose newest texts of the processors on match,
+// best first, at most `limit`, with their best pages. With an embedder,
+// those nearest the query's meaning too: knn always has nearest ones, so
+// then there are up to `limit` even when none has the words. The index
+// knows nothing of who reads what: `hashes` are all it looks through.
 export class SearchTextsQuery extends Query<TextHit[]> {
   constructor(
     public readonly text: string,

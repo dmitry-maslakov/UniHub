@@ -66,18 +66,25 @@ const words = (text: string) =>
     multi_match: { query: text, type: 'most_fields', fields: FIELDS },
   }) satisfies Types.Common_QueryDsl.QueryContainer;
 
-// The chunks of these contents only, filtered in the query itself: a
-// post_filter would cut knn's k nearest down afterwards, to few or none.
-// Past 65,536 hashes (index.max_terms_count) OpenSearch refuses the query
-// with a 400 that says so, which goes up as it came.
-const among = (hashes: TextQuery['hashes']) => ({ terms: { hash: hashes } });
+// The chunks of these contents only, by these processors, filtered in the
+// query itself: a post_filter would cut knn's k nearest down afterwards, to
+// few or none. Past 65,536 hashes (index.max_terms_count) OpenSearch refuses
+// the query with a 400 that says so, which goes up as it came.
+const among = (
+  hashes: TextQuery['hashes'],
+  processors: TextQuery['processors'],
+) => ({
+  bool: {
+    filter: [{ terms: { hash: hashes } }, { terms: { processor: processors } }],
+  },
+});
 
 // BM25 alone: no vector for the query, or an index without vectors
-export const keywordBody = ({ text, hashes, size }: TextQuery) =>
+export const keywordBody = ({ text, hashes, processors, size }: TextQuery) =>
   ({
     size,
     _source: ['hash'],
-    query: { bool: { must: words(text), filter: among(hashes) } },
+    query: { bool: { must: words(text), filter: among(hashes, processors) } },
     collapse,
   }) satisfies API.Search_RequestBody;
 
@@ -89,6 +96,7 @@ export const hybridBody = ({
   text,
   vector,
   hashes,
+  processors,
   size,
 }: TextQuery & { vector: number[] }) =>
   ({
@@ -96,7 +104,7 @@ export const hybridBody = ({
     _source: ['hash'],
     query: {
       hybrid: {
-        filter: among(hashes),
+        filter: among(hashes, processors),
         pagination_depth: DEPTH,
         queries: [
           words(text),

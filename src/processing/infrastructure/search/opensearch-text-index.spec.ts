@@ -36,7 +36,12 @@ const items = (...failed: [status: number, type: string][]) => ({
   },
 });
 const ok = { body: { errors: false, items: [] } };
-const query = { text: 'semafor', hashes: [key.hash], size: 10 };
+const query = {
+  text: 'semafor',
+  hashes: [key.hash],
+  processors: [key.processor],
+  size: 10,
+};
 const none = { body: { hits: { hits: [] } } };
 
 // the calls OpenSearchTextIndex makes, answered as an index of this

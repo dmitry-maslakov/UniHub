@@ -9,7 +9,9 @@ import { TextIndex, TextIndexQueue } from './ports.js';
 // Puts the search index back in step with postgres: queues what it lacks
 // (a lost job, a deleted index) and what it holds that isn't newest (an
 // older version, a newer one postgres lost, a text it no longer has), which
-// the job replaces or takes out.
+// the job replaces or takes out. The texts of processors turned off too:
+// searches leave them out (SearchTexts), so one turned back on is found
+// again at once, nothing embedded anew.
 @Injectable()
 export class ReconcileIndex {
   constructor(

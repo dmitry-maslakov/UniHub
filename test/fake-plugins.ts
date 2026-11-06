@@ -90,6 +90,24 @@ export class FakePdfProcessor implements ProcessesContent {
   }
 }
 
+// Processors of these names that take no file, so none of them runs: a spec
+// writes their texts to postgres itself, read as long as they're on.
+export function processorsOn(...names: string[]) {
+  const processors = names.map((name) => {
+    @ContentProcessor({ name, version: 1, accepts: ['.none'] })
+    @Injectable()
+    class On implements ProcessesContent {
+      async process() {
+        return { parts: [] };
+      }
+    }
+    return On;
+  });
+  @Module({ providers: processors })
+  class ProcessorsOnModule {}
+  return ProcessorsOnModule;
+}
+
 // a .bundle is JSON, { path: text }: each path a member holding its text
 @ContentUnpacker({ name: 'fake-bundle', version: 1, accepts: ['.bundle'] })
 @Injectable()

@@ -34,6 +34,12 @@ export class PluginCatalog implements OnModuleInit {
     return this.set.plugins.aggregators.find((a) => a.spec.name === name);
   }
 
+  // the processors on, whose texts are read and found; one turned off keeps
+  // its texts stored, out of sight until it's on again
+  get processorNames() {
+    return this.set.plugins.processors.map(({ spec }) => spec.name);
+  }
+
   // the processors that take this file, each with the entry it matched
   processorsFor(file: { name: string; mime: MediaType | null }) {
     return this.set.plugins.processors.flatMap((processor) => {

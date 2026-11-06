@@ -45,6 +45,9 @@ export interface TextQuery {
   // without it, by the words alone
   vector?: number[];
   hashes: readonly ContentHash[];
+  // whose texts are looked through: the processors on. One turned off keeps
+  // its texts indexed, found again once it's back on
+  processors: readonly PluginName[];
   // contents, at most
   size: number;
 }
