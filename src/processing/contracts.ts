@@ -7,10 +7,12 @@ export { PluginsOutboxTransport } from './infrastructure/plugins-outbox.transpor
 export { LEFT_OUT, type LeftOut } from './domain/unpacking.js';
 export {
   FindMemberQuery,
+  ListContainedQuery,
   GetTextPageQuery,
   ListMembersQuery,
   ListTextsQuery,
   SearchTextsQuery,
+  type ContainedMember,
   type MemberContent,
   type MemberInfo,
   type Snippet,

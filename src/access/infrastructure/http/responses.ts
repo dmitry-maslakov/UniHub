@@ -147,6 +147,14 @@ export class SearchResultResponse implements SearchResultView {
   @ApiProperty({ example: 'l5.pdf' }) name!: string;
   @ApiProperty({ description: "folder in the portal, '' for the root" })
   path!: string;
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    example: 'lab1/src/main.c',
+    description:
+      'the path in the file of the member found (GET /api/files/{fileId}/members), null for the file itself',
+  })
+  member!: string | null;
   @ApiProperty({ example: 'os', description: "the course's slug" })
   course!: string;
   @ApiProperty({

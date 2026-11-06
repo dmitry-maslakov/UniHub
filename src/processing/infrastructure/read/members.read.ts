@@ -4,7 +4,9 @@ import type { ContentHash, MediaType } from '@app/kernel';
 import type { PrismaTxHost } from '../../../platform/database/prisma.service.js';
 import {
   FindMemberQuery,
+  ListContainedQuery,
   ListMembersQuery,
+  type ContainedMember,
   type MemberInfo,
 } from '../../application/queries.js';
 
@@ -55,5 +57,20 @@ export class FindMemberHandler implements IQueryHandler<FindMemberQuery> {
           mime: member.mime as MediaType | null,
         }
       : null;
+  }
+}
+
+@QueryHandler(ListContainedQuery)
+export class ListContainedHandler implements IQueryHandler<ListContainedQuery> {
+  constructor(@InjectTransactionHost() private readonly txHost: PrismaTxHost) {}
+
+  execute({ hashes }: ListContainedQuery) {
+    return this.txHost.tx.$queryRaw<ContainedMember[]>`
+      SELECT m.hash AS container, m.path, m.content AS hash
+      FROM "Member" m
+      WHERE m.hash = ANY(${hashes}::text[])
+        AND m.content IS NOT NULL
+        AND EXISTS (SELECT FROM "Representation" r WHERE r.hash = m.content)
+      ORDER BY m.hash, m.position`;
   }
 }

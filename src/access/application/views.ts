@@ -1,11 +1,22 @@
-import type { Json, MediaType, PluginName, PortalId } from '@app/kernel';
+import type {
+  ContentHash,
+  Json,
+  MediaType,
+  PluginName,
+  PortalId,
+} from '@app/kernel';
 import type {
   CourseDto,
   FileDto,
   ItemDto,
   VisibleContentDto,
 } from '../../catalog/contracts.js';
-import type { Snippet, TextHit, TextInfo } from '../../processing/contracts.js';
+import type {
+  ContainedMember,
+  Snippet,
+  TextHit,
+  TextInfo,
+} from '../../processing/contracts.js';
 
 // What a user reads, through REST and MCP alike: catalog's records without
 // what only the hub needs (portal ids, removal, content hashes).
@@ -57,11 +68,13 @@ export interface SearchPageView {
   snippet: Snippet;
 }
 
-// a file whose text matched, its best pages first
+// a file whose text matched, or a member of it, its best pages first
 export interface SearchResultView {
   fileId: string;
   name: string;
   path: string;
+  // the member's path in the file, null for the file itself
+  member: string | null;
   // the course's slug
   course: string;
   pages: SearchPageView[];
@@ -119,21 +132,52 @@ export const fileView = ({
   hasContent: contentHash !== null,
 });
 
-// what search found of a content, as the first of the files that hold it
-// (by folder and name), the others named with it
+// a file that holds a content, or holds it as a member
+export interface Place extends VisibleContentDto {
+  member: string | null;
+}
+
+// Where a user finds each content: the files that hold it, then the members
+// that do in the files holding their containers, each in catalog's order
+// (by folder and name) and a file's members in their tree's
+export function placesOf(
+  files: readonly VisibleContentDto[],
+  contained: readonly ContainedMember[],
+) {
+  const inside = Map.groupBy(contained, ({ container }) => container);
+  const members = files.flatMap((file) =>
+    (inside.get(file.hash) ?? []).map(({ path, hash }) => ({
+      ...file,
+      hash,
+      member: path,
+    })),
+  );
+  return Map.groupBy<ContentHash, Place>(
+    [...files.map((file) => ({ ...file, member: null })), ...members],
+    ({ hash }) => hash,
+  );
+}
+
+// what search found of a content, as the first of its places, the other
+// files holding it named with it
 export const searchResultView = (
   { pages }: TextHit,
-  [{ fileId, name, path, courseId }, ...others]: VisibleContentDto[],
+  [{ fileId, name, path, member, courseId }, ...others]: Place[],
   slugs: ReadonlyMap<string, string>,
 ): SearchResultView => ({
   fileId,
   name,
   path,
+  member,
   course: slugs.get(courseId)!,
   pages: pages.map(({ page, processor, snippet }) => ({
     page,
     processor,
     snippet,
   })),
-  sameContentIn: others.map(({ fileId }) => fileId),
+  sameContentIn: [
+    ...new Set(
+      others.map(({ fileId }) => fileId).filter((id) => id !== fileId),
+    ),
+  ],
 });

@@ -4,15 +4,19 @@ import {
   ListVisibleContentQuery,
   type CourseRef,
 } from '../../catalog/contracts.js';
-import { SearchTextsQuery } from '../../processing/contracts.js';
+import {
+  ListContainedQuery,
+  SearchTextsQuery,
+} from '../../processing/contracts.js';
 import { readableCourse, readableCourses } from './readable.js';
 import type { SearchRequest } from './search-request.js';
-import { searchResultView, type SearchView } from './views.js';
+import { placesOf, searchResultView, type SearchView } from './views.js';
 
 // Search over what a user may read, for REST and MCP. The index knows
 // nothing of who reads what: identity's scope picks the courses, catalog the
-// files they show, and only those files' contents are looked through, so a
-// grant taken back or a file removed counts from the next search on.
+// files they show, and only those files' contents are looked through, and
+// the members with a text of those that are archives, so a grant taken back
+// or a file removed counts from the next search on.
 @Injectable()
 export class CourseSearch {
   constructor(private readonly queries: QueryBus) {}
@@ -28,15 +32,17 @@ export class CourseSearch {
     const files = await this.queries.execute(
       new ListVisibleContentQuery(courses.map(({ id }) => id)),
     );
-    // by folder and name within each content, as catalog lists them
-    const byContent = Map.groupBy(files, ({ hash }) => hash);
+    const contained = await this.queries.execute(
+      new ListContainedQuery([...new Set(files.map(({ hash }) => hash))]),
+    );
+    const places = placesOf(files, contained);
     const hits = await this.queries.execute(
-      new SearchTextsQuery(q, [...byContent.keys()], limit),
+      new SearchTextsQuery(q, [...places.keys()], limit),
     );
     const slugs = new Map(courses.map(({ id, slug }) => [id, slug]));
     return {
       results: hits.map((hit) =>
-        searchResultView(hit, byContent.get(hit.hash)!, slugs),
+        searchResultView(hit, places.get(hit.hash)!, slugs),
       ),
     };
   }
