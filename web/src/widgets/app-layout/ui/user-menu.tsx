@@ -1,5 +1,5 @@
 import { Anchor, Avatar, Box, Menu, Text, UnstyledButton } from '@mantine/core';
-import { IconKey, IconLogout, IconUser } from '@tabler/icons-react';
+import { IconKey, IconLock, IconLogout, IconUser } from '@tabler/icons-react';
 import { Link } from '@tanstack/react-router';
 import { useSession, useSessionActions } from '@/entities/session';
 
@@ -39,6 +39,13 @@ export function UserMenu() {
           leftSection={<IconKey size={16} stroke={1.75} />}
         >
           API keys
+        </Menu.Item>
+        <Menu.Item
+          component={Link}
+          to="/privacy"
+          leftSection={<IconLock size={16} stroke={1.75} />}
+        >
+          Privacy
         </Menu.Item>
         <Menu.Divider />
         <Menu.Item
