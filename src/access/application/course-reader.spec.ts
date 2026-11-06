@@ -5,11 +5,13 @@ import { sha256 } from '../../../test/sha256.js';
 import {
   FindCourseQuery,
   GetCourseFileQuery,
+  GetCourseItemQuery,
   ListCourseFilesQuery,
   ListCourseItemsQuery,
   ListCoursesQuery,
   Slug,
   type CourseFileDto,
+  type CourseItemDto,
   type CourseRef,
 } from '../../catalog/contracts.js';
 import { ReadScopeQuery } from '../../identity/contracts.js';
@@ -44,6 +46,20 @@ const file = (id: string, courseId: string, content = true): CourseFileDto => ({
   removed: false,
 });
 const files = [file('f1', os.id), file('f2', net.id), file('f3', os.id, false)];
+const item = (id: string, courseId: string): CourseItemDto => ({
+  id,
+  courseId,
+  portal,
+  externalId: `x-${id}`,
+  portalCourseId: 'pc',
+  kind: 'announcement',
+  title: 'Exam',
+  url: null,
+  publishedAt: null,
+  raw: { message: 'on Monday' },
+  removed: false,
+});
+const items = [item('i1', os.id), item('i2', net.id)];
 const text = {
   processor: PluginName.parse('office-text'),
   version: 2,
@@ -85,6 +101,11 @@ function reader() {
       GetCourseFileQuery,
       ({ fileId }: GetCourseFileQuery) =>
         files.find((f) => f.id === fileId) ?? null,
+    ],
+    [
+      GetCourseItemQuery,
+      ({ itemId }: GetCourseItemQuery) =>
+        items.find((i) => i.id === itemId) ?? null,
     ],
     [ListTextsQuery, () => [text]],
     [ListMembersQuery, () => [main]],
@@ -154,6 +175,25 @@ describe('CourseReader', () => {
         NotReadableError,
       );
     }
+  });
+
+  // as search finds it
+  it('opens a post of a course it may read, as the course lists it, and none of the others', async () => {
+    const { reader: r } = reader();
+
+    expect(await r.item('ana', 'i1')).toEqual({
+      id: 'i1',
+      portal,
+      kind: 'announcement',
+      title: 'Exam',
+      url: null,
+      publishedAt: null,
+      raw: { message: 'on Monday' },
+    });
+    for (const id of ['i2', 'nope'])
+      await expect(r.item('ana', id)).rejects.toThrowError(
+        new NotReadableError('item'),
+      );
   });
 
   it('reads text and content only of a file that has some', async () => {

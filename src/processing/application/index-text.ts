@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { chunksOf, type TextChunk } from '../domain/chunks.js';
+import { chunksOf } from '../domain/chunks.js';
 import {
   RepresentationRepository,
   type RepresentationKey,
@@ -24,15 +24,23 @@ export class IndexText {
     const newest = await this.representations.newest(hash, processor);
     if (!newest) return this.index.remove({ hash, processor });
     const { parts, ...key } = newest;
-    await this.index.put(key, await this.embedded(chunksOf(parts), signal));
-  }
-
-  private async embedded(chunks: TextChunk[], signal?: AbortSignal) {
-    if (!this.embedder || !chunks.length) return chunks;
-    const vectors = await this.embedder.embed(
-      chunks.map(({ text }) => text),
-      signal,
+    await this.index.put(
+      key,
+      await embedded(this.embedder, chunksOf(parts), signal),
     );
-    return chunks.map((chunk, i) => ({ ...chunk, vector: vectors[i] }));
   }
+}
+
+// chunks with their vectors, in one call; as they are without an embedder
+export async function embedded<T extends { text: string }>(
+  embedder: Embedder | null,
+  chunks: T[],
+  signal?: AbortSignal,
+) {
+  if (!embedder || !chunks.length) return chunks;
+  const vectors = await embedder.embed(
+    chunks.map(({ text }) => text),
+    signal,
+  );
+  return chunks.map((chunk, i) => ({ ...chunk, vector: vectors[i] }));
 }

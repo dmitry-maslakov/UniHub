@@ -6,9 +6,12 @@ import { roleConfig } from '../../../platform/role/role.config.js';
 import { opensearchConfig } from '../../../platform/search/opensearch.config.js';
 import { OpenSearchModule } from '../../../platform/search/opensearch.module.js';
 import { PluginsModule } from '../../../plugins/contracts.js';
+import { IndexRecord } from '../../application/index-record.js';
 import { IndexText } from '../../application/index-text.js';
 import {
   Embedder,
+  FileFacts,
+  PostFacts,
   QueryEmbedder,
   Reranker,
   TextIndex,
@@ -16,8 +19,12 @@ import {
 } from '../../application/ports.js';
 import { ReconcileIndex } from '../../application/reconcile-index.js';
 import { RepresentationRepository } from '../../domain/representation.js';
+import { UnpackingRepository } from '../../domain/unpacking.js';
 import { textSearchConfig } from '../../text-search.config.js';
+import { CatalogFileFacts } from '../catalog-file-facts.js';
+import { CatalogPostFacts } from '../catalog-post-facts.js';
 import { PrismaRepresentationRepository } from '../prisma-representation.repository.js';
+import { PrismaUnpackingRepository } from '../prisma-unpacking.repository.js';
 import { BullmqTextIndexQueue } from './bullmq-text-index-queue.js';
 import { OpenSearchTextIndex } from './opensearch-text-index.js';
 import { ReconcileIndexSchedule } from './reconcile-index.schedule.js';
@@ -28,8 +35,9 @@ import { TeiReranker } from './tei-reranker.js';
 
 const DAY = 24 * 60 * 60;
 
-// The processors' texts in OpenSearch, kept in step with postgres. Imported
-// only when search is on (processing.module.ts).
+// The processors' texts in OpenSearch, and the records (posts, files' names,
+// trees' paths), kept in step with postgres. Imported only when search is
+// on (processing.module.ts).
 @Module({
   imports: [
     ConfigModule.forFeature(opensearchConfig),
@@ -59,6 +67,9 @@ const DAY = 24 * 60 * 60;
       provide: RepresentationRepository,
       useClass: PrismaRepresentationRepository,
     },
+    { provide: UnpackingRepository, useClass: PrismaUnpackingRepository },
+    { provide: FileFacts, useClass: CatalogFileFacts },
+    { provide: PostFacts, useClass: CatalogPostFacts },
     { provide: TextIndex, useClass: OpenSearchTextIndex },
     { provide: TextIndexQueue, useClass: BullmqTextIndexQueue },
     // null without EMBEDDING_URL: BM25 only
@@ -83,6 +94,7 @@ const DAY = 24 * 60 * 60;
         rerank && new TeiReranker(rerank),
     },
     IndexText,
+    IndexRecord,
     ReconcileIndex,
     SearchIndexWorker,
     ReconcileIndexSchedule,

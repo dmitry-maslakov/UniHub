@@ -12,3 +12,12 @@ export const visibleFile = (
   OR: [{ itemId: null }, { item: { removedAt: null } }],
   portalCourse: { link: course ? { is: course } : { isNot: null } },
 });
+
+// The posts a course shows: not removed, in a portal course linked to the
+// course (to any course, without one), as visibleFile says of files.
+export const visibleItem = (
+  course?: Prisma.CourseLinkWhereInput,
+): Prisma.ItemWhereInput => ({
+  removedAt: null,
+  portalCourse: { link: course ? { is: course } : { isNot: null } },
+});

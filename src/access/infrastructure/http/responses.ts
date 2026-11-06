@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiExtraModels, ApiProperty, getSchemaPath } from '@nestjs/swagger';
 import type { Json, MediaType, PluginName, PortalId } from '@app/kernel';
 import {
   LEFT_OUT,
@@ -11,11 +11,12 @@ import {
 import type {
   CourseView,
   FileDetailsView,
+  FileResultView,
   FileView,
   ItemView,
   PortalCourseView,
+  PostResultView,
   SearchPageView,
-  SearchResultView,
   SearchView,
 } from '../../application/views.js';
 
@@ -142,7 +143,12 @@ export class SearchPageResponse implements SearchPageView {
   @ApiProperty() snippet!: SnippetResponse;
 }
 
-export class SearchResultResponse implements SearchResultView {
+export class FileResultResponse implements FileResultView {
+  @ApiProperty({
+    enum: ['file', 'member'],
+    description: 'a file, or a member of an archive the file is',
+  })
+  type!: 'file' | 'member';
   @ApiProperty() fileId!: string;
   @ApiProperty({ example: 'l5.pdf' }) name!: string;
   @ApiProperty({ description: "folder in the portal, '' for the root" })
@@ -159,9 +165,17 @@ export class SearchResultResponse implements SearchResultView {
   course!: string;
   @ApiProperty({
     type: [SearchPageResponse],
-    description: 'its best pages first, at most 3',
+    description:
+      'its best pages first, at most 3; none when only its name matched',
   })
   pages!: SearchPageResponse[];
+  @ApiProperty({
+    type: SnippetResponse,
+    nullable: true,
+    description:
+      "its name (a member's path) where the words matched, null when only its text did",
+  })
+  matchedName!: SnippetResponse | null;
   @ApiProperty({
     type: [String],
     description: 'other files of your courses with the same content',
@@ -169,7 +183,41 @@ export class SearchResultResponse implements SearchResultView {
   sameContentIn!: string[];
 }
 
+export class PostResultResponse implements PostResultView {
+  @ApiProperty({ enum: ['post'] }) type!: 'post';
+  @ApiProperty({ description: 'GET /api/items/{itemId}' }) itemId!: string;
+  @ApiProperty({ example: 'announcement' }) kind!: string;
+  @ApiProperty({ type: String, nullable: true }) title!: string | null;
+  @ApiProperty({ type: String, nullable: true }) url!: string | null;
+  @ApiProperty({ type: Date, nullable: true }) publishedAt!: Date | null;
+  @ApiProperty({ example: 'os', description: "the course's slug" })
+  course!: string;
+  @ApiProperty({
+    description:
+      'its best fragment, of its title and what the portal gave as plain text',
+  })
+  snippet!: SnippetResponse;
+}
+
+@ApiExtraModels(FileResultResponse, PostResultResponse)
 export class SearchResponse implements SearchView {
-  @ApiProperty({ type: [SearchResultResponse] })
-  results!: SearchResultResponse[];
+  @ApiProperty({
+    type: 'array',
+    items: {
+      oneOf: [
+        { $ref: getSchemaPath(FileResultResponse) },
+        { $ref: getSchemaPath(PostResultResponse) },
+      ],
+      discriminator: {
+        propertyName: 'type',
+        mapping: {
+          file: getSchemaPath(FileResultResponse),
+          member: getSchemaPath(FileResultResponse),
+          post: getSchemaPath(PostResultResponse),
+        },
+      },
+    },
+    description: 'best first, a file, a member or a post each (`type`)',
+  })
+  results!: (FileResultResponse | PostResultResponse)[];
 }

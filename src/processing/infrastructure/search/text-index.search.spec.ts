@@ -9,30 +9,76 @@ import {
 } from './text-index.search.js';
 
 const processors = [PluginName.parse('office-text')];
+const hashes = [sha256('lecture'), sha256('exercises')];
+// what a search looks through: these contents, and no records
+const scope = (contents = hashes) => ({
+  contents,
+  posts: [],
+  files: [],
+  archives: [],
+});
 // the contents named, by the processors on
-const among = (hashes: string[]) => ({
+const texts = (contents: string[]) => ({
   bool: {
-    filter: [{ terms: { hash: hashes } }, { terms: { processor: processors } }],
+    filter: [
+      { terms: { hash: contents } },
+      { terms: { processor: processors } },
+    ],
   },
 });
+const among = (...should: object[]) => ({
+  bool: { should, minimum_should_match: 1 },
+});
+const words = { text: 'semafor', processors, size: 7 };
+// the contents a filter names: the very list it was given
+const contentsIn = (filter: { bool: { should: object[] } }) =>
+  (filter.bool.should[0] as ReturnType<typeof texts>).bool.filter[0].terms.hash;
 
 // On a small index a post_filter finds what the query's own filter does
 // (the e2e specs can't tell them apart), on a big one too few or none.
 describe('keywordBody', () => {
-  const hashes = [sha256('lecture'), sha256('exercises')];
-  const body = keywordBody({ text: 'semafor', hashes, processors, size: 7 });
+  const body = keywordBody({ ...words, among: scope() });
 
   it('looks only through the texts of the contents and processors named, in the query itself', () => {
-    expect(body.query.bool.filter).toEqual(among(hashes));
-    expect(body.query.bool.filter.bool.filter[0].terms.hash).toBe(hashes);
+    expect(body.query.bool.filter).toEqual(among(texts(hashes)));
+    expect(contentsIn(body.query.bool.filter)).toBe(hashes);
     expect(body).not.toHaveProperty('post_filter');
   });
 
-  it('asks for that many contents, a hit each with more of its best chunks than pages shown', () => {
+  // a name or a path by the words of the record named alone, whoever's
+  // content it names; the processors are the texts'
+  it('looks through the posts, files and archives named, each of its kind', () => {
+    const records = { posts: ['p1'], files: ['f1'], archives: [hashes[1]] };
+    const of = (kind: string, ids: string[]) => ({
+      bool: { filter: [{ term: { kind } }, { terms: { record: ids } }] },
+    });
+
+    expect(
+      keywordBody({ ...words, among: { contents: hashes, ...records } }).query
+        .bool.filter,
+    ).toEqual(
+      among(
+        texts(hashes),
+        of('post', ['p1']),
+        of('file', ['f1']),
+        of('tree', [hashes[1]]),
+      ),
+    );
+    expect(
+      keywordBody({ ...words, among: { contents: [], ...records } }).query.bool
+        .filter.bool.should,
+    ).toHaveLength(3);
+  });
+
+  it('asks for that many contents, a hit each with more of its best chunks than pages shown, of texts and records', () => {
     expect(body.size).toBe(7);
     expect(body.collapse).toMatchObject({
       field: 'hash',
-      inner_hits: { name: 'pages', size: 10 },
+      inner_hits: {
+        name: 'pages',
+        size: 10,
+        _source: ['processor', 'version', 'page', 'kind', 'record', 'member'],
+      },
     });
   });
 
@@ -46,21 +92,14 @@ describe('keywordBody', () => {
 });
 
 describe('hybridBody', () => {
-  const hashes = [sha256('lecture'), sha256('exercises')];
   const vector = [0.6, 0.8];
-  const body = hybridBody({
-    text: 'semafor',
-    vector,
-    hashes,
-    processors,
-    size: 7,
-  });
+  const body = hybridBody({ ...words, vector, among: scope() });
 
   // a filter of knn's own would leave the words unfiltered, a bool around
   // the hybrid query is refused: the hybrid query's filter goes to both
   it('looks only through the texts of the contents and processors named, in both parts, before knn picks its nearest', () => {
-    expect(body.query.hybrid.filter).toEqual(among(hashes));
-    expect(body.query.hybrid.filter.bool.filter[0].terms.hash).toBe(hashes);
+    expect(body.query.hybrid.filter).toEqual(among(texts(hashes)));
+    expect(contentsIn(body.query.hybrid.filter)).toBe(hashes);
     expect(body).not.toHaveProperty('post_filter');
     expect(JSON.stringify(body.query.hybrid.queries)).not.toContain('filter');
   });
@@ -70,8 +109,7 @@ describe('hybridBody', () => {
 
     expect(body.query.hybrid.queries).toHaveLength(2);
     expect(byWords).toEqual(
-      keywordBody({ text: 'semafor', hashes, processors, size: 7 }).query.bool
-        .must,
+      keywordBody({ ...words, among: scope() }).query.bool.must,
     );
     expect(byMeaning).toEqual({
       knn: {
@@ -83,10 +121,8 @@ describe('hybridBody', () => {
 
   it('answers contents as a keyword search does', () => {
     const { query: _words, ...rest } = keywordBody({
-      text: 'semafor',
-      hashes,
-      processors,
-      size: 7,
+      ...words,
+      among: scope(),
     });
     const { query: _both, ...same } = body;
 
@@ -95,12 +131,7 @@ describe('hybridBody', () => {
 });
 
 describe('searchRequest', () => {
-  const query = {
-    text: 'semafor',
-    hashes: [sha256('lecture')],
-    processors,
-    size: 7,
-  };
+  const query = { ...words, among: scope([sha256('lecture')]) };
   const vector = [0.6, 0.8];
 
   it('asks by the words and the meaning through the pipeline, given a vector and an index of them', () => {
@@ -131,12 +162,22 @@ describe('contentHits', () => {
       text: [`page ${page}: ${HIGHLIGHT.open}${word}${HIGHLIGHT.close}`],
     },
   });
-  const hitOf = (...chunks: ReturnType<typeof chunk>[]) => [
+  const hitOf = (...chunks: object[]) => [
     {
       _source: { hash },
       inner_hits: { pages: { hits: { hits: chunks, max_score: 1 } } },
     },
   ];
+  // a record's chunk as one
+  const recordChunk = (
+    kind: string,
+    record: string,
+    word: string,
+    member?: string,
+  ) => ({
+    _source: { kind, record, ...(member && { member }) },
+    highlight: { text: [`${HIGHLIGHT.open}${word}${HIGHLIGHT.close}`] },
+  });
   const shown = ({ hash, pages }: ReturnType<typeof contentHits>[number]) => ({
     hash,
     pages: pages.map(({ processor, page, snippet }) => [
@@ -158,8 +199,52 @@ describe('contentHits', () => {
             snippet: { text: 'page 4: semafor', highlights: [[8, 15]] },
           },
         ],
+        records: [],
       },
     ]);
+  });
+
+  it("reads the records found with a content apart from its pages, each once by its best chunk, a tree's members apart", () => {
+    const [found] = contentHits(
+      hitOf(
+        recordChunk('file', 'f1', 'l5.pdf'),
+        chunk(4, 'semafor'),
+        recordChunk('tree', 'zip', 'lab/l5.pdf', 'lab/l5.pdf'),
+        recordChunk('tree', 'zip', 'old/l5.pdf', 'old/l5.pdf'),
+        recordChunk('file', 'f1', 'again'),
+      ),
+    );
+
+    expect(shown(found).pages).toEqual([[officeText, 4, 'page 4: semafor']]);
+    expect(found.records).toEqual([
+      {
+        kind: 'file',
+        record: 'f1',
+        member: null,
+        snippet: { text: 'l5.pdf', highlights: [[0, 6]] },
+      },
+      expect.objectContaining({ record: 'zip', member: 'lab/l5.pdf' }),
+      expect.objectContaining({ record: 'zip', member: 'old/l5.pdf' }),
+    ]);
+  });
+
+  it('reads a post found by its text, each chunk of it once', () => {
+    const [found] = contentHits(
+      hitOf(recordChunk('post', 'p1', 'a'), recordChunk('post', 'p1', 'b')),
+    );
+
+    expect(found).toEqual({
+      hash,
+      pages: [],
+      records: [
+        {
+          kind: 'post',
+          record: 'p1',
+          member: null,
+          snippet: { text: 'a', highlights: [[0, 1]] },
+        },
+      ],
+    });
   });
 
   it('shows a page once, by the best of its chunks, those of other processors apart', () => {

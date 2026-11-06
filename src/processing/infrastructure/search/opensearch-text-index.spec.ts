@@ -38,10 +38,11 @@ const items = (...failed: [status: number, type: string][]) => ({
 const ok = { body: { errors: false, items: [] } };
 const query = {
   text: 'semafor',
-  hashes: [key.hash],
+  among: { contents: [key.hash], posts: [], files: [], archives: [] },
   processors: [key.processor],
   size: 10,
 };
+const post = { kind: 'post' as const, id: 'post-1', fingerprint: 'f2' };
 const none = { body: { hits: { hits: [] } } };
 
 // the calls OpenSearchTextIndex makes, answered as an index of this
@@ -56,6 +57,9 @@ function opensearch(embedding: Vectors = null) {
       getMapping: vi.fn<(params: object) => Promise<unknown>>(async () => ({
         body: { [name]: { mappings: indexBody(embedding).mappings } },
       })),
+      putMapping: vi.fn<(params: object) => Promise<unknown>>(async () => ({
+        body: { acknowledged: true },
+      })),
     },
     searchPipeline: {
       put: vi.fn<(params: object) => Promise<unknown>>(async () => ({
@@ -69,6 +73,13 @@ function opensearch(embedding: Vectors = null) {
       body: {},
     })),
     deleteByQuery: vi.fn<(params: object) => Promise<unknown>>(async () => ({
+      body: {},
+    })),
+    // no document is there unless a spec says so
+    exists: vi.fn<(params: object) => Promise<unknown>>(async () => ({
+      body: false,
+    })),
+    delete: vi.fn<(params: object) => Promise<unknown>>(async () => ({
       body: {},
     })),
     search: vi.fn<(params: object) => Promise<unknown>>(async () => ({
@@ -161,6 +172,22 @@ describe('OpenSearchTextIndex', () => {
     expect(client.searchPipeline.put).not.toHaveBeenCalled();
   });
 
+  // one made before the records' fields: its texts go on as they were
+  it("puts this generation's fields into the index there, once it's known to be of this generation", async () => {
+    const { client, text } = opensearch(vectors);
+
+    await text.ensure();
+
+    expect(client.indices.putMapping).toHaveBeenCalledWith({
+      index: indexName('unihub', vectors),
+      body: { properties: indexBody(vectors).mappings.properties },
+    });
+    expect(
+      client.indices.getMapping.mock.invocationCallOrder[0] <
+        client.indices.putMapping.mock.invocationCallOrder[0],
+    ).toBe(true);
+  });
+
   it('puts the hybrid pipeline before it makes an index of vectors, named by their model', async () => {
     const { client, text } = opensearch(vectors);
 
@@ -202,6 +229,7 @@ describe('OpenSearchTextIndex', () => {
         TextIndexUnavailableError,
       );
       expect(client.bulk).not.toHaveBeenCalled();
+      expect(client.indices.putMapping).not.toHaveBeenCalled();
     }
   });
 
@@ -317,6 +345,154 @@ describe('OpenSearchTextIndex', () => {
     expect(client.index).toHaveBeenCalledTimes(2);
   });
 
+  // a backfill's, which waits for no refresh: a get sees the manifest at once
+  it("writes a record's chunks, then its manifest, dropping nothing the first time", async () => {
+    const { client, text } = opensearch(vectors);
+    const tree = {
+      kind: 'tree' as const,
+      id: key.hash,
+      fingerprint: 'archives__1__1',
+    };
+
+    await text.putRecord(post, [
+      { hash: key.hash, text: 'Exam', vector: [1, 0, 0] },
+    ]);
+    await text.putRecord(tree, [
+      { hash: key.hash, text: 'lab/main.c', member: 'lab/main.c' },
+    ]);
+
+    expect(client.exists).toHaveBeenNthCalledWith(1, {
+      index: indexName('unihub', vectors),
+      id: 'post__post-1',
+    });
+    expect(client.bulk.mock.calls.map(([{ body }]) => body)).toEqual([
+      [
+        { index: { _id: 'post__post-1__0' } },
+        {
+          kind: 'post',
+          record: 'post-1',
+          fingerprint: 'f2',
+          hash: key.hash,
+          chunk: 0,
+          text: 'Exam',
+          vector: [1, 0, 0],
+        },
+      ],
+      [
+        { index: { _id: `tree__${key.hash}__0` } },
+        {
+          kind: 'tree',
+          record: key.hash,
+          fingerprint: 'archives__1__1',
+          hash: key.hash,
+          chunk: 0,
+          text: 'lab/main.c',
+          member: 'lab/main.c',
+        },
+      ],
+    ]);
+    expect(client.index).toHaveBeenNthCalledWith(1, {
+      index: indexName('unihub', vectors),
+      id: 'post__post-1',
+      body: { kind: 'post', record: 'post-1', fingerprint: 'f2', chunks: 1 },
+    });
+    expect(client.deleteByQuery).not.toHaveBeenCalled();
+    expect(
+      client.bulk.mock.invocationCallOrder[0] <
+        client.index.mock.invocationCallOrder[0],
+    ).toBe(true);
+  });
+
+  it('replaces a record as a text: its manifest refreshed, then its chunks of another fingerprint dropped', async () => {
+    const { client, text } = opensearch();
+    client.exists.mockResolvedValue({ body: true });
+
+    await text.putRecord(post, []);
+
+    expect(client.index).toHaveBeenCalledWith({
+      index,
+      id: 'post__post-1',
+      body: { kind: 'post', record: 'post-1', fingerprint: 'f2', chunks: 0 },
+      refresh: 'wait_for',
+    });
+    expect(client.deleteByQuery).toHaveBeenCalledWith({
+      index,
+      refresh: true,
+      conflicts: 'proceed',
+      body: {
+        query: {
+          bool: {
+            filter: [
+              { term: { kind: 'post' } },
+              { term: { record: 'post-1' } },
+            ],
+            must_not: [{ term: { fingerprint: 'f2' } }],
+          },
+        },
+      },
+    });
+    expect(
+      client.index.mock.invocationCallOrder[0] <
+        client.deleteByQuery.mock.invocationCallOrder[0],
+    ).toBe(true);
+  });
+
+  it('removes all of a record, its manifest first, refreshed for the drop to see the chunks', async () => {
+    const { client, text } = opensearch();
+    const all = {
+      bool: {
+        filter: [{ term: { kind: 'file' } }, { term: { record: 'file-1' } }],
+      },
+    };
+
+    await text.removeRecord({ kind: 'file', id: 'file-1' });
+    client.exists.mockResolvedValue({ body: true });
+    await text.removeRecord({ kind: 'file', id: 'file-1' });
+
+    expect(client.delete.mock.calls).toEqual([
+      [{ index, id: 'file__file-1', refresh: 'wait_for' }],
+    ]);
+    expect(client.deleteByQuery.mock.calls).toEqual([
+      [expect.objectContaining({ body: { query: all } })],
+      [expect.objectContaining({ body: { query: all } })],
+    ]);
+    expect(
+      client.delete.mock.invocationCallOrder[0] <
+        client.deleteByQuery.mock.invocationCallOrder[1],
+    ).toBe(true);
+  });
+
+  it("lists the records' manifests as their keys", async () => {
+    const { client, text } = opensearch();
+    const { id, ...fields } = post;
+    client.search.mockResolvedValueOnce({
+      body: {
+        aggregations: {
+          keys: { buckets: [{ key: { ...fields, record: id } }] },
+        },
+      },
+    });
+
+    const keys = [];
+    for await (const listed of text.recordKeys()) keys.push(listed);
+
+    expect(keys).toEqual([post]);
+    expect(client.search.mock.calls[0][0]).toMatchObject({
+      body: {
+        query: {
+          bool: {
+            filter: [
+              { exists: { field: 'chunks' } },
+              { exists: { field: 'kind' } },
+              { exists: { field: 'record' } },
+              { exists: { field: 'fingerprint' } },
+            ],
+          },
+        },
+      },
+    });
+  });
+
   it('removes every version of a text', async () => {
     const { client, text } = opensearch();
 
@@ -362,7 +538,16 @@ describe('OpenSearchTextIndex', () => {
     expect(asked[2]).toMatchObject({
       index,
       body: {
-        query: { exists: { field: 'chunks' } },
+        query: {
+          bool: {
+            filter: [
+              { exists: { field: 'chunks' } },
+              { exists: { field: 'hash' } },
+              { exists: { field: 'processor' } },
+              { exists: { field: 'version' } },
+            ],
+          },
+        },
         aggs: { keys: { composite: { after: key } } },
       },
     });
@@ -426,6 +611,7 @@ describe('OpenSearchTextIndex', () => {
             snippet: { text: 'a semafor', highlights: [[2, 9]] },
           },
         ],
+        records: [],
       },
     ]);
   });

@@ -5,6 +5,7 @@ import { PluginName } from '@app/kernel';
 import { sha256 } from '../../../../test/sha256.js';
 import type { PrismaService } from '../../../platform/database/prisma.service.js';
 import { roleSettings } from '../../../platform/role/role.config.js';
+import type { IndexRecord } from '../../application/index-record.js';
 import type { IndexText } from '../../application/index-text.js';
 import {
   EmbedderUnavailableError,
@@ -16,24 +17,28 @@ import { SearchIndexWorker } from './search-index.worker.js';
 
 // what BullMQ's job does to put itself back
 const moveToWait = vi.fn(async () => 0);
+const key = {
+  hash: sha256('%PDF lecture'),
+  processor: PluginName.parse('office-text'),
+  version: 1,
+};
 const job = {
   id: 'job-1',
-  data: {
-    key: {
-      hash: sha256('%PDF lecture'),
-      processor: PluginName.parse('office-text'),
-      version: 1,
-    },
-  },
+  data: { key },
   moveToWait,
 } as unknown as Job<IndexJob>;
 
+// a text's or a record's
+type Run = (what: unknown, signal: AbortSignal) => Promise<void>;
+
 // a worker whose jobs fail with what `run` throws, the database up or down,
-// in a process of `role`, which runs the workers unless it's an api one
+// in a process of `role`, which runs the workers unless it's an api one; a
+// record's jobs go to `record`
 function worker(
-  run: (key: IndexJob['key'], signal: AbortSignal) => Promise<void>,
+  run: Run,
   database: 'up' | 'down' = 'up',
   role = 'all',
+  record: Run = run,
 ) {
   const health = {
     pingCheck: () => ({
@@ -44,6 +49,7 @@ function worker(
   const settings = roleSettings.parse({ APP_ROLE: role });
   const w = new SearchIndexWorker(
     { run } as unknown as IndexText,
+    { run: record } as unknown as IndexRecord,
     health,
     {} as PrismaService,
     queue as unknown as Queue<IndexJob>,
@@ -56,7 +62,7 @@ function worker(
 }
 
 // a run that goes on until its signal stops it, as an embed does
-const embedding = (_key: IndexJob['key'], signal: AbortSignal) =>
+const embedding = (_what: unknown, signal: AbortSignal) =>
   new Promise<void>((_, reject) =>
     signal.addEventListener('abort', () => reject(signal.reason)),
   );
@@ -100,6 +106,23 @@ describe('SearchIndexWorker', () => {
   it('has no worker to close in an api process, which registers none', async () => {
     const { worker: w } = worker(embedding, 'up', 'api');
     await expect(w.onModuleDestroy()).resolves.toBeUndefined();
+  });
+
+  it("indexes a text's job as a text, a record's as a record", async () => {
+    const text = vi.fn<Run>(async () => {});
+    const record = vi.fn<Run>(async () => {});
+    const { worker: w } = worker(text, 'up', 'all', record);
+    const post = { kind: 'post', id: 'post-1' };
+
+    await w.process(job);
+    await w.process({
+      id: 'job-2',
+      data: { record: post },
+      moveToWait,
+    } as unknown as Job<IndexJob>);
+
+    expect(text.mock.calls).toEqual([[key, expect.any(AbortSignal)]]);
+    expect(record.mock.calls).toEqual([[post, expect.any(AbortSignal)]]);
   });
 
   it('waits out the index being away without spending an attempt', async () => {

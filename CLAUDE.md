@@ -49,10 +49,11 @@ Put off:
 - a read alias for the search index, moved to a new one (another generation or model) once the reconcile has filled it: until then searches answer from the new one, partly filled (README, Search index)
 - a floor for the meaning part of a search (knn's `min_score`, a radial search): it needs a value measured per model; until then, with an embedder, a search answers up to `limit` files even when none has the words (README, Search)
 - OpenSearch's security plugin, with TLS certificates and users of its own (`OPENSEARCH_USERNAME`, `OPENSEARCH_PASSWORD`): needed once anything past the one compose network reaches it, a second host; until then it's off and its port isn't published (README, Deploying search)
-- searches through more than 65,536 contents (`index.max_terms_count`, an admin's the first to get there): contents numbered, so `terms` can take them as a bitmap, or the ones not to find left out (`must_not`) instead; neither tried. The members of archives with a text count among them, and bring it closer
+- searches through more than 65,536 contents (`index.max_terms_count`, an admin's the first to get there): contents numbered, so `terms` can take them as a bitmap, or the ones not to find left out (`must_not`) instead; neither tried. The members of archives with a text count among them, and bring it closer; posts, files and archives are ids of their own, a filter each with its own count
 - OpenSearch 3.10's fusion mode for the hybrid query
 - vectors as `half_float` should memory run short: a new generation
-- searching file names and posts (`Item.raw`), not only the texts
+- a file renamed is found by its new name from the next hourly reconcile on: catalog records no event for a rename or a move (`FILE_CONTENT_CHANGED` is content's), and one for plugins would be another sdk topic
+- a post's text is every string of its `raw` but links and dates: the hub knows no portal's field names, so a portal's ids and enums (`online_upload`, `application/pdf`) are words too. A connector naming the fields that hold its text (the sdk's `ItemRecord`, the proto) would make it exact
 - paging search results: one window of up to 50 contents now
 - a CI job on real TEI servers with small models: the adapters are checked against msw's answers, the e2e specs run on fake models
 - random access for unpackers, a container's size and a ranged `content()` over its blob (yauzl's `RandomAccessReader`): an unpacker gets a stream from the start, as a processor does, so a zip, its directory at its end, is read whole into memory up to the unpacker's limit; when memory calls for it

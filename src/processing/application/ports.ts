@@ -5,9 +5,11 @@ import {
   type PluginName,
 } from '@app/kernel';
 import type { TextChunk } from '../domain/chunks.js';
+import type { Post } from '../domain/post-text.js';
+import type { RecordChunk, RecordKey, RecordRef } from '../domain/records.js';
 import type { RepresentationKey } from '../domain/representation.js';
 import type { PluginJob } from './plugin-job.js';
-import type { TextHit } from './queries.js';
+import type { SearchScope, TextHit } from './queries.js';
 
 // what processors are matched by
 export interface FileFact {
@@ -24,7 +26,17 @@ export abstract class FileFacts {
   // the files that hold this content and aren't removed
   abstract holding(hash: ContentHash): Promise<FileFact[]>;
   // every file that has content and isn't removed
-  abstract withContent(): AsyncIterable<FileFact & { hash: ContentHash }>;
+  abstract withContent(): AsyncIterable<
+    FileFact & { id: string; hash: ContentHash }
+  >;
+}
+
+// catalog's posts, as the search index needs them
+export abstract class PostFacts {
+  // null once it's removed
+  abstract post(id: string): Promise<Post | null>;
+  // every post that isn't removed
+  abstract posts(): AsyncIterable<Post & { id: string }>;
 }
 
 export abstract class PluginJobQueue {
@@ -38,17 +50,17 @@ export abstract class PluginJobQueue {
   abstract requeue(job: PluginJob): Promise<void>;
 }
 
-// words to look for (NFC, as the chunks are), among these contents only
+// words to look for (NFC, as the chunks are), among these only
 export interface TextQuery {
   text: string;
   // the words' meaning, by the embedder that made the chunks' vectors;
   // without it, by the words alone
   vector?: number[];
-  hashes: readonly ContentHash[];
+  among: SearchScope;
   // whose texts are looked through: the processors on. One turned off keeps
   // its texts indexed, found again once it's back on
   processors: readonly PluginName[];
-  // contents, at most
+  // hits, at most
   size: number;
 }
 
@@ -57,7 +69,13 @@ export interface IndexedChunk extends TextChunk {
   vector?: number[];
 }
 
-// The processors' texts in the search index. Made of postgres alone, so
+// a post's chunks have theirs too
+export interface IndexedRecordChunk extends RecordChunk {
+  vector?: number[];
+}
+
+// The processors' texts in the search index, and the records (posts, files'
+// names, trees' paths: domain/records.ts). Made of postgres alone, so
 // ReconcileIndex can build it again from nothing.
 export abstract class TextIndex {
   // creates the index if it's missing; asks the server every time
@@ -75,17 +93,33 @@ export abstract class TextIndex {
   }): Promise<void>;
   // the representations indexed in full (those with a manifest)
   abstract keys(): AsyncIterable<RepresentationKey>;
-  // the contents whose texts match, best first, as SearchTextsQuery answers
+  // as put() does: the chunks, the manifest, then the record's chunks of
+  // another fingerprint
+  abstract putRecord(
+    key: RecordKey,
+    chunks: readonly IndexedRecordChunk[],
+  ): Promise<void>;
+  abstract removeRecord(ref: RecordRef): Promise<void>;
+  // the records indexed in full
+  abstract recordKeys(): AsyncIterable<RecordKey>;
+  // the contents whose texts, names or posts match, best first, as
+  // SearchTextsQuery answers
   abstract search(query: TextQuery): Promise<TextHit[]>;
 }
 
-// a job per key, which indexes the newest version of its (hash, processor)
+// A job per key, which indexes the newest version of its (hash, processor),
+// or per record, which indexes it as it is then
 export abstract class TextIndexQueue {
   // dropped while the same key waits or runs, and after that for as long as
   // the queue keeps its job
   abstract enqueue(key: RepresentationKey): Promise<void>;
   // dropped only while the same key waits or runs
   abstract requeue(key: RepresentationKey): Promise<void>;
+  // for what changed it (an outbox message, a tree's key): dropped as
+  // enqueue() drops, so a change while its record's job runs is one more
+  abstract enqueueRecord(ref: RecordRef, change: string): Promise<void>;
+  // dropped only while the same record waits or runs
+  abstract requeueRecord(ref: RecordRef): Promise<void>;
 }
 
 // the index can't be reached now: worth waiting out, not the job's fault

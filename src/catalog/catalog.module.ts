@@ -41,8 +41,11 @@ import {
   ListVisibleContentHandler,
 } from './infrastructure/read/files.read.js';
 import {
+  GetCourseItemHandler,
   GetItemHandler,
   ListCourseItemsHandler,
+  ListItemsHandler,
+  ListVisibleItemsHandler,
 } from './infrastructure/read/items.read.js';
 
 // What portals publish (written by ingest) and the courses admins make of
@@ -70,7 +73,10 @@ import {
     FindCourseHandler,
     GetPortalCourseHandler,
     ListCourseItemsHandler,
+    GetCourseItemHandler,
+    ListVisibleItemsHandler,
     GetItemHandler,
+    ListItemsHandler,
     ListCourseFilesHandler,
     GetCourseFileHandler,
     ListVisibleContentHandler,

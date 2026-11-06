@@ -7,12 +7,15 @@ import type {
 } from '@app/kernel';
 import type {
   CourseDto,
+  CourseRef,
   FileDto,
   ItemDto,
   VisibleContentDto,
+  VisibleItemDto,
 } from '../../catalog/contracts.js';
 import type {
   ContainedMember,
+  RecordMatch,
   Snippet,
   TextHit,
   TextInfo,
@@ -68,8 +71,10 @@ export interface SearchPageView {
   snippet: Snippet;
 }
 
-// a file whose text matched, or a member of it, its best pages first
-export interface SearchResultView {
+// A file whose text or name matched, or a member of an archive the file is
+// by its text or its path, its best pages first
+export interface FileResultView {
+  type: 'file' | 'member';
   fileId: string;
   name: string;
   path: string;
@@ -78,10 +83,28 @@ export interface SearchResultView {
   // the course's slug
   course: string;
   pages: SearchPageView[];
+  // the file's name, or the member's path, where the words matched; null
+  // when only the text did
+  matchedName: Snippet | null;
   // the other files the user reads that hold the same content, themselves:
   // not those that hold it as a member
   sameContentIn: string[];
 }
+
+// a post whose text matched, by its best fragment
+export interface PostResultView {
+  type: 'post';
+  itemId: string;
+  kind: string;
+  title: string | null;
+  url: string | null;
+  publishedAt: Date | null;
+  // the course's slug
+  course: string;
+  snippet: Snippet;
+}
+
+export type SearchResultView = FileResultView | PostResultView;
 
 export interface SearchView {
   results: SearchResultView[];
@@ -159,24 +182,84 @@ export function placesOf(
   );
 }
 
-// what search found of a content, as the first of its places, the other
-// files holding it themselves named with it
-export const searchResultView = (
-  { pages }: TextHit,
-  [{ fileId, name, path, member, courseId }, ...others]: Place[],
-  slugs: ReadonlyMap<string, string>,
-): SearchResultView => ({
-  fileId,
-  name,
-  path,
-  member,
-  course: slugs.get(courseId)!,
-  pages: pages.map(({ page, processor, snippet }) => ({
-    page,
-    processor,
-    snippet,
-  })),
-  sameContentIn: others
-    .filter(({ member }) => member === null)
-    .map(({ fileId }) => fileId),
-});
+// What a user may find: the contents' places (placesOf), the files and the
+// posts the courses they read show, and those courses
+export interface Findable {
+  places: ReadonlyMap<ContentHash, Place[]>;
+  files: readonly VisibleContentDto[];
+  posts: readonly VisibleItemDto[];
+  courses: readonly CourseRef[];
+}
+
+// What search found, in its order: of a content, the file or member whose
+// name matched (one holding it still, in a course the user reads), else the
+// first of its places by its text, with its pages and the other files
+// holding it themselves; then the posts it's the text of, each once
+export function searchResults(
+  hits: readonly TextHit[],
+  { places, files, posts, courses }: Findable,
+): SearchResultView[] {
+  const slugs = new Map(courses.map(({ id, slug }) => [id, slug]));
+  const holding = Map.groupBy<string, VisibleContentDto>(
+    files,
+    ({ hash }) => hash,
+  );
+  const postsById = new Map(posts.map((post) => [post.itemId, post]));
+  const seen = new Set<string>();
+  // the place a name names: the file, if it holds the content found, or the
+  // member at that path in the first file holding the archive
+  const named = (
+    hash: ContentHash,
+    { kind, record, member }: RecordMatch,
+  ): Place | undefined => {
+    if (kind === 'file')
+      return places
+        .get(hash)
+        ?.find((place) => place.fileId === record && place.member === null);
+    const archive = kind === 'tree' ? holding.get(record)?.[0] : undefined;
+    return archive && { ...archive, hash, member };
+  };
+  return hits.flatMap(({ hash, pages, records }) => {
+    const name = records
+      .map((match) => ({ match, place: named(hash, match) }))
+      .find(({ place }) => place);
+    const place = name?.place ?? (pages.length ? places.get(hash)?.[0] : null);
+    const found: SearchResultView[] = place
+      ? [
+          {
+            type: place.member === null ? 'file' : 'member',
+            fileId: place.fileId,
+            name: place.name,
+            path: place.path,
+            member: place.member,
+            course: slugs.get(place.courseId)!,
+            pages: pages.map(({ page, processor, snippet }) => ({
+              page,
+              processor,
+              snippet,
+            })),
+            matchedName: name?.match.snippet ?? null,
+            sameContentIn: (places.get(hash) ?? [])
+              .filter(
+                ({ fileId, member }) =>
+                  member === null && fileId !== place.fileId,
+              )
+              .map(({ fileId }) => fileId),
+          },
+        ]
+      : [];
+    for (const { kind, record, snippet } of records) {
+      const post = postsById.get(record);
+      if (kind !== 'post' || !post || seen.has(record)) continue;
+      seen.add(record);
+      const { courseId, ...view } = post;
+      found.push({
+        type: 'post',
+        ...view,
+        course: slugs.get(courseId)!,
+        snippet,
+      });
+    }
+    return found;
+  });
+}

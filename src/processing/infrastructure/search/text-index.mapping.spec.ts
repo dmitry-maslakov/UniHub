@@ -14,7 +14,8 @@ const bgeM3 = { model: 'bge-m3-5617a9f6', dimensions: 1024 };
 
 describe('text index mapping', () => {
   // indices of a generation hold documents analysed by its body and cut by
-  // its chunker: a change to either, seen here, comes with a new GENERATION
+  // its chunker: a change to either, seen here, comes with a new GENERATION,
+  // but for a field added, which the index there is given (create())
   it('changes with its generation only', () => {
     expect({
       GENERATION,
@@ -44,7 +45,12 @@ describe('text index mapping', () => {
     const { queries } = hybridBody({
       text: 'semafor',
       vector: [1],
-      hashes: [sha256('lecture')],
+      among: {
+        contents: [sha256('lecture')],
+        posts: [],
+        files: [],
+        archives: [],
+      },
       processors: [PluginName.parse('office-text')],
       size: 10,
     }).query.hybrid;

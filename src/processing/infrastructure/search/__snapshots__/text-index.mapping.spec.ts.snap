@@ -17,13 +17,25 @@ exports[`text index mapping > changes with its generation only 1`] = `
         "chunks": {
           "type": "integer",
         },
+        "fingerprint": {
+          "type": "keyword",
+        },
         "hash": {
+          "type": "keyword",
+        },
+        "kind": {
+          "type": "keyword",
+        },
+        "member": {
           "type": "keyword",
         },
         "page": {
           "type": "integer",
         },
         "processor": {
+          "type": "keyword",
+        },
+        "record": {
           "type": "keyword",
         },
         "text": {
@@ -220,13 +232,25 @@ exports[`text index mapping > changes with its generation only, with vectors too
         "chunks": {
           "type": "integer",
         },
+        "fingerprint": {
+          "type": "keyword",
+        },
         "hash": {
+          "type": "keyword",
+        },
+        "kind": {
+          "type": "keyword",
+        },
+        "member": {
           "type": "keyword",
         },
         "page": {
           "type": "integer",
         },
         "processor": {
+          "type": "keyword",
+        },
+        "record": {
           "type": "keyword",
         },
         "text": {

@@ -38,7 +38,8 @@ export class CatalogFileFacts extends FileFacts {
         new ListFilesWithContentQuery(after, PAGE),
       );
       for (const file of files)
-        if (file.contentHash) yield { ...factOf(file), hash: file.contentHash };
+        if (file.contentHash)
+          yield { ...factOf(file), id: file.id, hash: file.contentHash };
       if (files.length < PAGE) return;
       after = files[files.length - 1].id;
     }

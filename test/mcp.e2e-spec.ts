@@ -174,6 +174,7 @@ describe('MCP', { timeout: 20_000 }, () => {
       'list_items',
       'list_members',
       'read_file',
+      'read_item',
       // search is on in the tests (search-off.e2e-spec.ts has it off)
       'search',
     ]);
@@ -188,12 +189,16 @@ describe('MCP', { timeout: 20_000 }, () => {
     ]);
 
     const items = await call('list_items', { course: 'alg' });
-    expect(JSON.parse(items.content[0].text)).toEqual([
+    const listed = JSON.parse(items.content[0].text);
+    expect(listed).toEqual([
       expect.objectContaining({
         title: 'Exam on Friday',
         raw: { body: 'Bring a pen' },
       }),
     ]);
+    // as search answers it
+    const item = await call('read_item', { item: listed[0].id });
+    expect(JSON.parse(item.content[0].text)).toEqual(listed[0]);
 
     const files = await call('list_files', { course: 'alg' });
     expect(JSON.parse(files.content[0].text)).toEqual([
@@ -248,6 +253,7 @@ describe('MCP', { timeout: 20_000 }, () => {
       ['list_items', { course: 'alg', limit: 500 }],
       ['list_files', { course: 'Not A Slug' }],
       ['list_members', { file: fileId, limit: 500 }],
+      ['read_item', { item: 'not-an-id' }],
       // past what postgres takes
       ['read_file', { file: fileId, page: 1e12 }],
     ] as const) {

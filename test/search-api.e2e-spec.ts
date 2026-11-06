@@ -28,23 +28,26 @@ import { FakePluginsModule } from './fake-plugins.js';
 import { portalIngest } from './ingest.js';
 
 // Search as users get it, GET /api/search and the MCP tool search, on
-// OpenSearch. Which courses and files CourseSearch looks through is checked
-// on fakes (course-search.spec.ts), what the index answers on its own
-// (search.e2e-spec.ts). Here, what only the whole app shows: a file of a
-// course the user doesn't read never comes back however well it matches,
-// by its words or its meaning (its text the query's, so its vector the
-// query's too), nor a removed one; a file comes once however many of its
-// pages match; the limit is one count for REST and MCP. Each search counts
-// against it, so each case has a user of its own. By meaning, knn always
-// has nearest files, so a search answers up to its limit: the cases check
-// the best ones, and the exact list by the words alone (byWordsNext).
+// OpenSearch. Which courses, files and posts CourseSearch looks through is
+// checked on fakes (course-search.spec.ts), what the index answers on its
+// own (search.e2e-spec.ts). Here, what only the whole app shows: a file or
+// a post of a course the user doesn't read never comes back however well it
+// matches, by its words or its meaning (its text the query's, so its vector
+// the query's too), nor a removed one; a file comes once however many of
+// its pages match, and is found by its name with no text at all; the limit
+// is one count for REST and MCP. Each search counts against it, so each case
+// has a user of its own. By meaning, knn always has nearest files, so a
+// search answers up to its limit: the cases check the best ones, and the
+// exact list by the words alone (byWordsNext).
 
 const PORTAL = 'search-api-test';
 const index = indexName(testEnv.OPENSEARCH_INDEX_PREFIX, testVectors);
 const fakeText = PluginName.parse('fake-text');
 
 interface Result {
-  fileId: string;
+  type: 'file' | 'member' | 'post';
+  fileId?: string;
+  itemId?: string;
   course: string;
   pages: { page: number }[];
   sameContentIn: string[];
@@ -57,13 +60,14 @@ describe('search API', { timeout: 60_000 }, () => {
   let hub: PortalIngest;
   let opensearch: Client;
   const files: Record<string, string> = {};
+  const posts: Record<string, string> = {};
   const courses: Record<string, string> = {};
 
   const search = (cookie: string, query: Record<string, string | number>) =>
     http().get('/api/search').query(query).set('cookie', cookie);
   const found = async (cookie: string, q: string, limit = 10) =>
     (await search(cookie, { q, limit }).expect(200)).body.results as Result[];
-  const ids = (results: Result[]) => results.map((r) => r.fileId);
+  const ids = (results: Result[]) => results.map((r) => r.fileId ?? r.itemId);
   // the next search by the words alone, as while the query embedder is away
   const byWordsNext = () =>
     vi
@@ -107,6 +111,41 @@ describe('search API', { timeout: 60_000 }, () => {
         where: { portal_externalId: { portal: PORTAL, externalId } },
       })
     ).id;
+  };
+  // a record there once its manifest is, and searchable
+  const indexed = (id: string) =>
+    vi.waitFor(
+      async () =>
+        expect(
+          (await opensearch.exists({ index, id, realtime: false })).body,
+        ).toBe(true),
+      { timeout: 20_000, interval: 200 },
+    );
+  const announce = async (externalId: string, course: string, html: string) => {
+    await hub.item({
+      externalId,
+      course,
+      kind: 'announcement',
+      title: 'Obaveštenje',
+      raw: { message: html },
+    });
+    posts[externalId] = (
+      await app.get(PrismaService).item.findUniqueOrThrow({
+        where: { portal_externalId: { portal: PORTAL, externalId } },
+      })
+    ).id;
+    await indexed(`post__${posts[externalId]}`);
+  };
+  // a file no processor takes, its name all there is to find
+  const picture = async (externalId: string, course: string, name: string) => {
+    await hub.file({ externalId, course, name });
+    await hub.content(externalId, Readable.from(['\x89PNG']));
+    files[externalId] = (
+      await app.get(PrismaService).file.findUniqueOrThrow({
+        where: { portal_externalId: { portal: PORTAL, externalId } },
+      })
+    ).id;
+    await indexed(`file__${files[externalId]}`);
   };
   // a user who reads these courses, signed in
   const reader = async (name: string, ...slugs: string[]) => {
@@ -161,6 +200,17 @@ describe('search API', { timeout: 60_000 }, () => {
     await upload('book', 'ours', book.join('\f'));
     for (const n of [1, 2, 3])
       await upload(`sheet-${n}`, 'ours', `protokol, list ${n}`);
+    await announce(
+      'ours-post',
+      'ours',
+      '<p>Kolokvijum iz <b>niti</b> je u petak.</p>',
+    );
+    await announce(
+      'their-post',
+      'theirs',
+      '<p>Kolokvijum iz niti je u petak, sala 2.</p>',
+    );
+    await picture('diagram', 'ours', 'dijagram-stanja.png');
     // each file waits for its job, maybe behind the texts other specs left
     // (the reconcile at start queues them): past a hook's 10 s on ci
   }, 60_000);
@@ -193,6 +243,55 @@ describe('search API', { timeout: 60_000 }, () => {
     expect(granted.find((r) => r.fileId === files.os)).toMatchObject({
       sameContentIn: [files['shared-os']],
     });
+  });
+
+  it('finds a post of a course the user reads by its text, none of another, through the route and the tool alike', async () => {
+    const student = await reader('posts', 'ours');
+    const key = await keyOf(student);
+
+    const results = await found(student, 'kolokvijum iz niti');
+
+    expect(results[0]).toEqual({
+      type: 'post',
+      itemId: posts['ours-post'],
+      kind: 'announcement',
+      title: 'Obaveštenje',
+      url: null,
+      publishedAt: null,
+      course: 'ours',
+      snippet: expect.objectContaining({
+        text: 'Obaveštenje\n\nKolokvijum iz niti je u petak.',
+      }),
+    });
+    expect(ids(results)).not.toContain(posts['their-post']);
+    const mcp = await tool(key, { q: 'kolokvijum iz niti' });
+    expect(JSON.parse(mcp.content[0].text)).toEqual({ results });
+    byWordsNext();
+    expect(ids(await found(student, 'kolokvijum iz niti'))).toEqual([
+      posts['ours-post'],
+    ]);
+  });
+
+  it('finds a file with no text by its name, and nothing of a removed post from then on', async () => {
+    const student = await reader('names', 'ours');
+
+    byWordsNext();
+    expect(await found(student, 'dijagram')).toEqual([
+      expect.objectContaining({
+        type: 'file',
+        fileId: files.diagram,
+        pages: [],
+        matchedName: {
+          text: 'dijagram-stanja.png',
+          highlights: [[0, 8]],
+        },
+      }),
+    ]);
+
+    await hub.removeItem('ours-post');
+
+    byWordsNext();
+    expect(await found(student, 'kolokvijum')).toEqual([]);
   });
 
   it('finds nothing of a removed file from then on', async () => {
