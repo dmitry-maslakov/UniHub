@@ -35,7 +35,7 @@ export const seenByShared = { some: { ...sharedSight, hiddenFrom: null } };
 // A version some account sees now: one none sees is removed. A pass hides
 // what a user's account no longer sees from a slot to come, so it's seen
 // till then.
-const unhidden = (now: Date) => ({
+export const unhidden = (now: Date) => ({
   OR: [{ hiddenFrom: null }, { hiddenFrom: { gt: now } }],
 });
 export const seen = (now = new Date()) => ({ some: unhidden(now) });

@@ -154,6 +154,13 @@ describe('views of accounts of their own', { timeout: 60_000 }, () => {
         ).toBe(true),
       { timeout: 20_000, interval: 200 },
     );
+  // a record's manifest gone from the index, as a get sees it: at once
+  const unindexed = (id: string) =>
+    vi.waitFor(
+      async () =>
+        expect((await opensearch.exists({ index, id })).body).toBe(false),
+      { timeout: 20_000, interval: 200 },
+    );
 
   // what a run of the account sends, shown as `at` says
   const ingestOf = (
@@ -339,6 +346,10 @@ describe('views of accounts of their own', { timeout: 60_000 }, () => {
         .delete(`/api/me/portals/${LMS}/token`)
         .set('cookie', as[who])
         .expect(204);
+    // and what they saw out of the index, by this app, so no spec after it
+    // starts behind its removals
+    for (const id of ['news', 'section', 'soon', 'going'])
+      await unindexed(`post__${version[id]}`);
     await app.close();
     vi.unstubAllEnvs();
   });
@@ -684,5 +695,11 @@ describe('views of accounts of their own', { timeout: 60_000 }, () => {
     expect(
       await prisma.itemSight.count({ where: { versionId: version.news } }),
     ).toBe(1);
+    // what bo alone saw is removed, and leaves the index; what ana sees too
+    // stays there
+    await unindexed(`post__${version.sealed}`);
+    expect(
+      (await opensearch.exists({ index, id: `post__${version.news}` })).body,
+    ).toBe(true);
   });
 });

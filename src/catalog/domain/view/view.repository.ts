@@ -62,7 +62,8 @@ export abstract class ViewRepository {
     change: ViewChange,
     at: Shown,
   ): Promise<void>;
-  // an account gone: its sights, so nothing of what it saw stays
+  // an account gone: its sights, so nothing of what it saw stays; what no
+  // other account sees then is removed (its event to the outbox)
   abstract forget(account: string): Promise<void>;
   // the bytes of a file at a size and date as the portal gave them, for
   // every user's account's version of it there that has none yet; whether

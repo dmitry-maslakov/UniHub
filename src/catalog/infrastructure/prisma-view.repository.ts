@@ -12,7 +12,9 @@ import { jsonInput } from '../../platform/database/json-input.js';
 import type { PrismaTxHost } from '../../platform/database/prisma.service.js';
 import {
   FILE_CONTENT_CHANGED,
+  FILE_REMOVED,
   ITEM_CHANGED,
+  ITEM_REMOVED,
   type CatalogEvent,
 } from '../domain/events.js';
 import type { Shown } from '../domain/publication.js';
@@ -23,7 +25,7 @@ import {
   type Stamp,
   type VersionData,
 } from '../domain/view/view.repository.js';
-import { stampOf } from './rows.js';
+import { stampOf, unhidden } from './rows.js';
 
 // the column a kind's versions name their record by
 const RECORD = {
@@ -220,11 +222,38 @@ export class PrismaViewRepository extends ViewRepository {
       });
   }
 
+  // The account's sights go; what no other account sees now is removed
+  // with them (item.removed, file.removed), so the index and plugins let go
+  // of it at once rather than at the next reconcile
   @Transactional()
   async forget(account: string) {
     const { tx } = this.txHost;
+    const alone = {
+      sights: {
+        some: { account },
+        none: { account: { not: account }, ...unhidden(new Date()) },
+      },
+    };
+    const items = await tx.itemVersion.findMany({
+      where: alone,
+      select: { id: true, item: { select: { portal: true } } },
+    });
+    const files = await tx.fileVersion.findMany({
+      where: alone,
+      select: { id: true, file: { select: { portal: true } } },
+    });
     for (const sights of [tx.courseSight, tx.itemSight, tx.fileSight])
       await (sights as typeof tx.itemSight).deleteMany({ where: { account } });
+    await this.events([
+      ...items.map(({ id, item }): CatalogEvent => ({
+        topic: ITEM_REMOVED,
+        payload: { portal: item.portal as PortalId, itemId: id },
+      })),
+      ...files.map(({ id, file }): CatalogEvent => ({
+        topic: FILE_REMOVED,
+        payload: { portal: file.portal as PortalId, fileId: id },
+      })),
+    ]);
   }
 
   @Transactional(Propagation.Mandatory)
