@@ -240,7 +240,7 @@ describe('OAuth for MCP clients', { timeout: 20_000 }, () => {
     await ban('ana@oauth.test', false);
   });
 
-  it("ends an app's refresh tokens with a new password", async () => {
+  it("ends an app's refresh tokens and consent with a new password", async () => {
     const { refresh_token, cookie } = await connect('ana@oauth.test');
     await post(
       '/change-password',
@@ -262,6 +262,38 @@ describe('OAuth for MCP clients', { timeout: 20_000 }, () => {
       { currentPassword: 'battery staple 2', newPassword: password },
       await signIn('ana@oauth.test', 'battery staple 2'),
     ).expect(200);
+    // let in again, the user asked again
+    expect((await connect('ana@oauth.test')).asked).toBe(true);
+  });
+
+  it('makes no client through the API, nor by dynamic registration', async () => {
+    const cookie = await signIn('ana@oauth.test', password);
+    const client = { redirect_uris: [REDIRECT_URI], client_name: 'Mine' };
+    await post('/oauth2/create-client', client, cookie).expect(401);
+    await post('/oauth2/register', client, cookie).expect(403);
+    expect(
+      await app.get(PrismaService).oauthClient.count({
+        where: { name: 'Mine' },
+      }),
+    ).toBe(0);
+  });
+
+  it('takes an access token on MCP alone, and no session there', async () => {
+    const { access_token } = await connect('ana@oauth.test');
+    await http()
+      .get('/api/courses')
+      .set('authorization', `Bearer ${access_token}`)
+      .expect(401);
+    const signedIn = await post('/sign-in/email', {
+      email: 'ana@oauth.test',
+      password,
+    }).expect(200);
+    const session = signedIn.headers['set-auth-token'] as string;
+    await http()
+      .get('/api/courses')
+      .set('authorization', `Bearer ${session}`)
+      .expect(200);
+    await rpc({ authorization: `Bearer ${session}` }).expect(401);
   });
 
   it("turns away another site's page", async () => {

@@ -53,7 +53,7 @@ npm run test:e2e
 - Google, when `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set
 - sign-in by QR code: a new screen asks for a code (device authorization), a phone signed in within the last day approves it
 - session tokens as `Authorization: Bearer`, and API keys for MCP clients: only a session signed in within the last day makes one, they expire after 90 days, and a new password (a reset, a change, or one an admin sets) deletes them
-- an OAuth 2.1 authorization server for MCP clients (MCP, below): its issuer is `/api/auth`, its discovery documents at `/.well-known/oauth-authorization-server/api/auth` and `/.well-known/oauth-protected-resource/api/mcp`. A user signs in on the web app's `/sign-in` and lets an app in on its `/consent`, which takes a session signed in within the last day; a new password deletes the apps' refresh tokens too
+- an OAuth 2.1 authorization server for MCP clients (MCP, below): its issuer is `/api/auth`, its discovery documents at `/.well-known/oauth-authorization-server/api/auth` and `/.well-known/oauth-protected-resource/api/mcp`. A user signs in on the web app's `/sign-in` and lets an app in on its `/consent`, which takes a session signed in within the last day; a new password deletes the apps' refresh tokens and consents too, so each has to be let in again
 
 The first admin: `npm run auth:create-admin -- --email you@example.com --password '…'`. After adding a Better Auth plugin, `npm run auth:generate` updates `prisma/schema/identity.prisma`.
 

@@ -74,15 +74,17 @@ export function createAuth({
       );
 
   // A new password ends what MCP clients got under the old one, API keys
-  // and OAuth refresh tokens (a JWT access token ends within the hour): a
-  // stolen session, or a screen signed in by QR, may have let some in, and
-  // neither needs a session to work. Neither plugin has a call for all of a
-  // user's; both keep them in the database only (no secondaryStorage here),
-  // so this is all of them.
+  // and OAuth refresh tokens (a JWT access token ends within the hour), and
+  // the consents, so an app let in has to be let in again: a stolen session,
+  // or a screen signed in by QR, may have let some in, and none needs a
+  // session to work. Neither plugin has a call for all of a user's; both
+  // keep them in the database only (no secondaryStorage here), so this is
+  // all of them.
   const dropAgentCredentials = (userId: string) =>
     prisma.$transaction([
       prisma.apikey.deleteMany({ where: { referenceId: userId } }),
       prisma.oauthRefreshToken.deleteMany({ where: { userId } }),
+      prisma.oauthConsent.deleteMany({ where: { userId } }),
     ]);
 
   const auth = betterAuth({
@@ -217,6 +219,10 @@ export function createAuth({
         grantTypes: ['authorization_code', 'refresh_token'],
         loginPage: '/sign-in',
         consentPage: '/consent',
+        // no client is made, read or changed through the API, by anyone
+        // signed in (the provider's default): apps come by CIMD alone,
+        // which registers them without this check
+        clientPrivileges: () => false,
         // per address and path: Claude's and ChatGPT's backends refresh all
         // their users' tokens from a few addresses
         rateLimit: { token: { window: 60, max: 300 } },

@@ -62,11 +62,16 @@ export class BetterAuthAccessTokens extends AccessTokens {
 
   // The hub's own keys, from its own server over loopback: through
   // BETTER_AUTH_URL the call would leave and come back in through the
-  // proxy. Kept 5 minutes, fetched again for a key not among them.
+  // proxy. Kept 5 minutes, fetched again for a key not among them. The
+  // library's request check takes a URL only, no fetcher.
   private jwksUrl(baseURL: string) {
-    const { port } = this.http.httpAdapter
+    const address: AddressInfo | string | null = this.http.httpAdapter
       .getHttpServer()
-      .address() as AddressInfo;
-    return `http://127.0.0.1:${port}${new URL(baseURL).pathname}/jwks`;
+      .address();
+    if (!address || typeof address === 'string')
+      throw new Error(
+        'access tokens are checked against the keys the app serves on its TCP port, and it listens on none',
+      );
+    return `http://127.0.0.1:${address.port}${new URL(baseURL).pathname}/jwks`;
   }
 }

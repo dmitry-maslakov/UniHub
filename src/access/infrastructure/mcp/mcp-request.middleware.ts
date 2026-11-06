@@ -22,9 +22,10 @@ export class McpRequestMiddleware implements NestMiddleware {
   use(req: Request, res: Response, next: NextFunction) {
     // The spec's guard against DNS rebinding: a page whose Origin is
     // another site's gets a 403, as the SDK's validateOriginHeader (and
-    // mcp-nest's allowedOrigins) has it. None at all passes: the AI apps'
-    // backends and desktop clients send none. Not the transport's own
-    // option: it's built before the settings are read.
+    // mcp-nest's allowedOrigins) has it, by hostname alone (scheme and port
+    // aside), which is what a rebinding page can't fake. None at all
+    // passes: the AI apps' backends and desktop clients send none. Not the
+    // transport's own option: it's built before the settings are read.
     const origin = validateOriginHeader(
       req.header('origin'),
       this.trusted.hostnames,
