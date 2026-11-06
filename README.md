@@ -212,7 +212,71 @@ What sharing the work still tells, by its timing and load, never who or what:
 - aggregate load: answers are slower while others' runs and searches load the server, which one server can't hide; the search index's word statistics are the whole index's
 - the reranker's busy fallback: a search while another is reranked keeps the index's order (Search index, above), which says someone else is searching
 
-The Canvas connector takes `token`. A token a user pastes has no scopes, so the Canvas client only reads (GET and HEAD), and only from the school's Canvas. Canvas's [OAuth docs](https://canvas.instructure.com/doc/api/file.oauth.html) say an app that several users use must get their tokens by OAuth, and that asking other users to make a token and enter it violates Instructure's API policy: on a Canvas Instructure hosts, keep `token` to `/admins` (in practice, yourself), as the hub doesn't link accounts by OAuth. A Canvas a school hosts itself follows that school's own rules instead: ask its Canvas admins before opening it to anyone.
+The Canvas connector takes `token`; what that means on a hosted or a self-hosted Canvas is in Canvas tokens, below.
+
+### Running a hub with users' own accounts
+
+The reference above says what the code does; this is what an operator decides. Everything here is off until a portal is set to `token`.
+
+#### Link modes
+
+| `PORTAL_LINKS` | Who gets in | Credential |
+|---|---|---|
+| a portal not named, or `canvas=shared` | the one account the operator configures (`CANVAS_TOKEN`); grants decide who reads | the plugin's settings |
+| `canvas=token` | every user may link an account of their own | a token each user pastes in settings |
+| `canvas=token/admins` | only admins may link; everyone else gets a 404 | the same |
+
+- A token is write-only: `PUT` replaces it, `DELETE` unlinks, nothing reads it back (no API answer, log, error, job or MCP tool shows it or a hint of it). Linking needs a session signed in within the last day.
+- Tokens are sealed with AES-256-GCM under `PORTAL_CREDENTIALS_SECRETS="2:<key>,1:<key>"`, versioned keys of 32 random bytes in base64 (`openssl rand -base64 32`), apart from `BETTER_AUTH_SECRET`. The app won't start with a `token` portal and no key. Rotating:
+  1. add a key with a higher version in front; it seals from then on, the older ones still open
+  2. a token sealed under an older version is sealed again under the new one when its user sets it again
+  3. take a version off only when nothing needs it: what it sealed, old backups' copies too, is unreadable after
+- `oauth` (the portal's consent page) and `connector` (a user's own connector) aren't available: `PORTAL_LINKS` refuses them. A mode the portal's connector doesn't support also stops the app from starting.
+
+#### Fetching with several accounts
+
+Each account is polled on a grid of its own and sees only what the portal shows it. What several accounts see alike is one stored version, so the expensive part is done once:
+
+- a file version (the portal's file, its size and date) is downloaded once, by the first account that sees it open and takes the lease; it is then stored and processed once per content, whoever asked
+- a post or course that two accounts see alike is one record; one they see differently is two, each in the views that list it
+- the listings are not shared: they cost about ten requests per course per account per pass, so `VIEW_MINUTES` is what to raise on a small portal
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `VIEW_MINUTES` | 60 | how often each account passes (5 to a day), at an offset its id gives |
+| `PUBLISH_DELAY_MINUTES` | 10 | what a pass finds shows this long after its slot; must be under `VIEW_MINUTES` |
+| `HOLD_MINUTES` | 15 | content (bytes, texts, search hits) opens this long after that |
+| `CONNECTOR_CONCURRENCY` | 4 | passes one worker runs at once (1 to 64); each asks its portal one thing at a time |
+| `CONNECTOR_POLL_TIMEOUT_MINUTES` | 60 | a run longer than this is aborted; also how long a file's fetch lease lasts |
+
+An expired or revoked account isn't polled, and a run the portal refuses the token of marks it revoked until it's linked again.
+
+#### What users can and can't learn of each other
+
+What the hub guarantees:
+
+- a record that isn't yours answers as one that isn't there: the same 404, whether another account sees it or nobody does
+- nothing says another user's account already fetched something: ids are random, no hub timestamps are shown, there are no counts or "already synced" states, and an account's items show on its own schedule whether the hub had them or not
+- the hold: a file's content opens `HOLD_MINUTES` after the user's own view shows it, the same whether the hub had it or fetched it for this account. Without it, content that opens at once would tell the user that someone else had it (a known side channel of sharing stored data)
+- a pass that ends late shows at the next slot, so how long it took tells nothing
+
+What can't be hidden:
+
+- timing under load: when fetching, processing and indexing a file take longer than `HOLD_MINUTES` (a first link of a large course nobody had, an embedding backfill), its texts and search hits come later, which shows it was new to the hub. A longer hold narrows this; none removes it while work is shared
+- load on one server: answers are slower while others' runs and searches run, the search index's word statistics are the whole index's, and with a reranker a search made while another is reranked keeps the index's order. These say that others are active, not who or what
+- the operator: whoever holds the database and the keys can open every token (the hub has to, to use them), and read everything the hub stores. The portal logs each request as the account that made it, and the hub never asks for anything outside that account's own view
+
+#### Canvas tokens
+
+A token a user pastes has no scopes, so the Canvas client only reads (GET and HEAD), and only from the configured Canvas over https.
+
+| | Canvas hosted by Instructure | Self-hosted Canvas |
+|---|---|---|
+| Users pasting their own tokens | Instructure's API policy says an app used by several users must get their tokens by OAuth, and that asking users to make a token and enter it into a third-party app violates it. Keep `canvas=token/admins` (in practice, the operator) | governed by the institution's own rules: ask its Canvas admins before opening it |
+| OAuth | needs a developer key from the institution; the hub doesn't link by OAuth | the same, if the institution allows it |
+
+- an institution may stop students from making tokens or cap how long one lasts: a student's token can expire, and its account then shows `expired`, or `revoked` once Canvas refuses it, until the user links a new one
+- tell the institution what the hub reads and who reads it, whichever Canvas it is
 
 ## External connectors
 
