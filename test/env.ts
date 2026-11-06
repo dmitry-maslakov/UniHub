@@ -32,6 +32,8 @@ export const testEnv = {
   CONNECTOR_TOKENS: 'grpc-test=good-test-token-0001',
   // gRPC starts with the app, as in production, away from a developer's own
   GRPC_URL: '127.0.0.1:50999',
+  // none served, whatever .env says; metrics.e2e-spec.ts gives its apps ports
+  METRICS_PORT: '',
   BETTER_AUTH_SECRET: 'e2e-secret-e2e-secret-e2e-secret-e2e',
   // mails are only logged; tests read them from the mailer
   SMTP_URL: '',

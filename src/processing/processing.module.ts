@@ -7,7 +7,11 @@ import { StorageModule } from '../storage/contracts.js';
 import { DeliverMessage } from './application/deliver-message.js';
 import { Dispatch } from './application/dispatch.js';
 import { Holders } from './application/holders.js';
-import { FileFacts, PluginJobQueue } from './application/ports.js';
+import {
+  FileFacts,
+  PluginJobQueue,
+  SearchMetrics,
+} from './application/ports.js';
 import { ProcessContent } from './application/process-content.js';
 import { Reconcile } from './application/reconcile.js';
 import { SearchTexts } from './application/search-texts.js';
@@ -16,6 +20,7 @@ import { RepresentationRepository } from './domain/representation.js';
 import { UnpackingRepository } from './domain/unpacking.js';
 import { BullmqPluginJobQueue } from './infrastructure/bullmq-plugin-job-queue.js';
 import { CatalogFileFacts } from './infrastructure/catalog-file-facts.js';
+import { OtelSearchMetrics } from './infrastructure/otel-search-metrics.js';
 import { PLUGINS_QUEUE } from './infrastructure/plugins.queue.js';
 import { PluginsWorker } from './infrastructure/plugins.worker.js';
 import { PrismaRepresentationRepository } from './infrastructure/prisma-representation.repository.js';
@@ -79,6 +84,7 @@ const DAY = 24 * 60 * 60;
     { provide: UnpackingRepository, useClass: PrismaUnpackingRepository },
     { provide: FileFacts, useClass: CatalogFileFacts },
     { provide: PluginJobQueue, useClass: BullmqPluginJobQueue },
+    { provide: SearchMetrics, useClass: OtelSearchMetrics },
   ],
   // for PluginsOutboxTransport: the outbox makes it, with this module's
   // exports (AppModule wires it into messaging)

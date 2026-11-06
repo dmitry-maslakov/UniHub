@@ -1,8 +1,10 @@
-import type { OnModuleDestroy } from '@nestjs/common';
-import { InjectQueue, Processor } from '@nestjs/bullmq';
+import { Inject, type OnModuleDestroy } from '@nestjs/common';
+import { InjectQueue, OnWorkerEvent, Processor } from '@nestjs/bullmq';
 import { PrismaHealthIndicator } from '@nestjs/terminus';
+import type { Counter, Meter } from '@opentelemetry/api';
 import type { Job, Queue } from 'bullmq';
 import { PrismaService } from '../../platform/database/prisma.service.js';
+import { METER } from '../../platform/metrics/metrics.module.js';
 import { DeliverMessage } from '../application/deliver-message.js';
 import { pluginOf, type PluginJob } from '../application/plugin-job.js';
 import { ProcessContent } from '../application/process-content.js';
@@ -16,6 +18,9 @@ export class PluginsWorker
   extends PausingWorker<PluginJob>
   implements OnModuleDestroy
 {
+  private readonly jobs: Counter;
+  private readonly deadLetters: Counter;
+
   constructor(
     private readonly deliver: DeliverMessage,
     private readonly processContent: ProcessContent,
@@ -23,8 +28,17 @@ export class PluginsWorker
     health: PrismaHealthIndicator,
     prisma: PrismaService,
     @InjectQueue(PLUGINS_QUEUE) queue: Queue<PluginJob>,
+    @Inject(METER) meter: Meter,
   ) {
     super(health, prisma, queue);
+    this.jobs = meter.createCounter('unihub.plugin.jobs', {
+      description:
+        "plugins' jobs by processor, unpacker or aggregator: completed, or failed (tried again while attempts are left)",
+    });
+    this.deadLetters = meter.createCounter('unihub.plugin.dead_letters', {
+      description:
+        "plugins' jobs given up for good: out of attempts, or stalled too often",
+    });
   }
 
   // an unpacking takes up to minutes: it stops at shutdown, before the
@@ -47,5 +61,20 @@ export class PluginsWorker
 
   protected nameOf(job: Job<PluginJob>) {
     return pluginOf(job.data);
+  }
+
+  // a job paused for an outage or put back at shutdown is neither
+  @OnWorkerEvent('completed')
+  countCompleted(job: Job<PluginJob>) {
+    this.jobs.add(1, { plugin: pluginOf(job.data), outcome: 'completed' });
+  }
+
+  // given up for good as PausingWorker logs it, by finishedOn
+  @OnWorkerEvent('failed')
+  countFailed(job: Job<PluginJob> | undefined) {
+    if (!job) return;
+    const plugin = pluginOf(job.data);
+    this.jobs.add(1, { plugin, outcome: 'failed' });
+    if (job.finishedOn) this.deadLetters.add(1, { plugin });
   }
 }

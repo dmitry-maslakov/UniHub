@@ -2,6 +2,7 @@ import { Logger } from '@nestjs/common';
 import type { PrismaHealthIndicator } from '@nestjs/terminus';
 import { RateLimitError, WaitingError, type Job, type Queue } from 'bullmq';
 import { PluginName } from '@app/kernel';
+import { testMeter } from '../../../test/metrics.js';
 import { sha256 } from '../../../test/sha256.js';
 import type { PrismaService } from '../../platform/database/prisma.service.js';
 import type { DeliverMessage } from '../application/deliver-message.js';
@@ -36,6 +37,7 @@ function worker(database: 'up' | 'down', unpackContent = {} as UnpackContent) {
     }),
   } as unknown as PrismaHealthIndicator;
   const queue = { rateLimit: vi.fn(async () => {}) };
+  const metrics = testMeter();
   return {
     worker: new PluginsWorker(
       {} as DeliverMessage,
@@ -44,8 +46,10 @@ function worker(database: 'up' | 'down', unpackContent = {} as UnpackContent) {
       health,
       {} as PrismaService,
       queue as unknown as Queue<PluginJob>,
+      metrics.meter,
     ),
     queue,
+    metrics,
   };
 }
 
@@ -104,5 +108,22 @@ describe('PluginsWorker', () => {
 
     expect(error).toHaveBeenCalledTimes(1);
     expect(error).toHaveBeenCalledWith('pdf gave up on job job-1', stall.stack);
+  });
+
+  it('counts jobs by plugin as they come out, and those given up for good apart', async () => {
+    const { worker: w, metrics } = worker('up');
+
+    w.countCompleted(job());
+    w.countCompleted(job());
+    // retried, then out of attempts
+    w.countFailed(job({ attemptsMade: 1 }));
+    w.countFailed(job({ attemptsMade: 5, finishedOn: 1 }));
+    w.countFailed(undefined);
+
+    expect(await metrics.read()).toEqual({
+      'unihub.plugin.jobs{plugin=pdf,outcome=completed}': 2,
+      'unihub.plugin.jobs{plugin=pdf,outcome=failed}': 2,
+      'unihub.plugin.dead_letters{plugin=pdf}': 1,
+    });
   });
 });

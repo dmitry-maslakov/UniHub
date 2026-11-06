@@ -6,6 +6,7 @@ import type { Job } from 'bullmq';
 import { Connection } from '../../ingest/contracts.js';
 import { roleConfig } from '../../platform/role/role.config.js';
 import { ConnectionDirectory } from '../application/connection-directory.js';
+import { ConnectorRuns } from '../application/connector-runs.js';
 import { ConnectorSchedules } from '../application/connector-schedules.js';
 import { PluginCatalog } from '../application/plugin-catalog.js';
 import { pluginsConfig } from '../plugins.config.js';
@@ -18,7 +19,7 @@ import {
 
 // A poll gets the job's abort signal (BullMQ hands it to a processor that
 // takes three arguments), aborted past CONNECTOR_POLL_TIMEOUT_MINUTES and at
-// shutdown too.
+// shutdown too. A poll job answers whether it polled.
 @Processor(CONNECTORS_QUEUE, { concurrency: 4 })
 export class ConnectorsWorker extends WorkerHost implements OnModuleDestroy {
   private readonly logger = new Logger(ConnectorsWorker.name);
@@ -32,6 +33,7 @@ export class ConnectorsWorker extends WorkerHost implements OnModuleDestroy {
     private readonly config: ConfigType<typeof pluginsConfig>,
     @Inject(roleConfig.KEY)
     private readonly role: ConfigType<typeof roleConfig>,
+    private readonly runs: ConnectorRuns,
   ) {
     super();
   }
@@ -42,7 +44,7 @@ export class ConnectorsWorker extends WorkerHost implements OnModuleDestroy {
 
     const connector = this.catalog.pollConnector(connection.portal);
     // turned off since the job was queued
-    if (!connector) return;
+    if (!connector) return false;
     const run = AbortSignal.any([
       AbortSignal.timeout(this.config.pollTimeoutMs),
       this.shutdown.signal,
@@ -55,6 +57,7 @@ export class ConnectorsWorker extends WorkerHost implements OnModuleDestroy {
     if (!run.aborted)
       await Promise.race([connector.instance.poll(ctx), aborted(run, job)]);
     if (run.aborted) throw new Error(`poll stopped: ${String(run.reason)}`);
+    return true;
   }
 
   // another instance may run the job now: this run stops rather than going
@@ -74,9 +77,19 @@ export class ConnectorsWorker extends WorkerHost implements OnModuleDestroy {
     if (this.role.worker) await this.worker.close();
   }
 
+  // a poll that ran, not one whose connector was turned off meanwhile
+  @OnWorkerEvent('completed')
+  completed(job: Job<ConnectorJob>, polled: unknown) {
+    if (job.name === POLL && polled === true)
+      this.runs.ended(job.data.portal, 'succeeded');
+  }
+
+  // one stopped at shutdown isn't counted
   @OnWorkerEvent('failed')
   failed(job: Job<ConnectorJob> | undefined, error: Error) {
-    if (job?.name === POLL)
-      this.logger.error(`${job.data.portal} poll failed`, error.stack);
+    if (job?.name !== POLL) return;
+    this.logger.error(`${job.data.portal} poll failed`, error.stack);
+    if (!this.shutdown.signal.aborted)
+      this.runs.ended(job.data.portal, 'failed');
   }
 }

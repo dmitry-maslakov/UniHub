@@ -1,3 +1,4 @@
+import { setTimeout } from 'node:timers/promises';
 import { Logger } from '@nestjs/common';
 import { PluginName, type ContentHash } from '@app/kernel';
 import { catalogOf, processor } from '../../../test/discovered-plugins.js';
@@ -11,7 +12,10 @@ import {
   type QueryEmbedder,
   type Reranker,
 } from './ports.js';
-import { InMemoryTextIndex } from './processing.fakes.js';
+import {
+  InMemoryTextIndex,
+  RecordedSearchMetrics,
+} from './processing.fakes.js';
 import { SearchTextsQuery, type TextHit } from './queries.js';
 import { SearchTexts } from './search-texts.js';
 
@@ -58,9 +62,11 @@ function searching(
 ) {
   const index = new InMemoryTextIndex();
   index.hits = hits;
+  const metrics = new RecordedSearchMetrics();
   return {
     index,
-    search: new SearchTexts(plugins, index, embedder, reranker),
+    metrics,
+    search: new SearchTexts(plugins, metrics, index, embedder, reranker),
   };
 }
 
@@ -82,7 +88,11 @@ describe('SearchTexts', () => {
   it('answers none with no processor on, without asking the index', async () => {
     const index = new InMemoryTextIndex();
     index.hits = [hit(lecture, 1)];
-    const search = new SearchTexts(catalogOf({}), index);
+    const search = new SearchTexts(
+      catalogOf({}),
+      new RecordedSearchMetrics(),
+      index,
+    );
 
     expect(
       await search.execute(new SearchTextsQuery('semafor', [lecture], 10)),
@@ -194,13 +204,16 @@ describe('SearchTexts', () => {
     const all = saying('semafor tajna lozinka');
     const tie = saying('o semaforima: semafor');
     const past = saying('semafor tajna lozinka, opet');
-    const { search } = searching([one, all, tie, past], { reranker });
+    const { search, metrics } = searching([one, all, tie, past], {
+      reranker,
+    });
 
     expect(
       await search.execute(
         new SearchTextsQuery('semafor tajna lozinka', [notes], 10),
       ),
     ).toEqual([all, one, tie, past]);
+    expect(metrics.unrankedBy).toEqual([]);
     expect(scores).toHaveBeenCalledWith('semafor tajna lozinka', [
       'semafor',
       'semafor tajna lozinka',
@@ -228,7 +241,7 @@ describe('SearchTexts', () => {
     const reranker: Reranker = new FakeReranker();
     vi.spyOn(reranker, 'scores').mockResolvedValue(null);
     const hits = [saying('semafor'), saying('semafor tajna lozinka')];
-    const { search } = searching(hits, { reranker });
+    const { search, metrics } = searching(hits, { reranker });
 
     expect(
       await search.execute(
@@ -236,6 +249,7 @@ describe('SearchTexts', () => {
       ),
     ).toEqual(hits);
     expect(warn).not.toHaveBeenCalled();
+    expect(metrics.unrankedBy).toEqual(['busy']);
   });
 
   // away or past its time: the reranker running behind on a CPU, not the
@@ -255,7 +269,7 @@ describe('SearchTexts', () => {
         ),
       );
     const hits = [saying('semafor'), saying('semafor tajna lozinka')];
-    const { search } = searching(hits, { reranker });
+    const { search, metrics } = searching(hits, { reranker });
     const asked = () =>
       search.execute(
         new SearchTextsQuery('semafor tajna lozinka', [notes], 10),
@@ -268,6 +282,7 @@ describe('SearchTexts', () => {
       ["in the index's order: The operation was aborted due to timeout"],
     ]);
     expect(error).not.toHaveBeenCalled();
+    expect(metrics.unrankedBy).toEqual(['away', 'timeout']);
   });
 
   // another model than a reranker, an answer that can't be read: someone
@@ -280,7 +295,7 @@ describe('SearchTexts', () => {
       new Error('http://reranker/rerank answered 424: not a reranker'),
     );
     const hits = [saying('semafor'), saying('semafor tajna lozinka')];
-    const { search } = searching(hits, { reranker });
+    const { search, metrics } = searching(hits, { reranker });
 
     expect(
       await search.execute(
@@ -292,6 +307,7 @@ describe('SearchTexts', () => {
       expect.any(String),
     );
     expect(warn).not.toHaveBeenCalled();
+    expect(metrics.unrankedBy).toEqual(['failed']);
   });
 
   it('answers an index away or stuck as search being unavailable', async () => {
@@ -311,7 +327,8 @@ describe('SearchTexts', () => {
   });
 
   it('answers search being off without an index, whatever it is asked', async () => {
-    const search = new SearchTexts(plugins);
+    const metrics = new RecordedSearchMetrics();
+    const search = new SearchTexts(plugins, metrics);
 
     for (const hashes of [[notes], []]) {
       const failed = search.execute(
@@ -323,6 +340,31 @@ describe('SearchTexts', () => {
         reason: 'SEARCH_OFF',
       });
     }
+    // no search, nothing timed
+    expect(metrics.searches).toEqual([]);
+  });
+
+  it('times each search in seconds, one that failed too', async () => {
+    const { index, search, metrics } = searching([hit(notes, 1)]);
+    const answered = index.search.bind(index);
+    vi.spyOn(index, 'search')
+      .mockImplementationOnce(async (query) => {
+        await setTimeout(20);
+        return answered(query);
+      })
+      .mockRejectedValueOnce(new TextIndexUnavailableError('ECONNREFUSED'));
+
+    await search.execute(new SearchTextsQuery('semafor', [notes], 10));
+    await expect(
+      search.execute(new SearchTextsQuery('semafor', [notes], 10)),
+    ).rejects.toBeInstanceOf(SearchUnavailableError);
+
+    expect(metrics.searches.map(({ outcome }) => outcome)).toEqual([
+      'ok',
+      'failed',
+    ]);
+    expect(metrics.searches[0].seconds).toBeGreaterThan(0.015);
+    expect(metrics.searches[0].seconds).toBeLessThan(1);
   });
 
   it('lets any other failure through as it came', async () => {

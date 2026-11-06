@@ -1,9 +1,5 @@
 import { z } from 'zod';
-import { settings } from '../platform/config/settings.js';
-
-// unset when empty, as .env.example leaves them
-const blank = <T extends z.ZodType>(schema: T) =>
-  z.preprocess((v) => (v === '' ? undefined : v), schema.optional());
+import { blank, settings } from '../platform/config/settings.js';
 
 // The search index's embedder, if any: without one it's BM25 only. And the
 // reranker, if any: without one a search answers in the index's order.

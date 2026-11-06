@@ -12,3 +12,7 @@ export const parseList = (value = '') =>
 
 // a comma-separated list
 export const list = z.string().default('').transform(parseList);
+
+// unset when empty, as .env.example leaves it
+export const blank = <T extends z.ZodType>(schema: T) =>
+  z.preprocess((v) => (v === '' ? undefined : v), schema.optional());

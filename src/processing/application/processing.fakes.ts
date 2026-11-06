@@ -12,10 +12,13 @@ import type { PluginJob } from './plugin-job.js';
 import {
   FileFacts,
   PluginJobQueue,
+  SearchMetrics,
   TextIndex,
   TextIndexQueue,
   type FileFact,
+  type SearchOutcome,
   type TextQuery,
+  type UnrankedReason,
 } from './ports.js';
 import type { TextHit } from './queries.js';
 
@@ -168,5 +171,20 @@ export class FakeTextIndexQueue extends TextIndexQueue {
 
   async requeue(key: RepresentationKey) {
     this.requeued.push(key);
+  }
+}
+
+// how each search came out and how long it took, and why one kept the
+// index's order
+export class RecordedSearchMetrics extends SearchMetrics {
+  readonly searches: { outcome: SearchOutcome; seconds: number }[] = [];
+  readonly unrankedBy: UnrankedReason[] = [];
+
+  searched(outcome: SearchOutcome, seconds: number) {
+    this.searches.push({ outcome, seconds });
+  }
+
+  unranked(reason: UnrankedReason) {
+    this.unrankedBy.push(reason);
   }
 }

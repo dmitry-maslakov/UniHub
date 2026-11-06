@@ -5,6 +5,7 @@ import { ConfigModule } from '@nestjs/config';
 import { IngestModule } from '../ingest/contracts.js';
 import { roleConfig } from '../platform/role/role.config.js';
 import { ConnectionDirectory } from './application/connection-directory.js';
+import { ConnectorRuns } from './application/connector-runs.js';
 import { ConnectorSchedules } from './application/connector-schedules.js';
 import { PluginCatalog } from './application/plugin-catalog.js';
 import { PluginDiscovery } from './application/plugin-discovery.js';
@@ -15,6 +16,7 @@ import { BullmqConnectorSchedules } from './infrastructure/bullmq-connector-sche
 import { CONNECTORS_QUEUE } from './infrastructure/connectors.queue.js';
 import { ConnectorsWorker } from './infrastructure/connectors.worker.js';
 import { NestPluginDiscovery } from './infrastructure/nest-plugin-discovery.js';
+import { OtelConnectorRuns } from './infrastructure/otel-connector-runs.js';
 import { HubReaderModule } from './infrastructure/sdk/hub-reader.module.js';
 import { pluginsConfig } from './plugins.config.js';
 
@@ -44,6 +46,7 @@ import { pluginsConfig } from './plugins.config.js';
     PushConnections,
     SyncConnectionHandler,
     { provide: ConnectorSchedules, useClass: BullmqConnectorSchedules },
+    { provide: ConnectorRuns, useClass: OtelConnectorRuns },
     ConnectorsWorker,
   ],
   exports: [PluginCatalog],
