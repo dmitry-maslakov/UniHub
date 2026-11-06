@@ -13,10 +13,13 @@ import { ARCHIVE } from './formats.js';
 
 // past this an archive is skipped, not read in part
 export const MAX_ARCHIVE_BYTES = 100 * 1024 * 1024;
+// Besides the heap, the thread holds the archive and the files it takes, so
+// up to MAX_ARCHIVE_BYTES and total; a tar.gz is unpacked as it's read.
 export const LIMITS: Limits = {
   entries: 10_000,
   total: 64 * 1024 * 1024,
-  unpacked: 256 * 1024 * 1024,
+  // a tar's entries are only looked through, a GiB in a second or two
+  unpacked: 1024 * 1024 * 1024,
   // text packs to a tenth of itself or so, a zip bomb to a thousandth
   ratio: 100,
 };

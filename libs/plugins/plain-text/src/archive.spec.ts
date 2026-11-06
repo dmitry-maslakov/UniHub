@@ -5,6 +5,7 @@ import { gzipSync } from 'node:zlib';
 import tar, { type Header } from 'tar-stream';
 import yazl from 'yazl';
 import {
+  named,
   partsOf,
   Selection,
   textFiles,
@@ -24,12 +25,18 @@ const LIMITS: Limits = {
   ratio: 100,
 };
 
-// these files deflated, a name ending in / as a folder
-async function zipOf(files: Record<string, string | Buffer>) {
+// these files deflated, a name ending in / as a folder; then symbolic links
+// to where they point
+async function zipOf(
+  files: Record<string, string | Buffer>,
+  links: Record<string, string> = {},
+) {
   const zip = new yazl.ZipFile();
   for (const [name, content] of Object.entries(files))
     if (name.endsWith('/')) zip.addEmptyDirectory(name);
     else zip.addBuffer(Buffer.from(content), name);
+  for (const [name, target] of Object.entries(links))
+    zip.addBuffer(Buffer.from(target), name, { mode: 0o120777 });
   zip.end();
   return buffer(zip.outputStream);
 }
@@ -65,20 +72,21 @@ async function read(
 }
 const paths = (files: { path: string }[]) => files.map(({ path }) => path);
 
-describe('Selection', () => {
-  const take = (name: string, size = 10, packed?: number) =>
-    new Selection(LIMITS).take(name, size, packed);
-
+describe('named', () => {
   it('takes what plain-text does, by the extension of its path', () => {
-    expect(take('lab/Main.C')).toEqual({ path: 'lab/Main.C', kind: 'lines' });
-    expect(take('./README.md')).toEqual({
+    expect(named('lab/Main.C')).toEqual({ path: 'lab/Main.C', kind: 'lines' });
+    expect(named('./README.md')).toEqual({
       path: 'README.md',
       kind: 'markdown',
     });
-    expect(take('lab//plots.ipynb')).toEqual({
+    expect(named('lab//plots.ipynb')).toEqual({
       path: 'lab/plots.ipynb',
       kind: 'notebook',
     });
+  });
+
+  it("composes the path's letters, as a Mac's zip leaves them apart", () => {
+    expect(named('lab/Pokazivac\u030Ci.md')?.path).toBe('lab/Pokazivači.md');
   });
 
   it.each([
@@ -96,7 +104,17 @@ describe('Selection', () => {
     ["a Mac's resource fork", '__MACOSX/lab/._main.c'],
     ['build output', 'Lab1/obj/Debug/Lab1.csproj.FileListAbsolute.txt'],
   ])('leaves out %s: %s', (_, name) => {
-    expect(take(name)).toBeNull();
+    expect(named(name)).toBeNull();
+  });
+});
+
+describe('Selection', () => {
+  const take = (name: string, size = 10, packed?: number) =>
+    new Selection(LIMITS).take(name, size, packed);
+
+  it('leaves out a file named() leaves out', () => {
+    expect(take('lab/inner.zip')).toBeNull();
+    expect(take('lab/main.c')).toEqual({ path: 'lab/main.c', kind: 'lines' });
   });
 
   it("leaves out a file past its kind's limit", () => {
@@ -129,16 +147,28 @@ describe('Selection', () => {
       false,
     ]);
   });
+
+  it("reads a tar's entries through up to the unpacked limit, taken or not", () => {
+    const selection = new Selection({ ...LIMITS, unpacked: 10 });
+    expect([selection.more(6), selection.more(4), selection.more(1)]).toEqual([
+      true,
+      true,
+      false,
+    ]);
+  });
 });
 
 describe('textFiles', () => {
-  it('reads the text files of a zip by their path, not the archives in it', async () => {
-    const zip = await zipOf({
-      'lab/': '',
-      'lab/main.c': 'int main() {}\n',
-      'lab/inner.zip': await zipOf({ 'inner.c': 'int inner;\n' }),
-      'README.md': '# Lab\n',
-    });
+  it('reads the text files of a zip by their path, not the archives or links in it', async () => {
+    const zip = await zipOf(
+      {
+        'lab/': '',
+        'lab/main.c': 'int main() {}\n',
+        'lab/inner.zip': await zipOf({ 'inner.c': 'int inner;\n' }),
+        'README.md': '# Lab\n',
+      },
+      { 'lab/passwd.txt': '/etc/passwd' },
+    );
 
     expect(await read(zip, 'zip')).toEqual([
       { path: 'lab/main.c', kind: 'lines', text: 'int main() {}\n' },
@@ -202,14 +232,34 @@ describe('textFiles', () => {
     expect(paths(await read(data, format, name))).toEqual(['main.c']);
   });
 
+  it("reads a tar through up to the unpacked limit, a tar.gz as it's unpacked", async () => {
+    const data = gzipSync(
+      await tarOf({
+        'main.c': 'a',
+        'junk.bin': 'x'.repeat(2000),
+        'after.c': 'b',
+      }),
+    );
+    expect(
+      paths(await read(data, 'tgz', 'labs.tgz', { ...LIMITS, unpacked: 1000 })),
+    ).toEqual(['main.c']);
+  });
+
+  it('fails on a tar.gz cut short', async () => {
+    const data = gzipSync(await tarOf({ 'main.c': 'int main;\n' }));
+    await expect(
+      read(data.subarray(0, data.length / 2), 'tgz', 'labs.tgz'),
+    ).rejects.toThrow();
+  });
+
   it("reads a gzip's one file, named as the gzip less its .gz", async () => {
     expect(await read(gzipSync('notes\n'), 'gzip', 'Notes.TXT.gz')).toEqual([
       { path: 'Notes.TXT', kind: 'lines', text: 'notes\n' },
     ]);
   });
 
-  it('reads nothing of a gzip unpacking past the limit, a gzip bomb', async () => {
-    const bomb = gzipSync(Buffer.alloc(LIMITS.unpacked + 1));
+  it("reads nothing of a gzip whose file unpacks past its kind's limit, a gzip bomb", async () => {
+    const bomb = gzipSync(Buffer.alloc(MAX_BYTES + 1));
     expect(await read(bomb, 'gzip', 'notes.txt.gz')).toEqual([]);
   });
 });

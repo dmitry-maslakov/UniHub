@@ -1,8 +1,10 @@
+import { constants } from 'node:fs';
 import { posix } from 'node:path';
+import { Readable, pipeline, type Transform } from 'node:stream';
 import { buffer } from 'node:stream/consumers';
-import { gunzipSync } from 'node:zlib';
+import { createGunzip, gunzipSync } from 'node:zlib';
 import tar from 'tar-stream';
-import yauzl from 'yauzl';
+import yauzl, { type Entry } from 'yauzl';
 import { KIND, maxBytes, MINIFIED, type ArchiveFormat } from './formats.ts';
 import { toParts, type Kind } from './parts.ts';
 
@@ -14,8 +16,8 @@ export interface Limits {
   entries: number;
   // bytes read of the files taken, unpacked, all of them together
   total: number;
-  // what a gzip holds, unpacked (a .tar.gz's tar, a .gz's one file): past
-  // it the archive has no text files
+  // bytes of a tar's entries, taken or not, as a tar is read through: past
+  // them the rest is left out (a tar.gz is unpacked as it's read)
   unpacked: number;
   // a zip entry unpacked to more than this many times its packed size
   ratio: number;
@@ -36,48 +38,61 @@ const LEFT_OUT = new Set(['node_modules', '__MACOSX', 'bin', 'obj']);
 // leaves it room
 const MAX_PATH = 4096;
 
-// Which entries of an archive are read, in turn: the files plain-text takes,
-// by the extension of their path, each up to its kind's limit and all of
-// them up to limits.total, a file that won't fit left out and the next one
-// looked at. Archives inside it aren't opened; entries named outside it
-// (absolute, with a .. in them), folders, and a zip entry packed past
-// limits.ratio (a zip bomb) are left out, and past limits.entries entries
-// so is the rest.
+// What an entry is read as by its name alone, null to leave it out: a file
+// plain-text takes by the extension of its path, the path's letters
+// composed (NFC), as the parts' are. Archives inside aren't opened; entries
+// named outside the archive (absolute, with a .. in them), folders, the
+// folders above, and minified code are left out.
+export function named(name: string) {
+  if (yauzl.validateFileName(name) !== null || name.endsWith('/')) return null;
+  const path = posix.normalize(name).normalize('NFC');
+  const kind = KIND[posix.extname(path).toLowerCase()];
+  if (!kind || MINIFIED.test(path) || path.length > MAX_PATH) return null;
+  const folders = path.split('/');
+  if (folders.some((dir) => dir.startsWith('.') || LEFT_OUT.has(dir)))
+    return null;
+  return { path, kind };
+}
+
+// Which entries of an archive are read, in turn: those named() takes, each
+// up to its kind's limit and all of them up to limits.total, a file that
+// won't fit left out and the next one looked at. A zip entry packed past
+// limits.ratio (a zip bomb) is left out too, and past limits.entries
+// entries or limits.unpacked bytes of a tar's, so is the rest.
 export class Selection {
   private readonly limits: Limits;
   private seen = 0;
+  private through = 0;
   private taken = 0;
 
   constructor(limits: Limits) {
     this.limits = limits;
   }
 
-  // false once past limits.entries
-  more() {
-    return ++this.seen <= this.limits.entries;
+  // false once past limits.entries, or limits.unpacked bytes of a tar's
+  // entries, which it reads through whether it takes them or not
+  more(tarred = 0) {
+    this.through += tarred;
+    return (
+      ++this.seen <= this.limits.entries && this.through <= this.limits.unpacked
+    );
   }
 
   // the path and kind to read an entry as, null to leave it out; a file
   // taken counts against the total
   take(name: string, size: number, packed = size) {
-    if (yauzl.validateFileName(name) !== null || name.endsWith('/'))
-      return null;
-    const path = posix.normalize(name);
-    const kind = KIND[posix.extname(path).toLowerCase()];
-    if (!kind || MINIFIED.test(path) || path.length > MAX_PATH) return null;
-    const folders = path.split('/');
-    if (folders.some((dir) => dir.startsWith('.') || LEFT_OUT.has(dir)))
-      return null;
-    if (size > maxBytes(kind) || size > packed * this.limits.ratio) return null;
+    const file = named(name);
+    if (!file || size > maxBytes(file.kind)) return null;
+    if (size > packed * this.limits.ratio) return null;
     if (this.taken + size > this.limits.total) return null;
     this.taken += size;
-    return { path, kind };
+    return file;
   }
 }
 
-// The text files of an archive that a Selection takes, read. A gzip holds
-// one file, named as the archive less its .gz, or a tar when that name
-// ends in .tar.
+// The text files of an archive that a Selection takes, read. A gzip holds a
+// tar when its name less the .gz ends in .tar, one file by that name
+// otherwise.
 export async function* textFiles(
   data: Buffer,
   format: ArchiveFormat,
@@ -86,14 +101,15 @@ export async function* textFiles(
 ): AsyncGenerator<TextFile> {
   const selection = new Selection(limits);
   if (format === 'zip') return yield* zip(data, selection);
-  if (format === 'tar') return yield* tarball(data, selection);
-  const unpacked = gunzipped(data, limits.unpacked);
-  if (!unpacked) return;
+  if (format === 'tar') return yield* tarball(data, [], selection);
   const inner = name.replace(/\.gz$/i, '');
   if (format === 'tgz' || /\.tar$/i.test(inner))
-    return yield* tarball(unpacked, selection);
-  const file = selection.take(inner, unpacked.length);
-  if (file) yield { ...file, bytes: unpacked };
+    return yield* tarball(data, [createGunzip()], selection);
+  // unpacked only when its name is one to read, and only up to its limit
+  const file = named(inner);
+  if (!file) return;
+  const bytes = gunzipped(data, maxBytes(file.kind));
+  if (bytes) yield { ...file, bytes };
 }
 
 // A file's parts, each starting with its path in the archive, so a page read
@@ -103,6 +119,11 @@ export function partsOf({ path, kind, bytes }: TextFile, max: number) {
   const head = `${path}\n\n`;
   return toParts(bytes, kind, max - head.length).map((part) => head + part);
 }
+
+// a symbolic link, by the Unix mode a zip keeps of it
+const isLink = (entry: Entry) =>
+  ((entry.externalFileAttributes >>> 16) & constants.S_IFMT) ===
+  constants.S_IFLNK;
 
 async function* zip(data: Buffer, selection: Selection) {
   // names decoded here, so that one named outside the archive leaves out
@@ -118,8 +139,8 @@ async function* zip(data: Buffer, selection: Selection) {
       entry.extraFields,
       false,
     );
-    // encrypted, or packed some way other than deflate
-    if (!entry.canDecodeFileData()) continue;
+    // encrypted, packed some way other than deflate, or a link
+    if (!entry.canDecodeFileData() || isLink(entry)) continue;
     const file = selection.take(
       name,
       entry.uncompressedSize,
@@ -134,12 +155,19 @@ async function* zip(data: Buffer, selection: Selection) {
   }
 }
 
-async function* tarball(data: Buffer, selection: Selection) {
+// A tar, through these first (a gzip's unpacking), read as it streams in.
+// A failure on the way destroys extract with it, which the loop throws;
+// breaking off the loop destroys extract, and the pipeline with it.
+async function* tarball(
+  data: Buffer,
+  through: Transform[],
+  selection: Selection,
+) {
   const extract = tar.extract();
-  extract.end(data);
+  pipeline([Readable.from([data]), ...through, extract], () => {});
   for await (const entry of extract) {
-    if (!selection.more()) break;
     const { name, type, size } = entry.header;
+    if (!selection.more(size)) break;
     // links and folders aren't files
     const file = type === 'file' ? selection.take(name, size) : null;
     if (file) yield { ...file, bytes: await buffer(entry) };
@@ -147,7 +175,7 @@ async function* tarball(data: Buffer, selection: Selection) {
   }
 }
 
-// null past max, a gzip bomb among others
+// null past max
 function gunzipped(data: Buffer, max: number) {
   try {
     return gunzipSync(data, { maxOutputLength: max });
