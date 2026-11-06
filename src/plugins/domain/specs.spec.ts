@@ -1,5 +1,10 @@
 import { InvalidValueError, MediaType } from '@app/kernel';
-import { aggregatorSpec, pollSpec, ProcessorSpec } from './specs.js';
+import {
+  aggregatorSpec,
+  pollSpec,
+  ProcessorSpec,
+  UnpackerSpec,
+} from './specs.js';
 
 const pdf = MediaType.parse('application/pdf');
 
@@ -24,6 +29,19 @@ describe('ProcessorSpec', () => {
     expect(() =>
       ProcessorSpec.of({ name: 'pdf', version: 1, accepts: ['pdf'] }),
     ).toThrow(new InvalidValueError('accepts entry', 'pdf'));
+  });
+});
+
+describe('UnpackerSpec', () => {
+  it("matches as a processor's does, taking its entries as files are matched", () => {
+    const spec = UnpackerSpec.of({
+      name: 'archives',
+      version: 1,
+      accepts: ['.ZIP', 'Application/Zip'],
+    });
+
+    expect(spec.match({ name: 'labs.zip', mime: null })).toBe('.ZIP');
+    expect(spec.takes).toEqual(['.zip', 'application/zip']);
   });
 });
 

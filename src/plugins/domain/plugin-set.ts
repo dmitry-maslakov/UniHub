@@ -6,6 +6,9 @@ interface Found {
   polls: readonly { spec: { portal: PortalId } }[];
   pushes: readonly { spec: { portal: PortalId } }[];
   processors: readonly { spec: { name: PluginName } }[];
+  unpackers: readonly {
+    spec: { name: PluginName; takes: readonly string[] };
+  }[];
   aggregators: readonly { spec: { name: PluginName } }[];
 }
 
@@ -17,7 +20,7 @@ const unique = (what: string, values: readonly string[]) => {
 // The enabled plugins, as the hub can run them. A plugin's name is its key
 // in job ids and stored results, so one per plugin; a portal has one writer,
 // in-process or over gRPC, or two would overwrite each other's records and
-// state.
+// state; a format has one unpacker, or a container would have two trees.
 export class PluginSet<F extends Found> {
   private constructor(readonly plugins: F) {}
 
@@ -25,7 +28,13 @@ export class PluginSet<F extends Found> {
     const connectors = [...found.polls, ...found.pushes];
     unique(
       'plugin name',
-      [...found.processors, ...found.aggregators].map((p) => p.spec.name),
+      [...found.processors, ...found.unpackers, ...found.aggregators].map(
+        (p) => p.spec.name,
+      ),
+    );
+    unique(
+      'unpacked format',
+      found.unpackers.flatMap((u) => u.spec.takes),
     );
     unique(
       'connector portal',

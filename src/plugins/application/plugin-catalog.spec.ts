@@ -6,6 +6,7 @@ import {
   poll,
   processor,
   push,
+  unpacker,
 } from '../../../test/discovered-plugins.js';
 import { PortalHasTwoWritersError } from '../domain/errors.js';
 
@@ -20,6 +21,7 @@ describe('PluginCatalog', () => {
       processor('pdf', ['.pdf', 'application/pdf']),
       processor('slides', ['.pptx', '.pdf']),
     ],
+    unpackers: [unpacker('archives', ['.zip', 'application/zip'])],
     aggregators: [
       aggregator('feed', [ITEM_INGESTED, ITEM_REMOVED]),
       aggregator('files', [FILE_REMOVED]),
@@ -40,6 +42,17 @@ describe('PluginCatalog', () => {
     ).toEqual(['.pdf', '.pdf']);
   });
 
+  it('finds the one unpacker that takes a file, with the entry it matched', () => {
+    const zip = MediaType.parse('application/zip');
+    const found = catalog.unpackerFor({ name: 'labs', mime: zip });
+
+    expect([found?.unpacker.spec.name, found?.matched]).toEqual([
+      'archives',
+      'application/zip',
+    ]);
+    expect(catalog.unpackerFor({ name: 'a.pdf', mime: null })).toBeNull();
+  });
+
   it('finds the aggregators listening to a topic', () => {
     expect(names(catalog.aggregatorsFor(ITEM_REMOVED))).toEqual(['feed']);
     expect(names(catalog.aggregatorsFor(FILE_REMOVED))).toEqual(['files']);
@@ -50,6 +63,8 @@ describe('PluginCatalog', () => {
       'slides',
     );
     expect(catalog.aggregator(PluginName.parse('slides'))).toBeUndefined();
+    expect(catalog.unpacker(PluginName.parse('archives'))).toBeDefined();
+    expect(catalog.unpacker(PluginName.parse('pdf'))).toBeUndefined();
     expect(catalog.pollConnector(PortalId.parse('moodle'))).toBeDefined();
     expect(catalog.pollConnector(PortalId.parse('teams'))).toBeUndefined();
   });

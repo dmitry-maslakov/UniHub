@@ -88,23 +88,30 @@ const accepted = (entry: string): Accepted => {
   return { entry, as: type.data };
 };
 
-export class ProcessorSpec {
-  private constructor(
+interface ContentOptions {
+  name: string;
+  version: number;
+  accepts: readonly string[];
+}
+
+const parsed = (options: ContentOptions) =>
+  [
+    valid(PluginName, 'plugin name', options.name),
+    options.version,
+    options.accepts.map(accepted),
+  ] as const;
+
+// What a processor or an unpacker takes, and how a file is matched by it.
+abstract class ContentSpec {
+  protected constructor(
     readonly name: PluginName,
     readonly version: number,
     private readonly accepts: readonly Accepted[],
   ) {}
 
-  static of(options: {
-    name: string;
-    version: number;
-    accepts: readonly string[];
-  }) {
-    return new ProcessorSpec(
-      valid(PluginName, 'plugin name', options.name),
-      options.version,
-      options.accepts.map(accepted),
-    );
+  // the entries as files are matched by them
+  get takes() {
+    return this.accepts.map(({ as }) => as);
   }
 
   // The entry this file matches, as the processor wrote it, null if none
@@ -116,5 +123,17 @@ export class ProcessorSpec {
       this.accepts.find((a) => a.as === ext) ??
       this.accepts.find((a) => a.as === file.mime);
     return found?.entry ?? null;
+  }
+}
+
+export class ProcessorSpec extends ContentSpec {
+  static of(options: ContentOptions) {
+    return new ProcessorSpec(...parsed(options));
+  }
+}
+
+export class UnpackerSpec extends ContentSpec {
+  static of(options: ContentOptions) {
+    return new UnpackerSpec(...parsed(options));
   }
 }

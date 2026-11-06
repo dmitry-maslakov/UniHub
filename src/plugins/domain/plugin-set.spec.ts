@@ -4,7 +4,16 @@ import { PluginSet } from './plugin-set.js';
 
 const named = (name: string) => ({ spec: { name: PluginName.parse(name) } });
 const of = (portal: string) => ({ spec: { portal: PortalId.parse(portal) } });
-const none = { polls: [], pushes: [], processors: [], aggregators: [] };
+const none = {
+  polls: [],
+  pushes: [],
+  processors: [],
+  unpackers: [],
+  aggregators: [],
+};
+const unpacking = (name: string, ...takes: string[]) => ({
+  spec: { name: PluginName.parse(name), takes },
+});
 
 describe('PluginSet', () => {
   it('takes plugins that keep the rules', () => {
@@ -12,6 +21,7 @@ describe('PluginSet', () => {
       polls: [of('moodle')],
       pushes: [of('teams')],
       processors: [named('office-text')],
+      unpackers: [unpacking('archives', '.zip', '.tar')],
       aggregators: [named('feed')],
     };
     expect(PluginSet.of(found, [PortalId.parse('canvas')]).plugins).toBe(found);
@@ -25,6 +35,30 @@ describe('PluginSet', () => {
     };
     expect(() => PluginSet.of(found, [])).toThrow(
       new UsedTwiceError('plugin name', 'text'),
+    );
+  });
+
+  it('refuses an unpacker named as a plugin of another kind', () => {
+    const found = {
+      ...none,
+      processors: [named('text')],
+      unpackers: [unpacking('text', '.zip')],
+    };
+    expect(() => PluginSet.of(found, [])).toThrow(
+      new UsedTwiceError('plugin name', 'text'),
+    );
+  });
+
+  it('refuses two unpackers that take one format', () => {
+    const found = {
+      ...none,
+      unpackers: [
+        unpacking('archives', '.zip', '.tar'),
+        unpacking('zips', '.zip'),
+      ],
+    };
+    expect(() => PluginSet.of(found, [])).toThrow(
+      new UsedTwiceError('unpacked format', '.zip'),
     );
   });
 

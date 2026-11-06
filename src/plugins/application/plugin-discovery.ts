@@ -4,12 +4,14 @@ import type {
   ProcessesContent,
   PushesFromPortal,
   Topic,
+  UnpacksContent,
 } from '@app/plugin-sdk';
 import type {
   AggregatorSpec,
   PollSpec,
   ProcessorSpec,
   PushSpec,
+  UnpackerSpec,
 } from '../domain/specs.js';
 
 export interface Plugin<S, I> {
@@ -21,6 +23,7 @@ export interface Found {
   polls: Plugin<PollSpec, PollsPortal>[];
   pushes: Plugin<PushSpec, PushesFromPortal>[];
   processors: Plugin<ProcessorSpec, ProcessesContent>[];
+  unpackers: Plugin<UnpackerSpec, UnpacksContent>[];
   aggregators: Plugin<AggregatorSpec<Topic>, HandlesMessages>[];
 }
 

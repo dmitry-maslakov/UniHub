@@ -5,9 +5,11 @@ import type {
   PushConnectorOptions,
   PushesFromPortal,
 } from './connectors.js';
+import type { ContentUnpackerOptions, UnpacksContent } from './unpackers.js';
 import {
   AggregatorMark,
   ContentProcessorMark,
+  ContentUnpackerMark,
   PollConnectorMark,
   PushConnectorMark,
 } from './host.js';
@@ -43,6 +45,12 @@ export function PushConnector(options: PushConnectorOptions) {
 export function ContentProcessor(options: ContentProcessorOptions) {
   return <C extends Class<ProcessesContent>>(target: C) => {
     ContentProcessorMark(options)(target);
+  };
+}
+
+export function ContentUnpacker(options: ContentUnpackerOptions) {
+  return <C extends Class<UnpacksContent>>(target: C) => {
+    ContentUnpackerMark(options)(target);
   };
 }
 
