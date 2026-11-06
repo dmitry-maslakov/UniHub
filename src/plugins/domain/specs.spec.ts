@@ -30,6 +30,12 @@ describe('ProcessorSpec', () => {
       ProcessorSpec.of({ name: 'pdf', version: 1, accepts: ['pdf'] }),
     ).toThrow(new InvalidValueError('accepts entry', 'pdf'));
   });
+
+  it('refuses an extension of two, as a file has its last only', () => {
+    expect(() =>
+      ProcessorSpec.of({ name: 'tgz', version: 1, accepts: ['.tar.gz'] }),
+    ).toThrow(new InvalidValueError('accepts entry', '.tar.gz'));
+  });
 });
 
 describe('UnpackerSpec', () => {

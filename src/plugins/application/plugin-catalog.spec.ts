@@ -21,7 +21,10 @@ describe('PluginCatalog', () => {
       processor('pdf', ['.pdf', 'application/pdf']),
       processor('slides', ['.pptx', '.pdf']),
     ],
-    unpackers: [unpacker('archives', ['.zip', 'application/zip'])],
+    unpackers: [
+      unpacker('archives', ['.zip', 'application/zip']),
+      unpacker('books', ['.epub']),
+    ],
     aggregators: [
       aggregator('feed', [ITEM_INGESTED, ITEM_REMOVED]),
       aggregator('files', [FILE_REMOVED]),
@@ -51,6 +54,13 @@ describe('PluginCatalog', () => {
       'application/zip',
     ]);
     expect(catalog.unpackerFor({ name: 'a.pdf', mime: null })).toBeNull();
+  });
+
+  it("finds the unpacker by the file's extension first, whichever comes first", () => {
+    const zip = MediaType.parse('application/zip');
+    expect(
+      catalog.unpackerFor({ name: 'book.epub', mime: zip })?.unpacker.spec.name,
+    ).toBe('books');
   });
 
   it('finds the aggregators listening to a topic', () => {

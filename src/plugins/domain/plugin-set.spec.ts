@@ -62,6 +62,14 @@ describe('PluginSet', () => {
     );
   });
 
+  it('takes an unpacker that lists a format twice', () => {
+    const found = {
+      ...none,
+      unpackers: [unpacking('archives', '.zip', '.zip')],
+    };
+    expect(() => PluginSet.of(found, [])).not.toThrow();
+  });
+
   it('refuses two connectors of one portal', () => {
     const found = { ...none, polls: [of('moodle')], pushes: [of('moodle')] };
     expect(() => PluginSet.of(found, [])).toThrow(
