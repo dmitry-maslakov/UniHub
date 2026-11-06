@@ -3,9 +3,15 @@ import { Link } from '@tanstack/react-router';
 import classes from './app-layout.module.css';
 
 const items = [
+  { to: '/courses', label: 'Courses' },
+  { to: '/search', label: 'Search' },
   { to: '/', label: 'Account' },
+  { to: '/settings/portals', label: 'Portal accounts' },
   { to: '/settings/api-keys', label: 'API keys' },
 ] as const;
+
+// Account is the home page, so only an exact match is it
+const exact = (to: string) => ({ exact: to === '/' });
 
 // The header's links on wide screens
 export function MainNav() {
@@ -16,7 +22,7 @@ export function MainNav() {
           key={item.to}
           to={item.to}
           className={classes.link}
-          activeOptions={{ exact: true }}
+          activeOptions={exact(item.to)}
         >
           {item.label}
         </Link>
@@ -35,7 +41,7 @@ export function DrawerNav({ onNavigate }: { onNavigate: () => void }) {
           component={Link}
           to={item.to}
           label={item.label}
-          activeOptions={{ exact: true }}
+          activeOptions={exact(item.to)}
           onClick={onNavigate}
         />
       ))}

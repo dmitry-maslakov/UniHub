@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom/vitest';
+import { notifications } from '@mantine/notifications';
 import { cleanup } from '@testing-library/react';
 import { afterAll, afterEach } from 'vitest';
 import { server } from './server';
@@ -32,5 +33,7 @@ server.listen({ onUnhandledFrame: 'error' });
 afterEach(() => {
   server.resetHandlers();
   cleanup();
+  // its store outlives a rendered app
+  notifications.clean();
 });
 afterAll(() => server.close());

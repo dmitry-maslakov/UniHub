@@ -14,11 +14,15 @@ import { Route as AuthRouteImport } from './routes/_auth'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppConsentRouteImport } from './routes/_app/consent'
 import { Route as AppDeviceRouteImport } from './routes/_app/device'
+import { Route as AppSearchRouteImport } from './routes/_app/search'
 import { Route as AuthCheckEmailRouteImport } from './routes/_auth/check-email'
 import { Route as AuthResetPasswordRouteImport } from './routes/_auth/reset-password'
 import { Route as AuthSignInRouteImport } from './routes/_auth/sign-in'
 import { Route as AuthSignUpRouteImport } from './routes/_auth/sign-up'
+import { Route as AppCoursesIndexRouteImport } from './routes/_app/courses/index'
+import { Route as AppCoursesSlugRouteImport } from './routes/_app/courses/$slug'
 import { Route as AppSettingsApiKeysRouteImport } from './routes/_app/settings/api-keys'
+import { Route as AppSettingsPortalsRouteImport } from './routes/_app/settings/portals'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -43,6 +47,11 @@ const AppDeviceRoute = AppDeviceRouteImport.update({
   path: '/device',
   getParentRoute: () => AppRoute,
 } as any)
+const AppSearchRoute = AppSearchRouteImport.update({
+  id: '/search',
+  path: '/search',
+  getParentRoute: () => AppRoute,
+} as any)
 const AuthCheckEmailRoute = AuthCheckEmailRouteImport.update({
   id: '/check-email',
   path: '/check-email',
@@ -63,9 +72,24 @@ const AuthSignUpRoute = AuthSignUpRouteImport.update({
   path: '/sign-up',
   getParentRoute: () => AuthRoute,
 } as any)
+const AppCoursesIndexRoute = AppCoursesIndexRouteImport.update({
+  id: '/courses/',
+  path: '/courses/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppCoursesSlugRoute = AppCoursesSlugRouteImport.update({
+  id: '/courses/$slug',
+  path: '/courses/$slug',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppSettingsApiKeysRoute = AppSettingsApiKeysRouteImport.update({
   id: '/settings/api-keys',
   path: '/settings/api-keys',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSettingsPortalsRoute = AppSettingsPortalsRouteImport.update({
+  id: '/settings/portals',
+  path: '/settings/portals',
   getParentRoute: () => AppRoute,
 } as any)
 
@@ -73,21 +97,29 @@ export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/consent': typeof AppConsentRoute
   '/device': typeof AppDeviceRoute
+  '/search': typeof AppSearchRoute
   '/check-email': typeof AuthCheckEmailRoute
   '/reset-password': typeof AuthResetPasswordRoute
   '/sign-in': typeof AuthSignInRoute
   '/sign-up': typeof AuthSignUpRoute
+  '/courses/$slug': typeof AppCoursesSlugRoute
   '/settings/api-keys': typeof AppSettingsApiKeysRoute
+  '/settings/portals': typeof AppSettingsPortalsRoute
+  '/courses/': typeof AppCoursesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
   '/consent': typeof AppConsentRoute
   '/device': typeof AppDeviceRoute
+  '/search': typeof AppSearchRoute
   '/check-email': typeof AuthCheckEmailRoute
   '/reset-password': typeof AuthResetPasswordRoute
   '/sign-in': typeof AuthSignInRoute
   '/sign-up': typeof AuthSignUpRoute
+  '/courses/$slug': typeof AppCoursesSlugRoute
   '/settings/api-keys': typeof AppSettingsApiKeysRoute
+  '/settings/portals': typeof AppSettingsPortalsRoute
+  '/courses': typeof AppCoursesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -95,12 +127,16 @@ export interface FileRoutesById {
   '/_auth': typeof AuthRouteWithChildren
   '/_app/consent': typeof AppConsentRoute
   '/_app/device': typeof AppDeviceRoute
+  '/_app/search': typeof AppSearchRoute
   '/_auth/check-email': typeof AuthCheckEmailRoute
   '/_auth/reset-password': typeof AuthResetPasswordRoute
   '/_auth/sign-in': typeof AuthSignInRoute
   '/_auth/sign-up': typeof AuthSignUpRoute
   '/_app/': typeof AppIndexRoute
+  '/_app/courses/$slug': typeof AppCoursesSlugRoute
   '/_app/settings/api-keys': typeof AppSettingsApiKeysRoute
+  '/_app/settings/portals': typeof AppSettingsPortalsRoute
+  '/_app/courses/': typeof AppCoursesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -108,33 +144,45 @@ export interface FileRouteTypes {
     | '/'
     | '/consent'
     | '/device'
+    | '/search'
     | '/check-email'
     | '/reset-password'
     | '/sign-in'
     | '/sign-up'
+    | '/courses/$slug'
     | '/settings/api-keys'
+    | '/settings/portals'
+    | '/courses/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/consent'
     | '/device'
+    | '/search'
     | '/check-email'
     | '/reset-password'
     | '/sign-in'
     | '/sign-up'
+    | '/courses/$slug'
     | '/settings/api-keys'
+    | '/settings/portals'
+    | '/courses'
   id:
     | '__root__'
     | '/_app'
     | '/_auth'
     | '/_app/consent'
     | '/_app/device'
+    | '/_app/search'
     | '/_auth/check-email'
     | '/_auth/reset-password'
     | '/_auth/sign-in'
     | '/_auth/sign-up'
     | '/_app/'
+    | '/_app/courses/$slug'
     | '/_app/settings/api-keys'
+    | '/_app/settings/portals'
+    | '/_app/courses/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -179,6 +227,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDeviceRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/search': {
+      id: '/_app/search'
+      path: '/search'
+      fullPath: '/search'
+      preLoaderRoute: typeof AppSearchRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_auth/check-email': {
       id: '/_auth/check-email'
       path: '/check-email'
@@ -207,11 +262,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthSignUpRouteImport
       parentRoute: typeof AuthRoute
     }
+    '/_app/courses/': {
+      id: '/_app/courses/'
+      path: '/courses'
+      fullPath: '/courses/'
+      preLoaderRoute: typeof AppCoursesIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/courses/$slug': {
+      id: '/_app/courses/$slug'
+      path: '/courses/$slug'
+      fullPath: '/courses/$slug'
+      preLoaderRoute: typeof AppCoursesSlugRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/settings/api-keys': {
       id: '/_app/settings/api-keys'
       path: '/settings/api-keys'
       fullPath: '/settings/api-keys'
       preLoaderRoute: typeof AppSettingsApiKeysRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/settings/portals': {
+      id: '/_app/settings/portals'
+      path: '/settings/portals'
+      fullPath: '/settings/portals'
+      preLoaderRoute: typeof AppSettingsPortalsRouteImport
       parentRoute: typeof AppRoute
     }
   }
@@ -220,15 +296,23 @@ declare module '@tanstack/react-router' {
 interface AppRouteChildren {
   AppConsentRoute: typeof AppConsentRoute
   AppDeviceRoute: typeof AppDeviceRoute
+  AppSearchRoute: typeof AppSearchRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppCoursesSlugRoute: typeof AppCoursesSlugRoute
   AppSettingsApiKeysRoute: typeof AppSettingsApiKeysRoute
+  AppSettingsPortalsRoute: typeof AppSettingsPortalsRoute
+  AppCoursesIndexRoute: typeof AppCoursesIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppConsentRoute: AppConsentRoute,
   AppDeviceRoute: AppDeviceRoute,
+  AppSearchRoute: AppSearchRoute,
   AppIndexRoute: AppIndexRoute,
+  AppCoursesSlugRoute: AppCoursesSlugRoute,
   AppSettingsApiKeysRoute: AppSettingsApiKeysRoute,
+  AppSettingsPortalsRoute: AppSettingsPortalsRoute,
+  AppCoursesIndexRoute: AppCoursesIndexRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
