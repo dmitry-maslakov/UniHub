@@ -4,6 +4,7 @@ import { notifications } from '@mantine/notifications';
 import { useMutation } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import type { z } from 'zod';
+import { useSessionActions } from '@/entities/session';
 import { authClient, authError } from '@/shared/api';
 import { authMessage } from '@/shared/lib';
 import { newPasswordSchema } from '../model/schema';
@@ -12,6 +13,7 @@ import { newPasswordSchema } from '../model/schema';
 // drops the user's API keys with it, so they sign in afresh.
 export function NewPasswordForm({ token }: { token: string }) {
   const navigate = useNavigate();
+  const { refresh } = useSessionActions();
   const form = useForm<z.infer<typeof newPasswordSchema>>({
     mode: 'uncontrolled',
     initialValues: { password: '', confirm: '' },
@@ -21,6 +23,8 @@ export function NewPasswordForm({ token }: { token: string }) {
     mutationFn: ({ password }: z.infer<typeof newPasswordSchema>) =>
       authClient.resetPassword({ newPassword: password, token }),
     onSuccess: async () => {
+      // every session ended with it, this browser's too
+      await refresh();
       notifications.show({
         title: 'Password changed',
         message: 'Sign in with your new password.',

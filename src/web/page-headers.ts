@@ -26,20 +26,17 @@ export const PAGE_CSP = Object.entries(directives)
   .map(([name, sources]) => `${name} ${sources.join(' ')}`)
   .join('; ');
 
-// index.html is asked for anew each time, so a release shows at once; the
-// files Vite names by their hash never change, so they're kept for a year
-export function cacheControl(file: string) {
-  if (file.endsWith('.html')) return 'no-store';
-  if (file.startsWith(`assets${sep}`))
-    return 'public, max-age=31536000, immutable';
-  return 'no-cache';
-}
-
 // serve-static's setHeaders, for every file of the app under `root` and
-// for index.html wherever it answers. They replace helmet's CSP on these
-// responses alone, so the API and its docs keep helmet's.
+// for index.html wherever it answers. The pages get the CSP above, in place
+// of helmet's, and are asked for anew each time, so a release shows at once;
+// the files Vite names by their hash never change and are kept for a year.
+// The rest keep helmet's and serve-static's headers, the API and its docs too.
 export const pageHeaders =
   (root: string) => (res: ServerResponse, path: string) => {
-    res.setHeader('Content-Security-Policy', PAGE_CSP);
-    res.setHeader('Cache-Control', cacheControl(relative(root, path)));
+    const file = relative(root, path);
+    if (file.endsWith('.html')) {
+      res.setHeader('Content-Security-Policy', PAGE_CSP);
+      res.setHeader('Cache-Control', 'no-store');
+    } else if (file.startsWith(`assets${sep}`))
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
   };

@@ -46,6 +46,27 @@ describe('API keys', () => {
     expect(screen.queryByText('uh_secret_value')).toBeNull();
   });
 
+  it('sends to sign in, and back, a session that ended meanwhile', async () => {
+    signedIn();
+    server.use(
+      http.get(auth('/api-key/list'), () =>
+        HttpResponse.json({ apiKeys: [], total: 0 }),
+      ),
+    );
+    const { router, queryClient } = renderApp('/settings/api-keys');
+    await screen.findByLabelText('New key');
+
+    server.use(http.get(auth('/get-session'), () => HttpResponse.json(null)));
+    await queryClient.invalidateQueries({ queryKey: ['session'] });
+
+    expect(
+      await screen.findByRole('heading', { name: 'Sign in to UniHub' }),
+    ).toBeVisible();
+    expect(router.state.location.search).toEqual({
+      next: '/settings/api-keys',
+    });
+  });
+
   it('asks to sign in again when the session is too old to make one', async () => {
     signedIn();
     server.use(

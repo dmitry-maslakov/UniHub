@@ -24,7 +24,7 @@ describe('sign-in', () => {
         HttpResponse.json({ apiKeys: [], total: 0 }),
       ),
     );
-    const router = renderApp('/sign-in?next=/settings/api-keys');
+    const { router } = renderApp('/sign-in?next=/settings/api-keys');
 
     await userEvent.type(await screen.findByLabelText('Email'), 'ana@uni.test');
     await userEvent.type(screen.getByLabelText('Password'), 'pw');
@@ -85,7 +85,7 @@ describe('sign-in', () => {
   it("keeps an OAuth client's signed query as it came", async () => {
     const query =
       '?client_id=app&ba_iat=1730000000&ba_param=ba_iat&ba_param=client_id&sig=a1';
-    const router = renderApp(`/sign-in${query}`);
+    const { router } = renderApp(`/sign-in${query}`);
     await screen.findByLabelText('Email');
     expect(router.history.location.search).toBe(query);
     expect(
@@ -96,7 +96,7 @@ describe('sign-in', () => {
   });
 
   it('sends the signed out from an app page to sign in, and back', async () => {
-    const router = renderApp('/device?user_code=ABCD2345');
+    const { router } = renderApp('/device?user_code=ABCD2345');
     await screen.findByLabelText('Email');
     await waitFor(() =>
       expect(router.state.location.search).toEqual({

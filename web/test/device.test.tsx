@@ -37,7 +37,7 @@ describe('approving a screen', () => {
 
   it('asks for the code when the screen gave none', async () => {
     signedIn();
-    const router = renderApp('/device');
+    const { router } = renderApp('/device');
     await userEvent.type(
       await screen.findByLabelText('Code on the screen'),
       'wxyz-2345',

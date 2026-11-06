@@ -10,6 +10,11 @@ describe('safeNext', () => {
     for (const next of [
       '//evil.test',
       '/\\evil.test',
+      '/\t/evil.test',
+      '/\n/evil.test',
+      '/\r/evil.test',
+      '/\u0000/evil.test',
+      '/\u007f/evil.test',
       'https://evil.test',
       'device',
       '',

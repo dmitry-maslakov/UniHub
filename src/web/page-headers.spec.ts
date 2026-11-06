@@ -1,5 +1,17 @@
 import { join } from 'node:path';
-import { cacheControl, PAGE_CSP } from './page-headers.js';
+import type { ServerResponse } from 'node:http';
+import { PAGE_CSP, pageHeaders } from './page-headers.js';
+
+const root = join('/srv', 'web');
+// the headers serve-static's setHeaders gives a file of the build
+const headersOf = (...path: string[]) => {
+  const set = new Map<string, string>();
+  const res = {
+    setHeader: (name: string, value: string) => set.set(name, value),
+  };
+  pageHeaders(root)(res as unknown as ServerResponse, join(root, ...path));
+  return Object.fromEntries(set);
+};
 
 describe('the web app pages', () => {
   it('load only what comes from the hub itself, and post no forms', () => {
@@ -17,11 +29,17 @@ describe('the web app pages', () => {
     expect(csp.get('base-uri')).toEqual(["'none'"]);
   });
 
-  it('are asked for anew, their hashed assets kept for good', () => {
-    expect(cacheControl('index.html')).toBe('no-store');
-    expect(cacheControl(join('assets', 'index-B9x2.js'))).toBe(
-      'public, max-age=31536000, immutable',
-    );
-    expect(cacheControl('favicon.svg')).toBe('no-cache');
+  it('are asked for anew, under that CSP', () => {
+    expect(headersOf('index.html')).toEqual({
+      'Content-Security-Policy': PAGE_CSP,
+      'Cache-Control': 'no-store',
+    });
+  });
+
+  it("keep hashed assets for good, and leave other files' headers be", () => {
+    expect(headersOf('assets', 'index-B9x2.js')).toEqual({
+      'Cache-Control': 'public, max-age=31536000, immutable',
+    });
+    expect(headersOf('favicon.svg')).toEqual({});
   });
 });
