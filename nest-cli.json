@@ -43,6 +43,15 @@
         "tsConfigPath": "libs/plugins/plain-text/tsconfig.lib.json"
       }
     },
+    "plugins/archives": {
+      "type": "library",
+      "root": "libs/plugins/archives",
+      "entryFile": "index",
+      "sourceRoot": "libs/plugins/archives/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/plugins/archives/tsconfig.lib.json"
+      }
+    },
     "plugins/canvas": {
       "type": "library",
       "root": "libs/plugins/canvas",
