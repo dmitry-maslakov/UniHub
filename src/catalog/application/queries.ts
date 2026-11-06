@@ -284,14 +284,3 @@ export class HasBytesQuery extends Query<boolean> {
     super();
   }
 }
-
-// the portal's ids of what the shared account sees of a course: what a
-// pass of it that leaves them out removes
-export class SharedViewQuery extends Query<{
-  items: string[];
-  files: string[];
-}> {
-  constructor(public readonly course: PortalRef) {
-    super();
-  }
-}

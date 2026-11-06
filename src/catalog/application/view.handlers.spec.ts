@@ -51,7 +51,7 @@ const open = <T>(record: T, isOpen = true): Seen<T> => ({
   record,
   open: isOpen,
 });
-const nothingKept: { items: string[]; files: string[] } = {
+const nothingGone: { items: string[]; files: string[] } = {
   items: [],
   files: [],
 };
@@ -68,7 +68,7 @@ async function viewing() {
     account: string,
     items: Seen<ItemInput>[],
     files: Seen<FileInput>[] = [],
-    { minute = 0, kept = nothingKept, of = 'c1' } = {},
+    { minute = 0, gone = nothingGone, of = 'c1' } = {},
   ) =>
     commands.execute(
       new ViewCourseCommand(
@@ -77,7 +77,7 @@ async function viewing() {
         of,
         items,
         files,
-        kept,
+        gone,
         at(minute),
       ),
     );
@@ -119,7 +119,7 @@ describe('views of users’ accounts', () => {
     );
   });
 
-  it('shows what a pass sent from its publication, and hides what the next leaves out unless it keeps it', async () => {
+  it('shows what a pass sent from its publication, and hides of what the next leaves out only what it says is gone', async () => {
     const { courses, pass, sees } = await viewing();
     await courses('ana', ['c1']);
     await pass(
@@ -133,10 +133,10 @@ describe('views of users’ accounts', () => {
       hiddenFrom: null,
     });
 
-    // a listing failed: what it had stays
+    // gone from a listing that went through; whatever a failed one had stays
     await pass('ana', [open(post('news'))], [], {
       minute: 60,
-      kept: { items: ['exam'], files: [] },
+      gone: { items: [], files: ['slides'] },
     });
     expect(sees('ana')).toMatchObject({
       news: { shownFrom: at(0).shownFrom, hiddenFrom: null },
@@ -145,13 +145,12 @@ describe('views of users’ accounts', () => {
     });
   });
 
-  it('hides a version once another of its record comes, kept or not', async () => {
+  it('hides a version once another of its record comes, gone or not', async () => {
     const { courses, pass, sees } = await viewing();
     await courses('ana', ['c1']);
     await pass('ana', [open(post('news'))]);
     await pass('ana', [open(post('news', 'news, edited'))], [], {
       minute: 60,
-      kept: { items: ['news'], files: [] },
     });
 
     expect(sees('ana')).toMatchObject({

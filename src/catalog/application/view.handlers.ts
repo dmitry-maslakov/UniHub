@@ -27,11 +27,11 @@ async function changeView(
   account: string,
   course: string | null,
   sent: Sighting[],
-  kept: ReadonlySet<string>,
+  gone: ReadonlySet<string> | undefined,
   at: Shown,
 ) {
   const before = await views.sightings(kind, account, course);
-  const change = viewChange(before, sent, kept);
+  const change = viewChange(before, sent, gone);
   await views.apply(kind, account, change, at);
   return change;
 }
@@ -68,7 +68,8 @@ export class ViewCoursesHandler implements ICommandHandler<ViewCoursesCommand> {
       account,
       null,
       sent,
-      new Set(),
+      // a whole listing: what it didn't send is gone
+      undefined,
       at,
     );
     // what it saw in a course it's no longer in goes with the course
@@ -77,7 +78,7 @@ export class ViewCoursesHandler implements ICommandHandler<ViewCoursesCommand> {
       (s) => !still.has(s.recordId),
     ))
       for (const kind of ['item', 'file'] as const)
-        await changeView(this.views, kind, account, course, [], new Set(), at);
+        await changeView(this.views, kind, account, course, [], undefined, at);
   }
 }
 
@@ -92,7 +93,7 @@ export class ViewCourseHandler implements ICommandHandler<ViewCourseCommand> {
     course,
     items,
     files,
-    kept,
+    gone,
     at,
   }: ViewCourseCommand) {
     const courseId = (
@@ -141,7 +142,7 @@ export class ViewCourseHandler implements ICommandHandler<ViewCourseCommand> {
       );
       sentFiles.push({ recordId, versionId, open });
     }
-    const keptOf = async (kind: Kind, externalIds: readonly string[]) =>
+    const goneOf = async (kind: Kind, externalIds: readonly string[]) =>
       new Set(
         (await this.views.recordIds(kind, portal, externalIds, false)).values(),
       );
@@ -151,7 +152,7 @@ export class ViewCourseHandler implements ICommandHandler<ViewCourseCommand> {
       account,
       courseId,
       sentItems,
-      await keptOf('item', kept.items),
+      await goneOf('item', gone.items),
       at,
     );
     await changeView(
@@ -160,7 +161,7 @@ export class ViewCourseHandler implements ICommandHandler<ViewCourseCommand> {
       account,
       courseId,
       sentFiles,
-      await keptOf('file', kept.files),
+      await goneOf('file', gone.files),
       at,
     );
   }

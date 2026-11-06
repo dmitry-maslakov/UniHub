@@ -42,10 +42,16 @@ export class SdkPortalIngest implements PortalIngest {
     private readonly run: Run = sharedRun,
   ) {}
 
-  courses(records: CourseRecord[]) {
-    return this.sdk(() =>
+  async courses(records: CourseRecord[]) {
+    const { refused } = await this.sdk(() =>
       this.ingest.courses(this.connection, records, this.run),
     );
+    return {
+      refused: refused.map(({ externalId, issues }) => ({
+        externalId,
+        error: new InvalidRecordError(issues),
+      })),
+    };
   }
 
   async pass(course: string): Promise<CoursePass> {
@@ -57,7 +63,7 @@ export class SdkPortalIngest implements PortalIngest {
         this.sdk(() => pass.item(record, seen)),
       file: (record: FileRecord, seen?: Seen) =>
         this.sdk(() => pass.file(record, seen)),
-      end: (kept) => this.sdk(() => pass.end(kept)),
+      end: (gone) => this.sdk(() => pass.end(gone)),
       content: (fileExternalId: string, content: Readable) => {
         const cut = addAbortSignal(this.signal, content);
         return this.sdk(() => pass.content(fileExternalId, cut));

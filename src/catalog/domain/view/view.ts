@@ -26,12 +26,13 @@ export interface ViewChange {
 }
 
 // What a pass makes of the account's view: what it sent, and of what it
-// saw before only the records `kept` names (a listing that failed), unless
-// the pass sent them as another version.
+// saw before all but the records `gone` names (gone from a listing that
+// went through), or with none all it didn't send (a whole listing); and a
+// version of a record the pass sent as another goes.
 export function viewChange(
   before: readonly Sighting[],
   sent: readonly Sighting[],
-  kept: ReadonlySet<string> = new Set(),
+  gone?: ReadonlySet<string>,
 ): ViewChange {
   const seen = new Map(before.map((s) => [s.versionId, s]));
   const sentVersions = new Set(sent.map((s) => s.versionId));
@@ -45,7 +46,7 @@ export function viewChange(
     hide: before.filter(
       (s) =>
         !sentVersions.has(s.versionId) &&
-        (sentRecords.has(s.recordId) || !kept.has(s.recordId)),
+        (sentRecords.has(s.recordId) || (gone?.has(s.recordId) ?? true)),
     ),
   };
 }

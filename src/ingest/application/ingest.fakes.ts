@@ -38,12 +38,10 @@ export class FakeLeases extends FetchLeases {
 }
 
 // Catalog answers every command with `changed`, and knows the files `known`
-// names; the shared account saw `view` of a course, the hub has the bytes
-// of the files `had` names
+// names; the hub has the bytes of the files `had` names
 export function ingest({
   changed = true,
   known = ['f1'],
-  view = { items: [] as string[], files: [] as string[] },
   had = [] as string[],
 } = {}) {
   const commands = new FakeBus([
@@ -55,7 +53,6 @@ export function ingest({
       ({ file }: catalog.FindFileQuery) =>
         known.includes(file.externalId) ? { id: 'id' } : null,
     ],
-    [catalog.SharedViewQuery, () => view],
     [
       catalog.HasBytesQuery,
       ({ file }: catalog.HasBytesQuery) => had.includes(file.externalId),

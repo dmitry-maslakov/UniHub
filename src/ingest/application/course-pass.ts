@@ -44,8 +44,8 @@ interface SentFile {
 }
 
 // One account's view of one course, as a connector sends it (the sdk's
-// CoursePass): records of the course, then end(), then the content of its
-// files. Whatever kind of account it is, the records are checked the same:
+// CoursePass): records of the course, then end() with what's gone of what
+// it sent before, then the content of its files. Whatever kind of account it is, the records are checked the same:
 // of this course, a file's post one the pass sent before it.
 export abstract class CoursePass {
   protected readonly items = new Map<string, catalog.ItemInput>();
@@ -79,9 +79,9 @@ export abstract class CoursePass {
   }
 
   // ended once the view is what it sent: one that fails may end again
-  async end(kept: unknown) {
+  async end(gone: unknown) {
     this.open();
-    await this.close(toKept(kept));
+    await this.close(toGone(gone));
     this.ended = true;
   }
 
@@ -110,7 +110,7 @@ export abstract class CoursePass {
     input: catalog.FileInput,
     fetchable: boolean,
   ): Promise<boolean>;
-  protected abstract close(kept: Kept): Promise<void>;
+  protected abstract close(gone: Gone): Promise<void>;
   protected abstract store(
     input: catalog.FileInput,
     content: Readable,
@@ -131,7 +131,9 @@ export abstract class CoursePass {
   }
 }
 
-export interface Kept {
+// of what the account saw before, what a listing that went through no
+// longer has, by the portal's ids
+export interface Gone {
   items: string[];
   files: string[];
 }
@@ -139,14 +141,14 @@ export interface Kept {
 const ids = (value: unknown) =>
   Array.isArray(value) ? value.filter((v) => typeof v === 'string') : [];
 
-const toKept = (kept: unknown): Kept => {
-  const { items, files } = (kept ?? {}) as Partial<Record<keyof Kept, unknown>>;
+const toGone = (gone: unknown): Gone => {
+  const { items, files } = (gone ?? {}) as Partial<Record<keyof Gone, unknown>>;
   return { items: ids(items), files: ids(files) };
 };
 
 // The shared account's pass: its records go to catalog one by one as they
-// come, as they always did, and end() removes what the shared account saw
-// of the course and the pass neither sent nor kept.
+// come, as they always did, and end() removes what's gone, unless the pass
+// sent it after all.
 export class SharedPass extends CoursePass {
   protected async sendItem(input: catalog.ItemInput) {
     const { changed } = await this.ports.commands.execute(
@@ -163,20 +165,11 @@ export class SharedPass extends CoursePass {
     return needsContent;
   }
 
-  protected async close(kept: Kept) {
+  protected async close(gone: Gone) {
     const { portal } = this.connection;
-    const view = await this.ports.queries.execute(
-      new catalog.SharedViewQuery({ portal, externalId: this.course }),
-    );
-    const stays = (sent: Map<string, unknown>, also: string[]) => {
-      const kept = new Set(also);
-      return (id: string) => sent.has(id) || kept.has(id);
-    };
-    const item = stays(this.items, kept.items);
-    const file = stays(this.files, kept.files);
-    for (const externalId of view.items.filter((id) => !item(id)))
+    for (const externalId of gone.items.filter((id) => !this.items.has(id)))
       await this.removed(new catalog.RemoveItemCommand({ portal, externalId }));
-    for (const externalId of view.files.filter((id) => !file(id)))
+    for (const externalId of gone.files.filter((id) => !this.files.has(id)))
       await this.removed(new catalog.RemoveFileCommand({ portal, externalId }));
   }
 
@@ -231,7 +224,7 @@ export class AccountPass extends CoursePass {
     return !has && this.ports.leases.take(JSON.stringify([file, stamp]));
   }
 
-  protected async close(kept: Kept) {
+  protected async close(gone: Gone) {
     const { portal, account } = this.connection;
     const items = [...this.items.values()].map((record) => ({
       record,
@@ -248,7 +241,7 @@ export class AccountPass extends CoursePass {
         this.course,
         items,
         files,
-        kept,
+        gone,
         this.run.shown(new Date()),
       ),
     );

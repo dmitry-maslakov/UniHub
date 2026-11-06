@@ -24,7 +24,7 @@ describe('viewChange', () => {
     sight('old', 'old-1'),
   ];
 
-  it('shows what the pass sent anew, hides another version of a record and what is gone', () => {
+  it('shows what a whole listing sent anew, hides another version of a record and what it no longer has', () => {
     expect(
       viewChange(before, [
         sight('news', 'news-1'),
@@ -38,22 +38,19 @@ describe('viewChange', () => {
     });
   });
 
-  it('keeps what a failed listing had, unless the pass sent it as another version', () => {
+  it('hides of what a pass left out only what it says is gone, and a version of a record it sent as another', () => {
     const { hide } = viewChange(
       before,
       [sight('exam', 'exam-2')],
-      new Set(['old', 'exam']),
+      new Set(['news']),
     );
     expect(hide).toEqual([sight('news', 'news-1'), sight('exam', 'exam-1')]);
+    expect(viewChange(before, [], new Set()).hide).toEqual([]);
   });
 
   it('opens or locks a version it sees still, as the pass saw it', () => {
     expect(
-      viewChange(
-        before,
-        [sight('news', 'news-1', false)],
-        new Set(['exam', 'old']),
-      ),
+      viewChange(before, [sight('news', 'news-1', false)], new Set()),
     ).toEqual({
       show: [],
       reopen: [sight('news', 'news-1', false)],

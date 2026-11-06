@@ -5,7 +5,7 @@ import { z } from 'zod';
 // the ids of what it sent, as of the last run it went through to the end.
 // A source that failed, was cut short or refused keeps what it had, and
 // an id is gone only once no source has it, so a tab hidden since, or a
-// page out of the list but still in a module, takes nothing away.
+// page out of the list but still in a module, removes nothing.
 
 const Sources = z.record(z.string(), z.array(z.string()));
 type Sources = z.output<typeof Sources>;
@@ -22,17 +22,18 @@ export type SyncState = z.output<typeof SyncState>;
 
 function settleSources(last: Sources = {}, now: Sources) {
   const sources = { ...last, ...now };
-  return { sources, kept: [...new Set(Object.values(sources).flat())] };
+  const kept = new Set(Object.values(sources).flat());
+  const had = new Set(Object.values(last).flat());
+  return { sources, gone: [...had].filter((id) => !kept.has(id)) };
 }
 
-// The listings to save once a course's run is through, and the ids a
-// source still has: what the pass keeps of the account's view (end()), so
-// the rest of what it saw before is gone
+// The listings to save once a course's run is through, and the ids gone:
+// what the pass's end() says is gone from the account's view
 export function settle(last: Listings | undefined, now: Listings) {
   const items = settleSources(last?.items, now.items);
   const files = settleSources(last?.files, now.files);
   return {
     listings: { items: items.sources, files: files.sources },
-    kept: { items: items.kept, files: files.kept },
+    gone: { items: items.gone, files: files.gone },
   };
 }

@@ -281,20 +281,14 @@ describe('views of accounts of their own', { timeout: 60_000 }, () => {
     await file(later, 'ana', { externalId: 'handout', item: 'edited' });
     await later.end();
     // then passes that hide a post from a time past, and show one and hide
-    // another from a time to come, keeping the rest
-    const keeping = (...items: string[]) => ({
-      items,
-      files: ['slides', 'later', 'handout'],
-    });
-    await (
-      await ingestOf('ana').pass('c1')
-    ).end(keeping('news', 'section', 'edited', 'going'));
+    // another from a time to come, the rest as it was
+    await (await ingestOf('ana').pass('c1')).end({ items: ['gone'] });
     const toCome = await ingestOf('ana', {
       shownFrom: future,
       openFrom: future,
     }).pass('c1');
     await toCome.item(post('soon'));
-    await toCome.end(keeping('news', 'section', 'edited'));
+    await toCome.end({ items: ['going'] });
     const { hash: kasnije } = await later.content(
       'later',
       Readable.from(['kasnije semafor']),
@@ -333,7 +327,8 @@ describe('views of accounts of their own', { timeout: 60_000 }, () => {
     await versionOf('itemVersion', 'edited', 'edited since');
     for (const id of ['slides', 'later', 'handout'])
       await versionOf('fileVersion', id);
-    for (const id of ['news', 'section', 'soon', 'gone', 'going', 'sealed'])
+    // 'gone' no account sees any longer, so the index leaves it out
+    for (const id of ['news', 'section', 'soon', 'going', 'sealed'])
       await indexed(`post__${version[id]}`);
   }, 60_000);
 

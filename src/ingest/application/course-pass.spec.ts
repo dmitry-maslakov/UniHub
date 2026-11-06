@@ -32,10 +32,8 @@ const of = <T extends object>(
 ) => sent.filter((m): m is T => m instanceof kind);
 
 describe('a pass of the shared account', () => {
-  it('sends its records one by one as they come, and removes at the end what it saw of the course and neither sent nor kept', async () => {
-    const { service, sent } = ingest({
-      view: { items: ['p1', 'p2', 'p3'], files: ['f1', 'f2'] },
-    });
+  it('sends its records one by one as they come, and removes at the end what is gone, unless it sent it after all', async () => {
+    const { service, sent } = ingest();
     const pass = service.pass(shared, 'c1');
     await pass.item(post('p1'), undefined);
     expect(of(sent, catalog.UpsertItemCommand)[0].data).toMatchObject({
@@ -43,7 +41,7 @@ describe('a pass of the shared account', () => {
       course: 'c1',
     });
     await pass.file(file('f1'), undefined);
-    await pass.end({ items: ['p2'] });
+    await pass.end({ items: ['p3', 'p1'], files: ['f2'] });
 
     expect(sent.slice(2)).toEqual([
       new catalog.RemoveItemCommand(ref('p3')),
@@ -92,7 +90,7 @@ describe("a pass of a user's own account", () => {
       account: 'ana',
       portal,
       course: 'c1',
-      kept: { items: [], files: ['f9'] },
+      gone: { items: [], files: ['f9'] },
       at,
     });
     expect(view.items.map((i) => [i.record.externalId, i.open])).toEqual([
@@ -171,11 +169,16 @@ describe("a pass of a user's own account", () => {
 });
 
 describe("an account's courses", () => {
-  it("are the shared account's to add to, one by one, and a user's account's view of them as a whole", async () => {
+  it("are the shared account's to add to, one by one, and a user's account's view of them as a whole, a refused one left out", async () => {
     const { service, sent } = ingest();
     const course = { externalId: 'c1', name: 'OS' };
-    await service.courses(shared, [course]);
-    await service.courses(ana, [course], run);
+    const nameless = { externalId: 'c2' };
+    expect(await service.courses(shared, [course, nameless])).toEqual({
+      refused: [
+        { externalId: 'c2', issues: [expect.stringMatching(/^name: /)] },
+      ],
+    });
+    await service.courses(ana, [nameless, course], run);
 
     const input = {
       portal,

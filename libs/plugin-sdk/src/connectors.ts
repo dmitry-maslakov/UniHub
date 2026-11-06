@@ -2,6 +2,7 @@ import type { Readable } from 'node:stream';
 import type { ContentHash, Json, PortalId } from '@app/kernel';
 import type { AccountLink } from '@app/kernel';
 import type { Credential } from './accounts.js';
+import type { InvalidRecordError } from './errors.js';
 import type { CourseRecord, FileRecord, ItemRecord } from './records.js';
 
 // Connectors bring data in from a portal. One is written for one account;
@@ -85,10 +86,12 @@ export interface CoursePass {
   // has ended; false when the hub has it, or another run is fetching it,
   // or it's locked or too large
   file(record: FileRecord, seen?: Seen): Promise<{ fetch: boolean }>;
-  // The account's view of the course is now what this pass sent, and those
-  // of what it sent before that `kept` names (a listing that failed this
-  // time): the rest is gone from it.
-  end(kept?: { items?: string[]; files?: string[] }): Promise<void>;
+  // The account's view of the course is now what this pass sent, and what
+  // it sent before but what `gone` names, by the portal's ids: what a
+  // listing that went through to the end no longer has. A record a listing
+  // that failed had stays, so a connector that can't tell gone from not
+  // listed this time names none.
+  end(gone?: { items?: string[]; files?: string[] }): Promise<void>;
   // content of a file of the pass, after end(); past the hub's limit for
   // one file it is an InvalidRecordError (CONTENT_TOO_LARGE)
   content(
@@ -104,8 +107,12 @@ export interface CoursePass {
 // SHARED_ONLY).
 export interface PortalIngest {
   // the courses the account is in, after a listing of them that went
-  // through to the end: a user's account sees only these from now on
-  courses(records: CourseRecord[]): Promise<void>;
+  // through to the end: a user's account sees only these from now on. A
+  // record the hub refuses is left out and named, with why (as `course()`
+  // would reject it): skip its pass
+  courses(records: CourseRecord[]): Promise<{
+    refused: { externalId: string; error: InvalidRecordError }[];
+  }>;
   pass(course: string): Promise<CoursePass>;
   course(record: CourseRecord): Promise<{ changed: boolean }>;
   item(record: ItemRecord): Promise<{ changed: boolean }>;

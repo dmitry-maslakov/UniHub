@@ -15,13 +15,16 @@ import {
 } from '@app/plugin-sdk';
 
 // What the hub would keep of one account's runs, as it refuses what the
-// sdk says it does: a pass of a course the courses didn't name, a file's
-// post the pass didn't send before it, content before end() or of a file
-// locked for the account. A record sent again replaces the one before; at
-// end() what the account saw of the course and the pass neither sent nor
-// kept is removed; the hub has a file's content once content() got it.
+// sdk says it does: a course in `refusing`, a pass of a course the courses
+// didn't name, a file's post the pass didn't send before it, content
+// before end() or of a file locked for the account. A record sent again
+// replaces the one before; at end() what it says is gone is removed,
+// unless the pass sent it; the hub has a file's content once content() got
+// it.
 export class RecordingIngest implements PortalIngest {
   readonly listedCourses = new Map<string, CourseRecord>();
+  // the courses whose records the hub refuses
+  readonly refusing = new Set<string>();
   readonly items = new Map<string, ItemRecord>();
   readonly files = new Map<string, FileRecord>();
   // the files sent locked for the account, as of the last pass
@@ -33,8 +36,15 @@ export class RecordingIngest implements PortalIngest {
 
   async courses(records: CourseRecord[]) {
     this.listedCourses.clear();
+    const refused = [];
     for (const record of records)
-      this.listedCourses.set(record.externalId, record);
+      if (this.refusing.has(record.externalId))
+        refused.push({
+          externalId: record.externalId,
+          error: new InvalidRecordError(['name: refused']),
+        });
+      else this.listedCourses.set(record.externalId, record);
+    return { refused };
   }
 
   async pass(course: string): Promise<CoursePass> {
@@ -63,23 +73,11 @@ export class RecordingIngest implements PortalIngest {
           fetch: !seen?.locked && !this.contents.has(record.externalId),
         };
       },
-      end: async (kept = {}) => {
+      end: async (gone = {}) => {
         open();
         ended = true;
-        this.drop(
-          this.items,
-          course,
-          sent.items,
-          kept.items,
-          this.removedItems,
-        );
-        this.drop(
-          this.files,
-          course,
-          sent.files,
-          kept.files,
-          this.removedFiles,
-        );
+        this.drop(this.items, sent.items, gone.items, this.removedItems);
+        this.drop(this.files, sent.files, gone.files, this.removedFiles);
       },
       content: async (fileExternalId: string, content: Readable) => {
         if (!ended || !sent.files.has(fileExternalId))
@@ -130,14 +128,13 @@ export class RecordingIngest implements PortalIngest {
   }
 
   private drop(
-    records: Map<string, { course?: string }>,
-    course: string,
+    records: Map<string, unknown>,
     sent: Set<string>,
-    kept: string[] = [],
+    gone: string[] = [],
     removed: string[],
   ) {
-    for (const [id, record] of records)
-      if (record.course === course && !sent.has(id) && !kept.includes(id)) {
+    for (const id of gone)
+      if (!sent.has(id)) {
         records.delete(id);
         removed.push(id);
       }

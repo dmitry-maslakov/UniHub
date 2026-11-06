@@ -14,14 +14,17 @@ import { settle, SyncState } from './listings.js';
 import { courseRecord } from './records.js';
 
 // One run: every open course the token's user is in, sent as the hub's
-// courses, then each one's records in a pass of its own, its view now what
-// the pass sent and what a listing that failed had (end()); then its
-// listings are saved, and the files the hub asked for downloaded. A run
-// cut short goes on from the courses it got through. A course no longer
-// listed is gone from a user's account's view, and keeps its records for
-// the shared account, its listings kept for when it's back. A course
-// Canvas fails on keeps what its view had: the others go on, and the run
-// fails once they're through.
+// courses, then each one's records in a pass of its own, its listings
+// saved and the pass ended with what's gone from a listing that went
+// through (only what one had before and no longer has: a listing that
+// failed, or one never saved, takes nothing away); then the files the hub
+// asked for are downloaded. The listings are saved before the end, so the
+// hub never has what they don't. A run cut short goes on from the courses
+// it got through. A course no longer listed is gone from a user's
+// account's view, and keeps its records for the shared account, its
+// listings kept for when it's back. A course Canvas fails on, or whose
+// record the hub refuses, keeps what its view had: the others go on, and
+// the run fails once they're through.
 export class CanvasSync {
   private readonly logger = new Logger(CanvasSync.name);
 
@@ -39,9 +42,15 @@ export class CanvasSync {
       '/api/v1/courses?enrollment_state=active&include[]=term',
     );
     // not open to its students yet: only its id comes
-    const courses = listed.filter((c) => !c.access_restricted_by_date);
-    await this.ingest.courses(courses.map((c) => courseRecord(this.base, c)));
-    const skipped: number[] = [];
+    const open = listed.filter((c) => !c.access_restricted_by_date);
+    const { refused } = await this.ingest.courses(
+      open.map((c) => courseRecord(this.base, c)),
+    );
+    const skipped = refused.map(({ externalId, error }) => {
+      this.logger.warn(`course ${externalId} skipped: ${error.message}`);
+      return Number(externalId);
+    });
+    const courses = open.filter((c) => !skipped.includes(c.id));
     for (const course of courses) {
       const synced = await this.skipRefused(`course ${course.id}`, () =>
         this.sync(course, state),
@@ -58,14 +67,14 @@ export class CanvasSync {
     const walk = new CourseWalk(this.api, this.base, course.id, this.view);
     const content = await walk.read();
     const pass = await this.ingest.pass(String(course.id));
-    const { listings, kept } = settle(
+    const { listings, gone } = settle(
       state.courses[course.id],
       content.listings,
     );
     const fetch = await this.send(pass, content);
-    await pass.end(kept);
     state.courses[course.id] = listings;
     await this.ingest.saveState(state);
+    await pass.end(gone);
     for (const { record, download } of fetch)
       await this.skipRefused(`file ${record.externalId}`, async () =>
         pass.content(record.externalId, await this.api.download(download)),

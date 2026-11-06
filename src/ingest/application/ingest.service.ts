@@ -52,27 +52,35 @@ export class IngestService {
 
   // The account's courses, after a listing of them that went through: a
   // user's account sees these alone from now on, the shared account keeps
-  // every course it ever sent
+  // every course it ever sent. A record refused is left out, and named.
   async courses(connection: Connection, raws: unknown, run: Run = sharedRun) {
     if (!Array.isArray(raws))
       throw new MalformedRecordError(['courses: a list']);
-    const courses = raws.map((raw) => toPortalCourseInput(connection, raw));
-    if (connection.shared) {
+    const courses: catalog.PortalCourseInput[] = [];
+    const refused: { externalId: string; issues: string[] }[] = [];
+    for (const raw of raws as unknown[])
+      try {
+        courses.push(toPortalCourseInput(connection, raw));
+      } catch (error) {
+        if (!(error instanceof MalformedRecordError)) throw error;
+        const { externalId } = (raw ?? {}) as { externalId?: unknown };
+        refused.push({ externalId: String(externalId), issues: error.issues });
+      }
+    if (connection.shared)
       for (const course of courses)
         await this.commands.execute(
           new catalog.UpsertPortalCourseCommand(course),
         );
-      return;
-    }
-    const { account, portal } = connection;
-    await this.commands.execute(
-      new catalog.ViewCoursesCommand(
-        account,
-        portal,
-        courses,
-        run.shown(new Date()),
-      ),
-    );
+    else
+      await this.commands.execute(
+        new catalog.ViewCoursesCommand(
+          connection.account,
+          connection.portal,
+          courses,
+          run.shown(new Date()),
+        ),
+      );
+    return { refused };
   }
 
   // one account's view of one course, sent as a whole (CoursePass)

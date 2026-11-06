@@ -16,7 +16,7 @@ describe('ConnectionDirectory', () => {
   });
 
   it("gives a user's account's run its credential, and shows what it finds at the slot it started in", async () => {
-    const courses = vi.fn(async () => {});
+    const courses = vi.fn(async () => ({ refused: [] }));
     const directory = directoryOf({ lms: ['ana'] }, { ana: credential }, {
       courses,
     } as unknown as IngestService);

@@ -204,6 +204,17 @@ describe('CanvasConnector', () => {
     expect(ingest.removedItems).toEqual(['assignment:901']);
   });
 
+  it('takes nothing away for a listing that fails with none saved before, its state lost', async () => {
+    const ingest = new RecordingIngest();
+    await run(ingest);
+    ingest.saved = null;
+    canvas.answers[`${COURSE}/assignments`] = 401;
+
+    await run(ingest);
+    expect(ingest.removedItems).toEqual([]);
+    expect(ingest.items.has('assignment:901')).toBe(true);
+  });
+
   it('removes nothing from a run cut short, and the next goes on', async () => {
     const ingest = new RecordingIngest();
     await run(ingest);
@@ -278,6 +289,28 @@ describe('CanvasConnector', () => {
     );
     expect(ingest.listedCourses.has('103')).toBe(true);
     // course 101's listings as they were, so nothing of it is taken for gone
+    expect(ingest.saved).toEqual({
+      courses: { '103': { items: {}, files: {} } },
+    });
+  });
+
+  it('skips a course whose record the hub refuses, goes on, and fails the run at the end', async () => {
+    (canvas.answers['/api/v1/courses'] as object[]).push({
+      id: 103,
+      name: 'Networks',
+      course_code: 'NET-2026',
+      start_at: null,
+      end_at: null,
+    });
+    const ingest = new RecordingIngest();
+    ingest.refusing.add('101');
+
+    await expect(run(ingest)).rejects.toThrow('canvas courses 101 skipped');
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringMatching(/^course 101 skipped: /),
+    );
+    expect(canvas.asked).not.toContain(`${COURSE}/tabs`);
+    expect([...ingest.listedCourses.keys()]).toEqual(['103']);
     expect(ingest.saved).toEqual({
       courses: { '103': { items: {}, files: {} } },
     });

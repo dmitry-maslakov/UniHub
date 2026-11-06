@@ -143,7 +143,7 @@ export class ViewCoursesCommand extends Command<void> {
 }
 
 // What a user's account sees of one course, from `at` on: these posts and
-// files, and of what it saw before only the records `kept` names (by the
+// files, and of what it saw before all but the records `gone` names (by the
 // portal's ids). Each record is the version the accounts that see it alike
 // share. The course is one the account's courses named.
 export class ViewCourseCommand extends Command<void> {
@@ -153,7 +153,7 @@ export class ViewCourseCommand extends Command<void> {
     public readonly course: string,
     public readonly items: readonly Seen<ItemInput>[],
     public readonly files: readonly Seen<FileInput>[],
-    public readonly kept: {
+    public readonly gone: {
       items: readonly string[];
       files: readonly string[];
     },

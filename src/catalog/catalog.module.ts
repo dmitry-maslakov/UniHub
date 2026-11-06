@@ -55,10 +55,7 @@ import {
   ListItemsHandler,
   ListVisibleItemsHandler,
 } from './infrastructure/read/items.read.js';
-import {
-  HasBytesHandler,
-  SharedViewHandler,
-} from './infrastructure/read/views.read.js';
+import { HasBytesHandler } from './infrastructure/read/views.read.js';
 
 // What portals publish (written by ingest), kept as versions that accounts
 // see through sights, and the courses admins make of it. The shared
@@ -89,7 +86,6 @@ import {
     StoreBytesHandler,
     ForgetAccountHandler,
     HasBytesHandler,
-    SharedViewHandler,
     ListCoursesHandler,
     FindCourseHandler,
     GetPortalCourseHandler,
