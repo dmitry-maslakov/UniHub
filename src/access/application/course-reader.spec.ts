@@ -58,6 +58,7 @@ const item = (id: string, courseId: string): CourseItemDto => ({
   publishedAt: null,
   raw: { message: 'on Monday' },
   removed: false,
+  updatedAt: new Date('2026-10-01T09:00:00Z'),
 });
 const items = [item('i1', os.id), item('i2', net.id)];
 const text = {

@@ -1,15 +1,15 @@
 import { createHash } from 'node:crypto';
 import { ContentHash, type Json } from '@app/kernel';
 import { chunksOf } from './chunks.js';
-import { postText, type Post } from './post-text.js';
+import { POST_TEXT_VERSION } from './post-text.js';
 import { kept, type Made, type Unpacking } from './unpacking.js';
 
 // What the search index keeps besides the processors' texts, each under
 // the id of what it's of: a post's text (an item), a file's name, and the
 // paths of the members an archive's tree kept (under its content's hash).
-// A record's documents go by the hash of the content they're of, as a
-// text's chunks do, so a search answers them with it: a name or a path by
-// the content it names, a post by its own text's.
+// A record's chunks go by a hash, as a text's do, so a search answers each
+// hash once: a name or a path by the content it names, with that content's
+// pages, and a post by one of its own, as no two posts are one.
 
 // the item's or the file's id, the archive's content hash
 export type RecordRef =
@@ -19,8 +19,7 @@ export type RecordKind = RecordRef['kind'];
 // and what it was made from, so the reconcile tells one that's out of date
 export type RecordKey = RecordRef & { fingerprint: string };
 
-// a document of a record: a chunk of the post, the file's name, a member's
-// path
+// a chunk of the post, the file's name, a member's path
 export interface RecordChunk {
   hash: ContentHash;
   text: string;
@@ -33,6 +32,12 @@ export interface RecordEntry {
   chunks: RecordChunk[];
 }
 
+// What the index says of a record: its key, and a digest of its chunks, so
+// one made again from something else but of the same chunks (a post edited
+// past its text, a file moved) has only this written again, its chunks and
+// their vectors kept
+export type RecordManifest = RecordKey & { digest: string };
+
 // the ref as one string, for ids
 export const refId = ({ kind, id }: RecordRef) => `${kind}__${id}`;
 
@@ -40,23 +45,36 @@ const sha256 = (text: string) =>
   ContentHash.parse(createHash('sha256').update(text).digest('hex'));
 const digest = (value: Json) => sha256(JSON.stringify(value));
 
-// what the post's text is made from, as catalog has it (postgres gives a
-// jsonb's keys back in one order)
-export const postKey = (id: string, { title, raw }: Post): RecordKey => ({
-  kind: 'post',
-  id,
-  fingerprint: digest([title, raw]),
+export const manifestOf = ({ key, chunks }: RecordEntry): RecordManifest => ({
+  ...key,
+  digest: digest(
+    chunks.map(({ hash, text, member }) => [hash, text, member ?? null]),
+  ),
 });
 
-// its text in chunks, each by the text's hash
-export async function postEntry(id: string, post: Post): Promise<RecordEntry> {
-  const text = await postText(post);
-  const hash = sha256(text);
+// a post changes when catalog writes it, and with the rule its text is made
+// by (POST_TEXT_VERSION)
+export const postKey = (
+  id: string,
+  { updatedAt }: { updatedAt: Date },
+): RecordKey => ({
+  kind: 'post',
+  id,
+  fingerprint: `${POST_TEXT_VERSION}__${updatedAt.toISOString()}`,
+});
+
+// its text (post-text.ts) in chunks, by a hash of the post's own
+export const postEntry = (
+  id: string,
+  post: { updatedAt: Date },
+  text: string,
+): RecordEntry => {
+  const hash = sha256(`post:${id}`);
   return {
     key: postKey(id, post),
     chunks: chunksOf([text]).map(({ text }) => ({ hash, text })),
   };
-}
+};
 
 // a file that holds content, by its name; one without isn't searched
 export interface NamedFile {

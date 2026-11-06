@@ -78,7 +78,8 @@ const posts: VisibleItemDto[] = [
     publishedAt: null,
   },
 ];
-const postText = sha256('Exam\n\non Monday');
+// a post's chunks go by a hash of its own
+const postHash = sha256('post:p1');
 
 const hit = (hash: ContentHash, page: number): TextHit => ({
   hash,
@@ -341,11 +342,9 @@ describe('CourseSearch', () => {
     );
   });
 
-  it('answers a post found by its text as the post, in its course, each once', async () => {
+  it('answers a post found by its text as the post, in its course', async () => {
     const { search } = searching(['os-id', 'net-id'], [], contained, [
-      byRecords(postText, match('post', 'p1')),
-      // its old text, while the index catches up with an edit
-      byRecords(sha256('Exam'), match('post', 'p1')),
+      byRecords(postHash, match('post', 'p1')),
     ]);
 
     expect(await search.search('ana', request({ q: 'exam' }))).toEqual({

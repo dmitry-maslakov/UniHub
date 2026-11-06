@@ -4,14 +4,18 @@ import type {
   IndexedChunk,
   IndexedRecordChunk,
 } from '../../application/ports.js';
-import { refId, type RecordKey, type RecordRef } from '../../domain/records.js';
+import {
+  refId,
+  type RecordManifest,
+  type RecordRef,
+} from '../../domain/records.js';
 import { keyId, type RepresentationKey } from '../../domain/representation.js';
 
 // What the index holds of a text, or of a record: a document per chunk, and
 // a manifest once they're all in, which has no text and so is never a hit.
 // Ids are made of the key, so writing a text again replaces its documents;
 // a record's of its ref and their number, so writing it again overwrites
-// them, and those past its new number go with its old fingerprint.
+// them, and those past its new number go with its old digest.
 
 // only the key's own fields: the mapping takes no others
 const fieldsOf = ({ hash, processor, version }: RepresentationKey) => ({
@@ -52,15 +56,15 @@ export const versionsOf = (
 
 // the record's own fields, then the chunk's
 export const recordDocs = (
-  key: RecordKey,
+  manifest: RecordManifest,
   chunks: readonly IndexedRecordChunk[],
 ) =>
   chunks.map(({ hash, text, member, vector }, chunk) => [
-    { index: { _id: `${refId(key)}__${chunk}` } },
+    { index: { _id: `${refId(manifest)}__${chunk}` } },
     {
-      kind: key.kind,
-      record: key.id,
-      fingerprint: key.fingerprint,
+      kind: manifest.kind,
+      record: manifest.id,
+      digest: manifest.digest,
       hash,
       chunk,
       text,
@@ -69,17 +73,18 @@ export const recordDocs = (
     },
   ]);
 
-export const recordManifest = (key: RecordKey, chunks: number) => ({
-  id: refId(key),
-  body: {
-    kind: key.kind,
-    record: key.id,
-    fingerprint: key.fingerprint,
-    chunks,
-  },
-});
+export const recordManifest = (manifest: RecordManifest, chunks: number) => {
+  const { kind, id, fingerprint, digest } = manifest;
+  return {
+    id: refId(manifest),
+    body: { kind, record: id, fingerprint, digest, chunks },
+  };
+};
 
-// a record's documents, or those made from another fingerprint than this
+// its first chunk's id: there, written partway, when its manifest isn't
+export const firstChunk = (ref: RecordRef) => `${refId(ref)}__0`;
+
+// a record's documents, or those of another digest than this
 export const recordOf = (
   { kind, id }: RecordRef,
   except?: string,
@@ -87,7 +92,7 @@ export const recordOf = (
   bool: {
     filter: [{ term: { kind } }, { term: { record: id } }],
     ...(except !== undefined && {
-      must_not: [{ term: { fingerprint: except } }],
+      must_not: [{ term: { digest: except } }],
     }),
   },
 });

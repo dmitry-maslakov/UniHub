@@ -42,7 +42,12 @@ const query = {
   processors: [key.processor],
   size: 10,
 };
-const post = { kind: 'post' as const, id: 'post-1', fingerprint: 'f2' };
+const post = {
+  kind: 'post' as const,
+  id: 'post-1',
+  fingerprint: 'f2',
+  digest: 'd2',
+};
 const none = { body: { hits: { hits: [] } } };
 
 // the calls OpenSearchTextIndex makes, answered as an index of this
@@ -80,6 +85,12 @@ function opensearch(embedding: Vectors = null) {
       body: false,
     })),
     delete: vi.fn<(params: object) => Promise<unknown>>(async () => ({
+      body: {},
+    })),
+    get: vi.fn<(params: object) => Promise<unknown>>(async () => ({
+      body: { found: false },
+    })),
+    update: vi.fn<(params: object) => Promise<unknown>>(async () => ({
       body: {},
     })),
     search: vi.fn<(params: object) => Promise<unknown>>(async () => ({
@@ -352,6 +363,7 @@ describe('OpenSearchTextIndex', () => {
       kind: 'tree' as const,
       id: key.hash,
       fingerprint: 'archives__1__1',
+      digest: 'd1',
     };
 
     await text.putRecord(post, [
@@ -361,17 +373,17 @@ describe('OpenSearchTextIndex', () => {
       { hash: key.hash, text: 'lab/main.c', member: 'lab/main.c' },
     ]);
 
-    expect(client.exists).toHaveBeenNthCalledWith(1, {
-      index: indexName('unihub', vectors),
-      id: 'post__post-1',
-    });
+    expect(client.exists.mock.calls.slice(0, 2)).toEqual([
+      [{ index: indexName('unihub', vectors), id: 'post__post-1' }],
+      [{ index: indexName('unihub', vectors), id: 'post__post-1__0' }],
+    ]);
     expect(client.bulk.mock.calls.map(([{ body }]) => body)).toEqual([
       [
         { index: { _id: 'post__post-1__0' } },
         {
           kind: 'post',
           record: 'post-1',
-          fingerprint: 'f2',
+          digest: 'd2',
           hash: key.hash,
           chunk: 0,
           text: 'Exam',
@@ -383,7 +395,7 @@ describe('OpenSearchTextIndex', () => {
         {
           kind: 'tree',
           record: key.hash,
-          fingerprint: 'archives__1__1',
+          digest: 'd1',
           hash: key.hash,
           chunk: 0,
           text: 'lab/main.c',
@@ -394,7 +406,13 @@ describe('OpenSearchTextIndex', () => {
     expect(client.index).toHaveBeenNthCalledWith(1, {
       index: indexName('unihub', vectors),
       id: 'post__post-1',
-      body: { kind: 'post', record: 'post-1', fingerprint: 'f2', chunks: 1 },
+      body: {
+        kind: 'post',
+        record: 'post-1',
+        fingerprint: 'f2',
+        digest: 'd2',
+        chunks: 1,
+      },
     });
     expect(client.deleteByQuery).not.toHaveBeenCalled();
     expect(
@@ -403,7 +421,8 @@ describe('OpenSearchTextIndex', () => {
     ).toBe(true);
   });
 
-  it('replaces a record as a text: its manifest refreshed, then its chunks of another fingerprint dropped', async () => {
+  // what it replaced found by the drop once the manifest's refresh shows it
+  it('replaces a record as a text: its manifest refreshed, then its chunks of another digest dropped', async () => {
     const { client, text } = opensearch();
     client.exists.mockResolvedValue({ body: true });
 
@@ -412,7 +431,13 @@ describe('OpenSearchTextIndex', () => {
     expect(client.index).toHaveBeenCalledWith({
       index,
       id: 'post__post-1',
-      body: { kind: 'post', record: 'post-1', fingerprint: 'f2', chunks: 0 },
+      body: {
+        kind: 'post',
+        record: 'post-1',
+        fingerprint: 'f2',
+        digest: 'd2',
+        chunks: 0,
+      },
       refresh: 'wait_for',
     });
     expect(client.deleteByQuery).toHaveBeenCalledWith({
@@ -426,7 +451,7 @@ describe('OpenSearchTextIndex', () => {
               { term: { kind: 'post' } },
               { term: { record: 'post-1' } },
             ],
-            must_not: [{ term: { fingerprint: 'f2' } }],
+            must_not: [{ term: { digest: 'd2' } }],
           },
         },
       },
@@ -435,6 +460,32 @@ describe('OpenSearchTextIndex', () => {
       client.index.mock.invocationCallOrder[0] <
         client.deleteByQuery.mock.invocationCallOrder[0],
     ).toBe(true);
+  });
+
+  // a write that failed partway: three chunks in, no manifest; the edit has
+  // one, and the two past it go
+  it('replaces a record whose manifest is missing but whose chunks are there, as one with a manifest', async () => {
+    const { client, text } = opensearch();
+    client.exists.mockImplementation(async ({ id }: { id?: string }) => ({
+      body: id === 'post__post-1__0',
+    }));
+
+    await text.putRecord(post, [{ hash: key.hash, text: 'Exam' }]);
+
+    expect(client.index).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'post__post-1', refresh: 'wait_for' }),
+    );
+    expect(client.deleteByQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: {
+          query: expect.objectContaining({
+            bool: expect.objectContaining({
+              must_not: [{ term: { digest: 'd2' } }],
+            }),
+          }),
+        },
+      }),
+    );
   });
 
   it('removes all of a record, its manifest first, refreshed for the drop to see the chunks', async () => {
@@ -450,7 +501,7 @@ describe('OpenSearchTextIndex', () => {
     await text.removeRecord({ kind: 'file', id: 'file-1' });
 
     expect(client.delete.mock.calls).toEqual([
-      [{ index, id: 'file__file-1', refresh: 'wait_for' }],
+      [{ index, id: 'file__file-1', refresh: 'wait_for' }, { ignore: [404] }],
     ]);
     expect(client.deleteByQuery.mock.calls).toEqual([
       [expect.objectContaining({ body: { query: all } })],
@@ -462,9 +513,37 @@ describe('OpenSearchTextIndex', () => {
     ).toBe(true);
   });
 
-  it("lists the records' manifests as their keys", async () => {
+  it("reads a record's manifest as a get sees it, none when it has none", async () => {
     const { client, text } = opensearch();
     const { id, ...fields } = post;
+    client.get.mockResolvedValueOnce({
+      body: { found: true, _source: { ...fields, record: id, chunks: 3 } },
+    });
+
+    expect(await text.recordManifest(post)).toEqual(post);
+    expect(await text.recordManifest(post)).toBeNull();
+    expect(client.get).toHaveBeenCalledWith(
+      { index, id: 'post__post-1' },
+      { ignore: [404] },
+    );
+  });
+
+  it("writes a record's fingerprint alone, its chunks and digest as they are", async () => {
+    const { client, text } = opensearch();
+
+    await text.putRecordFingerprint({ ...post, fingerprint: 'f3' });
+
+    expect(client.update).toHaveBeenCalledWith({
+      index,
+      id: 'post__post-1',
+      body: { doc: { fingerprint: 'f3' } },
+    });
+    expect(client.bulk).not.toHaveBeenCalled();
+  });
+
+  it("lists the records' manifests as their keys", async () => {
+    const { client, text } = opensearch();
+    const { id, digest: _, ...fields } = post;
     client.search.mockResolvedValueOnce({
       body: {
         aggregations: {
@@ -476,7 +555,7 @@ describe('OpenSearchTextIndex', () => {
     const keys = [];
     for await (const listed of text.recordKeys()) keys.push(listed);
 
-    expect(keys).toEqual([post]);
+    expect(keys).toEqual([{ kind: 'post', id, fingerprint: 'f2' }]);
     expect(client.search.mock.calls[0][0]).toMatchObject({
       body: {
         query: {

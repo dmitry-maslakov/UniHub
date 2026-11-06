@@ -1,10 +1,11 @@
-import { createHash } from 'node:crypto';
 import { PluginName } from '@app/kernel';
 import { sha256 } from '../../../test/sha256.js';
 import { CHUNK_CHARS, HIGHLIGHT } from './chunks.js';
+import { POST_TEXT_VERSION } from './post-text.js';
 import {
   fileEntry,
   fileKey,
+  manifestOf,
   postEntry,
   postKey,
   treeEntry,
@@ -12,38 +13,37 @@ import {
 } from './records.js';
 import type { Unpacking } from './unpacking.js';
 
-const post = { title: 'Exam', raw: { message: '<p>on Monday</p>' } };
+const updatedAt = new Date('2026-10-01T09:00:00Z');
 const lecture = sha256('%PDF lecture');
 
 describe('records', () => {
-  it("keys a post by what its text is made from, so an edit is another fingerprint, the same post another's", async () => {
-    const key = postKey('post-1', post);
-
-    expect(key).toMatchObject({ kind: 'post', id: 'post-1' });
-    expect(postKey('post-1', { ...post })).toEqual(key);
-    expect(postKey('post-1', { ...post, title: 'Exam!' })).not.toEqual(key);
-    expect(postKey('post-1', { ...post, raw: {} })).not.toEqual(key);
-    expect((await postEntry('post-1', post)).key).toEqual(key);
+  // catalog writes an item only when it changed; reading its raw for the
+  // reconcile would take every post's whole
+  it('keys a post by when catalog last changed it, and by the version of the rule its text is made by', () => {
+    expect(postKey('post-1', { updatedAt })).toEqual({
+      kind: 'post',
+      id: 'post-1',
+      fingerprint: `${POST_TEXT_VERSION}__2026-10-01T09:00:00.000Z`,
+    });
+    expect(postEntry('post-1', { updatedAt }, 'Exam').key).toEqual(
+      postKey('post-1', { updatedAt }),
+    );
   });
 
-  // a search answers chunks by their hash: a post's text is the content
-  // its chunks are of
-  it("cuts a post's text into chunks, each by the hash of the whole text", async () => {
-    const long = { title: null, raw: 'semafor '.repeat(CHUNK_CHARS / 4) };
-    const text = 'Exam\n\non Monday';
+  // a hit of its own each, so posts of the same text in several courses
+  // are found apart, and an edit's chunks go with the ones they replace
+  it("cuts a post's text into chunks, each by a hash of the post's own", () => {
+    const text = 'semafor '.repeat(CHUNK_CHARS / 4);
+    const { chunks } = postEntry('post-1', { updatedAt }, text);
 
-    expect((await postEntry('post-1', post)).chunks).toEqual([
-      { hash: createHash('sha256').update(text).digest('hex'), text },
-    ]);
-    const { chunks } = await postEntry('post-2', long);
     expect(chunks).toHaveLength(2);
-    expect(new Set(chunks.map(({ hash }) => hash)).size).toBe(1);
-  });
-
-  it('is no chunk of a post without words', async () => {
-    expect(
-      (await postEntry('post-1', { title: null, raw: {} })).chunks,
-    ).toEqual([]);
+    expect(new Set(chunks.map(({ hash }) => hash))).toEqual(
+      new Set([sha256('post:post-1')]),
+    );
+    expect(postEntry('post-2', { updatedAt }, text).chunks[0].hash).toBe(
+      sha256('post:post-2'),
+    );
+    expect(postEntry('post-1', { updatedAt }, '').chunks).toEqual([]);
   });
 
   // a file's name is found as the content it holds, which a new one changes
@@ -98,5 +98,29 @@ describe('records', () => {
       ],
     });
     expect(treeKey({ ...tree, policy: 2 }).fingerprint).toBe('archives__2__2');
+  });
+
+  // what it was made from may change while its chunks don't: then nothing
+  // is written but the fingerprint, nothing embedded
+  it('digests the chunks alone in its manifest, a change to any of their fields another digest', () => {
+    const entry = postEntry('post-1', { updatedAt }, 'Exam');
+    const { digest } = manifestOf(entry);
+
+    expect(manifestOf(entry)).toEqual({ ...entry.key, digest });
+    expect(
+      manifestOf(postEntry('post-1', { updatedAt: new Date() }, 'Exam')).digest,
+    ).toBe(digest);
+    expect(
+      manifestOf(postEntry('post-1', { updatedAt }, 'Exam!')).digest,
+    ).not.toBe(digest);
+    const file = fileEntry('file-1', { name: 'l5.pdf', hash: lecture });
+    expect(
+      manifestOf(fileEntry('file-1', { name: 'l5.pdf', hash: sha256('x') }))
+        .digest,
+    ).not.toBe(manifestOf(file).digest);
+    const [chunk] = file.chunks;
+    expect(
+      manifestOf({ ...file, chunks: [{ ...chunk, member: 'l5.pdf' }] }).digest,
+    ).not.toBe(manifestOf(file).digest);
   });
 });

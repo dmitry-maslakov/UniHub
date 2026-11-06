@@ -216,8 +216,8 @@ describe('search index', { timeout: 120_000 }, () => {
       [`post__${id}__0`]: {
         kind: 'post',
         record: id,
-        fingerprint: expect.any(String),
-        hash: sha256(text),
+        digest: expect.any(String),
+        hash: sha256(`post:${id}`),
         chunk: 0,
         text,
         // as float32
@@ -232,6 +232,28 @@ describe('search index', { timeout: 120_000 }, () => {
         text: 'Notice\n\nsearch index: the post, edited',
       }),
     });
+
+    // past its text: a link, which isn't words
+    const before = await record('post', id);
+    await hub.item({
+      externalId: 'notice',
+      kind: 'post',
+      title: 'Notice',
+      raw: {
+        body: '<p>search index: the post, edited</p>',
+        url: 'https://portal.example/notice',
+      },
+    });
+    await vi.waitFor(
+      async () =>
+        expect((await record('post', id))[`post__${id}`].fingerprint).not.toBe(
+          before[`post__${id}`].fingerprint,
+        ),
+      WAIT,
+    );
+    expect((await record('post', id))[`post__${id}__0`]).toEqual(
+      before[`post__${id}__0`],
+    );
 
     await hub.removeItem('notice');
     await recorded('post', id, {});
@@ -248,7 +270,7 @@ describe('search index', { timeout: 120_000 }, () => {
       [`file__${file}__0`]: {
         kind: 'file',
         record: file,
-        fingerprint: expect.any(String),
+        digest: expect.any(String),
         hash: sha256(bundle),
         chunk: 0,
         text: 'labs.bundle',
@@ -314,7 +336,7 @@ describe('search index', { timeout: 120_000 }, () => {
   it("gives an index this generation made before the records' fields those fields", async () => {
     await deleteIndex();
     const body = indexBody(testVectors);
-    const { kind, record, fingerprint, member, ...before } =
+    const { kind, record, fingerprint, digest, member, ...before } =
       body.mappings.properties;
     await opensearch.indices.create({
       index,
@@ -334,6 +356,7 @@ describe('search index', { timeout: 120_000 }, () => {
       kind,
       record,
       fingerprint,
+      digest,
       member,
     });
     expect((await opensearch.exists({ index, id: 'kept' })).body).toBe(true);

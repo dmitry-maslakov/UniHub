@@ -24,6 +24,7 @@ const select = {
   publishedAt: true,
   raw: true,
   removedAt: true,
+  updatedAt: true,
 } satisfies Prisma.ItemSelect;
 
 // the course a visible item shows in (see visibleItem)
@@ -125,8 +126,8 @@ export class ListItemsHandler implements IQueryHandler<ListItemsQuery> {
       where: { removedAt: null, ...(after && { id: { gt: after } }) },
       orderBy: { id: 'asc' },
       take: limit,
-      select,
+      select: { id: true, updatedAt: true },
     });
-    return rows.map(toDto);
+    return rows;
   }
 }

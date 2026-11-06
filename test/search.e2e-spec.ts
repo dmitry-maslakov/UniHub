@@ -20,6 +20,13 @@ import {
   type SearchScope,
 } from '../src/processing/contracts.js';
 import {
+  fileEntry,
+  manifestOf,
+  postEntry,
+  refId,
+  type RecordEntry,
+} from '../src/processing/domain/records.js';
+import {
   keyId,
   type RepresentationKey,
 } from '../src/processing/domain/representation.js';
@@ -220,28 +227,47 @@ describe('search', { timeout: 60_000 }, () => {
   });
 
   // as IndexRecord writes them: a name by the content it names, a post by
-  // its own text's hash, with its vector
-  it("finds records only of the ids named, a name by its words with its content's pages, a post by its meaning too", async () => {
+  // a hash of its own, with its vector
+  it("finds records only of the ids named, a name by its words with its content's pages, a post by its meaning too, each post apart", async () => {
     const records = app.get(TextIndex);
-    const post = 'Kolokvijum iz niti u petak';
-    const [vector] = await new FakeEmbedder(testVectors.dimensions).embed([
-      post,
-    ]);
-    await records.putRecord({ kind: 'file', id: 'named', fingerprint: 'a' }, [
-      { hash: sha256(lecture), text: 'raspored-semafora.txt' },
-    ]);
-    await records.putRecord({ kind: 'post', id: 'post', fingerprint: 'b' }, [
-      { hash: sha256(post), text: post, vector },
-    ]);
-    // written the first time, searchable after the next refresh
-    for (const id of ['file__named', 'post__post'])
+    const embedder = new FakeEmbedder(testVectors.dimensions);
+    const put = async ({ key, chunks }: RecordEntry, embedded = false) => {
+      await records.putRecord(
+        manifestOf({ key, chunks }),
+        embedded
+          ? await Promise.all(
+              chunks.map(async (chunk) => ({
+                ...chunk,
+                vector: (await embedder.embed([chunk.text]))[0],
+              })),
+            )
+          : chunks,
+      );
+      // written the first time, searchable after the next refresh
       await vi.waitFor(
         async () =>
           expect(
-            (await opensearch.exists({ index, id, realtime: false })).body,
+            (
+              await opensearch.exists({
+                index,
+                id: refId(key),
+                realtime: false,
+              })
+            ).body,
           ).toBe(true),
         { timeout: 20_000, interval: 200 },
       );
+    };
+    const post = 'Kolokvijum iz niti u petak';
+    const posts = ['p1', 'p2', 'p3', 'p4'];
+    await put(
+      fileEntry('named', {
+        name: 'raspored-semafora.txt',
+        hash: sha256(lecture),
+      }),
+    );
+    for (const id of posts)
+      await put(postEntry(id, { updatedAt: new Date() }, post), true);
 
     // the lecture's pages and its name, in one hit
     const [both, ...none] = await byWords('raspored semafor', [lecture], {
@@ -269,15 +295,21 @@ describe('search', { timeout: 60_000 }, () => {
     expect(
       await search('kvantna mehanika', [], 10, {
         files: ['named'],
-        posts: ['post'],
+        posts: ['p1'],
       }),
     ).toEqual([
       {
-        hash: sha256(post),
+        hash: sha256('post:p1'),
         pages: [],
-        records: [expect.objectContaining({ kind: 'post', record: 'post' })],
+        records: [expect.objectContaining({ kind: 'post', record: 'p1' })],
       },
     ]);
+    // the same text in four courses: four posts
+    const same = await byWords(post, [], { posts });
+    expect(
+      same.map(({ records }) => records.map(({ record }) => record)),
+    ).toEqual(expect.arrayContaining(posts.map((id) => [id])));
+    expect(same).toHaveLength(4);
     expect(await search(post, [elsewhere], 10, { posts: ['other'] })).toEqual([
       expect.objectContaining({ hash: sha256(elsewhere), records: [] }),
     ]);

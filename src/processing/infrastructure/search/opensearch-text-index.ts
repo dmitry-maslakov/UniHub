@@ -12,7 +12,12 @@ import {
   type IndexedRecordChunk,
   type TextQuery,
 } from '../../application/ports.js';
-import { refId, type RecordKey, type RecordRef } from '../../domain/records.js';
+import {
+  refId,
+  type RecordKey,
+  type RecordManifest,
+  type RecordRef,
+} from '../../domain/records.js';
 import type { RepresentationKey } from '../../domain/representation.js';
 import { textSearchConfig } from '../../text-search.config.js';
 import {
@@ -23,6 +28,7 @@ import {
 } from './opensearch-errors.js';
 import {
   chunkDocs,
+  firstChunk,
   manifest,
   manifestKeys,
   recordDocs,
@@ -54,6 +60,7 @@ interface KeysPage<K> {
 
 // a record's manifest, as putRecord() wrote it
 type RecordFields = Omit<RecordKey, 'id'> & { record: RecordKey['id'] };
+type ManifestFields = RecordFields & { digest: string; chunks: number };
 
 // The index, and with vectors the hybrid search pipeline, made when first
 // used, and made again when a write or a read finds either gone (then tried
@@ -102,32 +109,53 @@ export class OpenSearchTextIndex extends TextIndex {
     yield* this.pages<RepresentationKey>(manifestKeys);
   }
 
+  async recordManifest(ref: RecordRef) {
+    const { body } = await this.onIndex(() =>
+      this.client.get({ index: this.index, id: refId(ref) }, { ignore: [404] }),
+    );
+    if (!body.found) return null;
+    const { record, chunks: _, ...manifest } = body._source as ManifestFields;
+    return { ...manifest, id: record } as RecordManifest;
+  }
+
   // As a text is written, but a record's manifest waits for the refresh
   // only when it replaces one, for the drop to find what it replaced: one
   // written the first time, as a backfill writes them all, replaces nothing
-  // (a get is real-time, a search isn't), and is searchable within the
-  // second. A write that failed partway is tried again whole.
-  putRecord(key: RecordKey, chunks: readonly IndexedRecordChunk[]) {
+  // (gets are real-time, searches aren't) and is searchable within the
+  // second. One whose manifest is missing but whose chunks aren't, a write
+  // that failed partway, is replaced as well.
+  putRecord(manifest: RecordManifest, chunks: readonly IndexedRecordChunk[]) {
     return this.onIndex(async () =>
       this.writing(
-        recordDocs(key, chunks),
-        recordManifest(key, chunks.length),
-        (await this.has(refId(key))) ? recordOf(key, key.fingerprint) : null,
+        recordDocs(manifest, chunks),
+        recordManifest(manifest, chunks.length),
+        (await this.isThere(manifest))
+          ? recordOf(manifest, manifest.digest)
+          : null,
       ),
     );
   }
 
-  // its manifest first, if there is one, its refresh showing its chunks to
-  // the drop
+  // its chunks are as they were, so nothing waits on a refresh
+  async putRecordFingerprint(key: RecordKey) {
+    await this.onIndex(() =>
+      this.client.update({
+        index: this.index,
+        id: refId(key),
+        body: { doc: { fingerprint: key.fingerprint } },
+      }),
+    );
+  }
+
+  // its manifest first, if anything of it is there, its refresh showing the
+  // chunks to the drop
   async removeRecord(ref: RecordRef) {
     await this.onIndex(async () => {
-      const id = refId(ref);
-      if (await this.has(id))
-        await this.client.delete({
-          index: this.index,
-          id,
-          refresh: 'wait_for',
-        });
+      if (await this.isThere(ref))
+        await this.client.delete(
+          { index: this.index, id: refId(ref), refresh: 'wait_for' },
+          { ignore: [404] },
+        );
       await this.deleting(recordOf(ref));
     });
   }
@@ -220,6 +248,11 @@ export class OpenSearchTextIndex extends TextIndex {
   // whether a document is there, as a get sees it: at once
   private async has(id: string) {
     return (await this.client.exists({ index: this.index, id })).body;
+  }
+
+  // anything of a record: its manifest, or its first chunk without one
+  private async isThere(ref: RecordRef) {
+    return (await this.has(refId(ref))) || this.has(firstChunk(ref));
   }
 
   // the keys a composite aggregation buckets, paged by its after_key

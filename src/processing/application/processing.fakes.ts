@@ -1,7 +1,12 @@
 import type { ContentHash, PluginName } from '@app/kernel';
 import type { TextChunk } from '../domain/chunks.js';
 import type { Post } from '../domain/post-text.js';
-import { refId, type RecordKey, type RecordRef } from '../domain/records.js';
+import {
+  refId,
+  type RecordKey,
+  type RecordManifest,
+  type RecordRef,
+} from '../domain/records.js';
 import { UnpackingRepository, type Unpacking } from '../domain/unpacking.js';
 import {
   keyId,
@@ -13,6 +18,7 @@ import { Holders } from './holders.js';
 import type { PluginJob } from './plugin-job.js';
 import {
   FileFacts,
+  HtmlText,
   PluginJobQueue,
   PostFacts,
   SearchMetrics,
@@ -52,7 +58,7 @@ export class FakeFiles extends FileFacts {
 
 // catalog's posts by id; a removed one is left out
 export class FakePosts extends PostFacts {
-  constructor(readonly saved = new Map<string, Post>()) {
+  constructor(readonly saved = new Map<string, Post & { updatedAt: Date }>()) {
     super();
   }
 
@@ -61,7 +67,18 @@ export class FakePosts extends PostFacts {
   }
 
   async *posts() {
-    for (const [id, post] of this.saved) yield { ...post, id };
+    for (const [id, { updatedAt }] of this.saved) yield { id, updatedAt };
+  }
+}
+
+// HTML read as it is, so a spec's strings are its texts: officeparser's
+// reading is OfficeParserHtmlText's spec's
+export class PlainHtmlText extends HtmlText {
+  readonly read: string[][] = [];
+
+  async textsOf(html: readonly string[]) {
+    this.read.push([...html]);
+    return [...html];
   }
 }
 
@@ -155,7 +172,7 @@ export class InMemoryTextIndex extends TextIndex {
   >();
   readonly records = new Map<
     string,
-    { key: RecordKey; chunks: readonly IndexedRecordChunk[] }
+    { manifest: RecordManifest; chunks: readonly IndexedRecordChunk[] }
   >();
   readonly calls: string[] = [];
   readonly searched: TextQuery[] = [];
@@ -184,9 +201,25 @@ export class InMemoryTextIndex extends TextIndex {
     for (const { key } of this.texts.values()) yield key;
   }
 
-  async putRecord(key: RecordKey, chunks: readonly IndexedRecordChunk[]) {
+  async recordManifest(ref: RecordRef) {
+    return this.records.get(refId(ref))?.manifest ?? null;
+  }
+
+  async putRecord(
+    manifest: RecordManifest,
+    chunks: readonly IndexedRecordChunk[],
+  ) {
     this.calls.push('putRecord');
-    this.records.set(refId(key), { key, chunks });
+    this.records.set(refId(manifest), { manifest, chunks });
+  }
+
+  async putRecordFingerprint(key: RecordKey) {
+    this.calls.push('putRecordFingerprint');
+    const record = this.records.get(refId(key))!;
+    this.records.set(refId(key), {
+      ...record,
+      manifest: { ...record.manifest, fingerprint: key.fingerprint },
+    });
   }
 
   async removeRecord(ref: RecordRef) {
@@ -196,7 +229,10 @@ export class InMemoryTextIndex extends TextIndex {
 
   async *recordKeys() {
     this.calls.push('recordKeys');
-    for (const { key } of this.records.values()) yield key;
+    for (const {
+      manifest: { digest: _, ...key },
+    } of this.records.values())
+      yield key as RecordKey;
   }
 
   async search(query: TextQuery) {

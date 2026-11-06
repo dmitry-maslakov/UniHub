@@ -1,8 +1,10 @@
 import { PluginName } from '@app/kernel';
 import { FakeEmbedder } from '../../../test/fake-models.js';
 import { sha256 } from '../../../test/sha256.js';
+import { postStrings, postText } from '../domain/post-text.js';
 import {
   fileEntry,
+  manifestOf,
   postEntry,
   refId,
   treeEntry,
@@ -16,9 +18,17 @@ import {
   FakePosts,
   InMemoryTextIndex,
   InMemoryUnpackings,
+  PlainHtmlText,
 } from './processing.fakes.js';
 
-const post = { title: 'Exam', raw: { message: '<p>on Monday</p>' } };
+const updatedAt = new Date('2026-10-01T09:00:00Z');
+const post = {
+  title: 'Exam',
+  raw: { message: 'on Monday', url: 'https://portal.example/p1' },
+  updatedAt,
+};
+// as PlainHtmlText reads it
+const text = postText(postStrings(post));
 const lecture = sha256('%PDF lecture');
 const file = { name: 'l5.pdf', mime: null, hash: lecture };
 const tree: Unpacking = {
@@ -53,24 +63,40 @@ async function indexing({
   const unpackings = new InMemoryUnpackings();
   await unpackings.save(tree);
   const index = new InMemoryTextIndex();
+  const html = new PlainHtmlText();
   return {
     index,
+    posts,
     files,
-    indexRecord: new IndexRecord(posts, files, unpackings, index, embedder),
+    html,
+    indexRecord: new IndexRecord(
+      posts,
+      files,
+      unpackings,
+      html,
+      index,
+      embedder,
+    ),
   };
 }
 
+const indexed = (entry: ReturnType<typeof fileEntry>) => ({
+  manifest: manifestOf(entry),
+  chunks: entry.chunks,
+});
+
 describe('IndexRecord', () => {
-  it('indexes a post, a file and a tree as they are now', async () => {
-    const { index, indexRecord } = await indexing();
+  it("indexes a post, a file and a tree as they are now, a post's strings read as HTML", async () => {
+    const { index, indexRecord, html } = await indexing();
 
     for (const ref of Object.values(refs)) await indexRecord.run(ref);
 
     expect([...index.records.values()]).toEqual([
-      await postEntry('post-1', post),
-      fileEntry('file-1', file),
-      treeEntry(tree),
+      indexed(postEntry('post-1', post, text)),
+      indexed(fileEntry('file-1', file)),
+      indexed(treeEntry(tree)),
     ]);
+    expect(html.read).toEqual([postStrings(post)]);
   });
 
   // gone from catalog, or never there: removed, or of a deleted record
@@ -81,7 +107,7 @@ describe('IndexRecord', () => {
     });
     for (const ref of Object.values(refs))
       index.records.set(refId(ref), {
-        key: { ...ref, fingerprint: 'before' },
+        manifest: { ...ref, fingerprint: 'before', digest: 'd' },
         chunks: [],
       });
 
@@ -117,7 +143,7 @@ describe('IndexRecord', () => {
 
     for (const ref of Object.values(refs)) await indexRecord.run(ref, signal);
 
-    const { chunks } = await postEntry('post-1', post);
+    const { chunks } = postEntry('post-1', post, text);
     expect(embed.mock.calls).toEqual([
       [chunks.map(({ text }) => text), signal],
     ]);
@@ -132,5 +158,42 @@ describe('IndexRecord', () => {
     expect(index.records.get(refId(refs.file))!.chunks).toEqual(
       fileEntry('file-1', file).chunks,
     );
+  });
+
+  // its link changed, its text didn't
+  it('writes only the fingerprint of a post changed past its text, embedding nothing, and nothing of one not changed', async () => {
+    const embedder = new FakeEmbedder(4);
+    const { index, indexRecord, posts } = await indexing({ embedder });
+    await indexRecord.run(refs.post);
+    const embed = vi.spyOn(embedder, 'embed');
+    const later = new Date('2026-10-02T09:00:00Z');
+    posts.saved.set('post-1', {
+      ...post,
+      raw: { ...post.raw, url: 'https://portal.example/p1?v=2' },
+      updatedAt: later,
+    });
+    index.calls.length = 0;
+
+    await indexRecord.run(refs.post);
+    await indexRecord.run(refs.post);
+
+    expect(embed).not.toHaveBeenCalled();
+    expect(index.calls).toEqual(['putRecordFingerprint']);
+    expect(index.records.get(refId(refs.post))!.manifest).toEqual(
+      manifestOf(postEntry('post-1', { updatedAt: later }, text)),
+    );
+  });
+
+  it('writes a post whose text changed whole again, embedded', async () => {
+    const embedder = new FakeEmbedder(4);
+    const { index, indexRecord, posts } = await indexing({ embedder });
+    await indexRecord.run(refs.post);
+    const embed = vi.spyOn(embedder, 'embed');
+    posts.saved.set('post-1', { ...post, title: 'Exam moved' });
+
+    await indexRecord.run(refs.post);
+
+    expect(embed).toHaveBeenCalledTimes(1);
+    expect(index.calls.at(-1)).toBe('putRecord');
   });
 });

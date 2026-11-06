@@ -11,6 +11,7 @@ import { IndexText } from '../../application/index-text.js';
 import {
   Embedder,
   FileFacts,
+  HtmlText,
   PostFacts,
   QueryEmbedder,
   Reranker,
@@ -26,6 +27,7 @@ import { CatalogPostFacts } from '../catalog-post-facts.js';
 import { PrismaRepresentationRepository } from '../prisma-representation.repository.js';
 import { PrismaUnpackingRepository } from '../prisma-unpacking.repository.js';
 import { BullmqTextIndexQueue } from './bullmq-text-index-queue.js';
+import { OfficeParserHtmlText } from './officeparser-html-text.js';
 import { OpenSearchTextIndex } from './opensearch-text-index.js';
 import { ReconcileIndexSchedule } from './reconcile-index.schedule.js';
 import { SEARCH_INDEX_QUEUE } from './search-index.queue.js';
@@ -70,6 +72,7 @@ const DAY = 24 * 60 * 60;
     { provide: UnpackingRepository, useClass: PrismaUnpackingRepository },
     { provide: FileFacts, useClass: CatalogFileFacts },
     { provide: PostFacts, useClass: CatalogPostFacts },
+    { provide: HtmlText, useClass: OfficeParserHtmlText },
     { provide: TextIndex, useClass: OpenSearchTextIndex },
     { provide: TextIndexQueue, useClass: BullmqTextIndexQueue },
     // null without EMBEDDING_URL: BM25 only

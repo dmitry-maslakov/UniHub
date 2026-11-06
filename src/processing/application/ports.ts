@@ -6,7 +6,12 @@ import {
 } from '@app/kernel';
 import type { TextChunk } from '../domain/chunks.js';
 import type { Post } from '../domain/post-text.js';
-import type { RecordChunk, RecordKey, RecordRef } from '../domain/records.js';
+import type {
+  RecordChunk,
+  RecordKey,
+  RecordManifest,
+  RecordRef,
+} from '../domain/records.js';
 import type { RepresentationKey } from '../domain/representation.js';
 import type { PluginJob } from './plugin-job.js';
 import type { SearchScope, TextHit } from './queries.js';
@@ -31,12 +36,20 @@ export abstract class FileFacts {
   >;
 }
 
-// catalog's posts, as the search index needs them
+// catalog's posts, as the search index needs them, with when catalog last
+// changed each
 export abstract class PostFacts {
   // null once it's removed
-  abstract post(id: string): Promise<Post | null>;
-  // every post that isn't removed
-  abstract posts(): AsyncIterable<Post & { id: string }>;
+  abstract post(id: string): Promise<(Post & { updatedAt: Date }) | null>;
+  // every post that isn't removed, without its text
+  abstract posts(): AsyncIterable<{ id: string; updatedAt: Date }>;
+}
+
+// HTML as plain text, as office-text reads a page: tags, scripts and styles
+// left out, entities decoded, plain text as it is; a text per string, ''
+// for one it can't read. Off the event loop: the strings are anyone's.
+export abstract class HtmlText {
+  abstract textsOf(html: readonly string[]): Promise<string[]>;
 }
 
 export abstract class PluginJobQueue {
@@ -93,12 +106,18 @@ export abstract class TextIndex {
   }): Promise<void>;
   // the representations indexed in full (those with a manifest)
   abstract keys(): AsyncIterable<RepresentationKey>;
+  // a record's manifest as it is now, written a moment ago too; null if it
+  // has none
+  abstract recordManifest(ref: RecordRef): Promise<RecordManifest | null>;
   // as put() does: the chunks, the manifest, then the record's chunks of
-  // another fingerprint
+  // another digest
   abstract putRecord(
-    key: RecordKey,
+    manifest: RecordManifest,
     chunks: readonly IndexedRecordChunk[],
   ): Promise<void>;
+  // the manifest's fingerprint alone: the record is made from this now, its
+  // chunks as they are
+  abstract putRecordFingerprint(key: RecordKey): Promise<void>;
   abstract removeRecord(ref: RecordRef): Promise<void>;
   // the records indexed in full
   abstract recordKeys(): AsyncIterable<RecordKey>;

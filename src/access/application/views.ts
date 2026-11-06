@@ -194,7 +194,7 @@ export interface Findable {
 // What search found, in its order: of a content, the file or member whose
 // name matched (one holding it still, in a course the user reads), else the
 // first of its places by its text, with its pages and the other files
-// holding it themselves; then the posts it's the text of, each once
+// holding it themselves; of a post's hash, the post, if the user reads it
 export function searchResults(
   hits: readonly TextHit[],
   { places, files, posts, courses }: Findable,
@@ -205,7 +205,6 @@ export function searchResults(
     ({ hash }) => hash,
   );
   const postsById = new Map(posts.map((post) => [post.itemId, post]));
-  const seen = new Set<string>();
   // the place a name names: the file, if it holds the content found, or the
   // member at that path in the first file holding the archive
   const named = (
@@ -250,8 +249,7 @@ export function searchResults(
       : [];
     for (const { kind, record, snippet } of records) {
       const post = postsById.get(record);
-      if (kind !== 'post' || !post || seen.has(record)) continue;
-      seen.add(record);
+      if (kind !== 'post' || !post) continue;
       const { courseId, ...view } = post;
       found.push({
         type: 'post',

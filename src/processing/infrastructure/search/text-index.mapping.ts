@@ -162,10 +162,11 @@ export const indexBody = (vectors: Vectors) =>
         version: { type: 'integer' },
         page: { type: 'integer' },
         // a record's: a post, a file or a tree, its id, what it was made
-        // from, and a tree's member
+        // from, a digest of its chunks, and a tree's member
         kind: { type: 'keyword' },
         record: { type: 'keyword' },
         fingerprint: { type: 'keyword' },
+        digest: { type: 'keyword' },
         member: { type: 'keyword' },
         chunk: { type: 'integer' },
         chunks: { type: 'integer' },

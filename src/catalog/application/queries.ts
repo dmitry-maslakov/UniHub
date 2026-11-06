@@ -43,6 +43,14 @@ export interface ItemDto {
   publishedAt: Date | null;
   raw: Json;
   removed: boolean;
+  // when the hub last changed it: its record, or its removal
+  updatedAt: Date;
+}
+
+// an item that isn't removed, by when the hub last changed it
+export interface ItemStampDto {
+  id: string;
+  updatedAt: Date;
 }
 
 export interface FileDto {
@@ -190,8 +198,8 @@ export class ListFilesOfContentQuery extends Query<FileDto[]> {
 }
 
 // a page of items that aren't removed, by id, after the given one: for
-// walking all of them
-export class ListItemsQuery extends Query<ItemDto[]> {
+// walking all of them without their records
+export class ListItemsQuery extends Query<ItemStampDto[]> {
   constructor(
     public readonly after: string | null,
     public readonly limit: number,

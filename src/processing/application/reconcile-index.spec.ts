@@ -29,7 +29,11 @@ const key = (
 ): RepresentationKey => ({ hash: sha256(content), processor: by, version });
 
 // a post, a file and a tree in postgres
-const post = { title: 'Exam', raw: { body: '<p>on Monday</p>' } };
+const post = {
+  title: 'Exam',
+  raw: { body: '<p>on Monday</p>' },
+  updatedAt: new Date('2026-10-01T09:00:00Z'),
+};
 const file = { name: 'l5.pdf', hash: sha256('%PDF l5'), mime: null };
 const tree = {
   hash: sha256('labs.zip'),
@@ -56,7 +60,10 @@ async function reconciling(
   const index = new InMemoryTextIndex();
   for (const k of indexed) index.texts.set(keyId(k), { key: k, chunks: [] });
   for (const k of indexedRecords)
-    index.records.set(refId(k), { key: k, chunks: [] });
+    index.records.set(refId(k), {
+      manifest: { ...k, digest: 'd' },
+      chunks: [],
+    });
   const unpackings = new InMemoryUnpackings();
   await unpackings.save(tree);
   const queue = new FakeTextIndexQueue();
