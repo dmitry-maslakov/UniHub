@@ -1,4 +1,4 @@
-import { aborted } from 'node:util';
+import { once } from 'node:events';
 import { Inject, Logger, type OnModuleDestroy } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
 import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
@@ -52,10 +52,21 @@ export class ConnectorsWorker extends WorkerHost implements OnModuleDestroy {
     ]);
     const ctx = this.directory.context(connection, run);
     // let go of at the signal even when the connector doesn't listen to it,
-    // so the job ends and the next tick can poll again (aborted() holds the
-    // job weakly, and BullMQ holds it while it runs)
-    if (!run.aborted)
-      await Promise.race([connector.instance.poll(ctx), aborted(run, job)]);
+    // so the job ends and the next tick can poll again. once()'s listener
+    // holds the run till then: nothing else holds a poll that waits on
+    // nothing (BullMQ keeps the promise of the run, not the job), so
+    // aborted(run, job), which holds it only while the job is held, went at
+    // a GC, the job left active for good
+    const settled = new AbortController();
+    try {
+      if (!run.aborted)
+        await Promise.race([
+          connector.instance.poll(ctx),
+          once(run, 'abort', { signal: settled.signal }),
+        ]);
+    } finally {
+      settled.abort();
+    }
     if (run.aborted) throw new Error(`poll stopped: ${String(run.reason)}`);
     return true;
   }
