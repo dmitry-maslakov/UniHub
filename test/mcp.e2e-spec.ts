@@ -167,7 +167,7 @@ describe('MCP', { timeout: 20_000 }, () => {
     expect(page.content[0].text).toContain('page 2 of 2');
     expect(page.content[0].text).toContain('mergesort');
     // a page of the text named, as a search result names it, and none of a
-    // processor that made no text of the file
+    // processor that's off and made no text of the file
     const named = await call('read_file', {
       file: fileId,
       page: 1,

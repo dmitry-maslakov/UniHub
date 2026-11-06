@@ -5,6 +5,7 @@ import { TerminusModule } from '@nestjs/terminus';
 import { roleConfig } from '../../../platform/role/role.config.js';
 import { opensearchConfig } from '../../../platform/search/opensearch.config.js';
 import { OpenSearchModule } from '../../../platform/search/opensearch.module.js';
+import { PluginsModule } from '../../../plugins/contracts.js';
 import { IndexText } from '../../application/index-text.js';
 import {
   Embedder,
@@ -37,6 +38,8 @@ const DAY = 24 * 60 * 60;
     OpenSearchModule,
     // the worker asks whether the database is up before blaming a job
     TerminusModule,
+    // ReconcileIndex queues only the texts of the processors on
+    PluginsModule,
     BullModule.registerQueue({
       name: SEARCH_INDEX_QUEUE,
       defaultJobOptions: {
