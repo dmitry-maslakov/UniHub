@@ -5,8 +5,12 @@ import type { PrismaTxHost } from '../../platform/database/prisma.service.js';
 import {
   UnpackingRepository,
   type LeftOut,
+  type Made,
   type Unpacking,
 } from '../domain/unpacking.js';
+
+// trees() reads this many at a time
+const PAGE = 1000;
 
 // Keys, hashes, media types and reasons were checked on the way in, they're
 // read back as them; sizes went in as safe integers, they come back as numbers.
@@ -55,6 +59,22 @@ export class PrismaUnpackingRepository extends UnpackingRepository {
         members: { deleteMany: {}, createMany: { data: rows } },
       },
     });
+  }
+
+  // a page at a time, after the last hash of the page before
+  async *trees() {
+    let after = '';
+    for (;;) {
+      const page = await this.txHost.tx.unpacking.findMany({
+        where: { hash: { gt: after } },
+        orderBy: { hash: 'asc' },
+        take: PAGE,
+        select: { hash: true, unpacker: true, version: true, policy: true },
+      });
+      yield* page as Made[];
+      if (page.length < PAGE) return;
+      after = page[page.length - 1].hash;
+    }
   }
 
   async holding(hash: ContentHash) {

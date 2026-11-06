@@ -13,8 +13,19 @@ import {
   EmbedderUnavailableError,
   QueryEmbedder,
   Reranker,
+  TextIndex,
 } from '../src/processing/application/ports.js';
-import { SearchTextsQuery } from '../src/processing/contracts.js';
+import {
+  SearchTextsQuery,
+  type SearchScope,
+} from '../src/processing/contracts.js';
+import {
+  fileEntry,
+  manifestOf,
+  postEntry,
+  refId,
+  type RecordEntry,
+} from '../src/processing/domain/records.js';
 import {
   keyId,
   type RepresentationKey,
@@ -26,6 +37,7 @@ import {
 } from '../src/processing/infrastructure/search/text-index.mapping.js';
 import { bootApp } from './app.js';
 import { testEnv, testVectors } from './env.js';
+import { FakeEmbedder } from './fake-models.js';
 import { FakePluginsModule } from './fake-plugins.js';
 import { portalIngest } from './ingest.js';
 import { sha256 } from './sha256.js';
@@ -60,16 +72,35 @@ describe('search', { timeout: 60_000 }, () => {
   let hub: PortalIngest;
   let opensearch: Client;
 
-  const search = (text: string, contents: string[], limit = 10) =>
-    app
-      .get(QueryBus)
-      .execute(new SearchTextsQuery(text, contents.map(sha256), limit));
+  const search = (
+    text: string,
+    contents: string[],
+    limit = 10,
+    records: Partial<SearchScope> = {},
+  ) =>
+    app.get(QueryBus).execute(
+      new SearchTextsQuery(
+        text,
+        {
+          contents: contents.map(sha256),
+          posts: [],
+          files: [],
+          archives: [],
+          ...records,
+        },
+        limit,
+      ),
+    );
   // as when the query embedder is away: by the words alone
-  const byWords = (text: string, contents: string[]) => {
+  const byWords = (
+    text: string,
+    contents: string[],
+    records: Partial<SearchScope> = {},
+  ) => {
     vi.spyOn(app.get(QueryEmbedder), 'embed').mockRejectedValueOnce(
       new EmbedderUnavailableError('embedder.invalid: ENOTFOUND'),
     );
-    return search(text, contents);
+    return search(text, contents, 10, records);
   };
   // in whole once its manifest is there, and searchable once a search sees
   // it (realtime: false): a get finds it before the refresh does
@@ -142,6 +173,7 @@ describe('search', { timeout: 60_000 }, () => {
             },
           },
         ],
+        records: [],
       },
     ]);
   });
@@ -192,6 +224,95 @@ describe('search', { timeout: 60_000 }, () => {
     expect(new Set(pages.map(({ processor }) => processor))).toEqual(
       new Set([fakeText]),
     );
+  });
+
+  // as IndexRecord writes them: a name by the content it names, a post by
+  // a hash of its own, with its vector
+  it("finds records only of the ids named, a name by its words with its content's pages, a post by its meaning too, each post apart", async () => {
+    const records = app.get(TextIndex);
+    const embedder = new FakeEmbedder(testVectors.dimensions);
+    const put = async ({ key, chunks }: RecordEntry, embedded = false) => {
+      await records.putRecord(
+        manifestOf({ key, chunks }),
+        embedded
+          ? await Promise.all(
+              chunks.map(async (chunk) => ({
+                ...chunk,
+                vector: (await embedder.embed([chunk.text]))[0],
+              })),
+            )
+          : chunks,
+      );
+      // written the first time, searchable after the next refresh
+      await vi.waitFor(
+        async () =>
+          expect(
+            (
+              await opensearch.exists({
+                index,
+                id: refId(key),
+                realtime: false,
+              })
+            ).body,
+          ).toBe(true),
+        { timeout: 20_000, interval: 200 },
+      );
+    };
+    const post = 'Kolokvijum iz niti u petak';
+    const posts = ['p1', 'p2', 'p3', 'p4'];
+    await put(
+      fileEntry('named', {
+        name: 'raspored-semafora.txt',
+        hash: sha256(lecture),
+      }),
+    );
+    for (const id of posts)
+      await put(postEntry(id, { updatedAt: new Date() }, post), true);
+
+    // the lecture's pages and its name, in one hit
+    const [both, ...none] = await byWords('raspored semafor', [lecture], {
+      files: ['named'],
+    });
+    expect(none).toEqual([]);
+    expect(both).toMatchObject({
+      hash: sha256(lecture),
+      pages: [expect.objectContaining({ page: 3 }), expect.anything()],
+      records: [
+        {
+          kind: 'file',
+          record: 'named',
+          member: null,
+          snippet: {
+            text: 'raspored-semafora.txt',
+            highlights: [[0, 8]],
+          },
+        },
+      ],
+    });
+    // nor a name of a file not named, nor one by meaning alone: knn finds
+    // the post, never the name
+    expect(await byWords('raspored', [lecture])).toEqual([]);
+    expect(
+      await search('kvantna mehanika', [], 10, {
+        files: ['named'],
+        posts: ['p1'],
+      }),
+    ).toEqual([
+      {
+        hash: sha256('post:p1'),
+        pages: [],
+        records: [expect.objectContaining({ kind: 'post', record: 'p1' })],
+      },
+    ]);
+    // the same text in four courses: four posts
+    const same = await byWords(post, [], { posts });
+    expect(
+      same.map(({ records }) => records.map(({ record }) => record)),
+    ).toEqual(expect.arrayContaining(posts.map((id) => [id])));
+    expect(same).toHaveLength(4);
+    expect(await search(post, [elsewhere], 10, { posts: ['other'] })).toEqual([
+      expect.objectContaining({ hash: sha256(elsewhere), records: [] }),
+    ]);
   });
 
   // OpenSearch marks its parts (camel, Case, Name) one by one

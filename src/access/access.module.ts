@@ -13,6 +13,7 @@ import { CourseReader } from './application/course-reader.js';
 import { CourseAccessController } from './infrastructure/http/course-access.controller.js';
 import { CoursesController } from './infrastructure/http/courses.controller.js';
 import { FilesController } from './infrastructure/http/files.controller.js';
+import { ItemsController } from './infrastructure/http/items.controller.js';
 import { CourseTools } from './infrastructure/mcp/course.tools.js';
 import { McpHttpController } from './infrastructure/mcp/mcp-http.controller.js';
 import { McpRequestMiddleware } from './infrastructure/mcp/mcp-request.middleware.js';
@@ -38,6 +39,7 @@ import { AccessSearchModule } from './search.module.js';
   ],
   controllers: [
     CoursesController,
+    ItemsController,
     FilesController,
     CourseAccessController,
     McpHttpController,

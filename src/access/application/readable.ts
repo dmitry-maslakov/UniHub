@@ -2,6 +2,7 @@ import type { Query, QueryBus } from '@nestjs/cqrs';
 import {
   FindCourseQuery,
   GetCourseFileQuery,
+  GetCourseItemQuery,
   ListCoursesQuery,
   type Slug,
 } from '../../catalog/contracts.js';
@@ -27,6 +28,16 @@ export const readableCourse = (queries: QueryBus, userId: string, slug: Slug) =>
   readable(queries, userId, 'course', {
     query: new FindCourseQuery({ slug }),
     courseOf: ({ id }) => id,
+  });
+
+export const readableItem = (
+  queries: QueryBus,
+  userId: string,
+  itemId: string,
+) =>
+  readable(queries, userId, 'item', {
+    query: new GetCourseItemQuery(itemId),
+    courseOf: ({ courseId }) => courseId,
   });
 
 export const readableFile = (

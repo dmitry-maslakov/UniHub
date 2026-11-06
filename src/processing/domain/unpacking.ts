@@ -29,8 +29,12 @@ export interface Member {
   leftOut: LeftOut | null;
 }
 
-export interface Unpacking extends UnpackingKey {
+// what a tree was made by
+export interface Made extends UnpackingKey {
   policy: number;
+}
+
+export interface Unpacking extends Made {
   members: Member[];
   // why it couldn't be read to its end; what was read stays
   cutShort: string | null;
@@ -71,6 +75,8 @@ export abstract class UnpackingRepository {
   abstract current(hash: ContentHash): Promise<Unpacking | null>;
   // replaces the content's tree, in one transaction
   abstract save(unpacking: Unpacking): Promise<void>;
+  // what every tree there is was made by, without its members
+  abstract trees(): AsyncIterable<Made>;
   // the members, of any content's tree, that hold this content
   abstract holding(
     hash: ContentHash,

@@ -20,7 +20,7 @@ export class SearchTools {
   @Tool({
     name: 'search',
     description:
-      "Search the text of files in the user's courses by words (Latin or Cyrillic, with or without diacritics), by code identifiers and, when the hub has an embedding model, by meaning. By meaning, up to `limit` files come back even when none has the words, the best first: a result doesn't prove the words are there, its snippets' highlights mark those found. Each result is a file with its best pages and snippets, or a file inside an archive (`member`, its path in it); read a page with read_file, giving its processor and member.",
+      "Search the user's courses: the text of their files, the files' names, the paths of files inside archives, and posts (announcements, pages), by words (Latin or Cyrillic, with or without diacritics), by code identifiers and, when the hub has an embedding model, the texts and posts by meaning too. By meaning, up to `limit` results come back even when none has the words, the best first: a result doesn't prove the words are there, its snippets' highlights mark those found. Each result has a `type`: a `file` with its best pages and snippets, a `member` (a file inside an archive, `member` its path in it), either with `matchedName` when its name or path matched; read a page with read_file, giving its processor and member. A `post` has its best snippet; open it with read_item.",
     parameters: searchRequest,
     annotations: readOnly,
   })

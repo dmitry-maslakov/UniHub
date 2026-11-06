@@ -17,6 +17,6 @@ export const searchRequest = z.object({
     .min(1)
     .max(50)
     .default(10)
-    .describe('files, at most'),
+    .describe('results, at most'),
 });
 export type SearchRequest = z.output<typeof searchRequest>;

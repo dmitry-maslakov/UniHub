@@ -1,8 +1,10 @@
 import type { API, Types } from '@opensearch-project/opensearch';
 
-// Part of the index's name: raised with any change to its settings, its
-// mapping or the chunker (chunks.ts), so the new index is filled anew from
-// Postgres next to the old one.
+// Part of the index's name: raised with any change to its settings, to a
+// field of its mapping or to the chunker (chunks.ts), so the new index is
+// filled anew from Postgres next to the old one. A field added needs none:
+// OpenSearchTextIndex puts it into the index there, whose documents go on
+// as they were.
 export const GENERATION = 1;
 
 // the embedder whose vectors the index holds (EMBEDDING_MODEL and
@@ -129,7 +131,9 @@ const analysis: Types.Indices_Common.IndexSettingsAnalysis = {
 };
 
 // Chunks of texts, with their vectors when there's an embedder, and a
-// manifest per text. The body of PUT /<index>; `_meta` says what made it.
+// manifest per text; the records' chunks (a post's with vectors too) and a
+// manifest per record (text-index.documents.ts). The body of PUT /<index>;
+// `_meta` says what made it.
 export const indexBody = (vectors: Vectors) =>
   ({
     settings: {
@@ -151,10 +155,19 @@ export const indexBody = (vectors: Vectors) =>
         }),
       },
       properties: {
+        // what a hit is: the content a text, a name or a path is of, or a
+        // post's own text
         hash: { type: 'keyword' },
         processor: { type: 'keyword' },
         version: { type: 'integer' },
         page: { type: 'integer' },
+        // a record's: a post, a file or a tree, its id, what it was made
+        // from, a digest of its chunks, and a tree's member
+        kind: { type: 'keyword' },
+        record: { type: 'keyword' },
+        fingerprint: { type: 'keyword' },
+        digest: { type: 'keyword' },
+        member: { type: 'keyword' },
         chunk: { type: 'integer' },
         chunks: { type: 'integer' },
         // exact forms (phrases), Serbian and English stems, identifiers

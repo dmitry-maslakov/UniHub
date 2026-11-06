@@ -15,7 +15,12 @@ import {
 import { BlobStore } from '../../storage/contracts.js';
 import { NotReadableError } from './errors.js';
 import type { Page, TextAt } from './page.js';
-import { readableCourse, readableCourses, readableFile } from './readable.js';
+import {
+  readableCourse,
+  readableCourses,
+  readableFile,
+  readableItem,
+} from './readable.js';
 import { courseView, fileView, itemView } from './views.js';
 
 // What a user reads, for every way in (REST, MCP): each course or file
@@ -37,6 +42,11 @@ export class CourseReader {
       new ListCourseItemsQuery(course.id, offset, limit),
     );
     return items.map(itemView);
+  }
+
+  // one post, as a search finds it
+  async item(userId: string, itemId: string) {
+    return itemView(await readableItem(this.queries, userId, itemId));
   }
 
   async files(userId: string, slug: Slug, { offset, limit }: Page) {

@@ -43,6 +43,14 @@ export interface ItemDto {
   publishedAt: Date | null;
   raw: Json;
   removed: boolean;
+  // when the hub last changed it: its record, or its removal
+  updatedAt: Date;
+}
+
+// an item that isn't removed, by when the hub last changed it
+export interface ItemStampDto {
+  id: string;
+  updatedAt: Date;
 }
 
 export interface FileDto {
@@ -65,6 +73,21 @@ export interface CourseFileDto extends FileDto {
   courseId: string;
 }
 
+// a post as a course shows it, and that course
+export interface CourseItemDto extends ItemDto {
+  courseId: string;
+}
+
+// a post a course shows, as search answers it
+export interface VisibleItemDto {
+  itemId: string;
+  courseId: string;
+  kind: string;
+  title: string | null;
+  url: string | null;
+  publishedAt: Date | null;
+}
+
 // a file a course shows, by its content
 export interface VisibleContentDto {
   fileId: string;
@@ -83,7 +106,8 @@ export class FindCourseQuery extends Query<CourseRef | null> {
   }
 }
 
-// what the course's portals published, newest first, skipping removed ones
+// what the course's portals published, newest first, the ones a course
+// shows (see GetCourseItemQuery)
 export class ListCourseItemsQuery extends Query<ItemDto[]> {
   constructor(
     public readonly courseId: string,
@@ -122,6 +146,22 @@ export class ListVisibleContentQuery extends Query<VisibleContentDto[]> {
   }
 }
 
+// A post and its course, if a course shows it: not removed, in a portal
+// course linked to a course. Null otherwise.
+export class GetCourseItemQuery extends Query<CourseItemDto | null> {
+  constructor(public readonly itemId: string) {
+    super();
+  }
+}
+
+// the posts these courses show (see GetCourseItemQuery): what search may
+// look through
+export class ListVisibleItemsQuery extends Query<VisibleItemDto[]> {
+  constructor(public readonly courseIds: readonly string[]) {
+    super();
+  }
+}
+
 // The ones below are for plugins and processing, and find removed records
 // too (with `removed` set).
 
@@ -153,6 +193,17 @@ export class FindFileQuery extends Query<FileDto | null> {
 // the files that hold this content and aren't removed
 export class ListFilesOfContentQuery extends Query<FileDto[]> {
   constructor(public readonly hash: ContentHash) {
+    super();
+  }
+}
+
+// a page of items that aren't removed, by id, after the given one: for
+// walking all of them without their records
+export class ListItemsQuery extends Query<ItemStampDto[]> {
+  constructor(
+    public readonly after: string | null,
+    public readonly limit: number,
+  ) {
     super();
   }
 }

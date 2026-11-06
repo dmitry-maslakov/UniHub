@@ -38,6 +38,7 @@ const hit = (hash: ContentHash, ...pages: number[]): TextHit => ({
     page,
     snippet: { text: `page ${page}`, highlights: [[0, 4]] },
   })),
+  records: [],
 });
 
 // a content whose best page has this snippet, and whose others don't count
@@ -49,6 +50,15 @@ const saying = (text: string, ...others: string[]): TextHit => ({
     page: i + 1,
     snippet: { text: snippet, highlights: [] },
   })),
+  records: [],
+});
+
+// what a search looks through: these contents, and no records
+const contents = (hashes: ContentHash[]) => ({
+  contents: hashes,
+  posts: [],
+  files: [],
+  archives: [],
 });
 
 // by the words alone unless there's an embedder, in the index's order
@@ -79,7 +89,7 @@ describe('SearchTexts', () => {
     const { index, search } = searching([hit(lecture, 1)], { embedder });
 
     expect(
-      await search.execute(new SearchTextsQuery('semafor', [], 10)),
+      await search.execute(new SearchTextsQuery('semafor', contents([]), 10)),
     ).toEqual([]);
     expect(index.searched).toEqual([]);
     expect(embed).not.toHaveBeenCalled();
@@ -95,9 +105,38 @@ describe('SearchTexts', () => {
     );
 
     expect(
-      await search.execute(new SearchTextsQuery('semafor', [lecture], 10)),
+      await search.execute(
+        new SearchTextsQuery('semafor', contents([lecture]), 10),
+      ),
     ).toEqual([]);
     expect(index.searched).toEqual([]);
+  });
+
+  // posts and names are no processor's
+  it('looks through the posts and names given with no processor on, but no texts', async () => {
+    const index = new InMemoryTextIndex();
+    const search = new SearchTexts(
+      catalogOf({}),
+      new RecordedSearchMetrics(),
+      index,
+    );
+    const among = {
+      contents: [lecture],
+      posts: ['post-1'],
+      files: ['file-1'],
+      archives: [lecture],
+    };
+
+    await search.execute(new SearchTextsQuery('semafor', among, 10));
+
+    expect(index.searched).toEqual([
+      {
+        text: 'semafor',
+        among: { ...among, contents: [] },
+        processors: [],
+        size: 10,
+      },
+    ]);
   });
 
   // a processor turned off keeps its texts in the index, out of sight
@@ -105,12 +144,14 @@ describe('SearchTexts', () => {
     const { index, search } = searching();
     const hashes = [lecture, notes];
 
-    await search.execute(new SearchTextsQuery('C\u030Cac\u030Cak', hashes, 5));
+    await search.execute(
+      new SearchTextsQuery('C\u030Cac\u030Cak', contents(hashes), 5),
+    );
 
     expect(index.searched).toEqual([
-      { text: 'Čačak', hashes, processors, size: 5 },
+      { text: 'Čačak', among: contents(hashes), processors, size: 5 },
     ]);
-    expect(index.searched[0].hashes).toBe(hashes);
+    expect(index.searched[0].among.contents).toBe(hashes);
   });
 
   it('asks by the meaning too, of the words as NFC', async () => {
@@ -118,14 +159,16 @@ describe('SearchTexts', () => {
     const embed = vi.spyOn(embedder, 'embed');
     const { index, search } = searching([], { embedder });
 
-    await search.execute(new SearchTextsQuery('C\u030Cac\u030Cak', [notes], 5));
+    await search.execute(
+      new SearchTextsQuery('C\u030Cac\u030Cak', contents([notes]), 5),
+    );
 
     expect(embed).toHaveBeenCalledWith(['Čačak']);
     expect(index.searched).toEqual([
       {
         text: 'Čačak',
         vector: (await embedder.embed(['Čačak']))[0],
-        hashes: [notes],
+        among: contents([notes]),
         processors,
         size: 5,
       },
@@ -142,10 +185,12 @@ describe('SearchTexts', () => {
     const { index, search } = searching(hits, { embedder });
 
     expect(
-      await search.execute(new SearchTextsQuery('semafor', [notes], 5)),
+      await search.execute(
+        new SearchTextsQuery('semafor', contents([notes]), 5),
+      ),
     ).toEqual(hits);
     expect(index.searched).toEqual([
-      { text: 'semafor', hashes: [notes], processors, size: 5 },
+      { text: 'semafor', among: contents([notes]), processors, size: 5 },
     ]);
     expect(index.searched[0].vector).toBeUndefined();
     expect(warn).toHaveBeenCalledWith(
@@ -162,7 +207,7 @@ describe('SearchTexts', () => {
     );
     const { index, search } = searching([], { embedder });
 
-    await search.execute(new SearchTextsQuery('semafor', [notes], 5));
+    await search.execute(new SearchTextsQuery('semafor', contents([notes]), 5));
 
     expect(index.searched[0].vector).toBeUndefined();
     expect(error).toHaveBeenCalledWith(
@@ -177,7 +222,7 @@ describe('SearchTexts', () => {
 
     expect(
       await search.execute(
-        new SearchTextsQuery('semafor', [lecture, notes], 10),
+        new SearchTextsQuery('semafor', contents([lecture, notes]), 10),
       ),
     ).toEqual(hits);
   });
@@ -189,9 +234,11 @@ describe('SearchTexts', () => {
     });
 
     expect(
-      await search.execute(new SearchTextsQuery('semafor', [notes], 2)),
+      await search.execute(
+        new SearchTextsQuery('semafor', contents([notes]), 2),
+      ),
     ).toHaveLength(2);
-    await search.execute(new SearchTextsQuery('semafor', [notes], 5));
+    await search.execute(new SearchTextsQuery('semafor', contents([notes]), 5));
 
     expect(index.searched.map(({ size }) => size)).toEqual([3, 5]);
   });
@@ -210,7 +257,7 @@ describe('SearchTexts', () => {
 
     expect(
       await search.execute(
-        new SearchTextsQuery('semafor tajna lozinka', [notes], 10),
+        new SearchTextsQuery('semafor tajna lozinka', contents([notes]), 10),
       ),
     ).toEqual([all, one, tie, past]);
     expect(metrics.unrankedBy).toEqual([]);
@@ -221,16 +268,44 @@ describe('SearchTexts', () => {
     ]);
   });
 
+  it('reranks a post or a file found by its name by its best snippet, as a content by its best page', async () => {
+    const reranker = new FakeReranker({ candidates: 3 });
+    const scores = vi.spyOn(reranker, 'scores');
+    const record = (text: string): TextHit => ({
+      hash: sha256(text),
+      pages: [],
+      records: [
+        {
+          kind: 'post',
+          record: text,
+          member: null,
+          snippet: { text, highlights: [] },
+        },
+      ],
+    });
+    const hits = [record('semafor'), saying('semafor tajna lozinka')];
+
+    expect(
+      await searching(hits, { reranker }).search.execute(
+        new SearchTextsQuery('semafor tajna lozinka', contents([notes]), 10),
+      ),
+    ).toEqual([hits[1], hits[0]]);
+    expect(scores).toHaveBeenCalledWith('semafor tajna lozinka', [
+      'semafor',
+      'semafor tajna lozinka',
+    ]);
+  });
+
   it('asks the reranker of the words as NFC, and not about one content', async () => {
     const reranker = new FakeReranker();
     const scores = vi.spyOn(reranker, 'scores');
     const hits = [saying('Čačak'), saying('Cacak')];
 
     await searching(hits, { reranker }).search.execute(
-      new SearchTextsQuery('Čačak', [notes], 5),
+      new SearchTextsQuery('Čačak', contents([notes]), 5),
     );
     await searching(hits.slice(0, 1), { reranker }).search.execute(
-      new SearchTextsQuery('Čačak', [notes], 5),
+      new SearchTextsQuery('Čačak', contents([notes]), 5),
     );
 
     expect(scores.mock.calls).toEqual([['Čačak', ['Čačak', 'Cacak']]]);
@@ -245,7 +320,7 @@ describe('SearchTexts', () => {
 
     expect(
       await search.execute(
-        new SearchTextsQuery('semafor tajna lozinka', [notes], 10),
+        new SearchTextsQuery('semafor tajna lozinka', contents([notes]), 10),
       ),
     ).toEqual(hits);
     expect(warn).not.toHaveBeenCalled();
@@ -272,7 +347,7 @@ describe('SearchTexts', () => {
     const { search, metrics } = searching(hits, { reranker });
     const asked = () =>
       search.execute(
-        new SearchTextsQuery('semafor tajna lozinka', [notes], 10),
+        new SearchTextsQuery('semafor tajna lozinka', contents([notes]), 10),
       );
 
     expect(await asked()).toEqual(hits);
@@ -299,7 +374,7 @@ describe('SearchTexts', () => {
 
     expect(
       await search.execute(
-        new SearchTextsQuery('semafor tajna lozinka', [notes], 10),
+        new SearchTextsQuery('semafor tajna lozinka', contents([notes]), 10),
       ),
     ).toEqual(hits);
     expect(error).toHaveBeenCalledWith(
@@ -315,7 +390,9 @@ describe('SearchTexts', () => {
     const away = new TextIndexUnavailableError('connect ECONNREFUSED');
     vi.spyOn(index, 'search').mockRejectedValue(away);
 
-    const failed = search.execute(new SearchTextsQuery('semafor', [notes], 10));
+    const failed = search.execute(
+      new SearchTextsQuery('semafor', contents([notes]), 10),
+    );
 
     await expect(failed).rejects.toBeInstanceOf(SearchUnavailableError);
     await expect(failed).rejects.toMatchObject({
@@ -332,7 +409,7 @@ describe('SearchTexts', () => {
 
     for (const hashes of [[notes], []]) {
       const failed = search.execute(
-        new SearchTextsQuery('semafor', hashes, 10),
+        new SearchTextsQuery('semafor', contents(hashes), 10),
       );
       await expect(failed).rejects.toBeInstanceOf(SearchOffError);
       await expect(failed).rejects.toMatchObject({
@@ -354,9 +431,11 @@ describe('SearchTexts', () => {
       })
       .mockRejectedValueOnce(new TextIndexUnavailableError('ECONNREFUSED'));
 
-    await search.execute(new SearchTextsQuery('semafor', [notes], 10));
+    await search.execute(
+      new SearchTextsQuery('semafor', contents([notes]), 10),
+    );
     await expect(
-      search.execute(new SearchTextsQuery('semafor', [notes], 10)),
+      search.execute(new SearchTextsQuery('semafor', contents([notes]), 10)),
     ).rejects.toBeInstanceOf(SearchUnavailableError);
 
     expect(metrics.searches.map(({ outcome }) => outcome)).toEqual([
@@ -373,7 +452,7 @@ describe('SearchTexts', () => {
     vi.spyOn(index, 'search').mockRejectedValue(bug);
 
     await expect(
-      search.execute(new SearchTextsQuery('semafor', [notes], 10)),
+      search.execute(new SearchTextsQuery('semafor', contents([notes]), 10)),
     ).rejects.toBe(bug);
   });
 });

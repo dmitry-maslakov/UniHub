@@ -1,7 +1,7 @@
 import { isDeepStrictEqual } from 'node:util';
 import { Inject, Injectable } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
-import type { Client, Types } from '@opensearch-project/opensearch';
+import type { API, Client, Types } from '@opensearch-project/opensearch';
 import pRetry from 'p-retry';
 import type { ContentHash, PluginName } from '@app/kernel';
 import { opensearchConfig } from '../../../platform/search/opensearch.config.js';
@@ -9,8 +9,15 @@ import { OPENSEARCH } from '../../../platform/search/opensearch.module.js';
 import {
   TextIndex,
   type IndexedChunk,
+  type IndexedRecordChunk,
   type TextQuery,
 } from '../../application/ports.js';
+import {
+  refId,
+  type RecordKey,
+  type RecordManifest,
+  type RecordRef,
+} from '../../domain/records.js';
 import type { RepresentationKey } from '../../domain/representation.js';
 import { textSearchConfig } from '../../text-search.config.js';
 import {
@@ -21,8 +28,13 @@ import {
 } from './opensearch-errors.js';
 import {
   chunkDocs,
+  firstChunk,
   manifest,
   manifestKeys,
+  recordDocs,
+  recordManifest,
+  recordManifestKeys,
+  recordOf,
   versionsOf,
 } from './text-index.documents.js';
 import {
@@ -41,10 +53,14 @@ const SEARCH_TIMEOUT_MS = 5_000;
 
 // what keys() reads of a composite aggregation: put() wrote the keys, they're
 // read back as them
-interface KeysPage {
-  buckets: { key: RepresentationKey }[];
+interface KeysPage<K> {
+  buckets: { key: K }[];
   after_key?: Types.Common_Aggregations.CompositeAggregateKey;
 }
+
+// a record's manifest, as putRecord() wrote it
+type RecordFields = Omit<RecordKey, 'id'> & { record: RecordKey['id'] };
+type ManifestFields = RecordFields & { digest: string; chunks: number };
 
 // The index, and with vectors the hybrid search pipeline, made when first
 // used, and made again when a write or a read finds either gone (then tried
@@ -75,43 +91,80 @@ export class OpenSearchTextIndex extends TextIndex {
     return this.translating(() => this.create());
   }
 
-  // All in one try, so an index gone midway is filled anew. The manifest
-  // comes only once every chunk is in (bulk isn't atomic), and its refresh
-  // shows the chunks too.
   put(key: RepresentationKey, chunks: readonly IndexedChunk[]) {
-    return this.onIndex(async () => {
-      const docs = chunkDocs(key, chunks);
-      for (let i = 0; i < docs.length; i += BULK) {
-        const { body } = await this.client.bulk({
-          index: this.index,
-          body: docs.slice(i, i + BULK).flat(),
-        });
-        if (body.errors) throw bulkError(body.items);
-      }
-      await this.client.index({
-        index: this.index,
-        ...manifest(key, chunks.length),
-        refresh: 'wait_for',
-      });
-      await this.drop(key, key.version);
-    });
+    return this.onIndex(() =>
+      this.writing(
+        chunkDocs(key, chunks),
+        manifest(key, chunks.length),
+        versionsOf(key, key.version),
+      ),
+    );
   }
 
   async remove(of: { hash: ContentHash; processor: PluginName }) {
-    await this.onIndex(() => this.drop(of));
+    await this.onIndex(() => this.deleting(versionsOf(of)));
   }
 
-  // paged by the composite's after_key
   async *keys() {
-    let after: KeysPage['after_key'];
-    do {
-      const { body } = await this.onIndex(() =>
-        this.client.search({ index: this.index, body: manifestKeys(after) }),
-      );
-      const page = body.aggregations?.keys as unknown as KeysPage;
-      yield* page.buckets.map(({ key }) => key);
-      after = page.after_key;
-    } while (after);
+    yield* this.pages<RepresentationKey>(manifestKeys);
+  }
+
+  async recordManifest(ref: RecordRef) {
+    const { body } = await this.onIndex(() =>
+      this.client.get({ index: this.index, id: refId(ref) }, { ignore: [404] }),
+    );
+    if (!body.found) return null;
+    const { record, chunks: _, ...manifest } = body._source as ManifestFields;
+    return { ...manifest, id: record } as RecordManifest;
+  }
+
+  // As a text is written, but a record's manifest waits for the refresh
+  // only when it replaces one, for the drop to find what it replaced: one
+  // written the first time, as a backfill writes them all, replaces nothing
+  // (gets are real-time, searches aren't) and is searchable within the
+  // second. One whose manifest is missing but whose chunks aren't, a write
+  // that failed partway, is replaced as well.
+  putRecord(manifest: RecordManifest, chunks: readonly IndexedRecordChunk[]) {
+    return this.onIndex(async () =>
+      this.writing(
+        recordDocs(manifest, chunks),
+        recordManifest(manifest, chunks.length),
+        (await this.isThere(manifest))
+          ? recordOf(manifest, manifest.digest)
+          : null,
+      ),
+    );
+  }
+
+  // its chunks are as they were, so nothing waits on a refresh
+  async putRecordFingerprint(key: RecordKey) {
+    await this.onIndex(() =>
+      this.client.update({
+        index: this.index,
+        id: refId(key),
+        body: { doc: { fingerprint: key.fingerprint } },
+      }),
+    );
+  }
+
+  // its manifest first, if anything of it is there, its refresh showing the
+  // chunks to the drop
+  async removeRecord(ref: RecordRef) {
+    await this.onIndex(async () => {
+      if (await this.isThere(ref))
+        await this.client.delete(
+          { index: this.index, id: refId(ref), refresh: 'wait_for' },
+          { ignore: [404] },
+        );
+      await this.deleting(recordOf(ref));
+    });
+  }
+
+  async *recordKeys() {
+    for await (const { record, ...key } of this.pages<RecordFields>(
+      recordManifestKeys,
+    ))
+      yield { ...key, id: record } as RecordKey;
   }
 
   // Not after making sure of the index, which waits the client's 30 s on a
@@ -130,8 +183,10 @@ export class OpenSearchTextIndex extends TextIndex {
     return contentHits(body.hits.hits);
   }
 
-  // the pipeline put (the same again is harmless) and the index with this
-  // generation's mapping, made if missing
+  // The pipeline put (the same again is harmless) and the index with this
+  // generation's mapping, made if missing. One of this generation made
+  // before a field was added gets it: putting a mapping adds the fields it
+  // lacks, and refuses one that differs.
   private async create() {
     if (this.pipeline)
       await this.client.searchPipeline.put({
@@ -158,6 +213,61 @@ export class OpenSearchTextIndex extends TextIndex {
       throw new Error(
         `index ${this.index} exists with another mapping: delete it`,
       );
+    await this.client.indices.putMapping({
+      index: this.index,
+      body: { properties: this.body.mappings.properties },
+    });
+  }
+
+  // A text's or a record's chunks, BULK a request, then its manifest, then
+  // the documents of its other versions dropped, if it has any. Called in
+  // one try, so an index gone midway is filled anew. The manifest comes only
+  // once every chunk is in (bulk isn't atomic); before a drop its refresh
+  // shows the chunks to it and to a search.
+  private async writing(
+    docs: object[][],
+    { id, body }: { id: string; body: object },
+    others: Types.Common_QueryDsl.QueryContainer | null,
+  ) {
+    for (let i = 0; i < docs.length; i += BULK) {
+      const { body } = await this.client.bulk({
+        index: this.index,
+        body: docs.slice(i, i + BULK).flat(),
+      });
+      if (body.errors) throw bulkError(body.items);
+    }
+    await this.client.index({
+      index: this.index,
+      id,
+      body,
+      ...(others && { refresh: 'wait_for' as const }),
+    });
+    if (others) await this.deleting(others);
+  }
+
+  // whether a document is there, as a get sees it: at once
+  private async has(id: string) {
+    return (await this.client.exists({ index: this.index, id })).body;
+  }
+
+  // anything of a record: its manifest, or its first chunk without one
+  private async isThere(ref: RecordRef) {
+    return (await this.has(refId(ref))) || this.has(firstChunk(ref));
+  }
+
+  // the keys a composite aggregation buckets, paged by its after_key
+  private async *pages<K>(
+    query: (after?: KeysPage<K>['after_key']) => API.Search_RequestBody,
+  ) {
+    let after: KeysPage<K>['after_key'];
+    do {
+      const { body } = await this.onIndex(() =>
+        this.client.search({ index: this.index, body: query(after) }),
+      );
+      const page = body.aggregations?.keys as unknown as KeysPage<K>;
+      yield* page.buckets.map(({ key }) => key);
+      after = page.after_key;
+    } while (after);
   }
 
   private ready() {
@@ -197,15 +307,12 @@ export class OpenSearchTextIndex extends TextIndex {
     }
   }
 
-  private drop(
-    of: { hash: ContentHash; processor: PluginName },
-    except?: number,
-  ) {
+  private deleting(query: Types.Common_QueryDsl.QueryContainer) {
     return this.client.deleteByQuery({
       index: this.index,
       refresh: true,
       conflicts: 'proceed',
-      body: { query: versionsOf(of, except) },
+      body: { query },
     });
   }
 }

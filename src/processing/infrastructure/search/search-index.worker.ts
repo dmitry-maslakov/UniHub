@@ -5,6 +5,7 @@ import { PrismaHealthIndicator } from '@nestjs/terminus';
 import type { Job, Queue } from 'bullmq';
 import { PrismaService } from '../../../platform/database/prisma.service.js';
 import { roleConfig } from '../../../platform/role/role.config.js';
+import { IndexRecord } from '../../application/index-record.js';
 import { IndexText } from '../../application/index-text.js';
 import {
   EmbedderUnavailableError,
@@ -30,6 +31,7 @@ export class SearchIndexWorker
 
   constructor(
     private readonly indexText: IndexText,
+    private readonly indexRecord: IndexRecord,
     health: PrismaHealthIndicator,
     prisma: PrismaService,
     @InjectQueue(SEARCH_INDEX_QUEUE) queue: Queue<IndexJob>,
@@ -40,7 +42,8 @@ export class SearchIndexWorker
   }
 
   protected async work({ data }: Job<IndexJob>, signal: AbortSignal) {
-    await this.indexText.run(data.key, signal);
+    if ('key' in data) await this.indexText.run(data.key, signal);
+    else await this.indexRecord.run(data.record, signal);
     this.pauses = 0;
   }
 

@@ -5,6 +5,7 @@
 // for AppModule, which hands it to the outbox
 export { PluginsOutboxTransport } from './infrastructure/plugins-outbox.transport.js';
 export { LEFT_OUT, type LeftOut } from './domain/unpacking.js';
+export type { RecordKind } from './domain/records.js';
 export {
   FindMemberQuery,
   GetTextPageQuery,
@@ -15,6 +16,8 @@ export {
   type ContainedMember,
   type MemberContent,
   type MemberInfo,
+  type RecordMatch,
+  type SearchScope,
   type Snippet,
   type TextHit,
   type TextInfo,

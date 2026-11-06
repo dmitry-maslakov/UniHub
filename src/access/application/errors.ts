@@ -5,7 +5,7 @@ import { NotFoundError } from '@app/kernel';
 export class NotReadableError extends NotFoundError {
   readonly reason = 'NOT_READABLE';
 
-  constructor(readonly what: 'course' | 'file' | 'member' | 'page') {
+  constructor(readonly what: 'course' | 'item' | 'file' | 'member' | 'page') {
     super(`${what} not found`);
   }
 }

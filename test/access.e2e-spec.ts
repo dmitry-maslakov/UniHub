@@ -213,6 +213,22 @@ describe('REST API', { timeout: 20_000 }, () => {
     expect(byName['notes.pdf'].hasContent).toBe(false);
   });
 
+  // as search answers it
+  it('opens a post, none a course does not show, nor one of a course not given', async () => {
+    const [newest] = (await get('/api/courses/sys/items', student).expect(200))
+      .body;
+    const gone = await app.get(PrismaService).item.findUniqueOrThrow({
+      where: { portal_externalId: { portal: PORTAL, externalId: 'gone' } },
+    });
+
+    expect(
+      (await get(`/api/items/${newest.id}`, student).expect(200)).body,
+    ).toEqual(newest);
+    await get(`/api/items/${gone.id}`, student).expect(404);
+    await get(`/api/items/${newest.id}`, stranger).expect(404);
+    await get('/api/items/not-an-id', student).expect(400);
+  });
+
   it('pages lists', async () => {
     const second = await get(
       '/api/courses/sys/items?offset=1&limit=1',

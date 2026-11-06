@@ -1,11 +1,12 @@
 import { basename } from 'node:path';
 import { addAbortSignal, type Readable } from 'node:stream';
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import type { UnpacksContent } from '@app/plugin-sdk';
 import { MediaType, type ContentHash } from '@app/kernel';
 import { PluginCatalog } from '../../plugins/contracts.js';
 import { BlobStore, ContentTooLargeError } from '../../storage/contracts.js';
 import { isNoise, memberPath } from '../domain/member-path.js';
+import { treeKey } from '../domain/records.js';
 import { LIMITS, TreeBudget } from '../domain/tree-budget.js';
 import {
   cutShortBy,
@@ -21,7 +22,12 @@ import {
 import { Dispatch } from './dispatch.js';
 import type { UnpackJob } from './plugin-job.js';
 import { takenName, withStreams } from './plugin-run.js';
-import { FileFacts, PluginJobQueue, type FileFact } from './ports.js';
+import {
+  FileFacts,
+  PluginJobQueue,
+  TextIndexQueue,
+  type FileFact,
+} from './ports.js';
 
 // past this a walk is aborted, and the job fails as a processor's does
 const WALK_MS = 10 * 60_000;
@@ -44,9 +50,10 @@ interface Node extends FileFact {
 // Lists a container a file holds, the containers in it too, in one walk
 // under one TreeBudget: stores each member it keeps as a content of its
 // own, saves the tree, then queues the processing of each member kept by its
-// file name. A member's path is made safe or it's left out unlisted, as is
-// noise (member-path.ts). The tree is the root's; a container in it is
-// opened from its stored bytes by whichever unpacker takes it, once a walk.
+// file name, and with search on its members' paths for the index. A
+// member's path is made safe or it's left out unlisted, as is noise
+// (member-path.ts). The tree is the root's; a container in it is opened
+// from its stored bytes by whichever unpacker takes it, once a walk.
 @Injectable()
 export class UnpackContent {
   private readonly logger = new Logger(UnpackContent.name);
@@ -58,6 +65,8 @@ export class UnpackContent {
     private readonly unpackings: UnpackingRepository,
     private readonly dispatch: Dispatch,
     private readonly queue: PluginJobQueue,
+    // none when search is off
+    @Optional() private readonly textIndex?: TextIndexQueue,
   ) {}
 
   // the signal stops the walk, at shutdown; the job goes back to wait then
@@ -98,6 +107,8 @@ export class UnpackContent {
         this.dispatch.processing({ name: basename(path), mime, hash }),
       ),
     );
+    const record = treeKey(tree!);
+    await this.textIndex?.enqueueRecord(record, record.fingerprint);
   }
 
   private async walk(

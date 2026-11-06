@@ -1,5 +1,6 @@
 import { Query } from '@nestjs/cqrs';
 import type { ContentHash, MediaType, PluginName } from '@app/kernel';
+import type { RecordKind } from '../domain/records.js';
 import type { LeftOut } from '../domain/unpacking.js';
 
 // What other modules read of processing: the texts straight from the
@@ -101,26 +102,54 @@ export interface Snippet {
   highlights: [start: number, end: number][];
 }
 
+// a post, a file or a tree whose record matched, by its best chunk there
+export interface RecordMatch {
+  kind: RecordKind;
+  // the post's or the file's id, or the archive's content hash
+  record: string;
+  // a tree's: the path of the member that holds the content
+  member: string | null;
+  snippet: Snippet;
+}
+
 export interface TextHit {
   hash: ContentHash;
-  // best first, each page once, by its best chunk (at most 3)
+  // of its texts, best first, each page once, by its best chunk (at most 3)
   pages: {
     processor: PluginName;
     version: number;
     page: number;
     snippet: Snippet;
   }[];
+  // what else matched, best first, each once: the names of files holding
+  // it, the paths of members holding it, the posts it is the text of
+  records: RecordMatch[];
 }
 
-// The contents among these whose newest texts of the processors on match,
-// best first, at most `limit`, with their best pages. With an embedder,
-// those nearest the query's meaning too: knn always has nearest ones, so
-// then there are up to `limit` even when none has the words. The index
-// knows nothing of who reads what: `hashes` are all it looks through.
+// What a search may look through, as much as its caller may read: the
+// index knows nothing of who reads what
+export interface SearchScope {
+  // the contents whose texts are looked through, files' and members'
+  contents: readonly ContentHash[];
+  // the posts looked through by their texts
+  posts: readonly string[];
+  // the files looked through by their names
+  files: readonly string[];
+  // the archives (their contents) whose members are looked through by
+  // their paths
+  archives: readonly ContentHash[];
+}
+
+// The contents whose newest texts of the processors on match, or the names
+// of files or members holding them, and the posts whose texts match, best
+// first, at most `limit` hits, a content or a post's text each. With an
+// embedder, the texts and posts nearest the query's meaning too: knn always
+// has nearest ones, so then there are up to `limit` even when none has the
+// words. Names are found by their words alone.
 export class SearchTextsQuery extends Query<TextHit[]> {
   constructor(
     public readonly text: string,
-    public readonly hashes: readonly ContentHash[],
+    public readonly among: SearchScope,
     public readonly limit: number,
   ) {
     super();

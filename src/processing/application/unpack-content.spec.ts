@@ -11,11 +11,13 @@ import { FakeUnpacker } from '../../../test/fake-plugins.js';
 import { InMemoryBlobs } from '../../../test/in-memory-blobs.js';
 import { sha256 } from '../../../test/sha256.js';
 import { LIMITS, TreeBudget } from '../domain/tree-budget.js';
+import { treeKey } from '../domain/records.js';
 import { Dispatch } from './dispatch.js';
 import type { UnpackJob } from './plugin-job.js';
 import {
   FakeFiles,
   FakeQueue,
+  FakeTextIndexQueue,
   InMemoryUnpackings,
 } from './processing.fakes.js';
 import { UnpackContent } from './unpack-content.js';
@@ -52,6 +54,7 @@ function run(
   const blobs = new InMemoryBlobs({ holding: [container] });
   const unpackings = new InMemoryUnpackings();
   const queue = new FakeQueue();
+  const textIndex = new FakeTextIndexQueue();
   const unpack = new UnpackContent(
     plugins,
     files,
@@ -59,19 +62,30 @@ function run(
     unpackings,
     new Dispatch(plugins, files),
     queue,
+    textIndex,
   );
   const job: UnpackJob = {
     kind: 'unpack',
     key: { hash, unpacker: PluginName.parse('bundle'), version },
     policy: LIMITS.policy,
   };
-  const tree = () => unpackings.trees.get(hash);
+  const tree = () => unpackings.saved.get(hash);
   // the paths listed, with why each left out was
   const listed = () =>
     tree()?.members.map(({ path, leftOut }) =>
       leftOut ? `${path} ${leftOut}` : path,
     );
-  return { unpack, job, files, blobs, unpackings, queue, tree, listed };
+  return {
+    unpack,
+    job,
+    files,
+    blobs,
+    unpackings,
+    queue,
+    textIndex,
+    tree,
+    listed,
+  };
 }
 
 const processing = (content: string) => ({
@@ -360,9 +374,20 @@ describe('UnpackContent', () => {
     expect(stalled.destroyed).toBe(true);
   });
 
-  it('walks a current tree no more, queueing its processing again', async () => {
+  // its members found by their paths, under the tree's own key: one made
+  // anew is a new job, the same again isn't
+  it("queues the tree's members' paths for the search index", async () => {
+    const { unpack, job, textIndex, tree } = run();
+
+    await unpack.run(job);
+
+    const key = treeKey(tree()!);
+    expect(textIndex.records).toEqual([{ ref: key, change: key.fingerprint }]);
+  });
+
+  it('walks a current tree no more, queueing its processing and its paths again', async () => {
     const instance = new FakeUnpacker();
-    const { unpack, job, queue } = run(lab, instance);
+    const { unpack, job, queue, textIndex } = run(lab, instance);
     await unpack.run(job);
     const walk = vi.spyOn(instance, 'unpack');
     queue.enqueued.length = 0;
@@ -371,6 +396,7 @@ describe('UnpackContent', () => {
 
     expect(walk).not.toHaveBeenCalled();
     expect(queue.enqueued).toHaveLength(2);
+    expect(textIndex.records).toHaveLength(2);
   });
 
   it("walks again for another unpacker version or the hub's limits", async () => {

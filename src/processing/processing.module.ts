@@ -7,6 +7,7 @@ import { StorageModule } from '../storage/contracts.js';
 import { DeliverMessage } from './application/deliver-message.js';
 import { Dispatch } from './application/dispatch.js';
 import { Holders } from './application/holders.js';
+import { IndexMessages } from './application/index-messages.js';
 import {
   FileFacts,
   PluginJobQueue,
@@ -70,6 +71,7 @@ const DAY = 24 * 60 * 60;
     ListContainedHandler,
     SearchTexts,
     Dispatch,
+    IndexMessages,
     DeliverMessage,
     Holders,
     ProcessContent,
@@ -88,6 +90,6 @@ const DAY = 24 * 60 * 60;
   ],
   // for PluginsOutboxTransport: the outbox makes it, with this module's
   // exports (AppModule wires it into messaging)
-  exports: [Dispatch, PluginJobQueue],
+  exports: [Dispatch, PluginJobQueue, IndexMessages],
 })
 export class ProcessingModule {}

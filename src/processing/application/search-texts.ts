@@ -16,11 +16,12 @@ import {
 import { SearchTextsQuery, type TextHit } from './queries.js';
 
 // By the words and by their meaning, or by the words alone while the query
-// embedder is away or failing; the best contents then in the reranker's
-// order, or in the index's while it's busy, away or failing: a search
-// answers all the same. The hashes go to the index as they came: they are
-// what the caller may read, and the index has no other say. Only the texts
-// of the processors on are looked through, as only they are read.
+// embedder is away or failing; the best hits then in the reranker's order,
+// or in the index's while it's busy, away or failing: a search answers all
+// the same. The scope goes to the index as it came: it's what the caller may
+// read, and the index has no other say. Only the texts of the processors on
+// are looked through, as only they are read; posts and names are no
+// processor's.
 @QueryHandler(SearchTextsQuery)
 export class SearchTexts implements IQueryHandler<SearchTextsQuery> {
   private readonly logger = new Logger(SearchTexts.name);
@@ -56,17 +57,22 @@ export class SearchTexts implements IQueryHandler<SearchTextsQuery> {
 
   private async search(
     index: TextIndex,
-    { text, hashes, limit }: SearchTextsQuery,
+    { text, among, limit }: SearchTextsQuery,
   ) {
     const processors = this.plugins.processorNames;
-    if (!hashes.length || !processors.length) return [];
+    // a content's texts only by the processors on
+    const scope = {
+      ...among,
+      contents: processors.length ? among.contents : [],
+    };
+    if (Object.values(scope).every((ids) => !ids.length)) return [];
     // the chunks are NFC, which the analyzers fold; a query has to be too
     const words = text.normalize('NFC');
     const vector = await this.meaningOf(words);
     // as many as the reranker takes, whatever the limit
     const size = Math.max(limit, this.reranker?.candidates ?? 0);
     const hits = await index
-      .search({ text: words, vector, hashes, processors, size })
+      .search({ text: words, vector, among: scope, processors, size })
       .catch((err: unknown) => {
         throw err instanceof TextIndexUnavailableError
           ? new SearchUnavailableError({ cause: err })
@@ -88,16 +94,16 @@ export class SearchTexts implements IQueryHandler<SearchTextsQuery> {
     }
   }
 
-  // The reranker's candidates in its order, by their best snippets, ties as
-  // they were, and the rest after them; or the index's order, counted by
-  // why (unranked)
+  // The reranker's candidates in its order, by their best snippets (a
+  // page's, else a name's or a post's), ties as they were, and the rest
+  // after them; or the index's order, counted by why (unranked)
   private async reranked(query: string, hits: TextHit[]) {
     if (!this.reranker || hits.length < 2) return hits;
     const top = hits.slice(0, this.reranker.candidates);
     const scores = await this.reranker
       .scores(
         query,
-        top.map(({ pages }) => pages[0].snippet.text),
+        top.map(({ pages, records }) => (pages[0] ?? records[0]).snippet.text),
       )
       .then(
         (scores) => scores ?? this.unranked('busy'),

@@ -5,17 +5,20 @@ import {
   type OutboxMessage,
 } from '@nestjs/outbox';
 import { Dispatch } from '../application/dispatch.js';
+import { IndexMessages } from '../application/index-messages.js';
 import { PluginJobQueue } from '../application/ports.js';
 import { toSdkMessage } from '../application/to-sdk-message.js';
 
-// Publishes an outbox message as the plugin jobs it makes. Their ids come
-// from the work, so a message the relay publishes again, after a publish
-// that failed partway too, queues only what's missing.
+// Publishes an outbox message as the plugin jobs it makes, and the search
+// index's job. Their ids come from the work, so a message the relay
+// publishes again, after a publish that failed partway too, queues only
+// what's missing.
 @Injectable()
 export class PluginsOutboxTransport extends OutboxTransport {
   constructor(
     private readonly dispatch: Dispatch,
     private readonly queue: PluginJobQueue,
+    private readonly index: IndexMessages,
   ) {
     super();
   }
@@ -27,5 +30,6 @@ export class PluginsOutboxTransport extends OutboxTransport {
     if (!message)
       throw new NonRetryableMessageError(`no plugin message for ${topic}`);
     await this.queue.enqueue(await this.dispatch.jobsFor(id, message));
+    await this.index.publish(id, message);
   }
 }

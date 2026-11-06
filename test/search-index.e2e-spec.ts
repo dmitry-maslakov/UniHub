@@ -7,6 +7,7 @@ import type { PortalIngest } from '@app/plugin-sdk';
 import { PluginName } from '@app/kernel';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
 import { OPENSEARCH } from '../src/platform/search/opensearch.module.js';
+import { TextIndex } from '../src/processing/application/ports.js';
 import { ReconcileIndex } from '../src/processing/application/reconcile-index.js';
 import {
   keyId,
@@ -15,6 +16,7 @@ import {
 import { SEARCH_INDEX_QUEUE } from '../src/processing/infrastructure/search/search-index.queue.js';
 import {
   GENERATION,
+  indexBody,
   indexName,
 } from '../src/processing/infrastructure/search/text-index.mapping.js';
 import { bootApp } from './app.js';
@@ -24,10 +26,10 @@ import { FakePluginsModule } from './fake-plugins.js';
 import { portalIngest } from './ingest.js';
 import { sha256 } from './sha256.js';
 
-// The texts' way into OpenSearch, through the queue, and back in step with
-// postgres. What is indexed and what is queued is checked on fakes
-// (IndexText, ReconcileIndex), how OpenSearch's answers are read on a stub
-// of its client (OpenSearchTextIndex).
+// The texts' and the records' way into OpenSearch, through the queue, and
+// back in step with postgres. What is indexed and what is queued is checked
+// on fakes (IndexText, IndexRecord, ReconcileIndex), how OpenSearch's
+// answers are read on a stub of its client (OpenSearchTextIndex).
 
 const portal = 'search-index-test';
 const index = indexName(testEnv.OPENSEARCH_INDEX_PREFIX, testVectors);
@@ -64,11 +66,21 @@ describe('search index', { timeout: 120_000 }, () => {
   let prisma: PrismaService;
   let opensearch: Client;
 
-  // the ids of the documents some content has in the index
+  // the ids of the documents some content's texts have in the index, not
+  // the records naming it
   const documents = async (hash: string) => {
     const { body } = await opensearch.search({
       index,
-      body: { size: 1_000, query: { term: { hash } }, _source: false },
+      body: {
+        size: 1_000,
+        query: {
+          bool: {
+            filter: [{ term: { hash } }],
+            must_not: [{ exists: { field: 'kind' } }],
+          },
+        },
+        _source: false,
+      },
     });
     return body.hits.hits.map(({ _id }) => _id!).toSorted(byId);
   };
@@ -95,6 +107,34 @@ describe('search index', { timeout: 120_000 }, () => {
     await hub.file({ externalId: name, name });
     await hub.content(name, Readable.from([content]));
   };
+  // a record's documents, by id, with what they hold
+  const record = async (kind: string, id: string) => {
+    const { body } = await opensearch.search({
+      index,
+      body: {
+        size: 1_000,
+        query: {
+          bool: { filter: [{ term: { kind } }, { term: { record: id } }] },
+        },
+      },
+    });
+    return Object.fromEntries(
+      body.hits.hits.map(({ _id, _source }) => [_id, _source]),
+    );
+  };
+  const recorded = (kind: string, id: string, expected: object) =>
+    vi.waitFor(
+      async () => expect(await record(kind, id)).toEqual(expected),
+      WAIT,
+    );
+  const idOf = async (table: 'item' | 'file', externalId: string) =>
+    (
+      await (prisma[table] as typeof prisma.file).findUniqueOrThrow({
+        where: { portal_externalId: { portal, externalId } },
+      })
+    ).id;
+  const post = (externalId: string, body: string) =>
+    hub.item({ externalId, kind: 'post', title: 'Notice', raw: { body } });
 
   beforeAll(async () => {
     app = await bootApp({ imports: [FakePluginsModule] });
@@ -161,6 +201,165 @@ describe('search index', { timeout: 120_000 }, () => {
     await indexed(sha256(notes), ids(text(notes, 2), 1));
     await indexed(sha256(scan), ids(text(scan, 1, 'fake-pdf'), 0));
     await indexed(sha256(book), []);
+  });
+
+  it("writes a post as it's ingested or edited, with its chunks' vectors, and takes it out once it's removed", async () => {
+    await post('notice', '<p>search index: a post</p>');
+    const id = await idOf('item', 'notice');
+    const text = 'Notice\n\nsearch index: a post';
+    const [vector] = await new FakeEmbedder(testVectors.dimensions).embed([
+      text,
+    ]);
+
+    await recorded('post', id, {
+      [`post__${id}`]: expect.objectContaining({ kind: 'post', chunks: 1 }),
+      [`post__${id}__0`]: {
+        kind: 'post',
+        record: id,
+        digest: expect.any(String),
+        hash: sha256(`post:${id}`),
+        chunk: 0,
+        text,
+        // as float32
+        vector: vector.map((x) => expect.closeTo(x, 6)),
+      },
+    });
+
+    await post('notice', '<p>search index: the post, edited</p>');
+    await recorded('post', id, {
+      [`post__${id}`]: expect.anything(),
+      [`post__${id}__0`]: expect.objectContaining({
+        text: 'Notice\n\nsearch index: the post, edited',
+      }),
+    });
+
+    // past its text: a link, which isn't words
+    const before = await record('post', id);
+    await hub.item({
+      externalId: 'notice',
+      kind: 'post',
+      title: 'Notice',
+      raw: {
+        body: '<p>search index: the post, edited</p>',
+        url: 'https://portal.example/notice',
+      },
+    });
+    await vi.waitFor(
+      async () =>
+        expect((await record('post', id))[`post__${id}`].fingerprint).not.toBe(
+          before[`post__${id}`].fingerprint,
+        ),
+      WAIT,
+    );
+    expect((await record('post', id))[`post__${id}__0`]).toEqual(
+      before[`post__${id}__0`],
+    );
+
+    await hub.removeItem('notice');
+    await recorded('post', id, {});
+  });
+
+  // the tree's after the processors' and the unpacker's jobs
+  it("writes a file's name once its content is stored, and its tree's kept members' paths, by words alone", async () => {
+    const bundle = JSON.stringify({ 'lab/main.txt': 'int main' });
+    await upload('labs.bundle', bundle);
+    const file = await idOf('file', 'labs.bundle');
+
+    await recorded('file', file, {
+      [`file__${file}`]: expect.objectContaining({ chunks: 1 }),
+      [`file__${file}__0`]: {
+        kind: 'file',
+        record: file,
+        digest: expect.any(String),
+        hash: sha256(bundle),
+        chunk: 0,
+        text: 'labs.bundle',
+      },
+    });
+    await recorded('tree', sha256(bundle), {
+      [`tree__${sha256(bundle)}`]: expect.objectContaining({
+        fingerprint: 'fake-bundle__1__1',
+        chunks: 1,
+      }),
+      [`tree__${sha256(bundle)}__0`]: expect.objectContaining({
+        hash: sha256('int main'),
+        text: 'lab/main.txt',
+        member: 'lab/main.txt',
+      }),
+    });
+
+    await hub.removeFile('labs.bundle');
+    await recorded('file', file, {});
+  });
+
+  it('puts the records back in step: lost, made from what changed since, or of nothing postgres has', async () => {
+    await post('kept', 'search index: a post kept');
+    const id = await idOf('item', 'kept');
+    await recorded('post', id, {
+      [`post__${id}`]: expect.anything(),
+      [`post__${id}__0`]: expect.anything(),
+    });
+    const tree = sha256(JSON.stringify({ 'lab/main.txt': 'int main' }));
+    await opensearch.deleteByQuery({
+      index,
+      refresh: true,
+      body: { query: { term: { record: id } } },
+    });
+    await opensearch.index({
+      index,
+      id: `tree__${tree}`,
+      body: { kind: 'tree', record: tree, fingerprint: 'before', chunks: 0 },
+    });
+    await opensearch.index({
+      index,
+      id: 'post__gone',
+      body: { kind: 'post', record: 'gone', fingerprint: 'x', chunks: 0 },
+      refresh: true,
+    });
+
+    expect(await app.get(ReconcileIndex).run()).toBeGreaterThanOrEqual(3);
+
+    await recorded('post', id, {
+      [`post__${id}`]: expect.anything(),
+      [`post__${id}__0`]: expect.anything(),
+    });
+    await recorded('tree', tree, {
+      [`tree__${tree}`]: expect.objectContaining({
+        fingerprint: 'fake-bundle__1__1',
+      }),
+      [`tree__${tree}__0`]: expect.anything(),
+    });
+    await recorded('post', 'gone', {});
+  });
+
+  // fields added need no new generation: the texts in it are kept
+  it("gives an index this generation made before the records' fields those fields", async () => {
+    await deleteIndex();
+    const body = indexBody(testVectors);
+    const { kind, record, fingerprint, digest, member, ...before } =
+      body.mappings.properties;
+    await opensearch.indices.create({
+      index,
+      body: { ...body, mappings: { ...body.mappings, properties: before } },
+    });
+    await opensearch.index({
+      index,
+      id: 'kept',
+      body: { ...text(notes, 2), chunks: 0 },
+      refresh: true,
+    });
+
+    await app.get(TextIndex).ensure();
+
+    const { body: mapping } = await opensearch.indices.getMapping({ index });
+    expect(mapping[index].mappings.properties).toMatchObject({
+      kind,
+      record,
+      fingerprint,
+      digest,
+      member,
+    });
+    expect((await opensearch.exists({ index, id: 'kept' })).body).toBe(true);
   });
 
   it('makes the index again when it was deleted while the app runs', async () => {

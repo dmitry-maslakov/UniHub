@@ -10,6 +10,9 @@ import { McpUserId } from './mcp-user-id.js';
 import { json, readOnly } from './tool-results.js';
 
 const inCourse = pageSchema.extend({ course: Slug.describe('course slug') });
+const post = z.object({
+  item: z.uuid().describe('item id from list_items or search'),
+});
 const file = z.uuid().describe('file id from list_files or search');
 const fileText = textPageSchema.extend({ file });
 const fileMembers = pageSchema.extend({ file });
@@ -43,6 +46,20 @@ export class CourseTools {
     @McpUserId() userId: string,
   ) {
     return json(await this.reader.items(userId, course, page));
+  }
+
+  @Tool({
+    name: 'read_item',
+    description:
+      "One post, announcement or page, as list_items lists it: open a post search found. `raw` is the portal's own data and usually holds the text.",
+    parameters: post,
+    annotations: readOnly,
+  })
+  async item(
+    @Payload() { item }: z.output<typeof post>,
+    @McpUserId() userId: string,
+  ) {
+    return json(await this.reader.item(userId, item));
   }
 
   @Tool({

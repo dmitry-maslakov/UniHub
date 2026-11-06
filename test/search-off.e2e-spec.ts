@@ -56,9 +56,18 @@ describe('search off', { timeout: 20_000 }, () => {
   // its handler is processing's, there with search off too
   it('tells a search that search is off', async () => {
     await expect(
-      app
-        .get(QueryBus)
-        .execute(new SearchTextsQuery('semafor', [sha256('a')], 10)),
+      app.get(QueryBus).execute(
+        new SearchTextsQuery(
+          'semafor',
+          {
+            contents: [sha256('a')],
+            posts: [],
+            files: [],
+            archives: [],
+          },
+          10,
+        ),
+      ),
     ).rejects.toMatchObject({ kind: 'unavailable', reason: 'SEARCH_OFF' });
   });
 
