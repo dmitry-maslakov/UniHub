@@ -22,6 +22,7 @@ import { ProcessingModule } from './processing/processing.module.js';
 import { PluginsOutboxTransport } from './processing/contracts.js';
 import { plugins } from './plugins/enabled.js';
 import { PluginsModule } from './plugins/plugins.module.js';
+import { WebModule } from './web/contracts.js';
 
 // The modules the hub is made of; each one configures what it owns, its
 // settings included (ConfigModule.forFeature). Every role loads them all:
@@ -67,6 +68,7 @@ import { PluginsModule } from './plugins/plugins.module.js';
     IngestModule,
     StorageModule,
     ProcessingModule,
+    WebModule,
     ...plugins,
   ],
 })

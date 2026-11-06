@@ -61,5 +61,7 @@
         "./libs/plugins/plain-text/src/*"
       ]
     }
-  }
+  },
+  // web/ is a project of its own (web/tsconfig.json)
+  "exclude": ["node_modules", "dist", "web"]
 }

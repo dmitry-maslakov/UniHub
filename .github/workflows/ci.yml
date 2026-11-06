@@ -60,6 +60,28 @@ jobs:
       - run: npm run build
       - run: npm run test:e2e
 
+  # the web app (web/), a project of its own; the image builds it again
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run steiger
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      # the API's types are the ones web/openapi.json gives
+      - run: npm run api:generate && git diff --exit-code src/shared/api/schema.d.ts
+
   # the server's stack starts: migrations, then the app passes its health check
   image:
     runs-on: ubuntu-latest

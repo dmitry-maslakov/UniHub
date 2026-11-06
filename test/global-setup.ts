@@ -27,6 +27,7 @@ export default async function setup() {
   await redis.quit();
 
   await rm(testEnv.STORAGE_PATH, { recursive: true, force: true });
+  await rm(testEnv.WEB_PATH, { recursive: true, force: true });
 
   const opensearch = new OpenSearch({ node: testEnv.OPENSEARCH_URL });
   await opensearch.indices.delete({

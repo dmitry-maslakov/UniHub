@@ -3,6 +3,7 @@ import type {
   INestApplicationContext,
   Type,
 } from '@nestjs/common';
+import { AbstractLoader, ExpressLoader } from '@nestjs/serve-static';
 import { Test } from '@nestjs/testing';
 import { AppModule } from '../src/app.module.js';
 import { appOptions, configureApp } from '../src/app.setup.js';
@@ -45,7 +46,11 @@ export async function bootApp({
   imports?: Type[];
   role?: Exclude<Role, 'worker'>;
 } = {}): Promise<INestApplication> {
-  const builder = testApp(imports, role);
+  // serve-static picks its loader by the HTTP adapter, which a testing
+  // module only gets after compiling: the one main.ts's app gets
+  const builder = testApp(imports, role)
+    .overrideProvider(AbstractLoader)
+    .useClass(ExpressLoader);
   if (mails)
     builder
       .overrideProvider(Mailer)

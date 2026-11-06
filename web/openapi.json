@@ -1,0 +1,1449 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/courses": {
+      "post": {
+        "operationId": "CoursesAdminController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "slug": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "slug",
+                  "name"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "the new course's id"
+          },
+          "403": {
+            "description": "for admins only"
+          },
+          "409": {
+            "description": "another course has the slug"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "admin"
+        ]
+      },
+      "get": {
+        "operationId": "CoursesController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "courses you may read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CourseResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "courses"
+        ]
+      }
+    },
+    "/api/portal-courses/{portal}/{externalId}/course": {
+      "put": {
+        "operationId": "CoursesAdminController_link",
+        "parameters": [
+          {
+            "name": "portal",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9-]+$"
+            }
+          },
+          {
+            "name": "externalId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "course": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+                  },
+                  "year": {
+                    "default": null,
+                    "nullable": true,
+                    "type": "integer",
+                    "minimum": 1901,
+                    "maximum": 2999
+                  }
+                },
+                "required": [
+                  "course"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "linked, whether the hub has the portal course yet or not; one linked elsewhere moves here"
+          },
+          "403": {
+            "description": "for admins only"
+          },
+          "404": {
+            "description": "no such course"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "admin"
+        ]
+      },
+      "delete": {
+        "operationId": "CoursesAdminController_unlink",
+        "parameters": [
+          {
+            "name": "portal",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9-]+$"
+            }
+          },
+          {
+            "name": "externalId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "not linked to any course now"
+          },
+          "403": {
+            "description": "for admins only"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/sign-in-methods": {
+      "get": {
+        "operationId": "SignInMethodsController_methods",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignInMethodsResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/courses/{slug}/items": {
+      "get": {
+        "operationId": "CoursesController_items",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "pattern": "^(?:[a-z0-9]+(?:-[a-z0-9]+)*|[a-z0-9-]+~(?:~[A-Za-z0-9_-]{22}|[A-Za-z0-9._-]+))$"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 0,
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ItemResponse"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "courses"
+        ]
+      }
+    },
+    "/api/courses/{slug}/files": {
+      "get": {
+        "operationId": "CoursesController_files",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "pattern": "^(?:[a-z0-9]+(?:-[a-z0-9]+)*|[a-z0-9-]+~(?:~[A-Za-z0-9_-]{22}|[A-Za-z0-9._-]+))$"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 0,
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "by folder and name",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FileResponse"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "courses"
+        ]
+      }
+    },
+    "/api/items/{id}": {
+      "get": {
+        "operationId": "ItemsController_item",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "a post of one of your courses, as search finds it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "items"
+        ]
+      }
+    },
+    "/api/files/{id}": {
+      "get": {
+        "operationId": "FilesController_file",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileDetailsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/files/{id}/members": {
+      "get": {
+        "operationId": "FilesController_members",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 0,
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the files inside an archive (zip, tar, gz) the file is, in the order it lists them; none for another file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MemberResponse"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/files/{id}/text": {
+      "get": {
+        "operationId": "FilesController_text",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "member",
+            "required": false,
+            "in": "query",
+            "description": "a file inside it, by its path as list_members or the members route gives it; the file itself by default",
+            "schema": {
+              "description": "a file inside it, by its path as list_members or the members route gives it; the file itself by default",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000000
+            }
+          },
+          {
+            "name": "processor",
+            "required": false,
+            "in": "query",
+            "description": "which text, as a search result names it; the first one by default",
+            "schema": {
+              "description": "which text, as a search result names it; the first one by default",
+              "type": "string",
+              "pattern": "^[a-z0-9-]+$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "one page, slide or section of the text made from the file, or from a file inside it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TextPageResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/files/{id}/content": {
+      "get": {
+        "operationId": "FilesController_content",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "member",
+            "required": false,
+            "in": "query",
+            "description": "a file inside it, by its path as list_members or the members route gives it; the file itself by default",
+            "schema": {
+              "description": "a file inside it, by its path as list_members or the members route gives it; the file itself by default",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the file as the portal had it, or a file inside it as its archive had it"
+          },
+          "404": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/users/{userId}/courses/{courseId}": {
+      "put": {
+        "operationId": "CourseAccessController_grant",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "courseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "the user reads the course"
+          },
+          "403": {
+            "description": "for admins only"
+          },
+          "404": {
+            "description": "no such user or course"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "admin"
+        ]
+      },
+      "delete": {
+        "operationId": "CourseAccessController_revoke",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "courseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "the user doesn't read it now, unless an admin"
+          },
+          "403": {
+            "description": "for admins only"
+          },
+          "404": {
+            "description": "no such user"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/search": {
+      "get": {
+        "operationId": "SearchController_search",
+        "parameters": [
+          {
+            "name": "q",
+            "required": true,
+            "in": "query",
+            "description": "words, a phrase or a code identifier; Latin or Cyrillic, with or without č ć š ž đ",
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 500,
+              "description": "words, a phrase or a code identifier; Latin or Cyrillic, with or without č ć š ž đ"
+            }
+          },
+          {
+            "name": "course",
+            "required": false,
+            "in": "query",
+            "description": "course slug: search only there",
+            "schema": {
+              "description": "course slug: search only there",
+              "type": "string",
+              "pattern": "^(?:[a-z0-9]+(?:-[a-z0-9]+)*|[a-z0-9-]+~(?:~[A-Za-z0-9_-]{22}|[A-Za-z0-9._-]+))$"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "results, at most",
+            "schema": {
+              "default": 10,
+              "description": "results, at most",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "files of your courses whose text matches, best first; with search by meaning on, up to `limit` even when none has the words, the nearest by meaning",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "no course of yours by that slug"
+          },
+          "503": {
+            "description": "try again later"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "search"
+        ]
+      }
+    },
+    "/api/me/portals": {
+      "get": {
+        "operationId": "PortalAccountsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "the portals you may link an account of, and yours",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PortalResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "portals"
+        ]
+      }
+    },
+    "/api/me/portals/{portal}/token": {
+      "put": {
+        "operationId": "PortalAccountsController_setToken",
+        "parameters": [
+          {
+            "name": "portal",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9-]+$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "pattern": "^[\\x21-\\x7e]{1,4096}$",
+                    "writeOnly": true,
+                    "description": "a token of your own the portal gave you; never read back"
+                  }
+                },
+                "required": [
+                  "token"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "linked; a token of the same portal user keeps the account, another's makes a new one"
+          },
+          "403": {
+            "description": "sign in again: this needs a session signed in within a day"
+          },
+          "404": {
+            "description": "the portal links no account of yours by token"
+          },
+          "422": {
+            "description": "the portal didn't take the token"
+          },
+          "429": {
+            "description": "10 a minute"
+          },
+          "503": {
+            "description": "the portal could not be asked; try again later"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "portals"
+        ]
+      },
+      "delete": {
+        "operationId": "PortalAccountsController_unlink",
+        "parameters": [
+          {
+            "name": "portal",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9-]+$"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "no account of yours of the portal now, nor its token"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "portals"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "UniHub",
+    "description": "",
+    "version": "1.0.0",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http"
+      }
+    },
+    "schemas": {
+      "SignInMethodsResponse": {
+        "type": "object",
+        "properties": {
+          "google": {
+            "type": "boolean",
+            "description": "Google sign-in is set up"
+          }
+        },
+        "required": [
+          "google"
+        ]
+      },
+      "PortalCourseResponse": {
+        "type": "object",
+        "properties": {
+          "portal": {
+            "type": "string",
+            "example": "canvas"
+          },
+          "name": {
+            "type": "string"
+          },
+          "year": {
+            "type": "number",
+            "nullable": true,
+            "example": 2026
+          }
+        },
+        "required": [
+          "portal",
+          "name",
+          "year"
+        ]
+      },
+      "CourseResponse": {
+        "type": "object",
+        "properties": {
+          "slug": {
+            "type": "string",
+            "example": "os"
+          },
+          "name": {
+            "type": "string",
+            "example": "Operativni sistemi"
+          },
+          "portalCourses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortalCourseResponse"
+            }
+          }
+        },
+        "required": [
+          "slug",
+          "name",
+          "portalCourses"
+        ]
+      },
+      "ItemResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "portal": {
+            "type": "string",
+            "example": "canvas"
+          },
+          "kind": {
+            "type": "string",
+            "example": "announcement"
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "url": {
+            "type": "string",
+            "nullable": true
+          },
+          "publishedAt": {
+            "format": "date-time",
+            "type": "string",
+            "nullable": true
+          },
+          "raw": {
+            "type": "object",
+            "description": "the portal's own data, as the connector sent it; null while the post is locked for your account, or not open yet",
+            "additionalProperties": true,
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "portal",
+          "kind",
+          "title",
+          "url",
+          "publishedAt",
+          "raw"
+        ]
+      },
+      "FileResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "portal": {
+            "type": "string",
+            "example": "canvas"
+          },
+          "itemId": {
+            "type": "string",
+            "nullable": true,
+            "description": "the item (post) it came with"
+          },
+          "name": {
+            "type": "string",
+            "example": "l5.pdf"
+          },
+          "path": {
+            "type": "string",
+            "description": "folder in the portal, '' for the root"
+          },
+          "url": {
+            "type": "string",
+            "nullable": true
+          },
+          "size": {
+            "type": "number",
+            "nullable": true
+          },
+          "mime": {
+            "type": "string",
+            "nullable": true,
+            "example": "application/pdf"
+          },
+          "hasContent": {
+            "type": "boolean",
+            "description": "the hub has the bytes"
+          }
+        },
+        "required": [
+          "id",
+          "portal",
+          "itemId",
+          "name",
+          "path",
+          "url",
+          "size",
+          "mime",
+          "hasContent"
+        ]
+      },
+      "TextInfoResponse": {
+        "type": "object",
+        "properties": {
+          "processor": {
+            "type": "string",
+            "example": "office-text"
+          },
+          "version": {
+            "type": "number"
+          },
+          "pages": {
+            "type": "number",
+            "description": "pages, slides or sections"
+          }
+        },
+        "required": [
+          "processor",
+          "version",
+          "pages"
+        ]
+      },
+      "FileDetailsResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "portal": {
+            "type": "string",
+            "example": "canvas"
+          },
+          "itemId": {
+            "type": "string",
+            "nullable": true,
+            "description": "the item (post) it came with"
+          },
+          "name": {
+            "type": "string",
+            "example": "l5.pdf"
+          },
+          "path": {
+            "type": "string",
+            "description": "folder in the portal, '' for the root"
+          },
+          "url": {
+            "type": "string",
+            "nullable": true
+          },
+          "size": {
+            "type": "number",
+            "nullable": true
+          },
+          "mime": {
+            "type": "string",
+            "nullable": true,
+            "example": "application/pdf"
+          },
+          "hasContent": {
+            "type": "boolean",
+            "description": "the hub has the bytes"
+          },
+          "texts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TextInfoResponse"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "portal",
+          "itemId",
+          "name",
+          "path",
+          "url",
+          "size",
+          "mime",
+          "hasContent",
+          "texts"
+        ]
+      },
+      "MemberResponse": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "example": "lab1/src/main.c",
+            "description": "its path in the file, a nested archive's members under its own"
+          },
+          "size": {
+            "type": "number",
+            "nullable": true
+          },
+          "mime": {
+            "type": "string",
+            "nullable": true,
+            "example": "text/x-c"
+          },
+          "leftOut": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "TOO_LARGE",
+              "OVER_BUDGET",
+              "DUPLICATE_PATH",
+              "TOO_DEEP"
+            ],
+            "description": "why the hub kept none of it: past a member's limit, past the archive's, a path listed twice, an archive nested too deep to open; null if kept"
+          },
+          "texts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TextInfoResponse"
+            }
+          }
+        },
+        "required": [
+          "path",
+          "size",
+          "mime",
+          "leftOut",
+          "texts"
+        ]
+      },
+      "TextPageResponse": {
+        "type": "object",
+        "properties": {
+          "processor": {
+            "type": "string",
+            "example": "office-text"
+          },
+          "version": {
+            "type": "number"
+          },
+          "pages": {
+            "type": "number",
+            "description": "pages, slides or sections"
+          },
+          "page": {
+            "type": "number",
+            "example": 1
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "processor",
+          "version",
+          "pages",
+          "page",
+          "text"
+        ]
+      },
+      "SnippetResponse": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "up to 400 characters of the page as indexed: plain text, whatever HTML the file had included, so render it as text"
+          },
+          "highlights": {
+            "type": "array",
+            "description": "where the words matched: [start, end) UTF-16 offsets into snippet.text; render as text",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "example": [
+              [
+                12,
+                18
+              ]
+            ]
+          }
+        },
+        "required": [
+          "text",
+          "highlights"
+        ]
+      },
+      "SearchPageResponse": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "example": 3
+          },
+          "processor": {
+            "type": "string",
+            "example": "office-text",
+            "description": "whose text it is, for GET /api/files/{id}/text"
+          },
+          "snippet": {
+            "$ref": "#/components/schemas/SnippetResponse"
+          }
+        },
+        "required": [
+          "page",
+          "processor",
+          "snippet"
+        ]
+      },
+      "FileResultResponse": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "file",
+              "member"
+            ],
+            "description": "a file, or a member of an archive the file is"
+          },
+          "fileId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "example": "l5.pdf"
+          },
+          "path": {
+            "type": "string",
+            "description": "folder in the portal, '' for the root"
+          },
+          "member": {
+            "type": "string",
+            "nullable": true,
+            "example": "lab1/src/main.c",
+            "description": "the path in the file of the member found (GET /api/files/{fileId}/members), null for the file itself"
+          },
+          "course": {
+            "type": "string",
+            "example": "os",
+            "description": "the course's slug"
+          },
+          "pages": {
+            "description": "its best pages first, at most 3; none when only its name matched",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchPageResponse"
+            }
+          },
+          "matchedName": {
+            "nullable": true,
+            "description": "its name (a member's path) where the words matched, null when only its text did",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SnippetResponse"
+              }
+            ]
+          },
+          "sameContentIn": {
+            "description": "other files of your courses with the same content",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "type",
+          "fileId",
+          "name",
+          "path",
+          "member",
+          "course",
+          "pages",
+          "matchedName",
+          "sameContentIn"
+        ]
+      },
+      "PostResultResponse": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "post"
+            ]
+          },
+          "itemId": {
+            "type": "string",
+            "description": "GET /api/items/{itemId}"
+          },
+          "kind": {
+            "type": "string",
+            "example": "announcement"
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "url": {
+            "type": "string",
+            "nullable": true
+          },
+          "publishedAt": {
+            "format": "date-time",
+            "type": "string",
+            "nullable": true
+          },
+          "course": {
+            "type": "string",
+            "example": "os",
+            "description": "the course's slug"
+          },
+          "snippet": {
+            "description": "its best fragment, of its title and what the portal gave as plain text",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SnippetResponse"
+              }
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "itemId",
+          "kind",
+          "title",
+          "url",
+          "publishedAt",
+          "course",
+          "snippet"
+        ]
+      },
+      "SearchResponse": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/FileResultResponse"
+                },
+                {
+                  "$ref": "#/components/schemas/PostResultResponse"
+                }
+              ],
+              "discriminator": {
+                "propertyName": "type",
+                "mapping": {
+                  "file": "#/components/schemas/FileResultResponse",
+                  "member": "#/components/schemas/FileResultResponse",
+                  "post": "#/components/schemas/PostResultResponse"
+                }
+              }
+            },
+            "description": "best first, a file, a member or a post each (`type`)"
+          }
+        },
+        "required": [
+          "results"
+        ]
+      },
+      "PortalResponse": {
+        "type": "object",
+        "properties": {
+          "portal": {
+            "type": "string",
+            "example": "canvas"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "shared",
+              "token"
+            ],
+            "description": "how its accounts are linked: shared, the one the hub reads with; token, your own"
+          },
+          "linked": {
+            "type": "boolean",
+            "description": "you have an account of it linked"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "linked",
+              "expired",
+              "revoked"
+            ],
+            "nullable": true,
+            "description": "null when not linked"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string",
+            "nullable": true,
+            "description": "when the token stops working, if the portal says"
+          }
+        },
+        "required": [
+          "portal",
+          "mode",
+          "linked",
+          "status",
+          "expiresAt"
+        ]
+      }
+    }
+  }
+}
