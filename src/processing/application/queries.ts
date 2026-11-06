@@ -1,5 +1,6 @@
 import { Query } from '@nestjs/cqrs';
-import type { ContentHash, PluginName } from '@app/kernel';
+import type { ContentHash, MediaType, PluginName } from '@app/kernel';
+import type { LeftOut } from '../domain/unpacking.js';
 
 // What other modules read of processing: the texts straight from the
 // database (infrastructure/read), and a search over them in the index
@@ -31,6 +32,43 @@ export class GetTextPageQuery extends Query<TextPage | null> {
     public readonly hash: ContentHash,
     public readonly page: number,
     public readonly processor?: PluginName,
+  ) {
+    super();
+  }
+}
+
+// A member of a container's tree, kept with what processors made of it, or
+// listed with why it wasn't
+export interface MemberInfo {
+  // a nested container's members under its path
+  path: string;
+  size: number | null;
+  mime: MediaType | null;
+  leftOut: LeftOut | null;
+  texts: TextInfo[];
+}
+
+// a page of the tree of some content, in the order its container lists
+// them; none if it has no tree
+export class ListMembersQuery extends Query<MemberInfo[]> {
+  constructor(
+    public readonly hash: ContentHash,
+    public readonly offset: number,
+    public readonly limit: number,
+  ) {
+    super();
+  }
+}
+
+// the content of the member kept at `path` in the tree of some content,
+// null if none is
+export class FindMemberQuery extends Query<{
+  hash: ContentHash;
+  mime: MediaType | null;
+} | null> {
+  constructor(
+    public readonly hash: ContentHash,
+    public readonly path: string,
   ) {
     super();
   }

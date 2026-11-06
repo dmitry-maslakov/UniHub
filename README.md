@@ -66,6 +66,7 @@ OpenAPI at `/api/docs`. A signed-in user reads the courses they were given:
 - `GET /api/files/{id}`: the file and the texts made from it
 - `GET /api/files/{id}/text?page=2`: one page, slide or section of a text
 - `GET /api/files/{id}/content`: the file itself
+- `GET /api/files/{id}/members` (`offset`, `limit`): the files inside an archive the file is, in the order it lists them, each by its path (a nested archive's under its own), with the texts made from it or why it was left out (Plugins, below); `?member=lab/main.c` on `/text` and `/content` reads one of them. A member is found only inside a file the user reads, only if it was kept, and by no other way
 - `GET /api/search?q=semafor&course=os&limit=10`: the files of their courses (or of the one named) whose text matches, best first (Search, below)
 
 Everything goes through `CourseReader` and `CourseSearch` (`src/access`), which MCP shares; 1200 calls a minute per user, and searches apart, 20 a minute.
@@ -100,7 +101,7 @@ Admins set the courses up (`@Roles([ADMIN_ROLE])`):
 
 ## MCP
 
-`/api/mcp` serves the same reads to AI clients over streamable HTTP, as the tools `list_courses`, `list_items`, `list_files`, `read_file` (page by page, of the processor named or the first one) and `search` (as `GET /api/search`, its results as JSON; over its limit, a tool error). A client signs in with an API key (create one at `POST /api/auth/api-key/create`), sent as `X-API-Key` or `Authorization: Bearer`; 600 calls a minute per user, however many keys they have. A request carries one JSON-RPC message as JSON: other bodies get 415, batches 400.
+`/api/mcp` serves the same reads to AI clients over streamable HTTP, as the tools `list_courses`, `list_items`, `list_files`, `list_members` (of an archive), `read_file` (page by page, of the processor named or the first one, of the file or of a `member`) and `search` (as `GET /api/search`, its results as JSON; over its limit, a tool error). A client signs in with an API key (create one at `POST /api/auth/api-key/create`), sent as `X-API-Key` or `Authorization: Bearer`; 600 calls a minute per user, however many keys they have. A request carries one JSON-RPC message as JSON: other bodies get 415, batches 400.
 
 ## Plugins
 

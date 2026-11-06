@@ -34,6 +34,7 @@ describe('the HTTP app', () => {
         '/api/courses/{slug}/items',
         '/api/files/{id}/text',
         '/api/files/{id}/content',
+        '/api/files/{id}/members',
         '/api/search',
         '/api/users/{userId}/courses/{courseId}',
         '/api/portal-courses/{portal}/{externalId}/course',

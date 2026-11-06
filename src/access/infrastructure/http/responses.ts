@@ -1,6 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
 import type { Json, MediaType, PluginName, PortalId } from '@app/kernel';
 import type {
+  LeftOut,
+  MemberInfo,
   Snippet,
   TextInfo,
   TextPage,
@@ -78,6 +80,27 @@ export class FileDetailsResponse
   extends FileResponse
   implements FileDetailsView
 {
+  @ApiProperty({ type: [TextInfoResponse] }) texts!: TextInfoResponse[];
+}
+
+export class MemberResponse implements MemberInfo {
+  @ApiProperty({
+    example: 'lab1/src/main.c',
+    description:
+      "its path in the file, a nested archive's members under its own",
+  })
+  path!: string;
+  @ApiProperty({ type: Number, nullable: true }) size!: number | null;
+  @ApiProperty({ type: String, nullable: true, example: 'text/x-c' })
+  mime!: MediaType | null;
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    enum: ['TOO_LARGE', 'OVER_BUDGET', 'DUPLICATE_PATH', 'TOO_DEEP'],
+    description:
+      "why the hub kept none of it: past a member's limit, past the archive's, a path listed twice, an archive nested too deep to open; null if kept",
+  })
+  leftOut!: LeftOut | null;
   @ApiProperty({ type: [TextInfoResponse] }) texts!: TextInfoResponse[];
 }
 

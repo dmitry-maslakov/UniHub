@@ -3,21 +3,32 @@ import { Readable } from 'node:stream';
 import { buffer } from 'node:stream/consumers';
 import { gzipSync } from 'node:zlib';
 import type { INestApplication } from '@nestjs/common';
+import { CommandBus } from '@nestjs/cqrs';
 import tar from 'tar-stream';
 import yazl from 'yazl';
+import { PortalId } from '@app/kernel';
 import { ArchivesModule } from '@app/plugins/archives';
 import { OfficeTextModule } from '@app/plugins/office-text';
 import { PlainTextModule } from '@app/plugins/plain-text';
+import {
+  CourseName,
+  CreateCourseCommand,
+  LinkPortalCourseCommand,
+  Slug,
+} from '../src/catalog/contracts.js';
+import type { Mail } from '../src/identity/domain/mailer.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
+import { accounts } from './accounts.js';
 import { bootApp } from './app.js';
 import { portalIngest } from './ingest.js';
 import { sha256 } from './sha256.js';
 
 // archives as the hub runs it: found among the plugins, the members of a
 // zip stored and each read by the processor that takes its name
-// (office-text the pdf), a tgz in it opened in the same walk. What it makes
-// of an archive is checked in its unit specs, the walk's rules in
-// processing's.
+// (office-text the pdf), a tgz in it opened in the same walk, then read
+// through the API inside the file. What it makes of an archive is checked
+// in its unit specs, the walk's rules in processing's, who reads which
+// member on fakes (CourseReader).
 
 const PORTAL = 'archives-test';
 const lecture = readFileSync(
@@ -49,6 +60,11 @@ describe('archives', { timeout: 60_000 }, () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let zip: Buffer;
+  const mails: Mail[] = [];
+  const { http, signUp, makeAdmin } = accounts(() => app, mails);
+  let admin: string;
+  let fileId: string;
+  const get = (path: string) => http().get(path).set('cookie', admin);
   // what a processor made of a member's content
   const text = async (content: string | Buffer, processor: string) => {
     const stored = await prisma.representation.findFirst({
@@ -59,6 +75,7 @@ describe('archives', { timeout: 60_000 }, () => {
 
   beforeAll(async () => {
     app = await bootApp({
+      mails,
       imports: [ArchivesModule, PlainTextModule, OfficeTextModule],
     });
     prisma = app.get(PrismaService);
@@ -70,8 +87,26 @@ describe('archives', { timeout: 60_000 }, () => {
       'lab/old.tgz': await tgzOf({ 'inner.c': inner }),
     });
     const ingest = portalIngest(app, PORTAL);
-    await ingest.file({ externalId: 'labs', name: 'labs.zip' });
+    await ingest.course({ externalId: 'c1', name: 'Arhitektura' });
+    await ingest.file({ externalId: 'labs', course: 'c1', name: 'labs.zip' });
     await ingest.content('labs', Readable.from([zip]));
+    ({ id: fileId } = await prisma.file.findUniqueOrThrow({
+      where: { portal_externalId: { portal: PORTAL, externalId: 'labs' } },
+    }));
+
+    const commands = app.get(CommandBus);
+    await commands.execute(
+      new CreateCourseCommand(Slug.parse('ar'), CourseName.parse('AR')),
+    );
+    await commands.execute(
+      new LinkPortalCourseCommand(
+        Slug.parse('ar'),
+        { portal: PortalId.parse(PORTAL), externalId: 'c1' },
+        null,
+      ),
+    );
+    admin = await signUp('admin@archives.test');
+    await makeAdmin('admin@archives.test');
   });
 
   afterAll(() => app.close());
@@ -102,5 +137,51 @@ describe('archives', { timeout: 60_000 }, () => {
       'lab/old.tgz',
       'lab/old.tgz/inner.c',
     ]);
+  });
+
+  it("reads an archive's members through the API, each by its path", async () => {
+    const members = (await get(`/api/files/${fileId}/members`).expect(200))
+      .body;
+    expect(members).toContainEqual({
+      path: 'lab/semafor.c',
+      size: semafor.length,
+      mime: null,
+      leftOut: null,
+      texts: [{ processor: 'plain-text', version: 1, pages: 1 }],
+    });
+    expect(members.map(({ path }: { path: string }) => path)).toContain(
+      'lab/old.tgz/inner.c',
+    );
+
+    const page = async (member: string, processor = 'plain-text', n = 1) =>
+      (
+        await get(
+          `/api/files/${fileId}/text?member=${encodeURIComponent(member)}&page=${n}&processor=${processor}`,
+        ).expect(200)
+      ).body.text;
+    expect(await page('lab/semafor.c')).toBe(semafor);
+    expect(await page('lab/plot.py')).toContain('histogram');
+    expect(await page('README.md')).toContain('Vežbe');
+    expect(await page('lab/old.tgz/inner.c')).toBe(inner);
+    expect(await page('docs/lecture.pdf', 'office-text', 2)).toBe(
+      'Direct mapped caches',
+    );
+
+    const content = await get(
+      `/api/files/${fileId}/content?member=lab/semafor.c`,
+    )
+      .buffer(true)
+      .parse((res, done) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => done(null, Buffer.concat(chunks)));
+      })
+      .expect(200);
+    expect(content.headers['content-disposition']).toBe(
+      'attachment; filename=semafor.c',
+    );
+    expect(content.headers['content-type']).toBe('application/octet-stream');
+    expect(content.body.toString()).toBe(semafor);
+    await get(`/api/files/${fileId}/text?member=lab/gone.c`).expect(404);
   });
 });

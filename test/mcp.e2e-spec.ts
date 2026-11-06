@@ -1,7 +1,7 @@
 import { Readable } from 'node:stream';
 import type { INestApplication } from '@nestjs/common';
 import { CommandBus } from '@nestjs/cqrs';
-import { PortalId } from '@app/kernel';
+import { PluginName, PortalId } from '@app/kernel';
 import {
   AcademicYear,
   CourseName,
@@ -12,9 +12,11 @@ import {
 import { GrantCourseAccessCommand } from '../src/identity/contracts.js';
 import type { Mail } from '../src/identity/domain/mailer.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
+import { UnpackingRepository } from '../src/processing/domain/unpacking.js';
 import { bootApp } from './app.js';
 import { accounts } from './accounts.js';
 import { portalIngest } from './ingest.js';
+import { sha256 } from './sha256.js';
 
 // Each tool once, behind the API key, the request checks and the limit.
 // What a request may hold is checked on its values' specs and on
@@ -78,6 +80,32 @@ describe('MCP', { timeout: 20_000 }, () => {
         parts: ['quicksort', 'mergesort'],
       },
     });
+    // as if it held an archive too, a member of it with a text
+    const notes = sha256('heapsort');
+    await app.get(UnpackingRepository).save({
+      hash,
+      unpacker: PluginName.parse('archives'),
+      version: 1,
+      policy: 1,
+      members: [
+        {
+          path: 'docs/notes.md',
+          hash: notes,
+          size: 8,
+          mime: null,
+          leftOut: null,
+        },
+      ],
+      cutShort: null,
+    });
+    await prisma.representation.create({
+      data: {
+        hash: notes,
+        processor: 'plain-text',
+        version: 1,
+        parts: ['heapsort'],
+      },
+    });
     fileId = (
       await prisma.file.findUniqueOrThrow({
         where: { portal_externalId: { portal: PORTAL, externalId: 'f1' } },
@@ -135,6 +163,7 @@ describe('MCP', { timeout: 20_000 }, () => {
       'list_courses',
       'list_files',
       'list_items',
+      'list_members',
       'read_file',
       // search is on in the tests (search-off.e2e-spec.ts has it off)
       'search',
@@ -180,6 +209,16 @@ describe('MCP', { timeout: 20_000 }, () => {
     });
     expect(none.isError).toBe(true);
     expect(none.content[0].text).toContain('page not found');
+
+    const members = await call('list_members', { file: fileId });
+    expect(JSON.parse(members.content[0].text)).toEqual([
+      expect.objectContaining({ path: 'docs/notes.md' }),
+    ]);
+    const member = await call('read_file', {
+      file: fileId,
+      member: 'docs/notes.md',
+    });
+    expect(member.content[0].text).toContain('heapsort');
   });
 
   it('answers with an error the model can read', async () => {
@@ -191,6 +230,7 @@ describe('MCP', { timeout: 20_000 }, () => {
     for (const [tool, args] of [
       ['list_items', { course: 'alg', limit: 500 }],
       ['list_files', { course: 'Not A Slug' }],
+      ['list_members', { file: fileId, limit: 500 }],
       // past what postgres takes
       ['read_file', { file: fileId, page: 1e12 }],
     ] as const) {

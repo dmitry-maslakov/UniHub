@@ -1,18 +1,20 @@
+import { basename } from 'node:path';
 import { Injectable } from '@nestjs/common';
 import { QueryBus } from '@nestjs/cqrs';
-import type { PluginName } from '@app/kernel';
 import {
   ListCourseFilesQuery,
   ListCourseItemsQuery,
   type Slug,
 } from '../../catalog/contracts.js';
 import {
+  FindMemberQuery,
   GetTextPageQuery,
+  ListMembersQuery,
   ListTextsQuery,
 } from '../../processing/contracts.js';
 import { BlobStore } from '../../storage/contracts.js';
 import { NotReadableError } from './errors.js';
-import type { Page } from './page.js';
+import type { Page, TextAt } from './page.js';
 import { readableCourse, readableCourses, readableFile } from './readable.js';
 import { courseView, fileView, itemView } from './views.js';
 
@@ -53,14 +55,21 @@ export class CourseReader {
     return { ...fileView(file), texts };
   }
 
-  // one page of the file's text; the first processor's unless one is named
+  // a page of the members of an archive (or another container) the file
+  // holds, none if it holds none
+  async members(userId: string, fileId: string, { offset, limit }: Page) {
+    const { hash } = await this.readableContent(userId, fileId);
+    return this.queries.execute(new ListMembersQuery(hash, offset, limit));
+  }
+
+  // one page of the file's text, or a member's; the first processor's
+  // unless one is named
   async text(
     userId: string,
     fileId: string,
-    page: number,
-    processor?: PluginName,
+    { page, processor, member }: TextAt,
   ) {
-    const { hash } = await this.readableContent(userId, fileId);
+    const { hash } = await this.readableContent(userId, fileId, member);
     const text = await this.queries.execute(
       new GetTextPageQuery(hash, page, processor),
     );
@@ -68,15 +77,31 @@ export class CourseReader {
     return text;
   }
 
-  async content(userId: string, fileId: string) {
-    const { file, hash } = await this.readableContent(userId, fileId);
-    return { ...fileView(file), stream: await this.blobs.get(hash) };
+  // the file's bytes, or a member's, with its name and media type
+  async content(userId: string, fileId: string, member?: string) {
+    const { hash, name, mime } = await this.readableContent(
+      userId,
+      fileId,
+      member,
+    );
+    return { name, mime, stream: await this.blobs.get(hash) };
   }
 
-  // a file without content yet has nothing to read
-  private async readableContent(userId: string, fileId: string) {
+  // A file without content yet has nothing to read; a member is read only
+  // inside a file the user may read, and only if it was kept.
+  private async readableContent(
+    userId: string,
+    fileId: string,
+    member?: string,
+  ) {
     const file = await readableFile(this.queries, userId, fileId);
     if (!file.contentHash) throw new NotReadableError('file');
-    return { file, hash: file.contentHash };
+    if (member === undefined)
+      return { hash: file.contentHash, name: file.name, mime: file.mime };
+    const found = await this.queries.execute(
+      new FindMemberQuery(file.contentHash, member),
+    );
+    if (!found) throw new NotReadableError('member');
+    return { ...found, name: basename(member) };
   }
 }
