@@ -68,8 +68,8 @@ Put off:
 - a user's token's expiry is the one the portal gave at linking: a run doesn't renew it (the design's `expiresAt(at)`), and finds it `revoked` once the portal refuses it
 - a fetch lease isn't released: a run that took one and failed the download keeps that version's bytes from the other accounts' runs for the lease's time, as long as a run may take (`CONNECTOR_POLL_TIMEOUT_MINUTES`)
 - `CONNECTOR_CONCURRENCY` is per worker process and for every portal at once, not per portal
-- OAuth as a link mode: the portal's consent page, the access and refresh tokens sealed as a pasted token is (Canvas needs a developer key from the school)
-- connector keys (#33) bound to a user's account, accounts over gRPC and the `connector` mode
+- OAuth as a link mode, for a school that issues a developer key: built on branch `feat/135-oauth-mode` and kept there (openid-client with PKCE, the consent's state single-use in Redis, renewal, revoke on unlink); `shared` and `token` until then
+- the `connector` mode: a user's own connector, with #33's keys bound to the user's account, accounts over gRPC
 - a deleted user's accounts go by an event Better Auth's delete hook sends once the delete has committed, on the in-process bus: a crash in between leaves them, unreachable (no session is the user's); a sweep against identity's users, once something reads with accounts
 - a malformed JSON body's 400 quotes a few characters of it (V8's `JSON.parse` message, which Nest answers with): a token sent so shows a part of itself to its own sender, and isn't logged
 

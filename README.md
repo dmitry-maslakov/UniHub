@@ -181,7 +181,7 @@ How a portal's accounts are linked is set per portal in `PORTAL_LINKS` (`canvas=
 
 - `shared`, every portal's unless it says otherwise, as before: the one account the plugin's settings give (`CANVAS_TOKEN`), read by whoever an admin lets read a course
 - `token`: each user links an account of their own by pasting a token the portal gave them; `/admins` lets only admins link one
-- only `token` exists so far beside it; a portal's consent page (OAuth) and a user's own connector come later, and `PORTAL_LINKS` refuses them. The app doesn't start with a mode the portal's connector doesn't name (`links`, Plugins above)
+- only `shared` and `token` exist for now: `PORTAL_LINKS` refuses any other mode (a portal's consent page, a user's own connector). The app doesn't start with a mode the portal's connector doesn't name (`links`, Plugins above)
 
 The token is a setting that's written, never read:
 
@@ -212,7 +212,7 @@ What sharing the work still tells, by its timing and load, never who or what:
 - aggregate load: answers are slower while others' runs and searches load the server, which one server can't hide; the search index's word statistics are the whole index's
 - the reranker's busy fallback: a search while another is reranked keeps the index's order (Search index, above), which says someone else is searching
 
-The Canvas connector takes `token`. A token a user pastes has no scopes, so the Canvas client only reads (GET and HEAD), and only from the school's Canvas. Canvas's [OAuth docs](https://canvas.instructure.com/doc/api/file.oauth.html) say an app that several users use must get their tokens by OAuth, and that asking other users to make a token and enter it violates Instructure's API policy: on a Canvas Instructure hosts, keep `token` to `/admins` (in practice, yourself) until OAuth comes. A Canvas a school hosts itself follows that school's own rules instead: ask its Canvas admins before opening it to anyone.
+The Canvas connector takes `token`. A token a user pastes has no scopes, so the Canvas client only reads (GET and HEAD), and only from the school's Canvas. Canvas's [OAuth docs](https://canvas.instructure.com/doc/api/file.oauth.html) say an app that several users use must get their tokens by OAuth, and that asking other users to make a token and enter it violates Instructure's API policy: on a Canvas Instructure hosts, keep `token` to `/admins` (in practice, yourself), as the hub doesn't link accounts by OAuth. A Canvas a school hosts itself follows that school's own rules instead: ask its Canvas admins before opening it to anyone.
 
 ## External connectors
 
