@@ -9,8 +9,10 @@ RUN npm ci
 COPY web/package.json web/package-lock.json ./web/
 RUN npm ci --prefix web
 COPY . .
+# shown in the web app's user menu
+ARG COMMIT_SHA=dev
 # the web app's build goes to web/dist, which the app serves
-RUN npm run build && npm run build --prefix web
+RUN npm run build && VITE_COMMIT_SHA=$COMMIT_SHA npm run build --prefix web
 
 # the app: production dependencies, the bundle and what it reads at runtime
 FROM node:24-slim

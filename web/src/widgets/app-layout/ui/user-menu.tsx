@@ -1,7 +1,10 @@
-import { Avatar, Box, Menu, Text, UnstyledButton } from '@mantine/core';
+import { Anchor, Avatar, Box, Menu, Text, UnstyledButton } from '@mantine/core';
 import { IconKey, IconLogout, IconUser } from '@tabler/icons-react';
 import { Link } from '@tanstack/react-router';
 import { useSession, useSessionActions } from '@/entities/session';
+
+// the commit this build is of; unset in development
+const version: string = import.meta.env.VITE_COMMIT_SHA ?? 'dev';
 
 export function UserMenu() {
   const { user } = useSession();
@@ -44,6 +47,24 @@ export function UserMenu() {
         >
           Sign out
         </Menu.Item>
+        <Menu.Divider />
+        <Box px="sm" py={4}>
+          <Text size="xs" c="dimmed">
+            Version{' '}
+            {/^[0-9a-f]{7,40}$/.test(version) ? (
+              <Anchor
+                size="xs"
+                href={`https://github.com/dmitry-maslakov/UniHub/commit/${version}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {version.slice(0, 7)}
+              </Anchor>
+            ) : (
+              'dev'
+            )}
+          </Text>
+        </Box>
       </Menu.Dropdown>
     </Menu>
   );

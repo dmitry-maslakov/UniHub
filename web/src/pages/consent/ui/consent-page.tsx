@@ -1,16 +1,22 @@
-import { Text } from '@mantine/core';
+import { getRouteApi } from '@tanstack/react-router';
 import { AnchorLink, PageTitle } from '@/shared/ui';
+import { readConsentRequest } from '../lib/request';
+import { ConsentRequestView } from './consent-request';
 
-// Where an AI app's request to connect will be approved; until then, keys
+const route = getRouteApi('/_app/consent');
+
+// Better Auth's consentPage: an app asks to read the user's courses over
+// MCP. Without its signed query, there is nothing to answer.
 export function ConsentPage() {
-  return (
-    <>
-      <PageTitle>Connect an app</PageTitle>
-      <Text c="dimmed" maw="60ch" mb="md">
-        Approving AI apps that ask to read your courses isn't available yet.
-        Until it is, give an agent an API key.
-      </Text>
-      <AnchorLink to="/settings/api-keys">Manage API keys</AnchorLink>
-    </>
-  );
+  const request = readConsentRequest(route.useSearch());
+  if (!request)
+    return (
+      <>
+        <PageTitle description="This page opens from an app that asks to connect, and the link it sent is missing or has expired. Go back to the app and connect again.">
+          Nothing to approve
+        </PageTitle>
+        <AnchorLink to="/">Back to your account</AnchorLink>
+      </>
+    );
+  return <ConsentRequestView request={request} />;
 }
