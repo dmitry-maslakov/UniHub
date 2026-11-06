@@ -4,9 +4,11 @@ import type {
   Type,
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import type { ClientMetadataResourceFetch } from '@better-auth/oauth-provider';
 import { AppModule } from '../src/app.module.js';
 import { appOptions, configureApp } from '../src/app.setup.js';
 import { Mailer, type Mail } from '../src/identity/domain/mailer.js';
+import { CLIENT_METADATA_FETCH } from '../src/identity/infrastructure/client-metadata.module.js';
 import { roleConfig, roleSettings } from '../src/platform/role/role.config.js';
 import {
   Embedder,
@@ -35,13 +37,17 @@ function testApp(imports: Type[], role: Role) {
 
 // The app as main.ts sets it up, gRPC included, without listening: supertest
 // binds the HTTP server itself. `mails` gets what the Mailer would send,
-// `imports` adds the spec's own plugins, `role` is all of it unless told.
+// `clientMetadata` fetches OAuth clients' metadata documents (CIMD) in place
+// of the network, `imports` adds the spec's own plugins, `role` is all of it
+// unless told.
 export async function bootApp({
   mails,
+  clientMetadata,
   imports = [],
   role = 'all',
 }: {
   mails?: Mail[];
+  clientMetadata?: ClientMetadataResourceFetch;
   imports?: Type[];
   role?: Exclude<Role, 'worker'>;
 } = {}): Promise<INestApplication> {
@@ -50,6 +56,8 @@ export async function bootApp({
     builder
       .overrideProvider(Mailer)
       .useValue({ send: async (mail: Mail) => void mails.push(mail) });
+  if (clientMetadata)
+    builder.overrideProvider(CLIENT_METADATA_FETCH).useValue(clientMetadata);
   const app = (await builder.compile()).createNestApplication(appOptions);
   await configureApp(app);
   await app.init();

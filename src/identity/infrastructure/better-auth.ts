@@ -5,8 +5,11 @@ import {
   freshSessionMiddleware,
   isAPIError,
 } from 'better-auth/api';
-import { admin, bearer, deviceAuthorization } from 'better-auth/plugins';
+import { admin, bearer, deviceAuthorization, jwt } from 'better-auth/plugins';
 import { apiKey } from '@better-auth/api-key';
+import { cimd } from '@better-auth/cimd';
+import { mcp } from '@better-auth/mcp';
+import type { ClientMetadataResourceFetch } from '@better-auth/oauth-provider';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
 import type { PrismaClient } from '../../generated/prisma/client.js';
 import { FRESH_AGE_SECONDS } from '../domain/fresh-session.js';
@@ -16,9 +19,22 @@ import { ADMIN_ROLE } from '../domain/reader.js';
 // our own apps that may sign in by QR code (device authorization)
 export const DEVICE_CLIENTS = ['unihub-web', 'unihub-app'];
 
-// what a session does that outlasts it: makes an API key, or approves a
-// screen's sign-in by QR, which gives that screen a session of its own
-const FRESH_SESSION_PATHS = ['/api-key/create', '/device/approve'];
+// what a session does that outlasts it: makes an API key, approves a
+// screen's sign-in by QR, which gives that screen a session of its own, or
+// lets an AI app in by OAuth, which keeps it in by refresh tokens
+const FRESH_SESSION_PATHS = [
+  '/api-key/create',
+  '/device/approve',
+  '/oauth2/consent',
+];
+
+// what MCP's tools take of an OAuth client: reading courses, read-only
+export const MCP_SCOPES = ['courses:read'];
+
+// /api/mcp as OAuth names it, the resource its access tokens are bound to
+// (RFC 8707): exactly the URL a user gives an AI app
+export const mcpResource = (baseURL: string) =>
+  new URL('/api/mcp', baseURL).href;
 
 // 90 days; the plugin reads it in seconds, whatever its docs say
 export const API_KEY_LIFETIME_SECONDS = 90 * 24 * 60 * 60;
@@ -30,6 +46,8 @@ export interface AuthDeps {
   baseURL: string;
   trustedOrigins: string[];
   google?: { clientId: string; clientSecret: string };
+  // how OAuth clients' metadata documents are fetched (CIMD)
+  fetchClientMetadata: ClientMetadataResourceFetch;
   // once a user's delete has committed: what other modules keep of them goes
   onUserDeleted: (userId: string) => void;
 }
@@ -43,6 +61,7 @@ export function createAuth({
   baseURL,
   trustedOrigins,
   google,
+  fetchClientMetadata,
   onUserDeleted,
 }: AuthDeps) {
   // not awaited, so how long sending takes doesn't tell whether an account
@@ -54,19 +73,26 @@ export function createAuth({
         logger.error(`mail to ${mail.to} failed`, err as Error),
       );
 
-  // A new password ends the API keys made under the old one: a stolen
-  // session, or a screen signed in by QR, may have made some, and a key
-  // never needs a session to work. The plugin has no call for all of a
-  // user's keys; it keeps them in the database only (no secondaryStorage
-  // here), so this is all of them.
-  const dropApiKeys = (userId: string) =>
-    prisma.apikey.deleteMany({ where: { referenceId: userId } });
+  // A new password ends what MCP clients got under the old one, API keys
+  // and OAuth refresh tokens (a JWT access token ends within the hour): a
+  // stolen session, or a screen signed in by QR, may have let some in, and
+  // neither needs a session to work. Neither plugin has a call for all of a
+  // user's; both keep them in the database only (no secondaryStorage here),
+  // so this is all of them.
+  const dropAgentCredentials = (userId: string) =>
+    prisma.$transaction([
+      prisma.apikey.deleteMany({ where: { referenceId: userId } }),
+      prisma.oauthRefreshToken.deleteMany({ where: { userId } }),
+    ]);
 
   const auth = betterAuth({
     secret,
     baseURL,
     trustedOrigins,
     database: prismaAdapter(prisma, { provider: 'postgresql' }),
+    // jwt()'s JWT for a session: OAuth's access tokens are the only JWTs
+    // (Better Auth's MCP docs)
+    disabledPaths: ['/token'],
     // Better Auth skips origin checks under NODE_ENV=test; on here, tests see
     // what production does
     advanced: {
@@ -85,7 +111,7 @@ export function createAuth({
       // a stolen session, or a screen signed in by QR, ends with a reset
       revokeSessionsOnPasswordReset: true,
       onPasswordReset: async ({ user }) => {
-        await dropApiKeys(user.id);
+        await dropAgentCredentials(user.id);
       },
       sendResetPassword: async ({ user, url }) =>
         send({
@@ -114,9 +140,10 @@ export function createAuth({
       user: { delete: { after: async (user) => onUserDeleted(user.id) } },
     },
     hooks: {
-      // A key outlives the session that made it, and a screen approved by QR
-      // gets a session of its own, new and so fresh. So only a session
-      // signed in within a day (freshAge, fresh-session.ts) does either: an
+      // A key outlives the session that made it, a screen approved by QR
+      // gets a session of its own, new and so fresh, and an AI app let in
+      // keeps refreshing its tokens. So only a session signed in within a
+      // day (freshAge, fresh-session.ts) does any of them: an
       // old cookie someone stole doesn't, nor does a session kept alive for
       // weeks. Before hooks all get the request as it came, before bearer()
       // turns a token into the cookie, so the session is read through
@@ -139,7 +166,7 @@ export function createAuth({
             : ctx.path === '/admin/set-user-password'
               ? (ctx.body as { userId?: string }).userId
               : undefined;
-        if (userId) await dropApiKeys(userId);
+        if (userId) await dropAgentCredentials(userId);
       }),
     },
     plugins: [
@@ -165,6 +192,42 @@ export function createAuth({
           defaultExpiresIn: API_KEY_LIFETIME_SECONDS,
           disableCustomExpiresTime: true,
         },
+      }),
+      // signs OAuth access tokens, its keys at /api/auth/jwks; no JWT in a
+      // session's headers either (Better Auth's MCP docs)
+      jwt({ disableSettingJwtHeader: true }),
+      // MCP clients (claude.ai, Claude Desktop and Code, ChatGPT) by OAuth
+      // 2.1: a user signs in on the web app's /sign-in and lets the app in
+      // on its /consent, and the app gets a JWT access token for /api/mcp
+      // alone (1 hour) and a refresh token, replaced on every use (30 days).
+      // Its issuer is /api/auth, its discovery documents are served at the
+      // root (WellKnownController). No openid: no ID tokens or UserInfo
+      mcp({
+        resource: mcpResource(baseURL),
+        scopes: [...MCP_SCOPES, 'offline_access'],
+        // its row, which the provider writes on the first request, with its
+        // scopes named: Prisma takes no null for a list
+        resources: [
+          {
+            identifier: mcpResource(baseURL),
+            allowedScopes: [...MCP_SCOPES, 'offline_access'],
+          },
+        ],
+        // no client_credentials: every token is a user's
+        grantTypes: ['authorization_code', 'refresh_token'],
+        loginPage: '/sign-in',
+        consentPage: '/consent',
+        // per address and path: Claude's and ChatGPT's backends refresh all
+        // their users' tokens from a few addresses
+        rateLimit: { token: { window: 60, max: 300 } },
+      }),
+      // An app registers by its Client ID Metadata Document alone: its
+      // client_id is the https URL of it, fetched when it first comes and
+      // again after an hour. No dynamic registration, which would make a
+      // client per connection anyone may ask for
+      cimd({
+        fetchClientMetadataResource: fetchClientMetadata,
+        metadataProfile: 'mcp-2026-07-28',
       }),
     ],
   });

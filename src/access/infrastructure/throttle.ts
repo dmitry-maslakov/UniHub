@@ -31,13 +31,13 @@ const LimitOf = Reflector.createDecorator<Limit>();
 // A route counted against one named limit. ThrottlerGuard runs every named
 // limit, so each one skips the routes that aren't its own. The count is per
 // user, so the guard that finds the user must run first: on REST routes it's
-// the global session guard; on MCP, ApiKeyAuth applies this after its own.
+// the global session guard; on MCP, McpAuth applies this after its own.
 // On a route or its controller, not both: the guard would count it twice.
 export const Limited = (name: Limit) =>
   applyDecorators(LimitOf(name), UseGuards(ThrottlerGuard));
 
 // Throttler's way for a context other than HTTP: an MCP call's request is
-// the HTTP one it came in with, whose user ApiKeyAuth has found. No rate
+// the HTTP one it came in with, whose user McpAuth has found. No rate
 // headers: the response is the MCP transport's to write.
 @Injectable()
 class McpThrottlerGuard extends ThrottlerGuard {
