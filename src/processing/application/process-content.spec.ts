@@ -8,6 +8,7 @@ import { ProcessContent } from './process-content.js';
 import {
   FakeFiles,
   FakeTextIndexQueue,
+  holdersOf,
   InMemoryRepresentations,
 } from './processing.fakes.js';
 
@@ -31,8 +32,10 @@ function run(
   const textIndex = new FakeTextIndexQueue();
   const process = new ProcessContent(
     catalogOf({ processors: [processor('pdf', ['.pdf'], instance, version)] }),
-    new FakeFiles(
-      new Map(files.map((f, i) => [`f${i}`, { mime, hash, ...f }])),
+    holdersOf(
+      new FakeFiles(
+        new Map(files.map((f, i) => [`f${i}`, { mime, hash, ...f }])),
+      ),
     ),
     blobs,
     representations,
@@ -120,7 +123,9 @@ describe('ProcessContent', () => {
     const representations = new InMemoryRepresentations();
     const process = new ProcessContent(
       catalogOf({ processors: [processor('pdf', ['.pdf'], parts('text'))] }),
-      new FakeFiles(new Map([['f0', { name: 'a.pdf', mime, hash }]])),
+      holdersOf(
+        new FakeFiles(new Map([['f0', { name: 'a.pdf', mime, hash }]])),
+      ),
       new InMemoryBlobs({ holding: [lecture] }),
       representations,
     );
@@ -134,7 +139,7 @@ describe('ProcessContent', () => {
     const representations = new InMemoryRepresentations();
     const process = new ProcessContent(
       catalogOf({}),
-      new FakeFiles(),
+      holdersOf(new FakeFiles()),
       new InMemoryBlobs(),
       representations,
     );
