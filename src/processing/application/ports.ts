@@ -128,3 +128,14 @@ export abstract class Reranker {
 export class RerankerUnavailableError extends UnavailableError {
   readonly reason = 'RERANKER_UNAVAILABLE';
 }
+
+// How a search came out, and why one kept the index's order: the reranker
+// busy with another, away, past its time, or failing otherwise
+export type SearchOutcome = 'ok' | 'failed';
+export type UnrankedReason = 'busy' | 'away' | 'timeout' | 'failed';
+
+// Searches, timed and counted for monitoring (README, Metrics)
+export abstract class SearchMetrics {
+  abstract searched(outcome: SearchOutcome, seconds: number): void;
+  abstract unranked(reason: UnrankedReason): void;
+}

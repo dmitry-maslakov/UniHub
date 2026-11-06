@@ -7,8 +7,11 @@ import {
   QueryEmbedder,
   Reranker,
   RerankerUnavailableError,
+  SearchMetrics,
   TextIndex,
   TextIndexUnavailableError,
+  type SearchOutcome,
+  type UnrankedReason,
 } from './ports.js';
 import { SearchTextsQuery, type TextHit } from './queries.js';
 
@@ -24,6 +27,7 @@ export class SearchTexts implements IQueryHandler<SearchTextsQuery> {
 
   constructor(
     private readonly plugins: PluginCatalog,
+    private readonly metrics: SearchMetrics,
     // none when search is off
     @Optional() private readonly index?: TextIndex,
     // none when search is off, null for BM25 only
@@ -36,8 +40,24 @@ export class SearchTexts implements IQueryHandler<SearchTextsQuery> {
     private readonly reranker?: Reranker | null,
   ) {}
 
-  async execute({ text, hashes, limit }: SearchTextsQuery) {
+  // timed whichever way it comes out
+  async execute(query: SearchTextsQuery) {
     if (!this.index) throw new SearchOffError();
+    const started = performance.now();
+    let outcome: SearchOutcome = 'failed';
+    try {
+      const hits = await this.search(this.index, query);
+      outcome = 'ok';
+      return hits;
+    } finally {
+      this.metrics.searched(outcome, (performance.now() - started) / 1000);
+    }
+  }
+
+  private async search(
+    index: TextIndex,
+    { text, hashes, limit }: SearchTextsQuery,
+  ) {
     const processors = this.plugins.processorNames;
     if (!hashes.length || !processors.length) return [];
     // the chunks are NFC, which the analyzers fold; a query has to be too
@@ -45,7 +65,7 @@ export class SearchTexts implements IQueryHandler<SearchTextsQuery> {
     const vector = await this.meaningOf(words);
     // as many as the reranker takes, whatever the limit
     const size = Math.max(limit, this.reranker?.candidates ?? 0);
-    const hits = await this.index
+    const hits = await index
       .search({ text: words, vector, hashes, processors, size })
       .catch((err: unknown) => {
         throw err instanceof TextIndexUnavailableError
@@ -69,10 +89,8 @@ export class SearchTexts implements IQueryHandler<SearchTextsQuery> {
   }
 
   // The reranker's candidates in its order, by their best snippets, ties as
-  // they were, and the rest after them. When it fails, the index's order,
-  // which is logged: a warning while it's away or past its time (on a CPU,
-  // the reranker running behind), an error otherwise (another model, an
-  // answer that can't be read)
+  // they were, and the rest after them; or the index's order, counted by
+  // why (unranked)
   private async reranked(query: string, hits: TextHit[]) {
     if (!this.reranker || hits.length < 2) return hits;
     const top = hits.slice(0, this.reranker.candidates);
@@ -81,16 +99,31 @@ export class SearchTexts implements IQueryHandler<SearchTextsQuery> {
         query,
         top.map(({ pages }) => pages[0].snippet.text),
       )
-      .catch((err: unknown) => {
-        const behind =
-          err instanceof RerankerUnavailableError ||
-          (err as Error).name === 'TimeoutError';
-        this.failed(err, behind, "in the index's order");
-        return null;
-      });
+      .then(
+        (scores) => scores ?? this.unranked('busy'),
+        (err: unknown) =>
+          this.unranked(
+            err instanceof RerankerUnavailableError
+              ? 'away'
+              : (err as Error).name === 'TimeoutError'
+                ? 'timeout'
+                : 'failed',
+            err,
+          ),
+      );
     if (!scores) return hits;
     const order = top.map((_, i) => i).sort((a, b) => scores[b] - scores[a]);
     return [...order.map((i) => top[i]), ...hits.slice(top.length)];
+  }
+
+  // The index's order kept, and why. A failure is logged: a warning while
+  // it's away or past its time (on a CPU, the reranker running behind), an
+  // error otherwise (another model, an answer that can't be read).
+  private unranked(reason: UnrankedReason, err?: unknown) {
+    this.metrics.unranked(reason);
+    if (reason !== 'busy')
+      this.failed(err, reason !== 'failed', "in the index's order");
+    return null;
   }
 
   // a model's failure, which the search does without: a warning while it's

@@ -6,6 +6,7 @@ import type { Job } from 'bullmq';
 import { Connection } from '../../ingest/contracts.js';
 import { roleConfig } from '../../platform/role/role.config.js';
 import { ConnectionDirectory } from '../application/connection-directory.js';
+import { ConnectorRuns } from '../application/connector-runs.js';
 import { ConnectorSchedules } from '../application/connector-schedules.js';
 import { PluginCatalog } from '../application/plugin-catalog.js';
 import { pluginsConfig } from '../plugins.config.js';
@@ -32,6 +33,7 @@ export class ConnectorsWorker extends WorkerHost implements OnModuleDestroy {
     private readonly config: ConfigType<typeof pluginsConfig>,
     @Inject(roleConfig.KEY)
     private readonly role: ConfigType<typeof roleConfig>,
+    private readonly runs: ConnectorRuns,
   ) {
     super();
   }
@@ -74,9 +76,15 @@ export class ConnectorsWorker extends WorkerHost implements OnModuleDestroy {
     if (this.role.worker) await this.worker.close();
   }
 
+  @OnWorkerEvent('completed')
+  completed(job: Job<ConnectorJob>) {
+    if (job.name === POLL) this.runs.ended(job.data.portal, 'succeeded');
+  }
+
   @OnWorkerEvent('failed')
   failed(job: Job<ConnectorJob> | undefined, error: Error) {
-    if (job?.name === POLL)
-      this.logger.error(`${job.data.portal} poll failed`, error.stack);
+    if (job?.name !== POLL) return;
+    this.logger.error(`${job.data.portal} poll failed`, error.stack);
+    this.runs.ended(job.data.portal, 'failed');
   }
 }

@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
 import type { Job } from 'bullmq';
 import type { ConnectorContext } from '@app/plugin-sdk';
@@ -5,6 +6,7 @@ import { catalogOf, poll } from '../../../test/discovered-plugins.js';
 import type { IngestService } from '../../ingest/contracts.js';
 import { roleSettings } from '../../platform/role/role.config.js';
 import { ConnectionDirectory } from '../application/connection-directory.js';
+import type { ConnectorRuns } from '../application/connector-runs.js';
 import type { ConnectorSchedules } from '../application/connector-schedules.js';
 import type { pluginsConfig } from '../plugins.config.js';
 import { POLL, TICK, type ConnectorJob } from './connectors.queue.js';
@@ -19,6 +21,7 @@ function worker(
   role = 'all',
 ) {
   const pollNow = vi.fn(async () => {});
+  const runs = { ended: vi.fn() } satisfies ConnectorRuns;
   const config = { pollTimeoutMs: 50 } as ConfigType<typeof pluginsConfig>;
   const settings = roleSettings.parse({ APP_ROLE: role });
   const w = new ConnectorsWorker(
@@ -27,11 +30,12 @@ function worker(
     { pollNow } as unknown as ConnectorSchedules,
     config,
     settings,
+    runs,
   );
   // the BullMQ worker Nest would have made for it
   const close = vi.fn(async () => {});
   if (settings.worker) Object.defineProperty(w, 'worker', { value: { close } });
-  return { w, pollNow, close };
+  return { w, pollNow, close, runs };
 }
 
 describe('ConnectorsWorker', () => {
@@ -88,6 +92,24 @@ describe('ConnectorsWorker', () => {
     await expect(w.process(job(POLL))).rejects.toThrow(/poll stopped/);
     expect(polled).toHaveBeenCalledTimes(1);
     expect(close).toHaveBeenCalled();
+  });
+
+  it('counts the polls that succeeded and failed, by portal, but not the ticks', () => {
+    const { w, runs } = worker(async () => {});
+    const error = vi.spyOn(Logger.prototype, 'error').mockReturnValue();
+
+    w.completed(job(POLL));
+    w.completed(job(TICK));
+    w.failed(job(POLL, 'canvas'), new Error('canvas token expired'));
+    w.failed(job(TICK), new Error('redis is away'));
+    w.failed(undefined, new Error('a job gone meanwhile'));
+
+    expect(runs.ended.mock.calls).toEqual([
+      ['moodle', 'succeeded'],
+      ['canvas', 'failed'],
+    ]);
+    expect(error).toHaveBeenCalledTimes(1);
+    error.mockRestore();
   });
 
   it('has no worker to close in an api process, which registers none', async () => {

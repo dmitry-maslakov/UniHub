@@ -6,6 +6,7 @@ import { catalogOf, push } from '../../../test/discovered-plugins.js';
 import type { IngestService } from '../../ingest/contracts.js';
 import type { pluginsConfig } from '../plugins.config.js';
 import { ConnectionDirectory } from './connection-directory.js';
+import type { ConnectorRuns } from './connector-runs.js';
 import { PushConnections } from './push-connections.js';
 
 // to see the restart waits asked for without sitting through them
@@ -30,12 +31,13 @@ const never = () => new Promise<void>(() => {});
 function connections(
   connectors: Record<string, PushesFromPortal>,
   settings = config,
+  runs: ConnectorRuns = { ended: () => {} },
 ) {
   const catalog = catalogOf({
     pushes: Object.entries(connectors).map(([portal, c]) => push(portal, c)),
   });
   const directory = new ConnectionDirectory({} as IngestService);
-  return new PushConnections(catalog, directory, settings);
+  return new PushConnections(catalog, directory, settings, runs);
 }
 
 describe('PushConnections', () => {
@@ -66,23 +68,32 @@ describe('PushConnections', () => {
     expect(run).not.toHaveBeenCalled();
   });
 
-  it('runs a connector again when it fails or ends, until stopped', async () => {
+  it('runs a connector again when it fails or ends, until stopped, counting how each run came out but the one stopped', async () => {
     let runs = 0;
-    const running = connections({
-      teams: {
-        run: async (ctx) => {
-          runs++;
-          if (runs === 1) throw new Error('connection refused');
-          if (runs === 2) return;
-          await untilStopped(ctx);
+    const counted = { ended: vi.fn() };
+    const running = connections(
+      {
+        teams: {
+          run: async (ctx) => {
+            runs++;
+            if (runs === 1) throw new Error('connection refused');
+            if (runs === 2) return;
+            await untilStopped(ctx);
+          },
         },
       },
-    });
+      config,
+      counted,
+    );
 
     running.start();
     await vi.waitFor(() => expect(runs).toBe(3));
     await running.onModuleDestroy();
     expect(runs).toBe(3);
+    expect(counted.ended.mock.calls).toEqual([
+      ['teams', 'failed'],
+      ['teams', 'ended'],
+    ]);
   });
 
   it('waits a second again once a run stayed up past the longest wait', async () => {

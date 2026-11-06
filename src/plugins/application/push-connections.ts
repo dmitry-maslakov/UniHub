@@ -11,6 +11,7 @@ import type { PushesFromPortal } from '@app/plugin-sdk';
 import type { Connection } from '../../ingest/contracts.js';
 import { pluginsConfig } from '../plugins.config.js';
 import { ConnectionDirectory } from './connection-directory.js';
+import { ConnectorRuns, type RunOutcome } from './connector-runs.js';
 import { PluginCatalog } from './plugin-catalog.js';
 
 const FIRST_RESTART_MS = 1_000;
@@ -36,6 +37,7 @@ export class PushConnections implements OnModuleDestroy {
     private readonly directory: ConnectionDirectory,
     @Inject(pluginsConfig.KEY)
     private readonly config: ConfigType<typeof pluginsConfig>,
+    private readonly runs: ConnectorRuns,
   ) {}
 
   @Timeout('push-connections', 0)
@@ -65,13 +67,16 @@ export class PushConnections implements OnModuleDestroy {
     // longest wait was a working connection, so it starts over at a second
     for (let failing = 0; !signal.aborted; failing++) {
       const started = Date.now();
+      let outcome: RunOutcome = 'ended';
       try {
         await connector.run(this.directory.context(connection, signal));
       } catch (err) {
+        outcome = 'failed';
         if (!signal.aborted)
           this.logger.error(`${connection.key} failed`, (err as Error).stack);
       }
       if (signal.aborted) return;
+      this.runs.ended(connection.portal, outcome);
       if (Date.now() - started > this.config.restartMaxMs) failing = 0;
       const wait = Math.min(
         FIRST_RESTART_MS * 2 ** failing,

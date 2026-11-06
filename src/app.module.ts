@@ -6,6 +6,7 @@ import { appConfig } from './app.config.js';
 import { DatabaseModule } from './platform/database/database.module.js';
 import { ErrorsModule } from './platform/errors/errors.module.js';
 import { MessagingModule } from './platform/messaging/messaging.module.js';
+import { MetricsModule } from './platform/metrics/metrics.module.js';
 import { QueuesModule } from './platform/queues/queues.module.js';
 import { RedisModule } from './platform/redis/redis.module.js';
 import { roleConfig } from './platform/role/role.config.js';
@@ -29,6 +30,8 @@ import { PluginsModule } from './plugins/plugins.module.js';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, load: [appConfig] }),
+    // global, first, so its port serves until the rest has shut down
+    MetricsModule,
     // Redis and the database come before anything that pulls in BullMQ:
     // global modules shut down in reverse order, so they close after the
     // workers
