@@ -102,6 +102,8 @@ export class PortalAccounts implements OnApplicationBootstrap {
   // shared now reads nothing either.
   async viewing(userId: string, now = new Date()): Promise<Viewing> {
     const portals = this.links.readWithAccounts();
+    // every portal read as shared: no account of the user's is asked for
+    if (!portals.length) return { portals, accounts: [] };
     const accounts = (await this.accounts.ofUser(userId)).filter(
       (account) =>
         portals.includes(account.portal) && account.statusAt(now) === 'linked',

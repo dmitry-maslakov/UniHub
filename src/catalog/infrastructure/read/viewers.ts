@@ -33,24 +33,31 @@ const granted = ({ shared: { courses } }: Viewers) => ({
   link: courses ? { is: { courseId: { in: [...courses] } } } : { isNot: null },
 });
 
-// the user's own accounts', whole, in a portal course linked or not
-const own = (viewers: Viewers, sight: Sight) => ({
-  sights: { some: { account: { in: [...viewers.accounts] }, ...sight } },
-  portalCourseId: { not: null },
-});
+// the user's own accounts', whole, in a portal course linked or not that
+// their accounts are shown too
+const own = (viewers: Viewers, sight: Sight, now: Date) => {
+  const account = { in: [...viewers.accounts] };
+  return {
+    sights: { some: { account, ...sight } },
+    portalCourse: {
+      versions: { some: { sights: { some: { account, ...shows(now) } } } },
+    },
+  };
+};
 
 // The posts the viewers see: through the shared account, in a portal read
 // as shared and a portal course linked to a course granted; or through
-// their own accounts
+// their own accounts, in a portal course they see
 export const itemSeen = (
   viewers: Viewers,
-  sight: Sight,
+  now: Date,
+  sight: Sight = shows(now),
 ): Prisma.ItemVersionWhereInput => {
   const { record, ...sharedSight } = shared(viewers, sight);
   return {
     OR: [
       { ...sharedSight, item: record, portalCourse: granted(viewers) },
-      own(viewers, sight),
+      own(viewers, sight, now),
     ],
   };
 };
@@ -68,40 +75,53 @@ export const fileSeen = (
       {
         OR: [
           { ...sharedSight, file: record, portalCourse: granted(viewers) },
-          own(viewers, sight),
+          own(viewers, sight, now),
         ],
       },
       {
         OR: [
           { itemId: null },
-          { item: { versions: { some: itemSeen(viewers, shows(now)) } } },
+          { item: { versions: { some: itemSeen(viewers, now) } } },
         ],
       },
     ],
   };
 };
 
-// The sights of a file's version through which the viewers' view opens
-// its content: the shared account's in a portal read as shared, else the
-// user's own accounts'. None, and its content is the viewers' to see only
-// once there is one.
-export const opening = (
+// The sights of a version through which the viewers' view opens it: the
+// shared account's in a portal read as shared, else the user's own
+// accounts'. None, and a file's content, or a post's body, is the viewers'
+// to see only once there is one.
+const openingOf = (
   viewers: Viewers,
   now: Date,
-): Prisma.FileSightWhereInput => ({
+  record: (portal: { notIn: string[] }) => object,
+) => ({
   ...opens(now),
   AND: [
     {
       OR: [
         {
           account: SHARED_ACCOUNT,
-          version: { file: { portal: { notIn: [...viewers.shared.except] } } },
+          version: record({ notIn: [...viewers.shared.except] }),
         },
         { account: { in: [...viewers.accounts] } },
       ],
     },
   ],
 });
+
+export const opening = (
+  viewers: Viewers,
+  now: Date,
+): Prisma.FileSightWhereInput =>
+  openingOf(viewers, now, (portal) => ({ file: { portal } }));
+
+export const itemOpening = (
+  viewers: Viewers,
+  now: Date,
+): Prisma.ItemSightWhereInput =>
+  openingOf(viewers, now, (portal) => ({ item: { portal } }));
 
 // a portal course's sights through which the viewers see it, as posts are
 // seen

@@ -1,15 +1,19 @@
 import { Injectable } from '@nestjs/common';
 import { QueryBus } from '@nestjs/cqrs';
 import {
+  ListCoursesQuery,
   ListVisibleContentQuery,
   ListVisibleItemsQuery,
+  type CourseSlug,
+  type Viewers,
 } from '../../catalog/contracts.js';
 import {
   ListContainedQuery,
   SearchTextsQuery,
 } from '../../processing/contracts.js';
-import { readableCourse, readableCourses } from './readable.js';
+import { readableCourse } from './readable.js';
 import type { SearchRequest } from './search-request.js';
+import { readNothing, viewersOfUser } from './viewers.js';
 import { placesOf, searchResults, type SearchView } from './views.js';
 
 // Search over what a user may read, for REST and MCP. The index knows
@@ -28,21 +32,9 @@ export class CourseSearch {
     userId: string,
     { q, course, limit }: SearchRequest,
   ): Promise<SearchView> {
-    const { viewers, courses } = course
-      ? await readableCourse(this.queries, userId, course).then(
-          ({ viewers, course }) => ({ viewers, courses: [course] }),
-        )
-      : await readableCourses(this.queries, userId);
-    if (!courses.length) return { results: [] };
-    const portalCourseIds = course
-      ? courses[0].portalCourses.map(({ id }) => id)
-      : null;
-    const [files, posts] = await Promise.all([
-      this.queries.execute(
-        new ListVisibleContentQuery(viewers, portalCourseIds),
-      ),
-      this.queries.execute(new ListVisibleItemsQuery(viewers, portalCourseIds)),
-    ]);
+    const { courses, files, posts } = course
+      ? await this.inCourse(userId, course)
+      : await this.everywhere(userId);
     if (!files.length && !posts.length) return { results: [] };
     const archives = [...new Set(files.map(({ hash }) => hash))];
     const contained = archives.length
@@ -67,5 +59,36 @@ export class CourseSearch {
         limit,
       ),
     };
+  }
+
+  private async inCourse(userId: string, slug: CourseSlug) {
+    const { viewers, course, portalCourseIds } = await readableCourse(
+      this.queries,
+      userId,
+      slug,
+    );
+    const [files, posts] = await this.visible(viewers, portalCourseIds);
+    return { courses: [course], files, posts };
+  }
+
+  // the courses, to name a result's, asked for alongside
+  private async everywhere(userId: string) {
+    const viewers = await viewersOfUser(this.queries, userId);
+    if (readNothing(viewers)) return { courses: [], files: [], posts: [] };
+    const [courses, [files, posts]] = await Promise.all([
+      this.queries.execute(new ListCoursesQuery(viewers)),
+      this.visible(viewers, null),
+    ]);
+    return { courses, files, posts };
+  }
+
+  // what the viewers' views open, of these portal courses or of all
+  private visible(viewers: Viewers, portalCourseIds: string[] | null) {
+    return Promise.all([
+      this.queries.execute(
+        new ListVisibleContentQuery(viewers, portalCourseIds),
+      ),
+      this.queries.execute(new ListVisibleItemsQuery(viewers, portalCourseIds)),
+    ]);
   }
 }

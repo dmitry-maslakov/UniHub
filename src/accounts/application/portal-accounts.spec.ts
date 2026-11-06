@@ -292,6 +292,15 @@ describe('PortalAccounts', () => {
       account: { ...moodle.account, id: 'teams-account', portal: TEAMS },
     });
     expect((await service.viewing('ana', before)).accounts).toEqual([]);
+
+    // with every portal read as shared, no account is looked up
+    const shared = accounts({ links: {} });
+    const ofUser = vi.spyOn(shared.store, 'ofUser');
+    expect(await shared.service.viewing('ana')).toEqual({
+      portals: [],
+      accounts: [],
+    });
+    expect(ofUser).not.toHaveBeenCalled();
   });
 
   it('unlinks the account and its credential, whatever the mode is now', async () => {

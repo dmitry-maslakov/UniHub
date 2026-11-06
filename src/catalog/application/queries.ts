@@ -1,6 +1,7 @@
 import { Query } from '@nestjs/cqrs';
 import type { ContentHash, Json, MediaType, PortalId } from '@app/kernel';
 import type { PortalRef } from '../domain/portal-ref.js';
+import type { CourseSlug } from '../domain/values.js';
 
 // What other modules read from catalog: shapes of their own, so catalog's
 // records can change without breaking them. Read straight from the database
@@ -73,8 +74,15 @@ export interface CourseFileDto extends FileDto {
   courseId: string;
 }
 
+// A post as the viewers read it: listed once their view shows it, its
+// body (`raw`) only once it opens it too (not locked for their account,
+// past its hold), as a file's content is
+export interface ViewedItemDto extends Omit<ItemDto, 'raw'> {
+  raw: Json | null;
+}
+
 // a post as a course shows it, and that course
-export interface CourseItemDto extends ItemDto {
+export interface CourseItemDto extends ViewedItemDto {
   courseId: string;
 }
 
@@ -112,16 +120,20 @@ export interface Viewers {
 // their view: a course granted, whatever it holds of them, or one that
 // links a portal course their own accounts see; then, by slug too, the
 // portal courses their own accounts see that no course links, each a
-// course of its own (portalCourseSlug, its id the portal course's)
+// course of its own (portalCourseSlug, its id the portal course's). With
+// `slug`, the one of that slug alone, if they read it.
 export class ListCoursesQuery extends Query<CourseDto[]> {
-  constructor(public readonly viewers: Viewers) {
+  constructor(
+    public readonly viewers: Viewers,
+    public readonly slug?: CourseSlug,
+  ) {
     super();
   }
 }
 
-// an admin's course by its slug, or by the id catalog gave it
+// an admin's course by the id catalog gave it
 export class FindCourseQuery extends Query<CourseRef | null> {
-  constructor(public readonly by: { slug: string } | { id: string }) {
+  constructor(public readonly by: { id: string }) {
     super();
   }
 }
@@ -129,7 +141,7 @@ export class FindCourseQuery extends Query<CourseRef | null> {
 // What these portal courses (a course's, as ListCoursesQuery gives them)
 // published, newest first, the ones the viewers see (see
 // GetCourseItemQuery)
-export class ListCourseItemsQuery extends Query<ItemDto[]> {
+export class ListCourseItemsQuery extends Query<ViewedItemDto[]> {
   constructor(
     public readonly viewers: Viewers,
     public readonly portalCourseIds: readonly string[],

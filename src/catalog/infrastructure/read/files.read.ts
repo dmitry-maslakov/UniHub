@@ -30,7 +30,6 @@ import {
   itemSeen,
   opening,
   opens,
-  shows,
   withCourse,
 } from './viewers.js';
 
@@ -67,7 +66,6 @@ const toDto = ({
   removed: sights.length === 0,
 });
 
-// a file as the viewers read it: its content once their view opens it
 // a file as the viewers read it: its content once their view opens it,
 // its post as they see it
 const forViewers = (viewers: Viewers, now: Date) =>
@@ -77,7 +75,7 @@ const forViewers = (viewers: Viewers, now: Date) =>
     item: {
       select: {
         versions: {
-          where: itemSeen(viewers, shows(now)),
+          where: itemSeen(viewers, now),
           take: 1,
           select: { id: true },
         },

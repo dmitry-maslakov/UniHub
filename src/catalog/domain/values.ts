@@ -23,6 +23,16 @@ export const portalCourseSlug = (portal: PortalId, externalId: string) =>
     ? `${portal}~${externalId}`
     : `${portal}~~${createHash('sha256').update(externalId).digest('base64url').slice(0, 22)}`;
 
+// what a slug of a portal course's own says of it: its portal, and its id
+// unless that's hashed; null for an admin's course's slug
+export function slugOfPortalCourse(slug: string) {
+  const at = slug.indexOf('~');
+  if (at < 0) return null;
+  const portal = slug.slice(0, at);
+  const rest = slug.slice(at + 1);
+  return rest.startsWith('~') ? { portal } : { portal, externalId: rest };
+}
+
 // what a reader names a course by: an admin's course's slug, or a portal
 // course's of its own
 export const CourseSlug = z

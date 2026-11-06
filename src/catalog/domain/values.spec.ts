@@ -5,6 +5,7 @@ import {
   CourseSlug,
   portalCourseSlug,
   Slug,
+  slugOfPortalCourse,
 } from './values.js';
 
 describe('Slug', () => {
@@ -69,5 +70,19 @@ describe('AcademicYear', () => {
     expect(AcademicYear.parse(2026)).toBe(2026);
     for (const bad of [1900, 3000, 2026.5, Number.NaN])
       expect(AcademicYear.safeParse(bad).success).toBe(false);
+  });
+});
+
+describe('slugOfPortalCourse', () => {
+  it("names the portal course a slug of its own is, as far as it says: its id unless hashed, none for an admin's", () => {
+    const canvas = PortalId.parse('canvas');
+    expect(slugOfPortalCourse(portalCourseSlug(canvas, '101'))).toEqual({
+      portal: 'canvas',
+      externalId: '101',
+    });
+    expect(slugOfPortalCourse(portalCourseSlug(canvas, 'a b'))).toEqual({
+      portal: 'canvas',
+    });
+    expect(slugOfPortalCourse('operating-systems')).toBeNull();
   });
 });

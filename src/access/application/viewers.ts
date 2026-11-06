@@ -24,3 +24,7 @@ export async function viewersOfUser(queries: QueryBus, userId: string) {
   ]);
   return viewersOf(scope, viewing);
 }
+
+// none granted and none of their own: nothing to read, nothing to ask
+export const readNothing = ({ accounts, shared }: Viewers) =>
+  !accounts.length && shared.courses?.length === 0;

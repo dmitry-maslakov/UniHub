@@ -39,7 +39,7 @@ export class CourseTools {
   @Tool({
     name: 'list_items',
     description:
-      "Posts, announcements and pages of a course, newest first. `raw` is the portal's own data and usually holds the text.",
+      "Posts, announcements and pages of a course, newest first. `raw` is the portal's own data and usually holds the text; null while a post is locked for the user, or not open yet.",
     parameters: inCourse,
     annotations: readOnly,
   })
@@ -53,7 +53,7 @@ export class CourseTools {
   @Tool({
     name: 'read_item',
     description:
-      "One post, announcement or page, as list_items lists it: open a post search found. `raw` is the portal's own data and usually holds the text.",
+      "One post, announcement or page, as list_items lists it: open a post search found. `raw` is the portal's own data and usually holds the text; null while it's locked for the user, or not open yet.",
     parameters: post,
     annotations: readOnly,
   })

@@ -29,7 +29,8 @@ export async function readableCourse(
   userId: string,
   slug: CourseSlug,
 ) {
-  const { viewers, courses } = await readableCourses(queries, userId);
+  const viewers = await viewersOfUser(queries, userId);
+  const courses = await queries.execute(new ListCoursesQuery(viewers, slug));
   const course = courses.find((c) => c.slug === slug);
   if (!course) throw new NotReadableError('course');
   return {

@@ -8,7 +8,7 @@ import {
   type CourseDto,
 } from '../../application/queries.js';
 import { SHARED_ACCOUNT } from '@app/kernel';
-import { portalCourseSlug } from '../../domain/values.js';
+import { portalCourseSlug, slugOfPortalCourse } from '../../domain/values.js';
 import { courseValues, portalOf, seenByShared } from '../rows.js';
 import { courseSeen, shows } from './viewers.js';
 
@@ -25,11 +25,13 @@ const byPortalCourse = (a: { slug: string }, b: { slug: string }) =>
 export class ListCoursesHandler implements IQueryHandler<ListCoursesQuery> {
   constructor(@InjectTransactionHost() private readonly txHost: PrismaTxHost) {}
 
-  // the courses and their portal courses in one go, whatever their number
-  async execute({ viewers }: ListCoursesQuery): Promise<CourseDto[]> {
+  // the courses and their portal courses in one go, whatever their number;
+  // of one slug, the admins' courses or the portal courses alone
+  async execute({ viewers, slug }: ListCoursesQuery): Promise<CourseDto[]> {
     const { tx } = this.txHost;
     const now = new Date();
     const { accounts, shared } = viewers;
+    const own = slug === undefined ? undefined : slugOfPortalCourse(slug);
     // a portal course with each its name as the viewers see it
     const portalCourse = {
       select: {
@@ -56,32 +58,40 @@ export class ListCoursesHandler implements IQueryHandler<ListCoursesQuery> {
     };
     const ownPart = { portalCourse: seenBy({ in: [...accounts] }) };
     const [courses, unlinked] = await Promise.all([
-      tx.course.findMany({
-        // an admin's every one
-        where: shared.courses
-          ? {
-              OR: [
-                { id: { in: [...shared.courses] } },
-                { links: { some: ownPart } },
-              ],
-            }
-          : {},
-        orderBy: { slug: 'asc' },
-        select: {
-          id: true,
-          slug: true,
-          name: true,
-          links: {
-            where: { OR: [sharedPart, ownPart] },
-            // postgres puts nulls last: the portal courses that span years
-            orderBy: [{ year: 'asc' }, { portalCourseId: 'asc' }],
-            select: { year: true, portalCourse },
-          },
-        },
-      }),
-      accounts.length
+      own
+        ? []
+        : tx.course.findMany({
+            where: {
+              ...(slug !== undefined && { slug }),
+              // an admin's every one
+              ...(shared.courses && {
+                OR: [
+                  { id: { in: [...shared.courses] } },
+                  { links: { some: ownPart } },
+                ],
+              }),
+            },
+            orderBy: { slug: 'asc' },
+            select: {
+              id: true,
+              slug: true,
+              name: true,
+              links: {
+                where: { OR: [sharedPart, ownPart] },
+                // postgres puts nulls last: the portal courses that span
+                // years
+                orderBy: [{ year: 'asc' }, { portalCourseId: 'asc' }],
+                select: { year: true, portalCourse },
+              },
+            },
+          }),
+      accounts.length && own !== null
         ? tx.portalCourse.findMany({
-            where: { link: null, ...seenBy({ in: [...accounts] }) },
+            where: {
+              link: null,
+              ...own,
+              ...seenBy({ in: [...accounts] }),
+            },
             ...portalCourse,
           })
         : [],
@@ -112,6 +122,8 @@ export class ListCoursesHandler implements IQueryHandler<ListCoursesQuery> {
             portalCourses: [entry],
           };
         })
+        // a hashed id is found by its portal, then by its slug
+        .filter((course) => slug === undefined || course.slug === slug)
         .sort(byPortalCourse),
     ];
   }

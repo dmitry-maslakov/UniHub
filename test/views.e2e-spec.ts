@@ -81,9 +81,27 @@ describe('views of accounts of their own', { timeout: 60_000 }, () => {
   const account: Record<string, string> = {};
   // the versions the shared connection sent, by the portal's id
   const version: Record<string, string> = {};
+  // the lms's portal courses, by the portal's id
+  const portalCourse: Record<string, string> = {};
+  let lms: PortalIngest;
 
   const get = (who: string, path: string) =>
     http().get(path).set('cookie', as[who]);
+  // the courses a user reads, of this spec, each with its portals in order
+  const listed = async (who: string) =>
+    (
+      (await body(who, '/api/courses')) as {
+        slug: string;
+        portalCourses: { portal: string }[];
+      }[]
+    )
+      .filter(({ slug }) => slug.startsWith('views-'))
+      .map(({ slug, portalCourses }) => [
+        slug,
+        portalCourses.map((pc) => pc.portal).sort((a, b) => a.localeCompare(b)),
+      ]);
+  const sorted = (titles: (string | null | undefined)[]) =>
+    titles.map(String).sort((a, b) => a.localeCompare(b));
   const body = async (who: string, path: string) =>
     (await get(who, path).expect(200)).body;
   const titles = async (who: string, slug: string) =>
@@ -112,14 +130,20 @@ describe('views of accounts of their own', { timeout: 60_000 }, () => {
     who: string,
     kind: 'course' | 'item' | 'file',
     versionId: string,
-    { open = true, openFrom = past } = {},
+    {
+      open = true,
+      openFrom = past,
+      shownFrom = past,
+      hiddenFrom = null as Date | null,
+    } = {},
   ) => {
     const data = {
       account: account[who],
       versionId,
       open,
-      shownFrom: past,
+      shownFrom,
       openFrom,
+      hiddenFrom,
     };
     return kind === 'course'
       ? prisma.courseSight.create({ data })
@@ -172,7 +196,7 @@ describe('views of accounts of their own', { timeout: 60_000 }, () => {
 
     // what the portals have: the lms's records as the shared connection
     // sends them, a campus portal read as shared
-    const lms: PortalIngest = portalIngest(app, LMS);
+    lms = portalIngest(app, LMS);
     const campus: PortalIngest = portalIngest(app, CAMPUS);
     for (const c of ['c1', 'c2'])
       await lms.course({ externalId: c, name: `Course ${c}` });
@@ -185,7 +209,16 @@ describe('views of accounts of their own', { timeout: 60_000 }, () => {
         title: externalId,
         raw: { message: `${externalId} poruka` },
       });
-    for (const id of ['news', 'section', 'edited']) await post(lms, id, 'c1');
+    for (const id of [
+      'news',
+      'section',
+      'edited',
+      'soon',
+      'gone',
+      'going',
+      'sealed',
+    ])
+      await post(lms, id, 'c1');
     await post(lms, 'c2-news', 'c2');
     await post(campus, 'campus-news', 'campus-os');
     for (const [id, text] of [
@@ -222,12 +255,27 @@ describe('views of accounts of their own', { timeout: 60_000 }, () => {
     const courses = await prisma.portalCourse.findMany({
       where: { portal: LMS },
     });
-    const of = (c: string) => courses.find((pc) => pc.externalId === c)!.id;
+    for (const { externalId, id } of courses) portalCourse[externalId] = id;
+    const of = (c: string) => portalCourse[c];
     for (const c of ['c1', 'c2']) await sees('ana', 'course', of(c));
     await sees('bo', 'course', of('c1'));
     for (const id of ['news', 'section', 'edited', 'c2-news'])
       await sees('ana', 'item', await idOf('itemVersion', id));
     await sees('bo', 'item', version.news);
+    // ana's: a post shown from a time to come, one hidden since a time past
+    // and one hidden from a time to come; bo's: a post locked for him
+    await sees('ana', 'item', await idOf('itemVersion', 'soon'), {
+      shownFrom: future,
+    });
+    await sees('ana', 'item', await idOf('itemVersion', 'gone'), {
+      hiddenFrom: past,
+    });
+    await sees('ana', 'item', await idOf('itemVersion', 'going'), {
+      hiddenFrom: future,
+    });
+    await sees('bo', 'item', await idOf('itemVersion', 'sealed'), {
+      open: false,
+    });
     const edited = await prisma.itemVersion.create({
       data: {
         id: randomUUID(),
@@ -251,12 +299,13 @@ describe('views of accounts of their own', { timeout: 60_000 }, () => {
     });
     for (const who of ['ana', 'bo'])
       await sees(who, 'file', await idOf('fileVersion', 'handout'));
-    for (const id of ['news', 'section']) await indexed(`post__${version[id]}`);
+    for (const id of ['news', 'section', 'soon', 'gone', 'going', 'sealed'])
+      await indexed(`post__${version[id]}`);
   }, 60_000);
 
   afterAll(async () => {
     // the accounts and their credentials, which other specs count
-    for (const who of ['ana', 'bo'])
+    for (const who of ['ana', 'bo', 'ed'])
       await http()
         .delete(`/api/me/portals/${LMS}/token`)
         .set('cookie', as[who])
@@ -266,19 +315,6 @@ describe('views of accounts of their own', { timeout: 60_000 }, () => {
   });
 
   it('lists to each user the courses their own views hold, those parts alone', async () => {
-    const listed = async (who: string) =>
-      (
-        (await body(who, '/api/courses')) as {
-          slug: string;
-          portalCourses: { portal: string }[];
-        }[]
-      )
-        .filter(({ slug }) => slug.startsWith('views-'))
-        .map(({ slug, portalCourses }) => [
-          slug,
-          portalCourses.map((pc) => pc.portal),
-        ]);
-
     expect(await listed('ana')).toEqual([
       ['views-os', [LMS]],
       [`${LMS}~c2`, [LMS]],
@@ -290,14 +326,16 @@ describe('views of accounts of their own', { timeout: 60_000 }, () => {
   });
 
   it("gives each user their own account's posts, versions and all, and nothing of another's", async () => {
-    expect((await titles('ana', 'views-os')).sort()).toEqual([
+    expect(sorted(await titles('ana', 'views-os'))).toEqual([
       'edited',
+      'going',
       'news',
       'section',
     ]);
-    expect((await titles('bo', 'views-os')).sort()).toEqual([
+    expect(sorted(await titles('bo', 'views-os'))).toEqual([
       'edited since',
       'news',
+      'sealed',
     ]);
     for (const who of ['ed', 'dee'])
       expect(await titles(who, 'views-os')).toEqual(['campus-news']);
@@ -317,6 +355,37 @@ describe('views of accounts of their own', { timeout: 60_000 }, () => {
     expect(
       (await body('bo', `/api/items/${version['edited since']}`)).title,
     ).toBe('edited since');
+  });
+
+  it("lists a post only while the user's view shows it, and its body only once it opens it", async () => {
+    const items = async (who: string) =>
+      (await body(who, '/api/courses/views-os/items')) as (Listed & {
+        raw: unknown;
+      })[];
+    const anas = await items('ana');
+    for (const title of ['soon', 'gone'])
+      expect(anas.map((i) => i.title)).not.toContain(title);
+    // hidden from a time to come, it's shown till then
+    expect(anas.find((i) => i.title === 'going')?.raw).toEqual({
+      message: 'going poruka',
+    });
+    const missing = await get('ana', `/api/items/${randomUUID()}`).expect(404);
+    for (const id of ['soon', 'gone'])
+      expect(
+        (await get('ana', `/api/items/${version[id]}`).expect(404)).body,
+      ).toEqual(missing.body);
+
+    // locked for bo: listed by its title, its body held back on both routes
+    expect((await items('bo')).find((i) => i.title === 'sealed')).toMatchObject(
+      { id: version.sealed, raw: null },
+    );
+    expect(await body('bo', `/api/items/${version.sealed}`)).toMatchObject({
+      title: 'sealed',
+      raw: null,
+    });
+    expect((await body('bo', `/api/items/${version.news}`)).raw).toEqual({
+      message: 'news poruka',
+    });
   });
 
   it("opens a file's content only once the user's own view does", async () => {
@@ -360,7 +429,13 @@ describe('views of accounts of their own', { timeout: 60_000 }, () => {
     // by meaning, knn has nearest ones to every query: each user's own, and
     // no other's
     const own = {
-      ana: [version.news, version.section, version.edited, version['c2-news']],
+      ana: [
+        version.news,
+        version.section,
+        version.edited,
+        version['c2-news'],
+        version.going,
+      ],
       bo: [version.news, version['edited since']],
     };
     for (const [who, q] of [
@@ -388,9 +463,74 @@ describe('views of accounts of their own', { timeout: 60_000 }, () => {
             expect(anas).not.toContain(found);
       expect(await search('bo', 'semafor')).toEqual([]);
       expect(await search('bo', 'news')).toEqual([version.news]);
+      // not shown yet, hidden since, or locked: none found
+      for (const q of ['soon', 'gone'])
+        expect(await search('ana', q)).toEqual([]);
+      expect(await search('ana', 'going')).toEqual([version.going]);
+      expect(await search('bo', 'sealed')).toEqual([]);
     } finally {
       vi.restoreAllMocks();
     }
+  });
+
+  it('lets an admin read a portal read with accounts through an account of their own, as anyone', async () => {
+    await http()
+      .put(`/api/me/portals/${LMS}/token`)
+      .set('cookie', as.ed)
+      .send({ token: `ed~${randomBytes(8).toString('hex')}` })
+      .expect(204);
+    account.ed = (
+      await prisma.portalAccount.findFirstOrThrow({
+        where: { userId: await userId('ed@views.test') },
+      })
+    ).id;
+    await sees('ed', 'course', portalCourse.c1);
+    await sees('ed', 'item', version.news);
+
+    expect(await listed('ed')).toEqual([['views-os', [CAMPUS, LMS]]]);
+    expect(sorted(await titles('ed', 'views-os'))).toEqual([
+      'campus-news',
+      'news',
+    ]);
+  });
+
+  it('shows a portal course an admin linked before anything of it was sent, once sent, to an account that sees it', async () => {
+    await http()
+      .put(`/api/portal-courses/${LMS}/never-sent/course`)
+      .set('cookie', as.ed)
+      .send({ course: 'views-os' })
+      .expect(204);
+    await lms.course({ externalId: 'never-sent', name: 'Sent at last' });
+    await lms.item({
+      externalId: 'late-news',
+      course: 'never-sent',
+      kind: 'announcement',
+      title: 'late-news',
+      raw: { message: 'late-news poruka' },
+    });
+    const sent = await prisma.portalCourse.findFirstOrThrow({
+      where: { portal: LMS, externalId: 'never-sent' },
+    });
+    // a post of a portal course the account isn't shown is no one's
+    await sees('ana', 'item', await idOf('itemVersion', 'late-news'));
+    await get('ana', `/api/items/${version['late-news']}`).expect(404);
+    await sees('ana', 'course', sent.id);
+    await get('ana', `/api/items/${version['late-news']}`).expect(200);
+
+    const [os] = (
+      (await body('ana', '/api/courses')) as {
+        slug: string;
+        portalCourses: { portal: string; name: string }[];
+      }[]
+    ).filter(({ slug }) => slug === 'views-os');
+    expect(os.portalCourses).toContainEqual(
+      expect.objectContaining({ portal: LMS, name: 'Sent at last' }),
+    );
+    expect(await titles('ana', 'views-os')).toContain('late-news');
+    await http()
+      .delete(`/api/portal-courses/${LMS}/never-sent/course`)
+      .set('cookie', as.ed)
+      .expect(204);
   });
 
   it("answers an admin's link the same whether the hub has the portal course or not", async () => {

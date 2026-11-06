@@ -9,14 +9,16 @@ import {
   ListItemsQuery,
   ListVisibleItemsQuery,
   type ItemDto,
+  type ViewedItemDto,
+  type Viewers,
 } from '../../application/queries.js';
 import { itemValues, liveSights, portalOf, recordRef, seen } from '../rows.js';
 import {
   courseOf,
   inCourses,
+  itemOpening,
   itemSeen,
   opens,
-  shows,
   withCourse,
 } from './viewers.js';
 
@@ -51,6 +53,23 @@ const toDto = ({
   removed: sights.length === 0,
 });
 
+// a post as the viewers read it: its body once their view opens it
+const forViewers = (viewers: Viewers, now: Date) =>
+  ({
+    ...select,
+    _count: { select: { sights: { where: itemOpening(viewers, now) } } },
+  }) satisfies Prisma.ItemVersionSelect;
+
+const toViewersDto = ({
+  _count,
+  ...row
+}: Prisma.ItemVersionGetPayload<{
+  select: ReturnType<typeof forViewers>;
+}>): ViewedItemDto => {
+  const item = toDto(row);
+  return { ...item, raw: _count.sights ? item.raw : null };
+};
+
 @QueryHandler(ListCourseItemsQuery)
 export class ListCourseItemsHandler implements IQueryHandler<ListCourseItemsQuery> {
   constructor(@InjectTransactionHost() private readonly txHost: PrismaTxHost) {}
@@ -61,16 +80,15 @@ export class ListCourseItemsHandler implements IQueryHandler<ListCourseItemsQuer
     offset,
     limit,
   }: ListCourseItemsQuery) {
+    const now = new Date();
     const rows = await this.txHost.tx.itemVersion.findMany({
-      where: {
-        AND: [inCourses(portalCourseIds), itemSeen(viewers, shows(new Date()))],
-      },
+      where: { AND: [inCourses(portalCourseIds), itemSeen(viewers, now)] },
       orderBy: newestFirst,
       skip: offset,
       take: limit,
-      select,
+      select: forViewers(viewers, now),
     });
-    return rows.map(toDto);
+    return rows.map(toViewersDto);
   }
 }
 
@@ -92,14 +110,15 @@ export class GetCourseItemHandler implements IQueryHandler<GetCourseItemQuery> {
   constructor(@InjectTransactionHost() private readonly txHost: PrismaTxHost) {}
 
   async execute({ viewers, itemId }: GetCourseItemQuery) {
+    const now = new Date();
     const row = await this.txHost.tx.itemVersion.findFirst({
-      where: { AND: [{ id: itemId }, itemSeen(viewers, shows(new Date()))] },
-      select: { ...select, ...withCourse },
+      where: { AND: [{ id: itemId }, itemSeen(viewers, now)] },
+      select: { ...forViewers(viewers, now), ...withCourse },
     });
     const courseId = row && courseOf(row);
     if (!row || !courseId) return null;
     const { portalCourse: _, ...item } = row;
-    return { ...toDto(item), courseId };
+    return { ...toViewersDto(item), courseId };
   }
 }
 
@@ -108,9 +127,10 @@ export class ListVisibleItemsHandler implements IQueryHandler<ListVisibleItemsQu
   constructor(@InjectTransactionHost() private readonly txHost: PrismaTxHost) {}
 
   async execute({ viewers, portalCourseIds }: ListVisibleItemsQuery) {
+    const now = new Date();
     const rows = await this.txHost.tx.itemVersion.findMany({
       where: {
-        AND: [inCourses(portalCourseIds), itemSeen(viewers, opens(new Date()))],
+        AND: [inCourses(portalCourseIds), itemSeen(viewers, now, opens(now))],
       },
       orderBy: newestFirst,
       select: {
