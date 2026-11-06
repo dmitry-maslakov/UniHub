@@ -1,6 +1,7 @@
 import type { ConnectorContext } from './connectors.js';
 import {
   Aggregator,
+  ContentExpander,
   ContentProcessor,
   PollConnector,
   PushConnector,
@@ -33,6 +34,10 @@ describe('plugin decorators', () => {
     @Aggregator({ name: 'd', topics: [ITEM_INGESTED] })
     class AggregatorWithoutHandle {}
 
+    // @ts-expect-error an expander needs expand()
+    @ContentExpander({ name: 'j', version: 1, accepts: ['.zip'] })
+    class ExpanderWithoutExpand {}
+
     @PollConnector({ portal: 'e', schedule: '* * * * *' })
     class Fine {
       async poll(ctx: ConnectorContext) {
@@ -45,8 +50,9 @@ describe('plugin decorators', () => {
       PushWithStart,
       ProcessorWithoutProcess,
       AggregatorWithoutHandle,
+      ExpanderWithoutExpand,
       Fine,
-    ]).toHaveLength(5);
+    ]).toHaveLength(6);
   });
 
   it('give an aggregator the messages of its topics', () => {

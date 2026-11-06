@@ -5,6 +5,7 @@ export * from './aggregators.js';
 export * from './connectors.js';
 export * from './decorators.js';
 export * from './errors.js';
+export * from './expanders.js';
 export * from './messages.js';
 export * from './parsing.js';
 export * from './processors.js';

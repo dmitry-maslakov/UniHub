@@ -5,8 +5,10 @@ import type {
   PushConnectorOptions,
   PushesFromPortal,
 } from './connectors.js';
+import type { ContentExpanderOptions, ExpandsContent } from './expanders.js';
 import {
   AggregatorMark,
+  ContentExpanderMark,
   ContentProcessorMark,
   PollConnectorMark,
   PushConnectorMark,
@@ -43,6 +45,12 @@ export function PushConnector(options: PushConnectorOptions) {
 export function ContentProcessor(options: ContentProcessorOptions) {
   return <C extends Class<ProcessesContent>>(target: C) => {
     ContentProcessorMark(options)(target);
+  };
+}
+
+export function ContentExpander(options: ContentExpanderOptions) {
+  return <C extends Class<ExpandsContent>>(target: C) => {
+    ContentExpanderMark(options)(target);
   };
 }
 

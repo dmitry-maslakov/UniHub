@@ -4,7 +4,13 @@ import { PluginSet } from './plugin-set.js';
 
 const named = (name: string) => ({ spec: { name: PluginName.parse(name) } });
 const of = (portal: string) => ({ spec: { portal: PortalId.parse(portal) } });
-const none = { polls: [], pushes: [], processors: [], aggregators: [] };
+const none = {
+  polls: [],
+  pushes: [],
+  processors: [],
+  expanders: [],
+  aggregators: [],
+};
 
 describe('PluginSet', () => {
   it('takes plugins that keep the rules', () => {
@@ -12,6 +18,7 @@ describe('PluginSet', () => {
       polls: [of('moodle')],
       pushes: [of('teams')],
       processors: [named('office-text')],
+      expanders: [named('archives')],
       aggregators: [named('feed')],
     };
     expect(PluginSet.of(found, [PortalId.parse('canvas')]).plugins).toBe(found);
@@ -21,7 +28,7 @@ describe('PluginSet', () => {
     const found = {
       ...none,
       processors: [named('text')],
-      aggregators: [named('text')],
+      expanders: [named('text')],
     };
     expect(() => PluginSet.of(found, [])).toThrow(
       new UsedTwiceError('plugin name', 'text'),

@@ -1,4 +1,5 @@
 import type {
+  ExpandsContent,
   HandlesMessages,
   PollsPortal,
   ProcessesContent,
@@ -21,6 +22,8 @@ export interface Found {
   polls: Plugin<PollSpec, PollsPortal>[];
   pushes: Plugin<PushSpec, PushesFromPortal>[];
   processors: Plugin<ProcessorSpec, ProcessesContent>[];
+  // an expander's spec is as a processor's
+  expanders: Plugin<ProcessorSpec, ExpandsContent>[];
   aggregators: Plugin<AggregatorSpec<Topic>, HandlesMessages>[];
 }
 

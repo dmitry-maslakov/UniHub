@@ -6,6 +6,7 @@ interface Found {
   polls: readonly { spec: { portal: PortalId } }[];
   pushes: readonly { spec: { portal: PortalId } }[];
   processors: readonly { spec: { name: PluginName } }[];
+  expanders: readonly { spec: { name: PluginName } }[];
   aggregators: readonly { spec: { name: PluginName } }[];
 }
 
@@ -25,7 +26,9 @@ export class PluginSet<F extends Found> {
     const connectors = [...found.polls, ...found.pushes];
     unique(
       'plugin name',
-      [...found.processors, ...found.aggregators].map((p) => p.spec.name),
+      [...found.processors, ...found.expanders, ...found.aggregators].map(
+        (p) => p.spec.name,
+      ),
     );
     unique(
       'connector portal',

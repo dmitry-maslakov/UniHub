@@ -7,6 +7,7 @@ import type {
   PushConnectorOptions,
   PushesFromPortal,
 } from './connectors.js';
+import type { ContentExpanderOptions, ExpandsContent } from './expanders.js';
 import type {
   ContentProcessorOptions,
   ProcessesContent,
@@ -22,6 +23,8 @@ export const PushConnectorMark =
   DiscoveryService.createDecorator<PushConnectorOptions>();
 export const ContentProcessorMark =
   DiscoveryService.createDecorator<ContentProcessorOptions>();
+export const ContentExpanderMark =
+  DiscoveryService.createDecorator<ContentExpanderOptions>();
 export const AggregatorMark =
   DiscoveryService.createDecorator<AggregatorOptions>();
 
@@ -46,6 +49,9 @@ export function discover(discovery: DiscoveryService) {
     pushes: find<PushConnectorOptions, PushesFromPortal>(PushConnectorMark),
     processors: find<ContentProcessorOptions, ProcessesContent>(
       ContentProcessorMark,
+    ),
+    expanders: find<ContentExpanderOptions, ExpandsContent>(
+      ContentExpanderMark,
     ),
     aggregators: find<AggregatorOptions, HandlesMessages>(AggregatorMark),
   };

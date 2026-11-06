@@ -1,4 +1,5 @@
 import type {
+  ExpandsContent,
   HandlesMessages,
   PollsPortal,
   ProcessesContent,
@@ -36,6 +37,13 @@ export const processor = (
   version = 1,
 ) => ({ spec: ProcessorSpec.of({ name, version, accepts }), instance });
 
+export const expander = (
+  name: string,
+  accepts: string[],
+  instance: ExpandsContent = { expand: async function* () {} },
+  version = 1,
+) => ({ spec: ProcessorSpec.of({ name, version, accepts }), instance });
+
 export const aggregator = (
   name: string,
   topics: Topic[],
@@ -45,7 +53,13 @@ export const aggregator = (
 // the catalog of these plugins once the app's modules are up; `external`
 // are the portals with gRPC tokens
 export function catalogOf(found: Partial<Found>, external: string[] = []) {
-  const all = { polls: [], pushes: [], processors: [], aggregators: [] };
+  const all = {
+    polls: [],
+    pushes: [],
+    processors: [],
+    expanders: [],
+    aggregators: [],
+  };
   const tokens = { portals: () => external.map((p) => PortalId.parse(p)) };
   const catalog = new PluginCatalog(
     { find: () => ({ ...all, ...found }) },

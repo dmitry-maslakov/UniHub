@@ -36,11 +36,14 @@ export class NestPluginDiscovery extends PluginDiscovery {
   }
 
   find() {
-    const { polls, pushes, processors, aggregators } = discover(this.discovery);
+    const { polls, pushes, processors, expanders, aggregators } = discover(
+      this.discovery,
+    );
     return {
       polls: found(polls, pollSpec),
       pushes: found(pushes, pushSpec),
       processors: found(processors, (o) => ProcessorSpec.of(o)),
+      expanders: found(expanders, (o) => ProcessorSpec.of(o)),
       aggregators: found(aggregators, aggregatorSpec),
     };
   }
