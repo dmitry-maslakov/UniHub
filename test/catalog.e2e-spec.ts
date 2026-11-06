@@ -127,23 +127,22 @@ describe('catalog', { timeout: 20_000 }, () => {
     const { id } = await commands.execute(
       new UpsertItemCommand(item({ externalId: 'post-old-app' })),
     );
-    // as a write conflict, which that app's queries take for one (P2034)
-    const conflict = {
-      meta: { driverAdapterError: { cause: { originalCode: '40001' } } },
-    };
-
+    // a write conflict, as that app's queries take it
+    const conflict = { code: 'P2034' };
     await expect(
-      prisma.$executeRaw`UPDATE "Item" SET title = 'edited' WHERE id = ${id}`,
+      prisma.item.update({ where: { id }, data: { externalId: 'edited' } }),
     ).rejects.toMatchObject(conflict);
     await expect(
+      prisma.portalCourse.updateMany({ where: { portal }, data: { portal } }),
+    ).rejects.toMatchObject(conflict);
+    // a new record with its old columns, which this app's client can't name
+    for (const insert of [
       prisma.$executeRaw`INSERT INTO "Item" (id, portal, "externalId", kind, raw, "updatedAt") VALUES ('old-app', ${portal}, 'old-app', 'post', '{}', now())`,
-    ).rejects.toMatchObject(conflict);
-    await expect(
       prisma.$executeRaw`INSERT INTO "File" (id, portal, "externalId", name, "updatedAt") VALUES ('old-app', ${portal}, 'old-app', 'a.pdf', now())`,
-    ).rejects.toMatchObject(conflict);
-    await expect(
-      prisma.$executeRaw`UPDATE "PortalCourse" SET name = 'x' WHERE portal = ${portal}`,
-    ).rejects.toMatchObject(conflict);
+    ])
+      await expect(insert).rejects.toThrow(
+        'catalog keeps records in versions now',
+      );
   });
 
   it('reads json back as the same item, whatever order jsonb keeps its keys in', async () => {

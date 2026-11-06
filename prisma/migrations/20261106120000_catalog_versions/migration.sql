@@ -6,6 +6,18 @@
 -- they held, read and written by nothing, until a later migration drops
 -- them (CLAUDE.md, Put off).
 
+-- All of it or none: prisma runs a migration's statements one by one, so
+-- a failure partway would leave the old columns' keys gone and no
+-- triggers, and the migration unable to run again
+BEGIN;
+
+-- The old tables, parents first, at once in the strongest mode: the copy
+-- below takes every write committed before it, and none comes in between
+-- (a weaker lock taken now and raised by the first ALTER would deadlock
+-- with an app from before that read a row and goes on to write it). Those
+-- writes wait for the commit, and the triggers at the end refuse them.
+LOCK TABLE "PortalCourse", "Item", "File" IN ACCESS EXCLUSIVE MODE;
+
 -- CreateTable
 CREATE TABLE "CourseVersion" (
     "id" TEXT NOT NULL,
@@ -230,3 +242,5 @@ CREATE TRIGGER "File_in_versions" BEFORE UPDATE ON "File"
   FOR EACH ROW EXECUTE FUNCTION "catalog_in_versions"();
 CREATE TRIGGER "File_new_in_versions" BEFORE INSERT ON "File"
   FOR EACH ROW WHEN (NEW."name" IS NOT NULL) EXECUTE FUNCTION "catalog_in_versions"();
+
+COMMIT;
