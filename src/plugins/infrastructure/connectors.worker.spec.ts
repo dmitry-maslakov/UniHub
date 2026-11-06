@@ -1,3 +1,4 @@
+import { setImmediate } from 'node:timers/promises';
 import { Logger } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
 import type { Job } from 'bullmq';
@@ -64,7 +65,13 @@ describe('ConnectorsWorker', () => {
 
   it("lets go of a poll past its time, even one that doesn't listen", async () => {
     const { w } = worker(() => new Promise(() => {}));
-    await expect(w.process(job(POLL))).rejects.toThrow(/poll stopped/);
+    const run = w.process(job(POLL));
+    // nothing but its own promises holds a poll that waits on nothing, the
+    // job neither: a GC meanwhile (vitest.config.ts exposes it) mustn't take
+    // what lets go of it
+    await setImmediate();
+    gc!();
+    await expect(run).rejects.toThrow(/poll stopped/);
   });
 
   it('stops a poll whose job was cancelled', async () => {

@@ -8,5 +8,7 @@ export default defineConfig({
     globals: true,
     root: './',
     include: ['**/*.spec.ts'],
+    // gc(), for a spec of what a GC mustn't take
+    execArgv: ['--expose-gc'],
   },
 });

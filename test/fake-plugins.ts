@@ -1,6 +1,6 @@
+import { once } from 'node:events';
 import { Readable } from 'node:stream';
 import { text } from 'node:stream/consumers';
-import { aborted } from 'node:util';
 import { Injectable, Module } from '@nestjs/common';
 import {
   Aggregator,
@@ -59,7 +59,7 @@ export class FakePushConnector implements PushesFromPortal {
 
   async run(ctx: ConnectorContext) {
     this.running.push(ctx.connection.account);
-    await aborted(ctx.signal, this);
+    await once(ctx.signal, 'abort');
   }
 }
 

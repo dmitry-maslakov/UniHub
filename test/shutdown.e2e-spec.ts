@@ -1,5 +1,5 @@
+import { once } from 'node:events';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { aborted } from 'node:util';
 import { Injectable, Module } from '@nestjs/common';
 import { CommandBus } from '@nestjs/cqrs';
 import { Queue } from 'bullmq';
@@ -43,7 +43,7 @@ class StoppableConnector implements PushesFromPortal {
   stopped = false;
 
   async run(ctx: ConnectorContext) {
-    await aborted(ctx.signal, this);
+    await once(ctx.signal, 'abort');
     this.stopped = true;
   }
 }
@@ -57,7 +57,7 @@ class EndlessPoll implements PollsPortal {
 
   async poll(ctx: ConnectorContext) {
     this.polling = true;
-    await aborted(ctx.signal, this);
+    await once(ctx.signal, 'abort');
     this.stopped = true;
   }
 }
