@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { CommandBus, CqrsModule } from '@nestjs/cqrs';
 import { Test } from '@nestjs/testing';
 import { ClsModule } from 'nestjs-cls';
@@ -93,8 +94,21 @@ export class InMemoryPortalCourses
   extends InMemory<PortalCourseState, PortalCourse>
   implements PortalCourseRepository
 {
+  // the ids of the portal courses links named before any account sent them
+  readonly named = new Map<string, string>();
+
   constructor() {
     super((state) => PortalCourse.restore(state));
+  }
+
+  async recordId(ref: PortalRef) {
+    return this.records.get(key(ref))?.id ?? this.named.get(key(ref)) ?? null;
+  }
+
+  async keep(ref: PortalRef) {
+    const id = (await this.recordId(ref)) ?? randomUUID();
+    if (!this.records.has(key(ref))) this.named.set(key(ref), id);
+    return id;
   }
 }
 

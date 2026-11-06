@@ -4,6 +4,7 @@ import { PluginsModule } from '../plugins/contracts.js';
 import { accountsConfig } from './accounts.config.js';
 import { PortalAccounts } from './application/portal-accounts.js';
 import { UserDeletedHandler } from './application/user-deleted.handler.js';
+import { ViewingAccountsHandler } from './application/viewing-accounts.handler.js';
 import { CredentialVault } from './domain/credential-vault.js';
 import { PortalAccountRepository } from './domain/portal-account.js';
 import { PortalLinks } from './domain/portal-links.js';
@@ -14,9 +15,10 @@ import { PrismaPortalAccountRepository } from './infrastructure/prisma-portal-ac
 // Users' own accounts of portals (README, Portal accounts): how each
 // portal's are linked (PORTAL_LINKS), the token a user sets, sealed apart
 // from the account, and who that is on the portal, as its connector says
-// (plugins). Nothing reads with them yet; every portal is shared unless
-// PORTAL_LINKS says otherwise. Asks identity whether a user is an admin,
-// and drops a deleted user's accounts when it says so.
+// (plugins), and which of them a user reads through (ViewingAccountsQuery,
+// for access); every portal is shared unless PORTAL_LINKS says otherwise.
+// Asks identity whether a user is an admin, and drops a deleted user's
+// accounts when it says so.
 @Module({
   imports: [ConfigModule.forFeature(accountsConfig), PluginsModule],
   controllers: [PortalAccountsController],
@@ -34,6 +36,7 @@ import { PrismaPortalAccountRepository } from './infrastructure/prisma-portal-ac
     },
     PortalAccounts,
     UserDeletedHandler,
+    ViewingAccountsHandler,
   ],
 })
 export class AccountsModule {}

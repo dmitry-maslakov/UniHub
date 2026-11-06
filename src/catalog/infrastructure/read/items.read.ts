@@ -11,7 +11,14 @@ import {
   type ItemDto,
 } from '../../application/queries.js';
 import { itemValues, liveSights, portalOf, recordRef, seen } from '../rows.js';
-import { visibleItem } from './visibility.js';
+import {
+  courseOf,
+  inCourses,
+  itemSeen,
+  opens,
+  shows,
+  withCourse,
+} from './viewers.js';
 
 // a version, with its record's ids and whether any account sees it
 const select = {
@@ -25,11 +32,6 @@ const select = {
   updatedAt: true,
   item: recordRef,
   sights: liveSights,
-} satisfies Prisma.ItemVersionSelect;
-
-// the course a visible item shows in (see visibleItem)
-const withCourse = {
-  portalCourse: { select: { link: { select: { courseId: true } } } },
 } satisfies Prisma.ItemVersionSelect;
 
 const newestFirst = [
@@ -53,9 +55,16 @@ const toDto = ({
 export class ListCourseItemsHandler implements IQueryHandler<ListCourseItemsQuery> {
   constructor(@InjectTransactionHost() private readonly txHost: PrismaTxHost) {}
 
-  async execute({ courseId, offset, limit }: ListCourseItemsQuery) {
+  async execute({
+    viewers,
+    portalCourseIds,
+    offset,
+    limit,
+  }: ListCourseItemsQuery) {
     const rows = await this.txHost.tx.itemVersion.findMany({
-      where: visibleItem({ courseId }),
+      where: {
+        AND: [inCourses(portalCourseIds), itemSeen(viewers, shows(new Date()))],
+      },
       orderBy: newestFirst,
       skip: offset,
       take: limit,
@@ -82,12 +91,12 @@ export class GetItemHandler implements IQueryHandler<GetItemQuery> {
 export class GetCourseItemHandler implements IQueryHandler<GetCourseItemQuery> {
   constructor(@InjectTransactionHost() private readonly txHost: PrismaTxHost) {}
 
-  async execute({ itemId }: GetCourseItemQuery) {
+  async execute({ viewers, itemId }: GetCourseItemQuery) {
     const row = await this.txHost.tx.itemVersion.findFirst({
-      where: { AND: [{ id: itemId }, visibleItem()] },
+      where: { AND: [{ id: itemId }, itemSeen(viewers, shows(new Date()))] },
       select: { ...select, ...withCourse },
     });
-    const courseId = row?.portalCourse?.link?.courseId;
+    const courseId = row && courseOf(row);
     if (!row || !courseId) return null;
     const { portalCourse: _, ...item } = row;
     return { ...toDto(item), courseId };
@@ -98,9 +107,11 @@ export class GetCourseItemHandler implements IQueryHandler<GetCourseItemQuery> {
 export class ListVisibleItemsHandler implements IQueryHandler<ListVisibleItemsQuery> {
   constructor(@InjectTransactionHost() private readonly txHost: PrismaTxHost) {}
 
-  async execute({ courseIds }: ListVisibleItemsQuery) {
+  async execute({ viewers, portalCourseIds }: ListVisibleItemsQuery) {
     const rows = await this.txHost.tx.itemVersion.findMany({
-      where: visibleItem({ courseId: { in: [...courseIds] } }),
+      where: {
+        AND: [inCourses(portalCourseIds), itemSeen(viewers, opens(new Date()))],
+      },
       orderBy: newestFirst,
       select: {
         id: true,
@@ -114,7 +125,7 @@ export class ListVisibleItemsHandler implements IQueryHandler<ListVisibleItemsQu
     // the filter leaves only rows with a course, which Prisma's types can't
     // tell
     return rows.flatMap(({ id, portalCourse, ...row }) => {
-      const courseId = portalCourse?.link?.courseId;
+      const courseId = courseOf({ portalCourse });
       return courseId ? [{ itemId: id, courseId, ...row }] : [];
     });
   }

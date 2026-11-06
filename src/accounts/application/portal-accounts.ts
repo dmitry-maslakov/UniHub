@@ -36,6 +36,13 @@ const portalUser = z.object({
   expiresAt: z.date().nullable(),
 });
 
+// Whose views a user reads in the portals read with users' own accounts:
+// those portals, and the user's accounts in them that read now
+export interface Viewing {
+  portals: PortalId[];
+  accounts: string[];
+}
+
 // a portal as one user sees their own link to it
 export interface PortalView {
   portal: PortalId;
@@ -87,6 +94,19 @@ export class PortalAccounts implements OnApplicationBootstrap {
         expiresAt: account?.expiresAt ?? null,
       };
     });
+  }
+
+  // The portals read with users' own accounts, and the user's accounts in
+  // them that are linked and not past their expiry: an expired or revoked
+  // one reads nothing until it's linked again, and one of a portal read as
+  // shared now reads nothing either.
+  async viewing(userId: string, now = new Date()): Promise<Viewing> {
+    const portals = this.links.readWithAccounts();
+    const accounts = (await this.accounts.ofUser(userId)).filter(
+      (account) =>
+        portals.includes(account.portal) && account.statusAt(now) === 'linked',
+    );
+    return { portals, accounts: accounts.map(({ id }) => id) };
   }
 
   // The user's account of the portal, linked by the token once the portal

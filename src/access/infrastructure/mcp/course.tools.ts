@@ -2,14 +2,16 @@ import { UseFilters } from '@nestjs/common';
 import { Payload } from '@nestjs/microservices';
 import { McpController, Tool } from '@rekog/mcp-nest';
 import { z } from 'zod';
-import { Slug } from '../../../catalog/contracts.js';
+import { CourseSlug } from '../../../catalog/contracts.js';
 import { CourseReader } from '../../application/course-reader.js';
 import { pageSchema, textPageSchema } from '../../application/page.js';
 import { McpErrorsFilter } from './mcp-errors.filter.js';
 import { McpUserId } from './mcp-user-id.js';
 import { json, readOnly } from './tool-results.js';
 
-const inCourse = pageSchema.extend({ course: Slug.describe('course slug') });
+const inCourse = pageSchema.extend({
+  course: CourseSlug.describe('course slug'),
+});
 const post = z.object({
   item: z.uuid().describe('item id from list_items or search'),
 });

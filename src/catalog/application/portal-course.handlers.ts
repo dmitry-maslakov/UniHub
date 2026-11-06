@@ -14,7 +14,13 @@ export class UpsertPortalCourseHandler implements ICommandHandler<UpsertPortalCo
   }: UpsertPortalCourseCommand) {
     const ref = { portal, externalId };
     const found = await this.courses.getForUpdate(ref);
-    const course = found ?? PortalCourse.create(ref, props);
+    const course =
+      found ??
+      PortalCourse.create(
+        ref,
+        props,
+        (await this.courses.recordId(ref)) ?? undefined,
+      );
     const changed = found ? found.sync(props) : true;
     await this.courses.save(course);
     return { id: course.id, changed };

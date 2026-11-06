@@ -21,9 +21,9 @@ import { throttlerOptions } from './infrastructure/throttle.js';
 import { AccessSearchModule } from './search.module.js';
 
 // How users read the hub, the REST API and MCP, and how admins say who reads
-// which course. Over catalog and identity: every read goes through
-// CourseReader, every search through CourseSearch, every grant through
-// CourseGrants.
+// which course. Over catalog, identity and accounts: every read goes
+// through CourseReader, every search through CourseSearch, both cut to the
+// user's viewers, every grant through CourseGrants.
 @Module({
   imports: [
     // the named limits routes take with @Limited()

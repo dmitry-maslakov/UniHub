@@ -5,12 +5,12 @@ import { CourseLinkRepository } from '../domain/course-link/course-link.reposito
 import { Course } from '../domain/course/course.js';
 import { CourseRepository } from '../domain/course/course.repository.js';
 import { CourseSlugTakenError, UnknownCourseError } from '../domain/errors.js';
+import { PortalCourseRepository } from '../domain/portal-course/portal-course.repository.js';
 import {
   CreateCourseCommand,
   LinkPortalCourseCommand,
   UnlinkPortalCourseCommand,
 } from './commands.js';
-import { References } from './references.js';
 
 @CommandHandler(CreateCourseCommand)
 export class CreateCourseHandler implements ICommandHandler<CreateCourseCommand> {
@@ -23,20 +23,24 @@ export class CreateCourseHandler implements ICommandHandler<CreateCourseCommand>
   }
 }
 
+// An admin's link names a portal course whether the hub has it or not, and
+// answers the same either way: what a portal read with users' own accounts
+// has is theirs to know, not an admin's. A course nothing sent yet links
+// nothing anyone reads until an account sends it.
 @CommandHandler(LinkPortalCourseCommand)
 export class LinkPortalCourseHandler implements ICommandHandler<LinkPortalCourseCommand> {
   constructor(
     private readonly courses: CourseRepository,
     private readonly links: CourseLinkRepository,
-    private readonly references: References,
+    private readonly portalCourses: PortalCourseRepository,
   ) {}
 
   @Transactional()
   async execute({ course: slug, portalCourse, year }: LinkPortalCourseCommand) {
     const course = await this.courses.findBySlug(slug);
     if (!course) throw new UnknownCourseError(slug);
-    const linked = await this.references.portalCourse(portalCourse);
-    await this.links.save(CourseLink.of(linked, course, year));
+    const id = await this.portalCourses.keep(portalCourse);
+    await this.links.save(CourseLink.of({ id }, course, year));
   }
 }
 
@@ -44,11 +48,11 @@ export class LinkPortalCourseHandler implements ICommandHandler<LinkPortalCourse
 export class UnlinkPortalCourseHandler implements ICommandHandler<UnlinkPortalCourseCommand> {
   constructor(
     private readonly links: CourseLinkRepository,
-    private readonly references: References,
+    private readonly portalCourses: PortalCourseRepository,
   ) {}
 
   async execute({ portalCourse }: UnlinkPortalCourseCommand) {
-    const linked = await this.references.portalCourse(portalCourse);
-    return { changed: await this.links.remove(linked.id) };
+    const id = await this.portalCourses.recordId(portalCourse);
+    return { changed: id !== null && (await this.links.remove(id)) };
   }
 }

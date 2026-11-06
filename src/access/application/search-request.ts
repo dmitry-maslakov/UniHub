@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { StoredText } from '@app/kernel';
-import { Slug } from '../../catalog/contracts.js';
+import { CourseSlug } from '../../catalog/contracts.js';
 
 // What a search takes, over REST and MCP alike. Coerced, as a query string
 // carries text.
@@ -10,7 +10,7 @@ export const searchRequest = z.object({
     .describe(
       'words, a phrase or a code identifier; Latin or Cyrillic, with or without č ć š ž đ',
     ),
-  course: Slug.optional().describe('course slug: search only there'),
+  course: CourseSlug.optional().describe('course slug: search only there'),
   limit: z.coerce
     .number()
     .int()

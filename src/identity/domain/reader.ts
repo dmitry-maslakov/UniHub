@@ -22,9 +22,10 @@ export class Reader {
     return !this.bannedAt(now) && this.roles.includes(ADMIN_ROLE);
   }
 
-  // Admins read every course, everyone else the ones granted to them. A ban
-  // ends sessions, but anything that found the user earlier (an API key)
-  // must not read either.
+  // Admins read every course through the shared account, everyone else the
+  // ones granted to them, and each their own accounts' views. A ban ends
+  // sessions, but anything that found the user earlier (an API key) must
+  // not read either.
   scope(granted: Iterable<string>, now = new Date()) {
     if (this.bannedAt(now)) return ReadScope.none();
     return this.adminAt(now) ? ReadScope.all() : ReadScope.of(granted);

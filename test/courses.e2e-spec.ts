@@ -53,9 +53,15 @@ describe('courses', () => {
       ),
     );
   const course = async (slug: string) =>
-    (await queries.execute(new ListCoursesQuery())).find(
-      (c) => c.slug === slug,
-    );
+    // as an admin reads them
+    (
+      await queries.execute(
+        new ListCoursesQuery({
+          accounts: [],
+          shared: { courses: null, except: [] },
+        }),
+      )
+    ).find((c) => c.slug === slug);
 
   beforeAll(async () => {
     app = await bootApp();

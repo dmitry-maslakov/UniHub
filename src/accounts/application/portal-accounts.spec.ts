@@ -265,6 +265,35 @@ describe('PortalAccounts', () => {
     });
   });
 
+  it("reads through the user's own accounts that read now, in the portals not shared", async () => {
+    const until = new Date('2026-12-30T08:00:00Z');
+    const { service, store, setToken } = accounts({
+      identify: async () => ({ id: '4242', expiresAt: until }),
+    });
+    await setToken('ana', MOODLE);
+    await setToken('bo', CANVAS);
+    const moodle = store.rows.get('ana:moodle')!;
+    const before = new Date('2026-12-01T00:00:00Z');
+
+    expect(await service.viewing('ana', before)).toEqual({
+      portals: [CANVAS, MOODLE],
+      accounts: [moodle.account.id],
+    });
+    // nobody else's, nor one past its expiry
+    expect((await service.viewing('cy', before)).accounts).toEqual([]);
+    expect((await service.viewing('ana', until)).accounts).toEqual([]);
+    // revoked, or of a portal read as shared since
+    store.rows.set('ana:moodle', {
+      ...moodle,
+      account: { ...moodle.account, status: 'revoked' },
+    });
+    store.rows.set('ana:teams', {
+      ...moodle,
+      account: { ...moodle.account, id: 'teams-account', portal: TEAMS },
+    });
+    expect((await service.viewing('ana', before)).accounts).toEqual([]);
+  });
+
   it('unlinks the account and its credential, whatever the mode is now', async () => {
     const { service, store, setToken } = accounts();
     await setToken('ana', MOODLE);

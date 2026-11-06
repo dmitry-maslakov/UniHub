@@ -1,4 +1,6 @@
+import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
+import { Propagation, Transactional } from '@nestjs-cls/transactional';
 import { Prisma } from '../../generated/prisma/client.js';
 import {
   PortalCourse,
@@ -31,6 +33,24 @@ export class PrismaPortalCourseRepository
         props: { name: row.name, url: row.url, ...courseValues(row) },
       })
     );
+  }
+
+  async recordId(ref: PortalRef) {
+    const row = await this.txHost.tx.portalCourse.findUnique({
+      where: { portal_externalId: ofRecord(ref) },
+      select: { id: true },
+    });
+    return row?.id ?? null;
+  }
+
+  @Transactional(Propagation.Mandatory)
+  async keep(ref: PortalRef) {
+    await this.lockFor(ref);
+    await this.txHost.tx.portalCourse.createMany({
+      data: { id: randomUUID(), ...ofRecord(ref) },
+      skipDuplicates: true,
+    });
+    return (await this.recordId(ref))!;
   }
 
   protected async upsert({ id, ref, props }: Readonly<PortalCourseState>) {

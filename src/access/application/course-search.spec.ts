@@ -1,11 +1,12 @@
-import { PluginName, type ContentHash } from '@app/kernel';
+import { PluginName, PortalId, type ContentHash } from '@app/kernel';
 import { FakeBus } from '../../../test/fake-bus.js';
 import { sha256 } from '../../../test/sha256.js';
+import { ViewingAccountsQuery } from '../../accounts/contracts.js';
 import {
-  FindCourseQuery,
   ListCoursesQuery,
   ListVisibleContentQuery,
   ListVisibleItemsQuery,
+  type Viewers,
   type VisibleContentDto,
   type VisibleItemDto,
 } from '../../catalog/contracts.js';
@@ -27,13 +28,29 @@ const notes = sha256('notes');
 const secret = sha256('%PDF exam answers');
 const labs = sha256('labs.zip');
 const code = sha256('int main;');
-// empty shows no file with content
+// empty shows no file with content; each is one portal course, <slug>-pc
+const portal = PortalId.parse('canvas');
 const courses = ['os', 'net', 'exam', 'empty'].map((slug) => ({
   id: `${slug}-id`,
   slug,
   name: slug,
-  portalCourses: [],
+  portalCourses: [
+    { id: `${slug}-pc`, portal, externalId: slug, name: slug, year: null },
+  ],
 }));
+// what the viewers of a user who reads these courses are
+const viewersReading = (reads: string[]): Viewers => ({
+  accounts: [],
+  shared: { courses: reads, except: [] },
+});
+// catalog's cut, as the fakes make it: the courses the viewers read, and
+// of those the portal courses asked for
+const cut =
+  ({ shared }: Viewers, portalCourseIds: readonly string[] | null) =>
+  ({ courseId }: { courseId: string }) =>
+    (shared.courses?.includes(courseId) ?? true) &&
+    (!portalCourseIds ||
+      portalCourseIds.includes(courseId.replace(/-id$/, '-pc')));
 
 // catalog's order: by folder and name; the slides are in os and net both
 const files: VisibleContentDto[] = [
@@ -117,22 +134,22 @@ function searching(
 ) {
   const visible = [...files, ...withArchives];
   const queries = new FakeBus([
-    [ReadScopeQuery, () => ({ allows: (id: string) => reads.includes(id) })],
-    [ListCoursesQuery, () => courses],
+    [ReadScopeQuery, () => ({ granted: reads, ownAccounts: true })],
+    [ViewingAccountsQuery, () => ({ portals: [], accounts: [] })],
     [
-      FindCourseQuery,
-      ({ by }: FindCourseQuery) =>
-        courses.find((c) => 'slug' in by && c.slug === by.slug) ?? null,
+      ListCoursesQuery,
+      ({ viewers }: ListCoursesQuery) =>
+        courses.filter(({ id }) => cut(viewers, null)({ courseId: id })),
     ],
     [
       ListVisibleContentQuery,
-      ({ courseIds }: ListVisibleContentQuery) =>
-        visible.filter((f) => courseIds.includes(f.courseId)),
+      ({ viewers, portalCourseIds }: ListVisibleContentQuery) =>
+        visible.filter(cut(viewers, portalCourseIds)),
     ],
     [
       ListVisibleItemsQuery,
-      ({ courseIds }: ListVisibleItemsQuery) =>
-        posts.filter((p) => courseIds.includes(p.courseId)),
+      ({ viewers, portalCourseIds }: ListVisibleItemsQuery) =>
+        posts.filter(cut(viewers, portalCourseIds)),
     ],
     [
       ListContainedQuery,
@@ -163,11 +180,13 @@ describe('CourseSearch', () => {
 
     await search.search('ana', request({ q: 'semafor', limit: 5 }));
 
+    // the user's viewers, in every course they read
+    const viewers = viewersReading(['os-id', 'net-id']);
     expect(sentOf(queries, ListVisibleContentQuery)).toEqual([
-      new ListVisibleContentQuery(['os-id', 'net-id']),
+      new ListVisibleContentQuery(viewers, null),
     ]);
     expect(sentOf(queries, ListVisibleItemsQuery)).toEqual([
-      new ListVisibleItemsQuery(['os-id', 'net-id']),
+      new ListVisibleItemsQuery(viewers, null),
     ]);
     expect(sentOf(queries, SearchTextsQuery)).toEqual([
       new SearchTextsQuery(
@@ -222,9 +241,10 @@ describe('CourseSearch', () => {
       request({ q: 'semafor', course: 'net' }),
     );
 
-    expect(sentOf(queries, ListCoursesQuery)).toEqual([]);
     expect(sentOf(queries, ListVisibleContentQuery)).toEqual([
-      new ListVisibleContentQuery(['net-id']),
+      new ListVisibleContentQuery(viewersReading(['os-id', 'net-id']), [
+        'net-pc',
+      ]),
     ]);
     expect(results).toEqual([
       expect.objectContaining({ fileId: 'f3', course: 'net' }),

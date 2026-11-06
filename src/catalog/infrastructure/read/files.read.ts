@@ -11,6 +11,7 @@ import {
   ListFilesWithContentQuery,
   ListVisibleContentQuery,
   type FileDto,
+  type Viewers,
 } from '../../application/queries.js';
 import {
   contentOf,
@@ -22,7 +23,16 @@ import {
   seen,
   sharedSight,
 } from '../rows.js';
-import { visibleFile } from './visibility.js';
+import {
+  courseOf,
+  fileSeen,
+  inCourses,
+  itemSeen,
+  opening,
+  opens,
+  shows,
+  withCourse,
+} from './viewers.js';
 
 // a version, with its record's ids and whether any account sees it
 const select = {
@@ -37,11 +47,6 @@ const select = {
   contentHash: true,
   file: recordRef,
   sights: liveSights,
-} satisfies Prisma.FileVersionSelect;
-
-// the course a visible file shows in (see visibleFile)
-const withCourse = {
-  portalCourse: { select: { link: { select: { courseId: true } } } },
 } satisfies Prisma.FileVersionSelect;
 
 const byFolderAndName = [
@@ -62,19 +67,58 @@ const toDto = ({
   removed: sights.length === 0,
 });
 
+// a file as the viewers read it: its content once their view opens it
+// a file as the viewers read it: its content once their view opens it,
+// its post as they see it
+const forViewers = (viewers: Viewers, now: Date) =>
+  ({
+    ...select,
+    _count: { select: { sights: { where: opening(viewers, now) } } },
+    item: {
+      select: {
+        versions: {
+          where: itemSeen(viewers, shows(now)),
+          take: 1,
+          select: { id: true },
+        },
+      },
+    },
+  }) satisfies Prisma.FileVersionSelect;
+
+const toViewersDto = ({
+  _count,
+  item,
+  ...row
+}: Prisma.FileVersionGetPayload<{
+  select: ReturnType<typeof forViewers>;
+}>): FileDto => {
+  const file = toDto(row);
+  return {
+    ...file,
+    itemId: item?.versions[0]?.id ?? null,
+    contentHash: _count.sights ? file.contentHash : null,
+  };
+};
+
 @QueryHandler(ListCourseFilesQuery)
 export class ListCourseFilesHandler implements IQueryHandler<ListCourseFilesQuery> {
   constructor(@InjectTransactionHost() private readonly txHost: PrismaTxHost) {}
 
-  async execute({ courseId, offset, limit }: ListCourseFilesQuery) {
+  async execute({
+    viewers,
+    portalCourseIds,
+    offset,
+    limit,
+  }: ListCourseFilesQuery) {
+    const now = new Date();
     const rows = await this.txHost.tx.fileVersion.findMany({
-      where: visibleFile({ courseId }),
+      where: { AND: [inCourses(portalCourseIds), fileSeen(viewers, now)] },
       orderBy: byFolderAndName,
       skip: offset,
       take: limit,
-      select,
+      select: forViewers(viewers, now),
     });
-    return rows.map(toDto);
+    return rows.map(toViewersDto);
   }
 }
 
@@ -82,15 +126,16 @@ export class ListCourseFilesHandler implements IQueryHandler<ListCourseFilesQuer
 export class GetCourseFileHandler implements IQueryHandler<GetCourseFileQuery> {
   constructor(@InjectTransactionHost() private readonly txHost: PrismaTxHost) {}
 
-  async execute({ fileId }: GetCourseFileQuery) {
+  async execute({ viewers, fileId }: GetCourseFileQuery) {
+    const now = new Date();
     const row = await this.txHost.tx.fileVersion.findFirst({
-      where: { AND: [{ id: fileId }, visibleFile()] },
-      select: { ...select, ...withCourse },
+      where: { AND: [{ id: fileId }, fileSeen(viewers, now)] },
+      select: { ...forViewers(viewers, now), ...withCourse },
     });
-    const courseId = row?.portalCourse?.link?.courseId;
+    const courseId = row && courseOf(row);
     if (!row || !courseId) return null;
     const { portalCourse: _, ...file } = row;
-    return { ...toDto(file), courseId };
+    return { ...toViewersDto(file), courseId };
   }
 }
 
@@ -98,11 +143,13 @@ export class GetCourseFileHandler implements IQueryHandler<GetCourseFileQuery> {
 export class ListVisibleContentHandler implements IQueryHandler<ListVisibleContentQuery> {
   constructor(@InjectTransactionHost() private readonly txHost: PrismaTxHost) {}
 
-  async execute({ courseIds }: ListVisibleContentQuery) {
+  async execute({ viewers, portalCourseIds }: ListVisibleContentQuery) {
+    const now = new Date();
     const rows = await this.txHost.tx.fileVersion.findMany({
       where: {
         AND: [
-          visibleFile({ courseId: { in: [...courseIds] } }),
+          inCourses(portalCourseIds),
+          fileSeen(viewers, now, opens(now)),
           { contentHash: { not: null } },
         ],
       },
@@ -117,7 +164,7 @@ export class ListVisibleContentHandler implements IQueryHandler<ListVisibleConte
     });
     // the filter leaves only rows with both, which Prisma's types can't tell
     return rows.flatMap(({ id, name, path, portalCourse, ...row }) => {
-      const courseId = portalCourse?.link?.courseId;
+      const courseId = courseOf({ portalCourse });
       const hash = contentOf(row);
       return courseId && hash
         ? [{ fileId: id, courseId, hash, name, path }]
