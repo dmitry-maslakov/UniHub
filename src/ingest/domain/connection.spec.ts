@@ -1,5 +1,5 @@
-import { PortalId } from '@app/kernel';
-import { Connection, SHARED_ACCOUNT } from './connection.js';
+import { PortalId, SHARED_ACCOUNT } from '@app/kernel';
+import { Connection } from './connection.js';
 
 describe('Connection', () => {
   it('is one account on one portal, with a key of its own', () => {

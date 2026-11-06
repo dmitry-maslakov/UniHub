@@ -1,8 +1,5 @@
 import { z } from 'zod';
-import { PortalId } from '@app/kernel';
-
-// the account of portals everyone sees the same; per-user ones come later
-export const SHARED_ACCOUNT = 'shared';
+import { PortalId, SHARED_ACCOUNT } from '@app/kernel';
 
 // a key joins portal and account with '__', and job ids can't have ':'
 const Account = z

@@ -163,7 +163,10 @@ export class ListVisibleItemsQuery extends Query<VisibleItemDto[]> {
 }
 
 // The ones below are for plugins and processing, and find removed records
-// too (with `removed` set).
+// too (with `removed` set): a version is removed once no account sees it.
+// A post or a file by its version's id, as catalog's events name it (the
+// record's own id, for the shared account's version); a portal course by
+// its own id, as the shared account sees it.
 
 export class GetPortalCourseQuery extends Query<PortalCourseDto | null> {
   constructor(public readonly id: string) {
@@ -183,7 +186,7 @@ export class GetFileQuery extends Query<FileDto | null> {
   }
 }
 
-// by the portal's id
+// by the portal's id, as the shared account sees it
 export class FindFileQuery extends Query<FileDto | null> {
   constructor(public readonly file: PortalRef) {
     super();

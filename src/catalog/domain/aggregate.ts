@@ -3,7 +3,10 @@ import { differs } from './changes.js';
 import type { CatalogEvent } from './events.js';
 import type { PortalRef } from './portal-ref.js';
 
-// what every record a portal sends has: the hub's id for it, and the portal's
+// What every record a portal sends has: the hub's id for it, and the
+// portal's. A record as the shared account sees it, its version under the
+// record's id; other accounts' come with their views (README, Portal
+// accounts).
 export interface Ingested {
   id: string;
   ref: PortalRef;
@@ -46,7 +49,8 @@ export abstract class CatalogAggregate<
 }
 
 export interface Removable extends Ingested {
-  // the portal said it's gone; sending it again clears this
+  // the portal said it's gone: the account's sight of it is hidden since;
+  // sending it again clears this
   removedAt: Date | null;
 }
 

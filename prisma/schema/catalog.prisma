@@ -19,18 +19,35 @@ model CourseLink {
   @@index([courseId])
 }
 
+// Records a portal sends: a course, a post, a file, each the hub's by the
+// portal's id (PortalCourse, Item, File: what links and the other records
+// name), and what the portal says of it in versions, as the accounts that
+// see it saw it (CourseVersion, ItemVersion, FileVersion). An account sees
+// one version of a record, through a sight of its own, kept once the record
+// is gone from its view (hiddenFrom). Account ids are ingest's, opaque here:
+// catalog knows no users. The shared account's version of a record is its
+// own, under the record's id, and changed in place, as records were before
+// versions (README, Portal accounts).
+//
+// Columns marked "from before versions" are what the records held then,
+// copied into versions and sights by 20261106120000_catalog_versions;
+// nothing reads or writes them since, and a trigger refuses what an app
+// from before writes to them still (that migration, CLAUDE.md: Put off).
+
 // a course as it exists in one portal (canvas course, moodle course, teams team...).
 // portal is a plugin id, not an enum, so a new plugin doesn't need a migration
 model PortalCourse {
-  id         String      @id @default(uuid())
+  id         String          @id @default(uuid())
   portal     String
   externalId String
-  name       String
-  url        String?
-  meta       Json?
-  updatedAt  DateTime    @updatedAt
-  items      Item[]
-  files      File[]
+  // from before versions
+  name       String?         @ignore
+  url        String?         @ignore
+  meta       Json?           @ignore
+  updatedAt  DateTime?       @ignore
+  versions   CourseVersion[]
+  items      ItemVersion[]
+  files      FileVersion[]
   link       CourseLink?
 
   @@unique([portal, externalId])
@@ -41,6 +58,61 @@ model Item {
   id             String        @id @default(uuid())
   portal         String
   externalId     String
+  // from before versions
+  portalCourseId String?       @ignore
+  kind           String?       @ignore
+  title          String?       @ignore
+  url            String?       @ignore
+  publishedAt    DateTime?     @ignore
+  raw            Json?         @ignore
+  removedAt      DateTime?     @ignore
+  updatedAt      DateTime?     @ignore
+  versions       ItemVersion[]
+  // the files attached to it, in their versions
+  files          FileVersion[]
+
+  @@unique([portal, externalId])
+}
+
+model File {
+  id              String        @id @default(uuid())
+  portal          String
+  externalId      String
+  // from before versions
+  portalCourseId  String?       @ignore
+  itemId          String?       @ignore
+  name            String?       @ignore
+  path            String        @default("") @ignore
+  url             String?       @ignore
+  size            BigInt?       @ignore
+  mime            String?       @ignore
+  sourceUpdatedAt DateTime?     @ignore
+  contentHash     String?       @ignore
+  contentStale    Boolean       @default(false) @ignore
+  removedAt       DateTime?     @ignore
+  updatedAt       DateTime?     @ignore
+  versions        FileVersion[]
+
+  @@unique([portal, externalId])
+}
+
+model CourseVersion {
+  id             String        @id
+  portalCourseId String
+  portalCourse   PortalCourse  @relation(fields: [portalCourseId], references: [id], onDelete: Cascade)
+  name           String
+  url            String?
+  meta           Json?
+  updatedAt      DateTime      @updatedAt
+  sights         CourseSight[]
+
+  @@index([portalCourseId])
+}
+
+model ItemVersion {
+  id             String        @id
+  itemId         String
+  item           Item          @relation(fields: [itemId], references: [id], onDelete: Cascade)
   portalCourseId String?
   portalCourse   PortalCourse? @relation(fields: [portalCourseId], references: [id], onDelete: Cascade)
   kind           String
@@ -48,23 +120,23 @@ model Item {
   url            String?
   publishedAt    DateTime?
   raw            Json
-  // set when the portal says it's gone, cleared when it comes back
-  removedAt      DateTime?
+  // when the hub last changed it: its record, or its removal
   updatedAt      DateTime      @updatedAt
-  files          File[]
+  sights         ItemSight[]
 
-  @@unique([portal, externalId])
+  @@index([itemId])
   // postgres doesn't index foreign keys: cascades, and course listings in
   // their order (newest first, the undated last: NULLS LAST in the migration)
   @@index([portalCourseId, publishedAt(sort: Desc)])
 }
 
-model File {
-  id              String        @id @default(uuid())
-  portal          String
-  externalId      String
+model FileVersion {
+  id              String        @id
+  fileId          String
+  file            File          @relation(fields: [fileId], references: [id], onDelete: Cascade)
   portalCourseId  String?
   portalCourse    PortalCourse? @relation(fields: [portalCourseId], references: [id], onDelete: Cascade)
+  // the post it came with
   itemId          String?
   item            Item?         @relation(fields: [itemId], references: [id], onDelete: SetNull)
   name            String
@@ -79,14 +151,58 @@ model File {
   contentHash     String?
   // the portal changed the file since its content was stored
   contentStale    Boolean       @default(false)
-  removedAt       DateTime?
   updatedAt       DateTime      @updatedAt
+  sights          FileSight[]
 
-  @@unique([portal, externalId])
+  @@index([fileId])
   // cascades and course listings in their order; a post's attachments and
   // SetNull
   @@index([portalCourseId, path, name])
   @@index([itemId])
   // processing asks which files hold some content
   @@index([contentHash])
+}
+
+// An account's sight of a version: since when its view shows it, whether
+// it may be opened (not locked for it) and since when, and since when it's
+// gone from its view. The shared account's are shown and open from the
+// first time it sent the record.
+model CourseSight {
+  account    String
+  versionId  String
+  version    CourseVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  open       Boolean       @default(true)
+  shownFrom  DateTime
+  openFrom   DateTime?
+  hiddenFrom DateTime?
+
+  @@id([account, versionId])
+  // who sees a version
+  @@index([versionId])
+}
+
+model ItemSight {
+  account    String
+  versionId  String
+  version    ItemVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  open       Boolean     @default(true)
+  shownFrom  DateTime
+  openFrom   DateTime?
+  hiddenFrom DateTime?
+
+  @@id([account, versionId])
+  @@index([versionId])
+}
+
+model FileSight {
+  account    String
+  versionId  String
+  version    FileVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  open       Boolean     @default(true)
+  shownFrom  DateTime
+  openFrom   DateTime?
+  hiddenFrom DateTime?
+
+  @@id([account, versionId])
+  @@index([versionId])
 }

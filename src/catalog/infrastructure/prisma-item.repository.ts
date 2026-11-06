@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { Item as Row } from '../../generated/prisma/client.js';
+import type { Prisma } from '../../generated/prisma/client.js';
 import { jsonInput } from '../../platform/database/json-input.js';
 import { Item, type ItemState } from '../domain/item/item.js';
 import type { ItemRepository } from '../domain/item/item.repository.js';
@@ -8,24 +8,29 @@ import {
   LOCK,
   PrismaIngestedRepository,
 } from './prisma-ingested.repository.js';
-import { byPortalRef, itemValues } from './rows.js';
+import { itemValues, ofRecord, sharedSight } from './rows.js';
 
-const toItem = (row: Row) => {
-  const { portal, raw } = itemValues(row);
-  return Item.restore({
+const include = {
+  sights: { where: sharedSight, select: { hiddenFrom: true } },
+} satisfies Prisma.ItemVersionInclude;
+
+const toItem = (
+  ref: PortalRef,
+  row: Prisma.ItemVersionGetPayload<{ include: typeof include }>,
+) =>
+  Item.restore({
     id: row.id,
-    ref: { portal, externalId: row.externalId },
+    ref,
     props: {
       kind: row.kind,
       title: row.title,
       url: row.url,
       publishedAt: row.publishedAt,
-      raw,
+      ...itemValues(row),
     },
     portalCourseId: row.portalCourseId,
-    removedAt: row.removedAt,
+    removedAt: row.sights[0].hiddenFrom,
   });
-};
 
 @Injectable()
 export class PrismaItemRepository
@@ -35,31 +40,31 @@ export class PrismaItemRepository
   protected readonly lock = LOCK.item;
 
   async findByRef(ref: PortalRef) {
-    const row = await this.txHost.tx.item.findUnique({
-      where: byPortalRef(ref),
+    const row = await this.txHost.tx.itemVersion.findFirst({
+      where: { item: ofRecord(ref), sights: { some: sharedSight } },
+      include,
     });
-    return row && toItem(row);
+    return row && toItem(ref, row);
   }
 
-  protected upsert({
+  protected async upsert({
     id,
     ref,
     props,
     portalCourseId,
     removedAt,
   }: Readonly<ItemState>) {
-    const data = {
-      portal: ref.portal,
-      externalId: ref.externalId,
-      ...props,
-      raw: jsonInput(props.raw),
-      portalCourseId,
-      removedAt,
-    };
-    return this.txHost.tx.item.upsert({
+    const { tx } = this.txHost;
+    await tx.item.createMany({
+      data: { id, ...ofRecord(ref) },
+      skipDuplicates: true,
+    });
+    const data = { ...props, raw: jsonInput(props.raw), portalCourseId };
+    await tx.itemVersion.upsert({
       where: { id },
-      create: { id, ...data },
+      create: { id, itemId: id, ...data },
       update: data,
     });
+    await tx.itemSight.upsert(this.sight(id, removedAt));
   }
 }

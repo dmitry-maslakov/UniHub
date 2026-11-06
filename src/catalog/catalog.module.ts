@@ -48,9 +48,10 @@ import {
   ListVisibleItemsHandler,
 } from './infrastructure/read/items.read.js';
 
-// What portals publish (written by ingest) and the courses admins make of
-// it. Commands go through the aggregates; queries read the database
-// straight into what other modules get.
+// What portals publish (written by ingest), kept as versions that accounts
+// see through sights, and the courses admins make of it. Commands go
+// through the aggregates; queries read the database straight into what
+// other modules get, of the shared account's view for now.
 @Module({
   controllers: [CoursesAdminController],
   providers: [

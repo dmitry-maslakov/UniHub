@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { File as Row } from '../../generated/prisma/client.js';
+import type { Prisma } from '../../generated/prisma/client.js';
 import {
   PortalFile,
   type FileState,
@@ -10,13 +10,20 @@ import {
   LOCK,
   PrismaIngestedRepository,
 } from './prisma-ingested.repository.js';
-import { byPortalRef, fileValues } from './rows.js';
+import { fileValues, ofRecord, sharedSight } from './rows.js';
 
-const toFile = (row: Row) => {
-  const { portal, size, mime, contentHash } = fileValues(row);
+const include = {
+  sights: { where: sharedSight, select: { hiddenFrom: true } },
+} satisfies Prisma.FileVersionInclude;
+
+const toFile = (
+  ref: PortalRef,
+  row: Prisma.FileVersionGetPayload<{ include: typeof include }>,
+) => {
+  const { size, mime, contentHash } = fileValues(row);
   return PortalFile.restore({
     id: row.id,
-    ref: { portal, externalId: row.externalId },
+    ref,
     props: {
       name: row.name,
       path: row.path,
@@ -28,7 +35,7 @@ const toFile = (row: Row) => {
     placement: { portalCourseId: row.portalCourseId, itemId: row.itemId },
     content: contentHash,
     stale: row.contentStale,
-    removedAt: row.removedAt,
+    removedAt: row.sights[0].hiddenFrom,
   });
 };
 
@@ -40,13 +47,14 @@ export class PrismaPortalFileRepository
   protected readonly lock = LOCK.file;
 
   async findByRef(ref: PortalRef) {
-    const row = await this.txHost.tx.file.findUnique({
-      where: byPortalRef(ref),
+    const row = await this.txHost.tx.fileVersion.findFirst({
+      where: { file: ofRecord(ref), sights: { some: sharedSight } },
+      include,
     });
-    return row && toFile(row);
+    return row && toFile(ref, row);
   }
 
-  protected upsert({
+  protected async upsert({
     id,
     ref,
     props,
@@ -55,19 +63,22 @@ export class PrismaPortalFileRepository
     stale,
     removedAt,
   }: Readonly<FileState>) {
+    const { tx } = this.txHost;
+    await tx.file.createMany({
+      data: { id, ...ofRecord(ref) },
+      skipDuplicates: true,
+    });
     const data = {
-      portal: ref.portal,
-      externalId: ref.externalId,
       ...props,
       ...placement,
       contentHash: content,
       contentStale: stale,
-      removedAt,
     };
-    return this.txHost.tx.file.upsert({
+    await tx.fileVersion.upsert({
       where: { id },
-      create: { id, ...data },
+      create: { id, fileId: id, ...data },
       update: data,
     });
+    await tx.fileSight.upsert(this.sight(id, removedAt));
   }
 }

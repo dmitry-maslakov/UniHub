@@ -7,7 +7,13 @@ import {
   ListCoursesQuery,
   type CourseDto,
 } from '../../application/queries.js';
-import { portalCourseValues, portalOf } from '../rows.js';
+import { courseValues, portalOf, seenByShared } from '../rows.js';
+
+// a portal course as the shared account sees it: its version
+const sharedVersion = {
+  where: { sights: seenByShared },
+  take: 1,
+} as const;
 
 @QueryHandler(ListCoursesQuery)
 export class ListCoursesHandler implements IQueryHandler<ListCoursesQuery> {
@@ -22,12 +28,20 @@ export class ListCoursesHandler implements IQueryHandler<ListCoursesQuery> {
         slug: true,
         name: true,
         links: {
+          where: {
+            portalCourse: { versions: { some: { sights: seenByShared } } },
+          },
           // postgres puts nulls last: the portal courses that span years
           orderBy: [{ year: 'asc' }, { portalCourseId: 'asc' }],
           select: {
             year: true,
             portalCourse: {
-              select: { id: true, portal: true, externalId: true, name: true },
+              select: {
+                id: true,
+                portal: true,
+                externalId: true,
+                versions: { ...sharedVersion, select: { name: true } },
+              },
             },
           },
         },
@@ -35,11 +49,14 @@ export class ListCoursesHandler implements IQueryHandler<ListCoursesQuery> {
     });
     return courses.map(({ links, ...course }) => ({
       ...course,
-      portalCourses: links.map(({ year, portalCourse }) => ({
-        ...portalCourse,
-        portal: portalOf(portalCourse),
-        year,
-      })),
+      portalCourses: links.map(
+        ({ year, portalCourse: { versions, ...portalCourse } }) => ({
+          ...portalCourse,
+          portal: portalOf(portalCourse),
+          name: versions[0].name,
+          year,
+        }),
+      ),
     }));
   }
 }
@@ -67,11 +84,21 @@ export class GetPortalCourseHandler implements IQueryHandler<GetPortalCourseQuer
         id: true,
         portal: true,
         externalId: true,
-        name: true,
-        url: true,
-        meta: true,
+        versions: {
+          ...sharedVersion,
+          select: { name: true, url: true, meta: true },
+        },
       },
     });
-    return row && { ...row, ...portalCourseValues(row) };
+    const version = row?.versions[0];
+    if (!row || !version) return null;
+    const { versions: _, ...course } = row;
+    return {
+      ...course,
+      portal: portalOf(course),
+      name: version.name,
+      url: version.url,
+      ...courseValues(version),
+    };
   }
 }

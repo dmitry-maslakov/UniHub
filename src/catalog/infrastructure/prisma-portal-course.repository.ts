@@ -1,8 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import {
-  Prisma,
-  type PortalCourse as Row,
-} from '../../generated/prisma/client.js';
+import { Prisma } from '../../generated/prisma/client.js';
 import {
   PortalCourse,
   type PortalCourseState,
@@ -13,16 +10,7 @@ import {
   LOCK,
   PrismaIngestedRepository,
 } from './prisma-ingested.repository.js';
-import { byPortalRef, portalCourseValues } from './rows.js';
-
-const toPortalCourse = (row: Row) => {
-  const { portal, meta } = portalCourseValues(row);
-  return PortalCourse.restore({
-    id: row.id,
-    ref: { portal, externalId: row.externalId },
-    props: { name: row.name, url: row.url, meta },
-  });
-};
+import { courseValues, ofRecord, sharedSight } from './rows.js';
 
 @Injectable()
 export class PrismaPortalCourseRepository
@@ -32,24 +20,35 @@ export class PrismaPortalCourseRepository
   protected readonly lock = LOCK.course;
 
   async findByRef(ref: PortalRef) {
-    const row = await this.txHost.tx.portalCourse.findUnique({
-      where: byPortalRef(ref),
+    const row = await this.txHost.tx.courseVersion.findFirst({
+      where: { portalCourse: ofRecord(ref), sights: { some: sharedSight } },
     });
-    return row && toPortalCourse(row);
+    return (
+      row &&
+      PortalCourse.restore({
+        id: row.id,
+        ref,
+        props: { name: row.name, url: row.url, ...courseValues(row) },
+      })
+    );
   }
 
-  protected upsert({ id, ref, props }: Readonly<PortalCourseState>) {
+  protected async upsert({ id, ref, props }: Readonly<PortalCourseState>) {
+    const { tx } = this.txHost;
+    await tx.portalCourse.createMany({
+      data: { id, ...ofRecord(ref) },
+      skipDuplicates: true,
+    });
     const data = {
-      portal: ref.portal,
-      externalId: ref.externalId,
       ...props,
       // no meta is no value at all, not a json null
       meta: props.meta === null ? Prisma.DbNull : props.meta,
     };
-    return this.txHost.tx.portalCourse.upsert({
+    await tx.courseVersion.upsert({
       where: { id },
-      create: { id, ...data },
+      create: { id, portalCourseId: id, ...data },
       update: data,
     });
+    await tx.courseSight.upsert(this.sight(id));
   }
 }
