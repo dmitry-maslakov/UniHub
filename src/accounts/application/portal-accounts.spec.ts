@@ -11,6 +11,7 @@ import { catalogOf, poll } from '../../../test/discovered-plugins.js';
 import { FakeBus } from '../../../test/fake-bus.js';
 import { NotLinkableError, UnsupportedLinkError } from '../domain/errors.js';
 import { PortalLinks, type PortalLink } from '../domain/portal-links.js';
+import { AccountsChangedCommand } from '../../plugins/contracts.js';
 import { FakeVault, InMemoryAccounts } from './accounts.fakes.js';
 import { PortalUnavailableError, TokenRefusedError } from './errors.js';
 import { PortalAccounts } from './portal-accounts.js';
@@ -49,6 +50,7 @@ function accounts({
   const queries = new FakeBus([
     [IsAdminQuery, ({ userId }: IsAdminQuery) => userId === 'bo'],
   ]);
+  const commands = new FakeBus();
   const store = new InMemoryAccounts();
   const vault = new FakeVault();
   const policy = new PortalLinks(
@@ -60,11 +62,12 @@ function accounts({
     vault,
     plugins,
     queries.queries,
+    commands.commands,
   );
   service.onApplicationBootstrap();
   const setToken = (userId: string, p: PortalId, token = TOKEN) =>
     service.setToken(userId, p, new Secret(token));
-  return { service, store, vault, asked, setToken };
+  return { service, store, vault, asked, setToken, told: commands.sent };
 }
 
 describe('PortalAccounts', () => {
@@ -92,7 +95,7 @@ describe('PortalAccounts', () => {
 
   it("keeps the account for the same portal user's token, not for another's", async () => {
     let id = '4242';
-    const { store, setToken } = accounts({
+    const { store, setToken, told } = accounts({
       identify: async () => ({ id, expiresAt: null }),
     });
     const accountId = async () =>
@@ -105,8 +108,16 @@ describe('PortalAccounts', () => {
 
     id = '5151';
     await setToken('ana', MOODLE, '1~someone-elses');
-    expect(await accountId()).not.toBe(first);
+    const second = await accountId();
+    expect(second).not.toBe(first);
     expect(store.rows.size).toBe(1);
+
+    // plugins run the account linked, and forget the one it replaced
+    expect(told).toEqual([
+      new AccountsChangedCommand(MOODLE, { linked: [first], gone: [] }),
+      new AccountsChangedCommand(MOODLE, { linked: [first], gone: [] }),
+      new AccountsChangedCommand(MOODLE, { linked: [second], gone: [first] }),
+    ]);
   });
 
   it('takes a token only where the portal links by token, for admins from admins alone', async () => {
@@ -303,13 +314,94 @@ describe('PortalAccounts', () => {
     expect(ofUser).not.toHaveBeenCalled();
   });
 
-  it('unlinks the account and its credential, whatever the mode is now', async () => {
-    const { service, store, setToken } = accounts();
+  it('unlinks the account and its credential, whatever the mode is now, and plugins forget it', async () => {
+    const { service, store, setToken, told } = accounts();
     await setToken('ana', MOODLE);
+    const { id } = store.rows.get('ana:moodle')!.account;
+    told.length = 0;
     await service.unlink('ana', MOODLE);
     await service.unlink('ana', TEAMS);
 
     expect(store.rows.size).toBe(0);
+    expect(told).toEqual([new AccountsChangedCommand(MOODLE, { gone: [id] })]);
+  });
+
+  it("removes a deleted user's accounts, nobody else's, and plugins forget each", async () => {
+    const { service, store, setToken, told } = accounts();
+    await setToken('ana', MOODLE);
+    await setToken('bo', CANVAS);
+    const { id } = store.rows.get('ana:moodle')!.account;
+    told.length = 0;
+    await service.removeAllOf('ana');
+
+    expect([...store.rows.keys()]).toEqual(['bo:canvas']);
+    expect(told).toEqual([new AccountsChangedCommand(MOODLE, { gone: [id] })]);
+  });
+
+  it('runs a portal not shared for its accounts that read now, each with its own credential opened', async () => {
+    const until = new Date('2026-12-30T08:00:00Z');
+    const { service, store, setToken } = accounts({
+      identify: async () => ({ id: '4242', expiresAt: until }),
+    });
+    await setToken('ana', MOODLE);
+    await setToken('bo', MOODLE, '1~bo-pasted-token');
+    const id = (user: string) => store.rows.get(`${user}:moodle`)!.account.id;
+    const before = new Date('2026-12-01T00:00:00Z');
+
+    expect(await service.readers(TEAMS)).toEqual({ shared: true });
+    expect(await service.readers(MOODLE, before)).toEqual({
+      shared: false,
+      accounts: [id('ana'), id('bo')],
+    });
+    const bo = await service.credential(id('bo'), before);
+    expect(bo?.credential).toEqual({
+      kind: 'token',
+      token: expect.any(Secret),
+    });
+    if (bo?.credential.kind === 'token')
+      expect(bo.credential.token.reveal()).toBe('1~bo-pasted-token');
+    // past its expiry, or one the portal rejected since: none
+    expect(await service.readers(MOODLE, until)).toEqual({
+      shared: false,
+      accounts: [],
+    });
+    const ana = await service.credential(id('ana'), before);
+    expect(await service.credential(id('ana'), until)).toBeNull();
+    await service.rejected(id('ana'), ana!.seal);
+    expect(store.rows.get('ana:moodle')!.account.status).toBe('revoked');
+    expect(await service.credential(id('ana'), before)).toBeNull();
+    expect(await service.readers(MOODLE, before)).toEqual({
+      shared: false,
+      accounts: [id('bo')],
+    });
+    expect(await service.credential('nobody')).toBeNull();
+  });
+
+  it('revokes the credential a run had, not one the account was linked by again since', async () => {
+    const { service, store, setToken } = accounts();
+    await setToken('ana', MOODLE, '1~old');
+    const { id } = store.rows.get('ana:moodle')!.account;
+    const old = await service.credential(id);
+    // linked again by the same portal user while a run on the old one goes
+    await setToken('ana', MOODLE, '1~new');
+    expect(store.rows.get('ana:moodle')!.account.id).toBe(id);
+
+    await service.rejected(id, old!.seal);
+    expect(store.rows.get('ana:moodle')!.account.status).toBe('linked');
+    const fresh = await service.credential(id);
+    expect(fresh?.seal).not.toBe(old!.seal);
+    await service.rejected(id, fresh!.seal);
+    expect(store.rows.get('ana:moodle')!.account.status).toBe('revoked');
+  });
+
+  it("opens no credential of an account of a portal that's read as shared since", async () => {
+    const { store, setToken } = accounts();
+    await setToken('ana', MOODLE);
+    const { id } = store.rows.get('ana:moodle')!.account;
+    const shared = accounts({ links: {} }).service;
+    Object.assign(shared, { accounts: store });
+
+    expect(await shared.credential(id)).toBeNull();
   });
 
   it('stops at startup on a mode no connector here takes', () => {

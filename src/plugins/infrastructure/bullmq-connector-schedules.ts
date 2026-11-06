@@ -22,12 +22,15 @@ export class BullmqConnectorSchedules extends ConnectorSchedules {
     super();
   }
 
-  async set({ connection, pattern }: Schedule) {
-    await this.queue.upsertJobScheduler(
-      connection.key,
-      { pattern },
-      { name: TICK, data: jobOf(connection) },
-    );
+  async set({ connection, repeat }: Schedule) {
+    await this.queue.upsertJobScheduler(connection.key, repeat, {
+      name: TICK,
+      data: jobOf(connection),
+    });
+  }
+
+  async remove(connection: Connection) {
+    await this.queue.removeJobScheduler(connection.key);
   }
 
   async keepOnly(connections: readonly Connection[]) {

@@ -4,6 +4,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule } from '@nestjs/config';
 import { IngestModule } from '../ingest/contracts.js';
 import { roleConfig } from '../platform/role/role.config.js';
+import { AccountsChangedHandler } from './application/accounts-changed.handler.js';
 import { ConnectionDirectory } from './application/connection-directory.js';
 import { ConnectorRuns } from './application/connector-runs.js';
 import { ConnectorSchedules } from './application/connector-schedules.js';
@@ -20,8 +21,10 @@ import { OtelConnectorRuns } from './infrastructure/otel-connector-runs.js';
 import { HubReaderModule } from './infrastructure/sdk/hub-reader.module.js';
 import { pluginsConfig } from './plugins.config.js';
 
-// Finds the enabled plugins and runs the connectors among them; processing
-// runs the rest through PluginCatalog.
+// Finds the enabled plugins and runs the connectors among them, for the
+// shared account or for users' own ones (which the accounts module keeps
+// and answers PortalReadersQuery for); processing runs the rest through
+// PluginCatalog.
 @Module({
   imports: [
     ConfigModule.forFeature(pluginsConfig),
@@ -45,6 +48,7 @@ import { pluginsConfig } from './plugins.config.js';
     PollSchedule,
     PushConnections,
     SyncConnectionHandler,
+    AccountsChangedHandler,
     { provide: ConnectorSchedules, useClass: BullmqConnectorSchedules },
     { provide: ConnectorRuns, useClass: OtelConnectorRuns },
     ConnectorsWorker,

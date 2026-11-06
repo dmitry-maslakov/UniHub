@@ -6,7 +6,7 @@ describe('canvas settings', () => {
     CANVAS_TOKEN: '1~abc',
   };
 
-  it('need the school address and a token, and name a user agent', () => {
+  it('need the school address, and name a user agent', () => {
     expect(canvasSettings.parse(env)).toEqual({
       url: 'https://canvas.example.edu',
       token: '1~abc',
@@ -18,10 +18,14 @@ describe('canvas settings', () => {
     ).toBe('hub of A. Student');
   });
 
-  it('refuse a missing token or an address that is no https one', () => {
-    expect(canvasSettings.safeParse({ ...env, CANVAS_TOKEN: '' }).success).toBe(
-      false,
-    );
+  it("take no owner's token, for a Canvas read with users' own", () => {
+    for (const token of [undefined, ''])
+      expect(
+        canvasSettings.parse({ ...env, CANVAS_TOKEN: token }).token,
+      ).toBeNull();
+  });
+
+  it('refuse an address that is no https one', () => {
     for (const url of [
       'canvas.example.edu',
       'ftp://canvas.example.edu',

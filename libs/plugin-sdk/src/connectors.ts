@@ -1,12 +1,15 @@
 import type { Readable } from 'node:stream';
 import type { ContentHash, Json, PortalId } from '@app/kernel';
 import type { AccountLink } from '@app/kernel';
+import type { Credential } from './accounts.js';
+import type { InvalidRecordError } from './errors.js';
 import type { CourseRecord, FileRecord, ItemRecord } from './records.js';
 
 // Connectors bring data in from a portal. One is written for one account;
-// the hub runs it once per account.
-// poll: the hub calls poll() on the connector's schedule, never two runs of
-//       one account at once.
+// the hub runs it once per account: the shared one, or each user's own.
+// poll: the hub calls poll() on the connector's schedule (a user's account
+//       on a grid of its own, VIEW_MINUTES), never two runs of one account
+//       at once.
 // push: the connector keeps its own connection (websocket, long poll...) in
 //       run(). Webhooks will come with the first connector that needs them.
 
@@ -27,9 +30,20 @@ export interface PollConnectorOptions<
 export type PushConnectorOptions<L extends AccountLink = AccountLink> =
   ConnectorOptions<L>;
 
+// Whose a run is: the shared account, which the plugin's own settings give,
+// or a user's own account, by the credential they linked. Reveal the
+// credential only to make a request of the portal; it stays a Secret until
+// then. A run the portal refuses the credential of rejects with
+// CredentialRejectedError: the account reads nothing till it's linked
+// again.
+export type RunAccount =
+  { kind: 'shared' } | { kind: 'user'; credential(): Promise<Credential> };
+
 export interface ConnectorContext {
-  // account is 'shared' for portals everyone sees the same; per-user later
+  // account is 'shared' for a portal read as shared, else a user's own
+  // account's id: opaque, never a user
   connection: { portal: PortalId; account: string };
+  account: RunAccount;
   // bound to that connection
   ingest: PortalIngest;
   // Aborts when the hub wants the run over: a poll past the hub's time for
@@ -51,7 +65,59 @@ export interface PushesFromPortal {
   run(ctx: ConnectorContext): Promise<void>;
 }
 
+// how the account sees a record: locked for it (listed, not to be opened)
+export interface Seen {
+  locked?: boolean;
+}
+
+// One account's view of one course, sent as it sees it: every record the
+// account sees there, then end(), then the content of the files file()
+// said to fetch, once every pass of the run has ended (when a pass ends
+// would otherwise tell how long the downloads before it took, and so what
+// the hub had already). A course courses() didn't send is an
+// UnknownReferenceError (at end(), for a user's account), and so is a
+// file's item the pass didn't send before it. Records seen alike by several
+// accounts are kept once, so leave out of a record what says how the
+// account stands (read or not, its submission): it would make a version per
+// account. A file's bytes are fetched once per version of them (its size
+// and updatedAt), by the run that gets fetch: true; the others go on
+// without them.
+export interface CoursePass {
+  // the record names this pass's course, or none
+  item(record: ItemRecord, seen?: Seen): Promise<void>;
+  // fetch: this run downloads the file's content and sends it once every
+  // pass of the run has ended; false when the hub has it, or another run is
+  // fetching it, or it's locked or too large
+  file(record: FileRecord, seen?: Seen): Promise<{ fetch: boolean }>;
+  // The account's view of the course is now what this pass sent, and what
+  // it sent before but what `gone` names, by the portal's ids: what a
+  // listing that went through to the end no longer has. A record a listing
+  // that failed had stays, so a connector that can't tell gone from not
+  // listed this time names none.
+  end(gone?: { items?: string[]; files?: string[] }): Promise<void>;
+  // content of a file of the pass, once every pass of the run has ended;
+  // past the hub's limit for one file it is an InvalidRecordError
+  // (CONTENT_TOO_LARGE)
+  content(
+    fileExternalId: string,
+    content: Readable,
+  ): Promise<{ hash: ContentHash }>;
+}
+
+// What a connector sends. A portal read as shared may be sent record by
+// record (course, item, file, content, removals), as gRPC connectors do;
+// courses() and pass() send what one account sees as a whole, and are the
+// only way for a user's own account (the others are an InvalidRecordError,
+// SHARED_ONLY).
 export interface PortalIngest {
+  // the courses the account is in, after a listing of them that went
+  // through to the end: a user's account sees only these from now on. A
+  // record the hub refuses is left out and named, with why (as `course()`
+  // would reject it): skip its pass
+  courses(records: CourseRecord[]): Promise<{
+    refused: { externalId: string; error: InvalidRecordError }[];
+  }>;
+  pass(course: string): Promise<CoursePass>;
   course(record: CourseRecord): Promise<{ changed: boolean }>;
   item(record: ItemRecord): Promise<{ changed: boolean }>;
   // needsContent: the hub has no content for it yet, or it may have changed.

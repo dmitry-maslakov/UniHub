@@ -2,10 +2,13 @@ import { once } from 'node:events';
 import { setTimeout } from 'node:timers/promises';
 import type { ConfigType } from '@nestjs/config';
 import type { ConnectorContext, PushesFromPortal } from '@app/plugin-sdk';
-import { catalogOf, push } from '../../../test/discovered-plugins.js';
-import type { IngestService } from '../../ingest/contracts.js';
+import {
+  catalogOf,
+  directoryOf,
+  pluginSettings,
+  push,
+} from '../../../test/discovered-plugins.js';
 import type { pluginsConfig } from '../plugins.config.js';
-import { ConnectionDirectory } from './connection-directory.js';
 import type { ConnectorRuns } from './connector-runs.js';
 import { PushConnections } from './push-connections.js';
 
@@ -16,8 +19,7 @@ vi.mock('node:timers/promises', async (original) => {
 });
 
 const config: ConfigType<typeof pluginsConfig> = {
-  enabled: [],
-  runConnectors: true,
+  ...pluginSettings(),
   pollTimeoutMs: 60_000,
   stopTimeoutMs: 100,
   restartMaxMs: 5,
@@ -36,8 +38,7 @@ function connections(
   const catalog = catalogOf({
     pushes: Object.entries(connectors).map(([portal, c]) => push(portal, c)),
   });
-  const directory = new ConnectionDirectory({} as IngestService);
-  return new PushConnections(catalog, directory, settings, runs);
+  return new PushConnections(catalog, directoryOf(), settings, runs);
 }
 
 describe('PushConnections', () => {
@@ -49,7 +50,8 @@ describe('PushConnections', () => {
       teams: { run: (ctx) => (seen.push(ctx), untilStopped(ctx)) },
     });
 
-    running.start();
+    await running.start();
+    await vi.waitFor(() => expect(seen).toHaveLength(1));
     expect(seen.map((ctx) => ctx.connection)).toEqual([
       { portal: 'teams', account: 'shared' },
     ]);
@@ -59,9 +61,9 @@ describe('PushConnections', () => {
     expect(seen[0].signal.aborted).toBe(true);
   });
 
-  it('runs none on an instance without RUN_CONNECTORS', () => {
+  it('runs none on an instance without RUN_CONNECTORS', async () => {
     const run = vi.fn(never);
-    connections(
+    await connections(
       { teams: { run } },
       { ...config, runConnectors: false },
     ).start();
@@ -86,7 +88,7 @@ describe('PushConnections', () => {
       counted,
     );
 
-    running.start();
+    await running.start();
     await vi.waitFor(() => expect(runs).toBe(3));
     await running.onModuleDestroy();
     expect(runs).toBe(3);
@@ -114,7 +116,7 @@ describe('PushConnections', () => {
       { ...config, restartMaxMs: 60_000 },
     );
 
-    running.start();
+    await running.start();
     await vi.waitFor(() => expect(runs).toBe(4));
     const waits = wait.mock.calls.map(([ms]) => ms);
     await running.onModuleDestroy();
@@ -130,7 +132,7 @@ describe('PushConnections', () => {
       c: { run: never },
       d: { run: (ctx) => untilStopped(ctx).then(stopped) },
     });
-    running.start();
+    await running.start();
 
     const started = performance.now();
     await running.onModuleDestroy();

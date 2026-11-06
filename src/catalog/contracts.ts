@@ -2,6 +2,13 @@
 export * from './application/commands.js';
 export * from './application/queries.js';
 export type { PortalRef } from './domain/portal-ref.js';
+export {
+  atOnce,
+  publication,
+  type Publishing,
+  type Shown,
+} from './domain/publication.js';
+export type { Stamp } from './domain/view/view.repository.js';
 export { AcademicYear, CourseName, CourseSlug, Slug } from './domain/values.js';
 export {
   FILE_CONTENT_CHANGED,

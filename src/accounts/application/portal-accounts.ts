@@ -1,5 +1,6 @@
+import { createHash } from 'node:crypto';
 import { Injectable, type OnApplicationBootstrap } from '@nestjs/common';
-import { QueryBus } from '@nestjs/cqrs';
+import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { z } from 'zod';
 import { CredentialRejectedError } from '@app/plugin-sdk';
 import {
@@ -9,7 +10,12 @@ import {
   type Secret,
 } from '@app/kernel';
 import { IsAdminQuery } from '../../identity/contracts.js';
-import { PluginCatalog } from '../../plugins/contracts.js';
+import {
+  AccountsChangedCommand,
+  PluginCatalog,
+  type AccountCredential,
+  type PortalReaders,
+} from '../../plugins/contracts.js';
 import { CredentialVault } from '../domain/credential-vault.js';
 import { NotLinkableError } from '../domain/errors.js';
 import {
@@ -28,6 +34,12 @@ const nameOf = (error: unknown) => {
   const name = error instanceof Error ? error.name : typeof error;
   return /^[A-Za-z][\w$]{0,63}$/.test(name) ? name : 'Error';
 };
+
+// Which seal of an account's credential a run had, and nothing of the
+// credential: a hash of what's sealed, new each time it's sealed (a fresh
+// nonce), so a link again by the same token is another
+const sealOf = (sealed: string) =>
+  createHash('sha256').update(sealed).digest('base64url');
 
 // what the hub keeps of a connector's answer; anything else is the
 // connector failing
@@ -54,9 +66,10 @@ export interface PortalView {
 
 // Each user's own accounts of the portals that link them (PortalLinks),
 // linked by a token the user pastes, which is never read back: it's sealed
-// for the account (CredentialVault), and only a run of the account will
-// open it. Who it is on the portal comes from the portal's connector
-// (identify), asked as the user.
+// for the account (CredentialVault), and only a run of the account opens
+// it. Who it is on the portal comes from the portal's connector
+// (identify), asked as the user. Plugins run each account that reads, and
+// are told as accounts are linked and go.
 @Injectable()
 export class PortalAccounts implements OnApplicationBootstrap {
   constructor(
@@ -65,6 +78,7 @@ export class PortalAccounts implements OnApplicationBootstrap {
     private readonly vault: CredentialVault,
     private readonly plugins: PluginCatalog,
     private readonly queries: QueryBus,
+    private readonly commands: CommandBus,
   ) {}
 
   // A mode no connector here takes stops the app at startup, once every
@@ -111,6 +125,40 @@ export class PortalAccounts implements OnApplicationBootstrap {
     return { portals, accounts: accounts.map(({ id }) => id) };
   }
 
+  // whose views the portal's runs are: the shared account's, or those of
+  // its users' own accounts that read now
+  async readers(portal: PortalId, now = new Date()): Promise<PortalReaders> {
+    if (this.links.of(portal).mode === 'shared') return { shared: true };
+    const accounts = await this.accounts.linkedOf(portal, now);
+    return { shared: false, accounts: accounts.map(({ id }) => id) };
+  }
+
+  // The credential of an account that reads now, opened for its run, and
+  // which seal of it that is
+  async credential(
+    id: string,
+    now = new Date(),
+  ): Promise<AccountCredential | null> {
+    const found = await this.accounts.withCredential(id);
+    if (!found) return null;
+    const { account, sealed } = found;
+    const reads =
+      this.links.of(account.portal).mode === account.snapshot.mode &&
+      account.statusAt(now) === 'linked';
+    if (!reads) return null;
+    const token = this.vault.open(sealed, account.snapshot);
+    return { credential: { kind: 'token', token }, seal: sealOf(sealed) };
+  }
+
+  // A run found the portal no longer takes the account's credential of
+  // `seal`: revoked, unless it was linked again since by another one
+  async rejected(id: string, seal: string) {
+    const found = await this.accounts.withCredential(id);
+    if (!found || sealOf(found.sealed) !== seal) return;
+    found.account.revoke();
+    await this.accounts.saveStatus(found.account, found.sealed);
+  }
+
   // The user's account of the portal, linked by the token once the portal
   // takes it: the same portal user's account as before stays, another's
   // takes its place.
@@ -124,11 +172,27 @@ export class PortalAccounts implements OnApplicationBootstrap {
       user,
     );
     await this.accounts.save(account, this.vault.seal(token, account.snapshot));
+    const replaced = had && had.id !== account.id ? [had.id] : [];
+    await this.changed(portal, { linked: [account.id], gone: replaced });
   }
 
   // the account and its credential, whatever the portal's mode is now
   async unlink(userId: string, portal: PortalId) {
-    await this.accounts.remove(userId, portal);
+    const gone = await this.accounts.remove(userId, portal);
+    if (gone) await this.changed(portal, { gone: [gone] });
+  }
+
+  // a deleted user's, all of them
+  async removeAllOf(userId: string) {
+    for (const { id, portal } of await this.accounts.removeAllOf(userId))
+      await this.changed(portal, { gone: [id] });
+  }
+
+  private changed(
+    portal: PortalId,
+    change: { linked?: string[]; gone?: string[] },
+  ) {
+    return this.commands.execute(new AccountsChangedCommand(portal, change));
   }
 
   private isAdmin(userId: string) {

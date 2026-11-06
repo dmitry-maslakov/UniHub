@@ -28,9 +28,11 @@ export class Connection {
     return `${this.portal}__${this.account}`;
   }
 
-  // With per-user accounts "this user can't see it" isn't "gone for
-  // everyone": only what everyone sees may be removed.
-  get mayRemoveRecords() {
+  // The shared account's records are what everyone sees, so they may come
+  // record by record and be removed one by one; a user's own account's
+  // "can't see it" isn't "gone for everyone", so it sends what it sees as
+  // a whole, by passes (README, Portal accounts).
+  get shared() {
     return this.account === SHARED_ACCOUNT;
   }
 }

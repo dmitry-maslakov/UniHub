@@ -1,5 +1,5 @@
 import type { Json } from '@app/plugin-sdk';
-import type { Assignment, Topic } from './canvas.types.js';
+import type { Assignment, Module, Topic } from './canvas.types.js';
 
 // A record is the object as the whole course sees it (the sdk's
 // records.ts), but Canvas answers as things stand for the token's user:
@@ -13,6 +13,14 @@ export const forEveryone = {
   assignment: (a: Assignment) =>
     !a.only_visible_to_overrides && a.visible_to_everyone !== false,
 };
+
+// A module as a user's own account sees it, without its items: which of
+// them it lists differs from one account to the next, so they'd make a
+// version of the module per account, and each is a record of its own.
+export function ownModule(module: Module): Module {
+  const { items: _, ...own } = module;
+  return own;
+}
 
 // The user's own state: read or not, subscribed, what they may do, locked
 // for them, their submission, how far they got through a module (its

@@ -1,5 +1,7 @@
+import type { ConfigType } from '@nestjs/config';
 import type {
   AccountLink,
+  Credential,
   HandlesMessages,
   PollsPortal,
   ProcessesContent,
@@ -8,7 +10,15 @@ import type {
   UnpacksContent,
 } from '@app/plugin-sdk';
 import { PortalId } from '@app/kernel';
-import type { ConnectorTokens } from '../src/ingest/contracts.js';
+import type {
+  ConnectorTokens,
+  IngestService,
+} from '../src/ingest/contracts.js';
+import {
+  AccountCredentialQuery,
+  PortalReadersQuery,
+} from '../src/plugins/application/accounts.js';
+import { ConnectionDirectory } from '../src/plugins/application/connection-directory.js';
 import { PluginCatalog } from '../src/plugins/application/plugin-catalog.js';
 import type { Found } from '../src/plugins/application/plugin-discovery.js';
 import {
@@ -18,6 +28,11 @@ import {
   pushSpec,
   UnpackerSpec,
 } from '../src/plugins/domain/specs.js';
+import {
+  pluginsSettings,
+  type pluginsConfig,
+} from '../src/plugins/plugins.config.js';
+import { FakeBus } from './fake-bus.js';
 
 // Plugins as discovery would find them, for the unit specs of plugins and
 // of processing, which reads them through PluginCatalog.
@@ -74,3 +89,36 @@ export function catalogOf(found: Partial<Found>, external: string[] = []) {
   catalog.onModuleInit();
   return catalog;
 }
+
+// the plugins' settings as the app reads them, these set
+export const pluginSettings = (env: Record<string, string> = {}) =>
+  pluginsSettings.parse(env) as ConfigType<typeof pluginsConfig>;
+
+// Who runs are for: the users' own accounts `accounts` names for a portal,
+// linked by `credentials` (one with none no longer reads); the shared
+// account of any other portal
+export const directoryOf = (
+  accounts: Record<string, string[]> = {},
+  credentials: Record<string, Credential> = {},
+  ingest = {} as IngestService,
+) =>
+  new ConnectionDirectory(
+    ingest,
+    new FakeBus([
+      [
+        PortalReadersQuery,
+        ({ portal }: PortalReadersQuery) =>
+          accounts[portal]
+            ? { shared: false, accounts: accounts[portal] }
+            : { shared: true },
+      ],
+      [
+        AccountCredentialQuery,
+        ({ account }: AccountCredentialQuery) =>
+          credentials[account]
+            ? { credential: credentials[account], seal: `seal-of-${account}` }
+            : null,
+      ],
+    ]).queries,
+    pluginSettings(),
+  );

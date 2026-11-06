@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { Injectable, Module, type INestApplication } from '@nestjs/common';
+import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import type { Redis } from 'ioredis';
 import type { Response } from 'supertest';
 import {
@@ -14,6 +15,10 @@ import { CredentialVault } from '../src/accounts/domain/credential-vault.js';
 import type { PortalAccountState } from '../src/accounts/domain/portal-account.js';
 import type { Mail } from '../src/identity/domain/mailer.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
+import {
+  AccountCredentialQuery,
+  AccountRejectedCommand,
+} from '../src/plugins/contracts.js';
 import { REDIS } from '../src/platform/redis/redis.module.js';
 import { bootApp } from './app.js';
 import { accounts } from './accounts.js';
@@ -153,6 +158,28 @@ describe('portal accounts', { timeout: 20_000 }, () => {
       .get(CredentialVault)
       .open(credential!.sealed, row as PortalAccountState);
     expect(opened.reveal()).toBe(TOKENS.other);
+  });
+
+  it('revokes the token a run had once the portal refuses it, not one linked again since', async () => {
+    const jo = await signUp('jo@portals.test');
+    const prisma = app.get(PrismaService);
+    const where = { userId: await userId('jo@portals.test') };
+    await put(jo, 'linked', TOKENS.good).expect(204);
+    const { id } = await prisma.portalAccount.findFirstOrThrow({ where });
+    const run = await app.get(QueryBus).execute(new AccountCredentialQuery(id));
+    // linked again, the same portal user's account, while that run goes
+    await put(jo, 'linked', TOKENS.good).expect(204);
+
+    const commands = app.get(CommandBus);
+    await commands.execute(new AccountRejectedCommand(id, run!.seal));
+    expect(
+      await prisma.portalAccount.findFirstOrThrow({ where }),
+    ).toMatchObject({ id, status: 'linked' });
+    const now = await app.get(QueryBus).execute(new AccountCredentialQuery(id));
+    await commands.execute(new AccountRejectedCommand(id, now!.seal));
+    expect(
+      (await prisma.portalAccount.findFirstOrThrow({ where })).status,
+    ).toBe('revoked');
   });
 
   it("answers 422 for a token the portal doesn't take, 503 while it's away, 400 for one that's none", async () => {
