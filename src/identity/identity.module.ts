@@ -71,6 +71,7 @@ import { SignInMethodsController } from './infrastructure/http/sign-in-methods.c
           secret: config.secret,
           baseURL: config.baseURL,
           trustedOrigins: config.trustedOrigins,
+          clientIpHeaders: config.clientIpHeaders,
           google: config.google,
           fetchClientMetadata,
           onUserDeleted: (userId) =>
