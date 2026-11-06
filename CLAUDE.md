@@ -30,6 +30,7 @@ Declined:
 - one kind-to-answer table for HTTP and gRPC: each transport answers with its own exceptions
 - `auth:generate` without a valid `.env`: the CLI reads the same checked settings as the app (README: set the secret first)
 - `ConditionalModule.registerWhen` for `APP_ROLE`, to leave the workers out of an api process: it reads the environment once per process, so one e2e spec couldn't boot an api and a worker side by side. The libraries' own switches read the role per app instead (`BullRegistrar.register()`, the scheduler's options, the outbox's `relay.enabled`), and `ConnectorsWorker` and `SearchIndexWorker` check it before closing a worker that an api process never registered
+- Trusted Types and styles without `'unsafe-inline'` in the web app's CSP: Mantine writes its theme's `<style>` through `innerHTML` and a component's variables into its `style` attribute; scripts, images, fonts and connections stay `'self'`, so an injected style can't call out
 - racing an unpacker's `next()` against the walk's signal: an unpacker passes the signal to every wait (the sdk says so), and a race would only leave one that stalls anyway behind, still holding what it opened: `return()` waits for the `next()` before it
 
 Put off:
@@ -43,7 +44,7 @@ Put off:
 - OAuth for MCP clients (claude.ai connectors need it); API keys until then
 - an `Origin` allowlist on the MCP transport (the spec asks for it against DNS rebinding); MCP takes no cookies, so a page can't call it as the user
 - MCP tools answer JSON as text, not `structuredContent` with an `outputSchema`
-- device sign-in: approval screen details and shorter device sessions, with the web portal
+- device sign-in: shorter device sessions (the approval screen is the web app's `/device`)
 - helmet's `Cross-Origin-Resource-Policy: same-origin` stops another origin embedding file content (`<img>`, `<iframe>`); `same-site` if the web portal lives on a sibling subdomain
 - grants of a deleted course: when catalog can delete courses (an event for identity)
 - a read alias for the search index, moved to a new one (another generation or model) once the reconcile has filled it: until then searches answer from the new one, partly filled (README, Search index)

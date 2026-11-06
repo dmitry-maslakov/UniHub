@@ -20,7 +20,8 @@ Search by meaning needs an embedding model: `docker compose --profile models up 
 
 ## Layout
 
-- `src/` — the hub: its modules (`catalog`, `ingest`, `storage`, `processing`, `plugins`, `identity`, `access`, `accounts`), each used by the others only through its `contracts.ts` (a lint rule checks it)
+- `src/` — the hub: its modules (`catalog`, `ingest`, `storage`, `processing`, `plugins`, `identity`, `access`, `accounts`, `web`), each used by the others only through its `contracts.ts` (a lint rule checks it)
+- `web/` — the web app (Web, below), a project of its own
 - `src/platform/` — what the modules run on: `database` (Prisma, `@Transactional()`), `redis`, `queues` (BullMQ), `messaging` (the outbox; `AppModule` names its transports), `role` (`APP_ROLE`, what this process runs), `errors` (one answer per kind of domain error), `validation` (a route's schemas), `search` (the OpenSearch client), `metrics` (the app's own OpenTelemetry meter, served on `METRICS_PORT`); `app.module.ts` lists the modules and wires them into the platform, `app.setup.ts` sets the app up (HTTP, MCP and gRPC) for `main.ts` and the e2e tests alike, `main.ts` starts it, or a worker with no server
 - `libs/plugin-sdk` — everything a plugin may depend on, plugins never import the core directly; its `host.ts` is the hub's side (how it finds plugins), which plugins can't import
 - `libs/plugins/` — the built-in plugins (`canvas`, `office-text`, `plain-text`), each on the sdk alone. A worker thread's file is run by node as it is in the tests, types stripped, so it and what it imports name each other's `.ts` (`rewriteRelativeImportExtensions` lets tsc take that)
@@ -44,6 +45,24 @@ npm run test:e2e
 
 - unit specs (`*.spec.ts`, next to the code) check the rules: the domain on its own, the use cases on in-memory fakes of their ports (`*.fakes.ts` beside them; `test/` has the shared ones: `FakeBus`, `InMemoryBlobs`, `sha256` of real content, plugins as discovery finds them)
 - e2e specs (`test/*.e2e-spec.ts`) check only what fakes can't: how records are written and read back, what the read queries find and in what order, the locks, the outbox rolling back with its transaction, BullMQ's deduplication, gRPC, each route and MCP tool once (and one bad request to each that declares a schema, since nothing else sees it is attached), the whole pipeline once (`plugins.e2e-spec.ts`), the search index's writes, the texts' and the records', and their repair (`search-index.e2e-spec.ts`), what OpenSearch answers a search, by the words and by meaning, and what of it the reranker gets (`search.e2e-spec.ts`), who finds what through the search route and tool, and their shared limit (`search-api.e2e-spec.ts`), what each user reads of a portal read with users' own accounts, by every route and by search (`views.e2e-spec.ts`), the app with search off (`search-off.e2e-spec.ts`), an api process adding work that only a worker does (`roles.e2e-spec.ts`), what each process serves on its metrics port (`metrics.e2e-spec.ts`), and the text index's analyzers, whose rules live in OpenSearch (`search-analysis.e2e-spec.ts`: a word in Cyrillic, in Latin and without diacritics gives the same tokens, on the OpenSearch client alone). The others boot the app as `main.ts` sets it up (`bootApp()` in `test/app.ts`, with every role unless told; `bootWorker()` for a worker) on a database, redis db, folder and search indices (`unihub-e2e-*`) of their own (`test/env.ts`), made anew for every run, with `FakeEmbedder` and `FakeReranker` (`test/fake-models.ts`) for the models, so none is downloaded (the reranker busy, so the order they check is the index's, unless a spec gives it scores), and wait for what they wait on (the outbox's events, a job's state), never for a while
+
+## Web
+
+`web/` is the web app: Vite, React and TypeScript, TanStack Router (file-based) and Query, Mantine, Better Auth's React client, and the API's types generated from its OpenAPI document. It's laid out by Feature-Sliced Design (`app`, `pages`, `widgets`, `features`, `entities`, `shared`), which Steiger checks; its look is `DESIGN.md`, its product `PRODUCT.md`.
+
+The hub serves its build at `/` on the API's own origin (the `web` module, `@nestjs/serve-static`), so Better Auth's cookies need no CORS: every path but `/api`, `/.well-known` and a missing `/assets` file is the app's `index.html`, with a CSP of its own (`src/web/page-headers.ts`: scripts, styles, fonts and calls from the hub only, inline styles for Mantine, no form posts) and `Cache-Control: no-store`; the hashed assets are kept a year. `WEB_PATH` says where the build is.
+
+```bash
+cd web
+npm install
+npm run build          # then open the hub at http://localhost:3000
+npm run dev            # or Vite on :5173, /api proxied to the hub
+npm run lint && npm run steiger && npm run typecheck && npm test
+```
+
+For `npm run dev`, add `http://localhost:5173` to `TRUSTED_ORIGINS`: Better Auth refuses calls from an origin it doesn't trust. Without `SMTP_URL`, the confirmation and reset links are in the hub's log.
+
+The API's types (`web/src/shared/api/schema.d.ts`) are generated from `web/openapi.json`, which `test/openapi.e2e-spec.ts` checks against the hub's document. After changing a route or a schema: `npm run test:e2e -- -u test/openapi.e2e-spec.ts`, then `npm run api:generate` in `web/`; CI fails until both are committed.
 
 ## Users
 
