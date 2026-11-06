@@ -11,6 +11,7 @@ import type {
   ContentProcessorOptions,
   ProcessesContent,
 } from './processors.js';
+import type { ContentUnpackerOptions, UnpacksContent } from './unpackers.js';
 
 // The hub's side of the decorators: the marks it finds plugins by. Not
 // exported from index.ts; plugins never need it, and a lint rule keeps them
@@ -22,6 +23,8 @@ export const PushConnectorMark =
   DiscoveryService.createDecorator<PushConnectorOptions>();
 export const ContentProcessorMark =
   DiscoveryService.createDecorator<ContentProcessorOptions>();
+export const ContentUnpackerMark =
+  DiscoveryService.createDecorator<ContentUnpackerOptions>();
 export const AggregatorMark =
   DiscoveryService.createDecorator<AggregatorOptions>();
 
@@ -46,6 +49,9 @@ export function discover(discovery: DiscoveryService) {
     pushes: find<PushConnectorOptions, PushesFromPortal>(PushConnectorMark),
     processors: find<ContentProcessorOptions, ProcessesContent>(
       ContentProcessorMark,
+    ),
+    unpackers: find<ContentUnpackerOptions, UnpacksContent>(
+      ContentUnpackerMark,
     ),
     aggregators: find<AggregatorOptions, HandlesMessages>(AggregatorMark),
   };

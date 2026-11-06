@@ -1,5 +1,10 @@
 import { InvalidValueError, MediaType } from '@app/kernel';
-import { aggregatorSpec, pollSpec, ProcessorSpec } from './specs.js';
+import {
+  aggregatorSpec,
+  pollSpec,
+  ProcessorSpec,
+  UnpackerSpec,
+} from './specs.js';
 
 const pdf = MediaType.parse('application/pdf');
 
@@ -24,6 +29,25 @@ describe('ProcessorSpec', () => {
     expect(() =>
       ProcessorSpec.of({ name: 'pdf', version: 1, accepts: ['pdf'] }),
     ).toThrow(new InvalidValueError('accepts entry', 'pdf'));
+  });
+
+  it('refuses an extension of two, as a file has its last only', () => {
+    expect(() =>
+      ProcessorSpec.of({ name: 'tgz', version: 1, accepts: ['.tar.gz'] }),
+    ).toThrow(new InvalidValueError('accepts entry', '.tar.gz'));
+  });
+});
+
+describe('UnpackerSpec', () => {
+  it("matches as a processor's does, taking its entries as files are matched", () => {
+    const spec = UnpackerSpec.of({
+      name: 'archives',
+      version: 1,
+      accepts: ['.ZIP', 'Application/Zip'],
+    });
+
+    expect(spec.match({ name: 'labs.zip', mime: null })).toBe('.ZIP');
+    expect(spec.takes).toEqual(['.zip', 'application/zip']);
   });
 });
 

@@ -8,6 +8,7 @@ import {
   pollSpec,
   ProcessorSpec,
   pushSpec,
+  UnpackerSpec,
 } from '../domain/specs.js';
 
 // a transient provider's instance is a placeholder whose constructor never
@@ -36,11 +37,14 @@ export class NestPluginDiscovery extends PluginDiscovery {
   }
 
   find() {
-    const { polls, pushes, processors, aggregators } = discover(this.discovery);
+    const { polls, pushes, processors, unpackers, aggregators } = discover(
+      this.discovery,
+    );
     return {
       polls: found(polls, pollSpec),
       pushes: found(pushes, pushSpec),
       processors: found(processors, (o) => ProcessorSpec.of(o)),
+      unpackers: found(unpackers, (o) => UnpackerSpec.of(o)),
       aggregators: found(aggregators, aggregatorSpec),
     };
   }

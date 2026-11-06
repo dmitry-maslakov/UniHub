@@ -11,3 +11,4 @@ export * from './processors.js';
 export * from './reader.js';
 export * from './records.js';
 export * from './settings.js';
+export * from './unpackers.js';

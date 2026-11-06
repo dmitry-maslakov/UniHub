@@ -5,6 +5,7 @@ import { Injectable, Module } from '@nestjs/common';
 import {
   Aggregator,
   ContentProcessor,
+  ContentUnpacker,
   PollConnector,
   PushConnector,
   ITEM_INGESTED,
@@ -16,6 +17,8 @@ import {
   type ProcessesContent,
   type ProcessorInput,
   type PushesFromPortal,
+  type UnpackerInput,
+  type UnpacksContent,
 } from '@app/plugin-sdk';
 
 // Plugins the way a real one is written: only @app/plugin-sdk, no hub imports.
@@ -87,6 +90,23 @@ export class FakePdfProcessor implements ProcessesContent {
   }
 }
 
+// a .bundle is JSON, { path: text }: each path a member holding its text
+@ContentUnpacker({ name: 'fake-bundle', version: 1, accepts: ['.bundle'] })
+@Injectable()
+export class FakeUnpacker implements UnpacksContent {
+  async *unpack(input: UnpackerInput) {
+    const members: Record<string, string> = JSON.parse(
+      await text(await input.content()),
+    );
+    for (const [path, content] of Object.entries(members))
+      yield {
+        path,
+        size: Buffer.byteLength(content),
+        content: Readable.from([Buffer.from(content)]),
+      };
+  }
+}
+
 type ItemMessage = Message<typeof ITEM_INGESTED | typeof ITEM_REMOVED>;
 
 @Aggregator({ name: 'fake-feed', topics: [ITEM_INGESTED, ITEM_REMOVED] })
@@ -122,6 +142,7 @@ export class FlakyAggregator implements HandlesMessages<typeof ITEM_INGESTED> {
     FakePushConnector,
     FakeTextProcessor,
     FakePdfProcessor,
+    FakeUnpacker,
     FakeAggregator,
     FlakyAggregator,
   ],

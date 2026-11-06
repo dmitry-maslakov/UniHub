@@ -26,6 +26,10 @@ export class PluginCatalog implements OnModuleInit {
     return this.set.plugins.processors.find((p) => p.spec.name === name);
   }
 
+  unpacker(name: PluginName) {
+    return this.set.plugins.unpackers.find((u) => u.spec.name === name);
+  }
+
   aggregator(name: PluginName) {
     return this.set.plugins.aggregators.find((a) => a.spec.name === name);
   }
@@ -36,6 +40,19 @@ export class PluginCatalog implements OnModuleInit {
       const matched = processor.spec.match(file);
       return matched === null ? [] : [{ processor, matched }];
     });
+  }
+
+  // The unpacker that takes this file, with the entry it matched; null if
+  // none does. Its extension first, of all of them: one unpacker may take
+  // the file's extension and another its media type (an .epub a portal
+  // calls application/zip).
+  unpackerFor(file: { name: string; mime: MediaType | null }) {
+    for (const by of [{ name: file.name, mime: null }, file])
+      for (const unpacker of this.set.plugins.unpackers) {
+        const matched = unpacker.spec.match(by);
+        if (matched !== null) return { unpacker, matched };
+      }
+    return null;
   }
 
   aggregatorsFor(topic: Topic) {

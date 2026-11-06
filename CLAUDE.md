@@ -54,6 +54,7 @@ Put off:
 - searching file names and posts (`Item.raw`), not only the texts
 - paging search results: one window of up to 50 contents now
 - a CI job on real TEI servers with small models: the adapters are checked against msw's answers, the e2e specs run on fake models
+- random access for unpackers, a container's size and a ranged `content()` over its blob (yauzl's `RandomAccessReader`): an unpacker gets a stream from the start, as a processor does, so a zip, its directory at its end, is read whole into memory up to the unpacker's limit; when memory calls for it
 - search in health and monitoring (`/api/health/search`, the `search-index` queue's backlog, OpenSearch's disk): `/api/health` leaves search out, so an index away doesn't take down the app caddy waits on
 
 Done the standard way after all: global prefix, gRPC guard (#36).

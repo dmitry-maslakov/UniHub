@@ -4,6 +4,7 @@ import type {
   ProcessesContent,
   PushesFromPortal,
   Topic,
+  UnpacksContent,
 } from '@app/plugin-sdk';
 import { PortalId } from '@app/kernel';
 import type { ConnectorTokens } from '../src/ingest/contracts.js';
@@ -14,6 +15,7 @@ import {
   pollSpec,
   ProcessorSpec,
   pushSpec,
+  UnpackerSpec,
 } from '../src/plugins/domain/specs.js';
 
 // Plugins as discovery would find them, for the unit specs of plugins and
@@ -36,6 +38,13 @@ export const processor = (
   version = 1,
 ) => ({ spec: ProcessorSpec.of({ name, version, accepts }), instance });
 
+export const unpacker = (
+  name: string,
+  accepts: string[],
+  instance: UnpacksContent = { unpack: async function* () {} },
+  version = 1,
+) => ({ spec: UnpackerSpec.of({ name, version, accepts }), instance });
+
 export const aggregator = (
   name: string,
   topics: Topic[],
@@ -45,7 +54,13 @@ export const aggregator = (
 // the catalog of these plugins once the app's modules are up; `external`
 // are the portals with gRPC tokens
 export function catalogOf(found: Partial<Found>, external: string[] = []) {
-  const all = { polls: [], pushes: [], processors: [], aggregators: [] };
+  const all = {
+    polls: [],
+    pushes: [],
+    processors: [],
+    unpackers: [],
+    aggregators: [],
+  };
   const tokens = { portals: () => external.map((p) => PortalId.parse(p)) };
   const catalog = new PluginCatalog(
     { find: () => ({ ...all, ...found }) },
