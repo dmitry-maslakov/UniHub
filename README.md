@@ -335,6 +335,7 @@ docker compose -f deploy/compose.yml run --rm migrate npm run auth:create-admin 
 - `/api/health` checks the database and redis; compose waits for it
 - external connectors reach gRPC through caddy over TLS on the same address (`DOMAIN:443`); the gRPC port isn't published
 - logs are capped per container
+- behind a proxy that puts the client's address in a header of its own, `CLIENT_IP_HEADERS` names it (comma separated, lower-cased; the first one set wins) for Better Auth's per-address rate limits. By default it reads `X-Forwarded-For` and, finding more than one address there, knows none. Behind Cloudflare, `CLIENT_IP_HEADERS=cf-connecting-ip`: Cloudflare sets it and overwrites what a client sends. Set it only when every request comes through that proxy; otherwise a client sends the header itself and picks the address its limits count under. The hub's own limits go by Express's `req.ip` and `TRUST_PROXY` (1 behind one proxy, which takes the right-most `X-Forwarded-For` entry, the one the proxy added), so they need no header setting
 - give the domain an A record only (or turn on IPv6 in docker): docker forwards IPv6 through its proxy, and every IPv6 client would show up with one address
 - backups: `deploy/backup.sh <folder>` from cron dumps the database and copies new files; keep the folder, and `deploy/.env`, off the server too. The search index needs none (below)
 

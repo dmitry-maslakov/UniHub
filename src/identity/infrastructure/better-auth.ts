@@ -45,6 +45,9 @@ export interface AuthDeps {
   secret: string;
   baseURL: string;
   trustedOrigins: string[];
+  // headers that carry the client's address, for Better Auth's limits;
+  // unset, its default
+  clientIpHeaders?: string[];
   google?: { clientId: string; clientSecret: string };
   // how OAuth clients' metadata documents are fetched (CIMD)
   fetchClientMetadata: ClientMetadataResourceFetch;
@@ -60,6 +63,7 @@ export function createAuth({
   secret,
   baseURL,
   trustedOrigins,
+  clientIpHeaders,
   google,
   fetchClientMetadata,
   onUserDeleted,
@@ -99,6 +103,9 @@ export function createAuth({
     // what production does
     advanced: {
       disableOriginCheck: false,
+      ...(clientIpHeaders && {
+        ipAddress: { ipAddressHeaders: clientIpHeaders },
+      }),
       // work that can wait until the response is out (API key bookkeeping)
       backgroundTasks: {
         handler: (task) =>

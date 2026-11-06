@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { list, settings } from '../platform/config/settings.js';
+import { blank, list, settings } from '../platform/config/settings.js';
 
 // "https://app.example.com", nothing more: no path, no wildcard
 const isOrigin = (value: string) => {
@@ -9,6 +9,9 @@ const isOrigin = (value: string) => {
     return false;
   }
 };
+
+// an HTTP header's name (RFC 9110 token), as the proxy sends it
+const headerName = /^[a-z0-9!#$%&'*+.^_`|~-]+$/;
 
 export const identitySettings = z
   .object({
@@ -26,6 +29,13 @@ export const identitySettings = z
             'exact origins like https://app.example.com: Better Auth reads * as a wildcard',
         }),
       ),
+    ),
+    // Which headers carry the client's address for Better Auth's per-address
+    // limits, first one set wins; unset, its default (X-Forwarded-For).
+    // Express's req.ip needs nothing: TRUST_PROXY=1 takes the right-most
+    // X-Forwarded-For entry, the one the proxy appended
+    CLIENT_IP_HEADERS: blank(
+      list.pipe(z.array(z.string().toLowerCase().regex(headerName)).min(1)),
     ),
     // Google sign-in is on when both are set
     GOOGLE_CLIENT_ID: z.string().default(''),
@@ -47,6 +57,7 @@ export const identitySettings = z
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.BETTER_AUTH_URL,
     trustedOrigins: env.TRUSTED_ORIGINS,
+    clientIpHeaders: env.CLIENT_IP_HEADERS,
     google:
       env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
         ? {

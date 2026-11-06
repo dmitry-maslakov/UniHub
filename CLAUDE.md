@@ -37,7 +37,7 @@ Put off:
 
 - failed API key attempts limited per address, counting only failures: each costs a database lookup (caddy has no rate limits without a plugin). Not a limit on all calls per address. The named limits are access's, a route counted against one by `@Limited(name)` while the others skip it (`skipIf`); this one would join them with a tracker of its own
 - Better Auth's rate limits in Redis (`secondaryStorage`): in memory is right for the one instance there is; with a second one, they'd need sharing
-- Better Auth reads the client's address from `X-Forwarded-For` regardless of `TRUST_PROXY`: right behind caddy, which overwrites it; in production the app runs only behind it
+- Better Auth reads the client's address from `X-Forwarded-For` regardless of `TRUST_PROXY`: right behind caddy, which overwrites it; in production the app runs only behind it. Behind a proxy with a header of its own, `CLIENT_IP_HEADERS` names it (README, Deploy)
 - monitoring: traces, errors and logs go to NestJS Observe (see AGENTS.md), on OpenTelemetry's global providers; the metrics stay on the app's own `MeterProvider`, served only to a scraper on `METRICS_PORT` (README, Metrics), so neither gets the other's. Alerts on them (downtime, dead letters, a connector's last success) are the scraper's to set; disk space isn't among them
 - connector API keys, and moving the "portal both built-in and external" check to key creation (#33)
 - cursor paging for MCP, if agents need it

@@ -53,3 +53,30 @@ describe('TRUSTED_ORIGINS', () => {
     ).toEqual({ clientId: 'id', clientSecret: 's' });
   });
 });
+
+describe('CLIENT_IP_HEADERS', () => {
+  const headers = (CLIENT_IP_HEADERS?: string) =>
+    identitySettings.safeParse({ ...secret, CLIENT_IP_HEADERS });
+
+  it("is unset by default, which keeps Better Auth's", () => {
+    expect(headers().data?.clientIpHeaders).toBeUndefined();
+    expect(headers('').data?.clientIpHeaders).toBeUndefined();
+  });
+
+  it('takes one header', () => {
+    expect(headers('cf-connecting-ip').data?.clientIpHeaders).toEqual([
+      'cf-connecting-ip',
+    ]);
+  });
+
+  it('trims and lower-cases a list', () => {
+    expect(
+      headers(' CF-Connecting-IP , X-Real-IP ').data?.clientIpHeaders,
+    ).toEqual(['cf-connecting-ip', 'x-real-ip']);
+  });
+
+  it('refuses what is no header name', () => {
+    for (const bad of [' , ', 'x forwarded', 'cf-connecting-ip:', 'ip,,a b'])
+      expect(headers(bad).success).toBe(false);
+  });
+});
