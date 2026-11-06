@@ -275,7 +275,7 @@ A token a user pastes has no scopes, so the Canvas client only reads (GET and HE
 | Users pasting their own tokens | Instructure's API policy says an app used by several users must get their tokens by OAuth, and that asking users to make a token and enter it into a third-party app violates it. Keep `canvas=token/admins` (in practice, the operator) | governed by the institution's own rules: ask its Canvas admins before opening it |
 | OAuth | needs a developer key from the institution; the hub doesn't link by OAuth | the same, if the institution allows it |
 
-- an institution may stop students from making tokens or cap how long one lasts, and Canvas has revoked tokens in bulk before: a student's token can expire, and its account then shows `expired`, or `revoked` once Canvas refuses it, until the user links a new one
+- an institution may stop students from making tokens or cap how long one lasts: a student's token can expire, and its account then shows `expired`, or `revoked` once Canvas refuses it, until the user links a new one
 - tell the institution what the hub reads and who reads it, whichever Canvas it is
 
 ## External connectors
