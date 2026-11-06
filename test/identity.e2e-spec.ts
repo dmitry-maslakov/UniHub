@@ -110,7 +110,12 @@ describe('identity', { timeout: 20_000 }, () => {
     const code = await post('/device/code', { client_id: 'unihub-web' }).expect(
       200,
     );
-    const { device_code, user_code } = code.body as Record<string, string>;
+    const { device_code, user_code, verification_uri } = code.body as Record<
+      string,
+      string
+    >;
+    // the web app's approve page
+    expect(new URL(verification_uri).pathname).toBe('/device');
 
     await http()
       .get('/api/auth/device')
@@ -253,6 +258,24 @@ describe('identity', { timeout: 20_000 }, () => {
       { keyId: created.body.id, expiresIn: null },
       cookie,
     ).expect(400);
+  });
+
+  it('says whether Google sign-in is on, to anyone', async () => {
+    await http()
+      .get('/api/sign-in-methods')
+      .expect(200)
+      .expect(({ body }) => expect(body).toEqual({ google: false }));
+  });
+
+  it("takes only JSON on the hub's routes, which no form elsewhere can send", async () => {
+    await signUp('fa@uni.test');
+    await makeAdmin('fa@uni.test');
+    const cookie = await signIn('fa@uni.test', 'correct horse 1');
+    const create = () =>
+      http().post('/api/courses').set('origin', ORIGIN).set('cookie', cookie);
+
+    await create().type('form').send('slug=form-os&name=OS').expect(400);
+    await create().send({ slug: 'json-os', name: 'OS' }).expect(201);
   });
 
   // the admin route that sends these is access's (access.e2e-spec)

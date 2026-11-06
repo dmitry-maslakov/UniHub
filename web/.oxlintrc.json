@@ -1,0 +1,20 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["react", "typescript", "oxc", "jsx-a11y"],
+  "ignorePatterns": [
+    "src/app/routeTree.gen.ts",
+    "src/shared/api/schema.d.ts",
+    "dist"
+  ],
+  "rules": {
+    "react/rules-of-hooks": "error",
+    "react/only-export-components": ["warn", { "allowConstantExport": true }],
+    "react/no-danger": "error"
+  },
+  "overrides": [
+    {
+      "files": ["src/app/routes/**"],
+      "rules": { "react/only-export-components": "off" }
+    }
+  ]
+}

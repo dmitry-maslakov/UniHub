@@ -19,6 +19,8 @@ export const testEnv = {
   // db 15: far from the 0 a developer normally uses, it gets flushed
   REDIS_URL: withPath(process.env.REDIS_URL ?? 'redis://localhost:6379', '/15'),
   STORAGE_PATH: join(tmpdir(), 'unihub-e2e'),
+  // web.e2e-spec.ts puts a build of its own there
+  WEB_PATH: join(tmpdir(), 'unihub-e2e-web'),
   OPENSEARCH_URL: process.env.OPENSEARCH_URL ?? 'http://localhost:9200',
   OPENSEARCH_INDEX_PREFIX: 'unihub-e2e',
   EMBEDDING_URL: 'http://embedder.invalid',

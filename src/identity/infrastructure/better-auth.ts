@@ -180,6 +180,8 @@ export function createAuth({
       // sign in by QR: a new screen shows a code, a signed-in phone approves it
       deviceAuthorization({
         validateClient: (clientId) => DEVICE_CLIENTS.includes(clientId),
+        // the web app's approve page, on the hub's own origin
+        verificationUri: '/device',
       }),
       // for MCP clients. The plugin's limit only resets after a quiet
       // window, so a steadily working agent gets locked out; MCP routes

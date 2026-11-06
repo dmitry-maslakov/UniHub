@@ -1,0 +1,66 @@
+{
+  "name": "unihub-web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b",
+    "lint": "oxlint",
+    "steiger": "steiger ./src",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "format": "prettier --write .",
+    "api:generate": "openapi-typescript ./openapi.json -o ./src/shared/api/schema.d.ts"
+  },
+  "dependencies": {
+    "@better-auth/api-key": "^1.7.15",
+    "@better-auth/oauth-provider": "^1.7.15",
+    "@fontsource-variable/onest": "^5.3.1",
+    "@mantine/core": "^9.7.5",
+    "@mantine/form": "^9.7.5",
+    "@mantine/hooks": "^9.7.5",
+    "@mantine/modals": "^9.7.5",
+    "@mantine/notifications": "^9.7.5",
+    "@tabler/icons-react": "^3.50.0",
+    "@tanstack/react-query": "^5.106.1",
+    "@tanstack/react-router": "^1.170.46",
+    "better-auth": "^1.7.15",
+    "openapi-fetch": "^0.17.0",
+    "openapi-react-query": "^0.5.4",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@feature-sliced/steiger-plugin": "^0.8.2",
+    "@tanstack/router-plugin": "^1.168.48",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.8",
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "jsdom": "^31.0.0",
+    "msw": "^3.0.4",
+    "openapi-typescript": "^7.13.0",
+    "oxlint": "^1.90.0",
+    "postcss": "^8.5.32",
+    "postcss-preset-mantine": "^1.18.0",
+    "postcss-simple-vars": "^7.0.1",
+    "prettier": "^3.9.10",
+    "steiger": "^0.9.0",
+    "typescript": "~6.0.3",
+    "vite": "^8.3.6",
+    "vitest": "^5.1.0"
+  },
+  "overrides": {
+    "openapi-typescript": {
+      "typescript": "$typescript"
+    }
+  }
+}

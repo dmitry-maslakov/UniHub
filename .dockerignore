@@ -1,6 +1,8 @@
 .git
 node_modules
 dist
+web/node_modules
+web/dist
 # generated in the image; a local copy would overwrite it
 src/generated
 src/ingest/infrastructure/grpc/generated

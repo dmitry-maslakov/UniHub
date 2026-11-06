@@ -1,0 +1,21 @@
+/* What the browser draws itself, in the app's colors (DESIGN.md) */
+::selection {
+  background: var(--mantine-primary-color-light);
+}
+
+:root {
+  caret-color: var(--mantine-primary-color-filled);
+  accent-color: var(--mantine-primary-color-filled);
+  scrollbar-color: var(--mantine-color-default-border) transparent;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+  letter-spacing: -0.015em;
+}
+
+p {
+  text-wrap: pretty;
+}

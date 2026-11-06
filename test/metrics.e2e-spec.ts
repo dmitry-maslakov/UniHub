@@ -80,6 +80,8 @@ describe('metrics', () => {
       { timeout: 10_000, interval: 200 },
     );
 
-    await request(api.getHttpServer()).get('/metrics').expect(404);
+    // nor on the app's own port, where any other path is the web app's
+    const onApp = await request(api.getHttpServer()).get('/metrics');
+    expect(onApp.text).not.toContain('# HELP');
   }, 30_000);
 });

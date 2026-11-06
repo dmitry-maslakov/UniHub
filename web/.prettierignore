@@ -1,0 +1,4 @@
+dist
+src/app/routeTree.gen.ts
+src/shared/api/schema.d.ts
+openapi.json

@@ -34,6 +34,7 @@ import {
 } from './infrastructure/mcp-settings.js';
 import { PrismaCourseAccessRepository } from './infrastructure/prisma-course-access.repository.js';
 import { PrismaReaderRepository } from './infrastructure/prisma-reader.repository.js';
+import { SignInMethodsController } from './infrastructure/http/sign-in-methods.controller.js';
 
 // Users, sign-in and who may read what. Better Auth serves /api/auth/* and
 // guards every HTTP route; a route that needs no user says @AllowAnonymous().
@@ -75,11 +76,14 @@ import { PrismaReaderRepository } from './infrastructure/prisma-reader.repositor
           onUserDeleted: (userId) =>
             events.publish(new UserDeletedEvent(userId)),
         }),
+        // the hub's own routes take JSON only, which no form on another
+        // site can send with the user's cookie (Better Auth checks Origin)
+        bodyParser: { urlencoded: { enabled: false } },
       }),
     }),
     ConfigModule.forFeature(identityConfig),
   ],
-  controllers: [WellKnownController],
+  controllers: [SignInMethodsController, WellKnownController],
   providers: [
     GrantCourseAccessHandler,
     RevokeCourseAccessHandler,
