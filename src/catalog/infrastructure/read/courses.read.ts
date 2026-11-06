@@ -7,7 +7,10 @@ import {
   ListCoursesQuery,
   type CourseDto,
 } from '../../application/queries.js';
+import { SHARED_ACCOUNT } from '@app/kernel';
+import { portalCourseSlug, slugOfPortalCourse } from '../../domain/values.js';
 import { courseValues, portalOf, seenByShared } from '../rows.js';
+import { courseSeen, shows } from './viewers.js';
 
 // a portal course as the shared account sees it: its version
 const sharedVersion = {
@@ -15,49 +18,114 @@ const sharedVersion = {
   take: 1,
 } as const;
 
+const byPortalCourse = (a: { slug: string }, b: { slug: string }) =>
+  a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0;
+
 @QueryHandler(ListCoursesQuery)
 export class ListCoursesHandler implements IQueryHandler<ListCoursesQuery> {
   constructor(@InjectTransactionHost() private readonly txHost: PrismaTxHost) {}
 
-  // the courses and their portal courses in one go, whatever their number
-  async execute(): Promise<CourseDto[]> {
-    const courses = await this.txHost.tx.course.findMany({
-      orderBy: { slug: 'asc' },
+  // the courses and their portal courses in one go, whatever their number;
+  // of one slug, the admins' courses or the portal courses alone
+  async execute({ viewers, slug }: ListCoursesQuery): Promise<CourseDto[]> {
+    const { tx } = this.txHost;
+    const now = new Date();
+    const { accounts, shared } = viewers;
+    const own = slug === undefined ? undefined : slugOfPortalCourse(slug);
+    // a portal course with each its name as the viewers see it
+    const portalCourse = {
       select: {
         id: true,
-        slug: true,
-        name: true,
-        links: {
-          where: {
-            portalCourse: { versions: { some: { sights: seenByShared } } },
-          },
-          // postgres puts nulls last: the portal courses that span years
-          orderBy: [{ year: 'asc' }, { portalCourseId: 'asc' }],
-          select: {
-            year: true,
-            portalCourse: {
-              select: {
-                id: true,
-                portal: true,
-                externalId: true,
-                versions: { ...sharedVersion, select: { name: true } },
-              },
-            },
-          },
+        portal: true,
+        externalId: true,
+        versions: {
+          where: { sights: { some: courseSeen(viewers, now) } },
+          take: 1,
+          select: { name: true },
         },
       },
+    } as const;
+    const seenBy = (account: string | { in: string[] }) => ({
+      versions: { some: { sights: { some: { account, ...shows(now) } } } },
     });
-    return courses.map(({ links, ...course }) => ({
+    // through the shared account in a course granted, or the user's own
+    const sharedPart = {
+      ...(shared.courses && { courseId: { in: [...shared.courses] } }),
+      portalCourse: {
+        portal: { notIn: [...shared.except] },
+        ...seenBy(SHARED_ACCOUNT),
+      },
+    };
+    const ownPart = { portalCourse: seenBy({ in: [...accounts] }) };
+    const [courses, unlinked] = await Promise.all([
+      own
+        ? []
+        : tx.course.findMany({
+            where: {
+              ...(slug !== undefined && { slug }),
+              // an admin's every one
+              ...(shared.courses && {
+                OR: [
+                  { id: { in: [...shared.courses] } },
+                  { links: { some: ownPart } },
+                ],
+              }),
+            },
+            orderBy: { slug: 'asc' },
+            select: {
+              id: true,
+              slug: true,
+              name: true,
+              links: {
+                where: { OR: [sharedPart, ownPart] },
+                // postgres puts nulls last: the portal courses that span
+                // years
+                orderBy: [{ year: 'asc' }, { portalCourseId: 'asc' }],
+                select: { year: true, portalCourse },
+              },
+            },
+          }),
+      accounts.length && own !== null
+        ? tx.portalCourse.findMany({
+            where: {
+              link: null,
+              ...own,
+              ...seenBy({ in: [...accounts] }),
+            },
+            ...portalCourse,
+          })
+        : [],
+    ]);
+    const part = (
+      { versions, ...course }: (typeof unlinked)[number],
+      year: number | null,
+    ) => ({
       ...course,
-      portalCourses: links.map(
-        ({ year, portalCourse: { versions, ...portalCourse } }) => ({
-          ...portalCourse,
-          portal: portalOf(portalCourse),
-          name: versions[0].name,
-          year,
-        }),
-      ),
-    }));
+      portal: portalOf(course),
+      name: versions[0].name,
+      year,
+    });
+    return [
+      ...courses.map(({ links, ...course }) => ({
+        ...course,
+        portalCourses: links.map(({ year, portalCourse }) =>
+          part(portalCourse, year),
+        ),
+      })),
+      ...unlinked
+        .map((course) => {
+          const entry = part(course, null);
+          return {
+            id: entry.id,
+            slug: portalCourseSlug(entry.portal, entry.externalId),
+            name: entry.name,
+            portalCourses: [entry],
+          };
+        })
+        // a hashed id is found by its portal, then by its slug
+        .filter((course) => slug === undefined || course.slug === slug)
+        .sort(byPortalCourse),
+    ];
   }
 }
 

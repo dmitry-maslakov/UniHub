@@ -5,7 +5,7 @@ import {
   ApiOkResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { Slug } from '../../../catalog/contracts.js';
+import { CourseSlug } from '../../../catalog/contracts.js';
 import { CurrentUserId } from '../../../identity/contracts.js';
 import { CourseReader } from '../../application/course-reader.js';
 import { pageSchema, type Page } from '../../application/page.js';
@@ -33,7 +33,7 @@ export class CoursesController {
   @ApiNotFoundResponse()
   items(
     @CurrentUserId() userId: string,
-    @Param('slug', { schema: Slug }) slug: Slug,
+    @Param('slug', { schema: CourseSlug }) slug: CourseSlug,
     @Query({ schema: pageSchema }) page: Page,
   ): Promise<ItemResponse[]> {
     return this.reader.items(userId, slug, page);
@@ -44,7 +44,7 @@ export class CoursesController {
   @ApiNotFoundResponse()
   files(
     @CurrentUserId() userId: string,
-    @Param('slug', { schema: Slug }) slug: Slug,
+    @Param('slug', { schema: CourseSlug }) slug: CourseSlug,
     @Query({ schema: pageSchema }) page: Page,
   ): Promise<FileResponse[]> {
     return this.reader.files(userId, slug, page);

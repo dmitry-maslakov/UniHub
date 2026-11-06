@@ -29,6 +29,15 @@ export class PortalLinks {
       .sort();
   }
 
+  // the portals read with users' own accounts, in order: every one whose
+  // mode isn't shared
+  readWithAccounts(): PortalId[] {
+    return [...this.byPortal]
+      .filter(([, link]) => link.mode !== 'shared')
+      .map(([portal]) => portal)
+      .sort();
+  }
+
   // NotLinkableError unless the user may link an account of the portal by
   // `mode`: it isn't the portal's, or only admins may and they aren't one.
   // The same answer either way, so it tells no one more than that.

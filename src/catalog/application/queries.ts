@@ -1,6 +1,7 @@
 import { Query } from '@nestjs/cqrs';
 import type { ContentHash, Json, MediaType, PortalId } from '@app/kernel';
 import type { PortalRef } from '../domain/portal-ref.js';
+import type { CourseSlug } from '../domain/values.js';
 
 // What other modules read from catalog: shapes of their own, so catalog's
 // records can change without breaking them. Read straight from the database
@@ -68,13 +69,20 @@ export interface FileDto {
   removed: boolean;
 }
 
-// a file as a course shows it, and that course
+// a file as a course shows it, and that course (ListCoursesQuery's id)
 export interface CourseFileDto extends FileDto {
   courseId: string;
 }
 
+// A post as the viewers read it: listed once their view shows it, its
+// body (`raw`) only once it opens it too (not locked for their account,
+// past its hold), as a file's content is
+export interface ViewedItemDto extends Omit<ItemDto, 'raw'> {
+  raw: Json | null;
+}
+
 // a post as a course shows it, and that course
-export interface CourseItemDto extends ItemDto {
+export interface CourseItemDto extends ViewedItemDto {
   courseId: string;
 }
 
@@ -97,20 +105,46 @@ export interface VisibleContentDto {
   path: string;
 }
 
-export class ListCoursesQuery extends Query<CourseDto[]> {}
+// Whose views a user reads (access works it out, README: Portal accounts).
+// In the portals read as shared, all but `except`, the shared account's,
+// of the courses granted them (`courses`, null for every one); in the
+// others, what their own `accounts` see, whole, linked to a course or not.
+// A reader query finds only what these see now, and a file's content only
+// once their view opens it.
+export interface Viewers {
+  accounts: readonly string[];
+  shared: { courses: readonly string[] | null; except: readonly PortalId[] };
+}
 
-// by its slug, or by the id catalog gave it
-export class FindCourseQuery extends Query<CourseRef | null> {
-  constructor(public readonly by: { slug: string } | { id: string }) {
+// The courses the viewers read, by slug, each with its portal courses in
+// their view: a course granted, whatever it holds of them, or one that
+// links a portal course their own accounts see; then, by slug too, the
+// portal courses their own accounts see that no course links, each a
+// course of its own (portalCourseSlug, its id the portal course's). With
+// `slug`, the one of that slug alone, if they read it.
+export class ListCoursesQuery extends Query<CourseDto[]> {
+  constructor(
+    public readonly viewers: Viewers,
+    public readonly slug?: CourseSlug,
+  ) {
     super();
   }
 }
 
-// what the course's portals published, newest first, the ones a course
-// shows (see GetCourseItemQuery)
-export class ListCourseItemsQuery extends Query<ItemDto[]> {
+// an admin's course by the id catalog gave it
+export class FindCourseQuery extends Query<CourseRef | null> {
+  constructor(public readonly by: { id: string }) {
+    super();
+  }
+}
+
+// What these portal courses (a course's, as ListCoursesQuery gives them)
+// published, newest first, the ones the viewers see (see
+// GetCourseItemQuery)
+export class ListCourseItemsQuery extends Query<ViewedItemDto[]> {
   constructor(
-    public readonly courseId: string,
+    public readonly viewers: Viewers,
+    public readonly portalCourseIds: readonly string[],
     public readonly offset: number,
     public readonly limit: number,
   ) {
@@ -118,11 +152,12 @@ export class ListCourseItemsQuery extends Query<ItemDto[]> {
   }
 }
 
-// the course's files by folder and name, the ones a course shows (see
+// their files by folder and name, the ones the viewers see (see
 // GetCourseFileQuery)
 export class ListCourseFilesQuery extends Query<FileDto[]> {
   constructor(
-    public readonly courseId: string,
+    public readonly viewers: Viewers,
+    public readonly portalCourseIds: readonly string[],
     public readonly offset: number,
     public readonly limit: number,
   ) {
@@ -130,34 +165,48 @@ export class ListCourseFilesQuery extends Query<FileDto[]> {
   }
 }
 
-// A file and its course, if a course shows it: not removed, not attached to
-// a removed post, in a portal course linked to a course. Null otherwise.
+// A file and its course (as ListCoursesQuery names it), if the viewers see
+// it: in a portal course, and attached to no post or one they see too.
+// Null otherwise. Its content is null until their view opens it.
 export class GetCourseFileQuery extends Query<CourseFileDto | null> {
-  constructor(public readonly fileId: string) {
+  constructor(
+    public readonly viewers: Viewers,
+    public readonly fileId: string,
+  ) {
     super();
   }
 }
 
-// the files these courses show (see GetCourseFileQuery) that have content,
-// by folder and name: what search may look through
+// the files the viewers see (see GetCourseFileQuery) whose content their
+// view opens, of these portal courses or of all, by folder and name: what
+// search may look through
 export class ListVisibleContentQuery extends Query<VisibleContentDto[]> {
-  constructor(public readonly courseIds: readonly string[]) {
+  constructor(
+    public readonly viewers: Viewers,
+    public readonly portalCourseIds: readonly string[] | null,
+  ) {
     super();
   }
 }
 
-// A post and its course, if a course shows it: not removed, in a portal
-// course linked to a course. Null otherwise.
+// A post and its course, if the viewers see it, in a portal course. Null
+// otherwise.
 export class GetCourseItemQuery extends Query<CourseItemDto | null> {
-  constructor(public readonly itemId: string) {
+  constructor(
+    public readonly viewers: Viewers,
+    public readonly itemId: string,
+  ) {
     super();
   }
 }
 
-// the posts these courses show (see GetCourseItemQuery): what search may
-// look through
+// the posts the viewers see (see GetCourseItemQuery) and their view opens,
+// of these portal courses or of all: what search may look through
 export class ListVisibleItemsQuery extends Query<VisibleItemDto[]> {
-  constructor(public readonly courseIds: readonly string[]) {
+  constructor(
+    public readonly viewers: Viewers,
+    public readonly portalCourseIds: readonly string[] | null,
+  ) {
     super();
   }
 }

@@ -29,7 +29,8 @@ import {
 import { courseLink, ExternalId, newCourse } from './requests.js';
 
 // What admins set up: courses, and which portal courses each is made of.
-// A portal course is named the way its portal names it.
+// A portal course is named the way its portal names it, and answered the
+// same whether the hub has it or not.
 @ApiTags('admin')
 @ApiBearerAuth()
 @ApiForbiddenResponse({ description: 'for admins only' })
@@ -48,9 +49,10 @@ export class CoursesAdminController {
   @Put('portal-courses/:portal/:externalId/course')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiNoContentResponse({
-    description: 'linked; a portal course linked elsewhere moves here',
+    description:
+      'linked, whether the hub has the portal course yet or not; one linked elsewhere moves here',
   })
-  @ApiNotFoundResponse({ description: 'no such course or portal course' })
+  @ApiNotFoundResponse({ description: 'no such course' })
   async link(
     @Param('portal', { schema: PortalId }) portal: PortalId,
     @Param('externalId', { schema: ExternalId }) externalId: string,
@@ -64,7 +66,6 @@ export class CoursesAdminController {
   @Delete('portal-courses/:portal/:externalId/course')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiNoContentResponse({ description: 'not linked to any course now' })
-  @ApiNotFoundResponse({ description: 'no such portal course' })
   async unlink(
     @Param('portal', { schema: PortalId }) portal: PortalId,
     @Param('externalId', { schema: ExternalId }) externalId: string,

@@ -2,14 +2,16 @@ import { UseFilters } from '@nestjs/common';
 import { Payload } from '@nestjs/microservices';
 import { McpController, Tool } from '@rekog/mcp-nest';
 import { z } from 'zod';
-import { Slug } from '../../../catalog/contracts.js';
+import { CourseSlug } from '../../../catalog/contracts.js';
 import { CourseReader } from '../../application/course-reader.js';
 import { pageSchema, textPageSchema } from '../../application/page.js';
 import { McpErrorsFilter } from './mcp-errors.filter.js';
 import { McpUserId } from './mcp-user-id.js';
 import { json, readOnly } from './tool-results.js';
 
-const inCourse = pageSchema.extend({ course: Slug.describe('course slug') });
+const inCourse = pageSchema.extend({
+  course: CourseSlug.describe('course slug'),
+});
 const post = z.object({
   item: z.uuid().describe('item id from list_items or search'),
 });
@@ -37,7 +39,7 @@ export class CourseTools {
   @Tool({
     name: 'list_items',
     description:
-      "Posts, announcements and pages of a course, newest first. `raw` is the portal's own data and usually holds the text.",
+      "Posts, announcements and pages of a course, newest first. `raw` is the portal's own data and usually holds the text; null while a post is locked for the user, or not open yet.",
     parameters: inCourse,
     annotations: readOnly,
   })
@@ -51,7 +53,7 @@ export class CourseTools {
   @Tool({
     name: 'read_item',
     description:
-      "One post, announcement or page, as list_items lists it: open a post search found. `raw` is the portal's own data and usually holds the text.",
+      "One post, announcement or page, as list_items lists it: open a post search found. `raw` is the portal's own data and usually holds the text; null while it's locked for the user, or not open yet.",
     parameters: post,
     annotations: readOnly,
   })

@@ -4,7 +4,7 @@ import { QueryBus } from '@nestjs/cqrs';
 import {
   ListCourseFilesQuery,
   ListCourseItemsQuery,
-  type Slug,
+  type CourseSlug,
 } from '../../catalog/contracts.js';
 import {
   FindMemberQuery,
@@ -33,13 +33,18 @@ export class CourseReader {
   ) {}
 
   async courses(userId: string) {
-    return (await readableCourses(this.queries, userId)).map(courseView);
+    const { courses } = await readableCourses(this.queries, userId);
+    return courses.map(courseView);
   }
 
-  async items(userId: string, slug: Slug, { offset, limit }: Page) {
-    const course = await readableCourse(this.queries, userId, slug);
+  async items(userId: string, slug: CourseSlug, { offset, limit }: Page) {
+    const { viewers, portalCourseIds } = await readableCourse(
+      this.queries,
+      userId,
+      slug,
+    );
     const items = await this.queries.execute(
-      new ListCourseItemsQuery(course.id, offset, limit),
+      new ListCourseItemsQuery(viewers, portalCourseIds, offset, limit),
     );
     return items.map(itemView);
   }
@@ -49,10 +54,14 @@ export class CourseReader {
     return itemView(await readableItem(this.queries, userId, itemId));
   }
 
-  async files(userId: string, slug: Slug, { offset, limit }: Page) {
-    const course = await readableCourse(this.queries, userId, slug);
+  async files(userId: string, slug: CourseSlug, { offset, limit }: Page) {
+    const { viewers, portalCourseIds } = await readableCourse(
+      this.queries,
+      userId,
+      slug,
+    );
     const files = await this.queries.execute(
-      new ListCourseFilesQuery(course.id, offset, limit),
+      new ListCourseFilesQuery(viewers, portalCourseIds, offset, limit),
     );
     return files.map(fileView);
   }
@@ -101,8 +110,9 @@ export class CourseReader {
     return { name, mime, stream: await this.blobs.get(hash) };
   }
 
-  // A file without content yet has nothing to read; a member is read only
-  // inside a file the user may read, and only if it was kept.
+  // A file without content yet, or whose content the user's view doesn't
+  // open yet, has nothing to read; a member is read only inside a file the
+  // user may read, and only if it was kept.
   private async readableContent(
     userId: string,
     fileId: string,

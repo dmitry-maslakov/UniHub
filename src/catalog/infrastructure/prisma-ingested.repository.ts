@@ -51,10 +51,14 @@ export abstract class PrismaIngestedRepository<
   // one, the lock would end with the statement.
   @Transactional(Propagation.Mandatory)
   async getForUpdate(ref: PortalRef) {
-    const { tx } = this.txHost;
-    const key = `${ref.portal}:${ref.externalId}`;
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${this.lock}::int, hashtext(${key}))`;
+    await this.lockFor(ref);
     return this.findByRef(ref);
+  }
+
+  protected async lockFor(ref: PortalRef) {
+    const key = `${ref.portal}:${ref.externalId}`;
+    await this.txHost.tx
+      .$executeRaw`SELECT pg_advisory_xact_lock(${this.lock}::int, hashtext(${key}))`;
   }
 
   // The change, if there is one, and the events it recorded go through the

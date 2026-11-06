@@ -9,7 +9,7 @@ import type {
   CourseDto,
   CourseRef,
   FileDto,
-  ItemDto,
+  ViewedItemDto,
   VisibleContentDto,
   VisibleItemDto,
 } from '../../catalog/contracts.js';
@@ -43,7 +43,9 @@ export interface ItemView {
   title: string | null;
   url: string | null;
   publishedAt: Date | null;
-  raw: Json;
+  // null till the user's view opens the post (locked for their account,
+  // or before its hold), as a file's content is
+  raw: Json | null;
 }
 
 export interface FileView {
@@ -132,7 +134,15 @@ export const itemView = ({
   url,
   publishedAt,
   raw,
-}: ItemDto): ItemView => ({ id, portal, kind, title, url, publishedAt, raw });
+}: ViewedItemDto): ItemView => ({
+  id,
+  portal,
+  kind,
+  title,
+  url,
+  publishedAt,
+  raw,
+});
 
 export const fileView = ({
   id,

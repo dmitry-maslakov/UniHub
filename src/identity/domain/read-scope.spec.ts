@@ -10,5 +10,16 @@ describe('ReadScope', () => {
       true,
       false,
     ]);
+    expect([ReadScope.all().granted, some.granted]).toEqual([
+      null,
+      ['c1', 'c2'],
+    ]);
+  });
+
+  it('reads through accounts of their own unless it is a ban', () => {
+    expect(ReadScope.all().ownAccounts).toBe(true);
+    // granted nothing is still someone's own accounts
+    expect(ReadScope.of([]).ownAccounts).toBe(true);
+    expect(ReadScope.none()).toMatchObject({ ownAccounts: false, granted: [] });
   });
 });

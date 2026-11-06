@@ -20,7 +20,7 @@ Declined:
 - connector token mapping to (portal, account): env tokens get replaced by API keys (#33), not extended
 - `actorId` in course access commands: the admin check is `@Roles([ADMIN_ROLE])` on the routes that send them (access's `CourseAccessController`)
 - a `source` column on course access (manual vs. from a portal): when per-user accounts come
-- portal courses not linked to a course: nobody reads them through the API, admins included
+- portal courses not linked to a course, of a portal read as shared: nobody reads them through the API, admins included. A portal read with users' own accounts shows its own to whoever's account sees them, as courses of their own (README, Portal accounts)
 - tests of Better Auth's own device flow cases (deny, expiry, reuse)
 - file-level access: files inherit their course's
 - an app-wide limit per address: a campus behind NAT shares one address, so one script would lock everyone out. Better Auth limits `/api/auth` itself, MCP is limited per user
@@ -61,7 +61,8 @@ Put off:
 - trees keyed by content and unpacker, with a second unpacker: one tree per content now, so the same bytes in files two unpackers take (`x.zip`, `x.epub`) would be walked by turns, each seeing the other's tree as not current
 - the columns of `PortalCourse`, `Item` and `File` from before versions, and the triggers that refuse what an app from before still writes to them (`20261106120000_catalog_versions`): dropped by a later migration, once no app from before runs
 - versions no account sees any longer are kept, not collected: the shared account's are changed in place and a removed record's stays for when it comes back, so only linked accounts' views (the pass API) will leave any behind
-- reads and searches cut by sights: a user's viewers (their linked accounts that haven't expired, the shared account of the courses granted them), content opened only past its hold, unlinked portal courses as entries of their own, admins' links answering the same whether the hub knows a course or not
+- content opens with the view that opens it (`openFrom`), processed and indexed or not: where the processors or the index are still at it past the hold, its texts and search hits come later, which tells a reader it was new to the hub; opening only once it's complete would need a record of a content's processing done or given up, which the hub doesn't keep
+- an account unlinked, or replaced by another portal user's, leaves its sights behind, read by no one (no viewer is it any longer): dropped with it once the pass API writes them
 - the pass API: a connector sends what one account sees as it sees it, versions shared by the accounts that see a record alike (a fingerprint each), bytes and bodies fetched once per version under a lease, each account on a grid of its own, its changes shown at a fixed slot and content at a hold after, `CONNECTOR_CONCURRENCY`; Canvas then reads with linked accounts
 - OAuth as a link mode: the portal's consent page, the access and refresh tokens sealed as a pasted token is (Canvas needs a developer key from the school)
 - connector keys (#33) bound to a user's account, accounts over gRPC and the `connector` mode

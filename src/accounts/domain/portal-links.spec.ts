@@ -30,6 +30,11 @@ describe('PortalLinks', () => {
     expect(links({}).openTo(true)).toEqual([]);
   });
 
+  it("reads with users' own accounts every portal not shared, for admins or not", () => {
+    expect(policy.readWithAccounts()).toEqual(['canvas', 'moodle']);
+    expect(links({}).readWithAccounts()).toEqual([]);
+  });
+
   it("lets a user link by the portal's own mode, and an admin only one for admins", () => {
     expect(() => policy.check(portal('moodle'), 'token', false)).not.toThrow();
     expect(() => policy.check(portal('canvas'), 'token', true)).not.toThrow();

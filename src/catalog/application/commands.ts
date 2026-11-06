@@ -102,7 +102,8 @@ export class CreateCourseCommand extends Command<{ id: string }> {
   }
 }
 
-// a portal course that is linked already moves to this course
+// a portal course that is linked already moves to this course; one the hub
+// has nothing of yet is linked all the same
 export class LinkPortalCourseCommand extends Command<void> {
   constructor(
     public readonly course: Slug,
@@ -113,6 +114,7 @@ export class LinkPortalCourseCommand extends Command<void> {
   }
 }
 
+// unlinking one the hub has nothing of changes nothing
 export class UnlinkPortalCourseCommand extends Command<{ changed: boolean }> {
   constructor(public readonly portalCourse: PortalRef) {
     super();

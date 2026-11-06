@@ -374,9 +374,14 @@ describe('catalog', { timeout: 20_000 }, () => {
     await commands.execute(new RemoveItemCommand(ref('vis-gone')));
 
     const [a, b] = [courseIds['vis-a'], courseIds['vis-b']];
+    // as the shared account shows them to a reader granted a and b
+    const reading = (courses: string[]) => ({
+      accounts: [],
+      shared: { courses, except: [] },
+    });
     const listed = await app
       .get(QueryBus)
-      .execute(new ListVisibleContentQuery([a, b]));
+      .execute(new ListVisibleContentQuery(reading([a, b]), null));
     expect(listed.map((f) => [f.name, f.courseId])).toEqual([
       ['a.pdf', a],
       ['z.pdf', a],
@@ -391,7 +396,9 @@ describe('catalog', { timeout: 20_000 }, () => {
       path: '',
     });
     expect(
-      await app.get(QueryBus).execute(new ListVisibleContentQuery([])),
+      await app
+        .get(QueryBus)
+        .execute(new ListVisibleContentQuery(reading([]), null)),
     ).toEqual([]);
   });
 

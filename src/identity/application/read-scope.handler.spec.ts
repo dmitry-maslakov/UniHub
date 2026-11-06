@@ -27,10 +27,9 @@ describe('ReadScopeQuery', () => {
     );
   });
 
-  it("answers none of a banned user's", async () => {
-    expect((await scopeOf(new Reader([], new Ban(null)))).allows('os')).toBe(
-      false,
-    );
+  it("answers none of a banned user's, nor their own accounts", async () => {
+    const banned = await scopeOf(new Reader([], new Ban(null)));
+    expect([banned.allows('os'), banned.ownAccounts]).toEqual([false, false]);
   });
 
   it('refuses a user who does not exist', async () => {

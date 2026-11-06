@@ -45,11 +45,13 @@ export class ItemResponse implements ItemView {
   @ApiProperty({ type: String, nullable: true }) url!: string | null;
   @ApiProperty({ type: Date, nullable: true }) publishedAt!: Date | null;
   @ApiProperty({
-    description: "the portal's own data, as the connector sent it",
+    description:
+      "the portal's own data, as the connector sent it; null while the post is locked for your account, or not open yet",
     type: 'object',
     additionalProperties: true,
+    nullable: true,
   })
-  raw!: Json;
+  raw!: Json | null;
 }
 
 export class FileResponse implements FileView {

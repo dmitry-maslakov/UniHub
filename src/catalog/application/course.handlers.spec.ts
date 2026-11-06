@@ -1,9 +1,5 @@
 import { PortalId } from '@app/kernel';
-import {
-  CourseSlugTakenError,
-  UnknownCourseError,
-  UnknownReferenceError,
-} from '../domain/errors.js';
+import { CourseSlugTakenError, UnknownCourseError } from '../domain/errors.js';
 import { AcademicYear, CourseName, Slug } from '../domain/values.js';
 import {
   CreateCourseCommand,
@@ -58,27 +54,35 @@ describe('course commands', () => {
     ]);
   });
 
-  it('refuse an unknown course or portal course', async () => {
-    const { commands, create } = await catalog();
-    await create('os');
+  it('refuse an unknown course, and link a portal course the hub has nothing of all the same', async () => {
+    const { commands, create, links, portalCourses } = await catalog();
+    const os = await create('os');
+    const unsent = { ...portalCourse, externalId: 'unsent' };
 
     await expect(
       commands.execute(
         new LinkPortalCourseCommand(Slug.parse('nope'), portalCourse, null),
       ),
     ).rejects.toBeInstanceOf(UnknownCourseError);
-    await expect(
-      commands.execute(
-        new LinkPortalCourseCommand(
-          Slug.parse('os'),
-          { ...portalCourse, externalId: 'nope' },
-          null,
-        ),
-      ),
-    ).rejects.toBeInstanceOf(UnknownReferenceError);
+    await commands.execute(
+      new LinkPortalCourseCommand(Slug.parse('os'), unsent, null),
+    );
+    const id = await portalCourses.recordId(unsent);
+    expect(links.byPortalCourse.get(id!)).toMatchObject({ courseId: os.id });
+
+    // sent later, under the id the link named
+    const sent = await commands.execute(
+      new UpsertPortalCourseCommand({
+        ...unsent,
+        name: 'OS',
+        url: null,
+        meta: null,
+      }),
+    );
+    expect(sent.id).toBe(id);
   });
 
-  it('unlink a portal course, saying whether it was linked, and no unknown one', async () => {
+  it('unlink a portal course, saying whether it was linked, an unknown one too', async () => {
     const { commands, create } = await catalog();
     await create('os');
     await commands.execute(
@@ -91,6 +95,6 @@ describe('course commands', () => {
       );
     expect(await unlink()).toEqual({ changed: true });
     expect(await unlink()).toEqual({ changed: false });
-    await expect(unlink('nope')).rejects.toBeInstanceOf(UnknownReferenceError);
+    expect(await unlink('nope')).toEqual({ changed: false });
   });
 });

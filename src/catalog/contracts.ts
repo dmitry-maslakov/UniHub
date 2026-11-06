@@ -2,7 +2,7 @@
 export * from './application/commands.js';
 export * from './application/queries.js';
 export type { PortalRef } from './domain/portal-ref.js';
-export { AcademicYear, CourseName, Slug } from './domain/values.js';
+export { AcademicYear, CourseName, CourseSlug, Slug } from './domain/values.js';
 export {
   FILE_CONTENT_CHANGED,
   FILE_REMOVED,

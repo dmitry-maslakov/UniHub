@@ -43,7 +43,7 @@ npm run test:e2e
 ```
 
 - unit specs (`*.spec.ts`, next to the code) check the rules: the domain on its own, the use cases on in-memory fakes of their ports (`*.fakes.ts` beside them; `test/` has the shared ones: `FakeBus`, `InMemoryBlobs`, `sha256` of real content, plugins as discovery finds them)
-- e2e specs (`test/*.e2e-spec.ts`) check only what fakes can't: how records are written and read back, what the read queries find and in what order, the locks, the outbox rolling back with its transaction, BullMQ's deduplication, gRPC, each route and MCP tool once (and one bad request to each that declares a schema, since nothing else sees it is attached), the whole pipeline once (`plugins.e2e-spec.ts`), the search index's writes, the texts' and the records', and their repair (`search-index.e2e-spec.ts`), what OpenSearch answers a search, by the words and by meaning, and what of it the reranker gets (`search.e2e-spec.ts`), who finds what through the search route and tool, and their shared limit (`search-api.e2e-spec.ts`), the app with search off (`search-off.e2e-spec.ts`), an api process adding work that only a worker does (`roles.e2e-spec.ts`), what each process serves on its metrics port (`metrics.e2e-spec.ts`), and the text index's analyzers, whose rules live in OpenSearch (`search-analysis.e2e-spec.ts`: a word in Cyrillic, in Latin and without diacritics gives the same tokens, on the OpenSearch client alone). The others boot the app as `main.ts` sets it up (`bootApp()` in `test/app.ts`, with every role unless told; `bootWorker()` for a worker) on a database, redis db, folder and search indices (`unihub-e2e-*`) of their own (`test/env.ts`), made anew for every run, with `FakeEmbedder` and `FakeReranker` (`test/fake-models.ts`) for the models, so none is downloaded (the reranker busy, so the order they check is the index's, unless a spec gives it scores), and wait for what they wait on (the outbox's events, a job's state), never for a while
+- e2e specs (`test/*.e2e-spec.ts`) check only what fakes can't: how records are written and read back, what the read queries find and in what order, the locks, the outbox rolling back with its transaction, BullMQ's deduplication, gRPC, each route and MCP tool once (and one bad request to each that declares a schema, since nothing else sees it is attached), the whole pipeline once (`plugins.e2e-spec.ts`), the search index's writes, the texts' and the records', and their repair (`search-index.e2e-spec.ts`), what OpenSearch answers a search, by the words and by meaning, and what of it the reranker gets (`search.e2e-spec.ts`), who finds what through the search route and tool, and their shared limit (`search-api.e2e-spec.ts`), what each user reads of a portal read with users' own accounts, by every route and by search (`views.e2e-spec.ts`), the app with search off (`search-off.e2e-spec.ts`), an api process adding work that only a worker does (`roles.e2e-spec.ts`), what each process serves on its metrics port (`metrics.e2e-spec.ts`), and the text index's analyzers, whose rules live in OpenSearch (`search-analysis.e2e-spec.ts`: a word in Cyrillic, in Latin and without diacritics gives the same tokens, on the OpenSearch client alone). The others boot the app as `main.ts` sets it up (`bootApp()` in `test/app.ts`, with every role unless told; `bootWorker()` for a worker) on a database, redis db, folder and search indices (`unihub-e2e-*`) of their own (`test/env.ts`), made anew for every run, with `FakeEmbedder` and `FakeReranker` (`test/fake-models.ts`) for the models, so none is downloaded (the reranker busy, so the order they check is the index's, unless a spec gives it scores), and wait for what they wait on (the outbox's events, a job's state), never for a while
 
 ## Users
 
@@ -56,13 +56,13 @@ npm run test:e2e
 
 The first admin: `npm run auth:create-admin -- --email you@example.com --password '…'`. After adding a Better Auth plugin, `npm run auth:generate` updates `prisma/schema/identity.prisma`.
 
-Every HTTP route needs a signed-in user unless it says `@AllowAnonymous()`. Admins read every course, other users the ones an admin granted them, a banned user nothing (by API key either).
+Every HTTP route needs a signed-in user unless it says `@AllowAnonymous()`. Admins read every course, other users the ones an admin granted them, a banned user nothing (by API key either). That's of the portals read as shared; one read with users' own accounts each user, an admin too, reads through their own account alone (Portal accounts, below).
 
 ## REST API
 
 OpenAPI at `/api/docs`. A signed-in user reads the courses they were given:
 
-- `GET /api/courses`, then `/api/courses/{slug}/items` and `/files` (`offset`, `limit` up to 200, 50 by default)
+- `GET /api/courses`, then `/api/courses/{slug}/items` and `/files` (`offset`, `limit` up to 200, 50 by default). A course lists only its portal courses in the user's view, and a portal course of a portal read with users' own accounts that no course links is a course of its own, `{portal}~{externalId}` (Portal accounts, below)
 - `GET /api/items/{id}`: one post, as `/items` lists it (a search finds it by its id)
 - `GET /api/files/{id}`: the file and the texts made from it
 - `GET /api/files/{id}/text?page=2`: one page, slide or section of a text
@@ -77,8 +77,8 @@ A user's own accounts of portals, by a token they set and never read back, are u
 Admins set the courses up (`@Roles([ADMIN_ROLE])`):
 
 - `POST /api/courses` with `{ slug, name }`: a course
-- `PUT /api/portal-courses/{portal}/{externalId}/course` with `{ course, year }`: the portal course becomes part of that course (no `year` for one that spans years); one linked elsewhere moves
-- `DELETE /api/portal-courses/{portal}/{externalId}/course`: unlinks it
+- `PUT /api/portal-courses/{portal}/{externalId}/course` with `{ course, year }`: the portal course becomes part of that course (no `year` for one that spans years); one linked elsewhere moves. Linking now answers 204 whether or not the hub knows the portal course (an unknown one used to be a 404), in every portal, so it tells an admin nothing of what some user's account sees; one nothing sent yet shows once an account sends it
+- `DELETE /api/portal-courses/{portal}/{externalId}/course`: unlinks it, 204 whether it was linked or known at all
 - `PUT /api/users/{userId}/courses/{courseId}`: the user reads the course, named by the id `POST /api/courses` answered (users' ids from Better Auth's `GET /api/auth/admin/list-users`); `DELETE` on the same path takes it back. An id no user has is a 404, and so is granting one no course has
 
 ### Search
@@ -106,7 +106,7 @@ Admins set the courses up (`@Roles([ADMIN_ROLE])`):
 - `snippet.text` is up to 400 characters of the page as indexed (letters composed, NFC), plain text with whatever HTML the file had: show it as text, never as HTML. `highlights` are `[start, end)` UTF-16 offsets into that text only (a page read whole may differ, when the file's letters weren't composed)
 - with an embedder (Search index, below), a file or a post is found by meaning too: a page about the same thing in other words, or in another language. Then a search answers up to `limit` results even when none has the words, the nearest by meaning, as knn always has nearest ones; `highlights` mark only the words found
 - with a reranker (Search index, below), the best results (20 by default) come in the order it puts them, by how well their best snippet (a page's, else a name's or a post's) answers `q`; while it's busy with another search, or away, in the index's order
-- only the files and posts the user reads right now are looked through, so a grant taken back, or a file or a post removed, counts from the next search on. A course they don't read is a 404, as on the other routes; the search index away is a 503 (`SEARCH_UNAVAILABLE`)
+- only the files and posts the user reads right now are looked through, of a portal read with users' own accounts those whose content their own view opens, so a grant taken back, an account unlinked, or a file or a post removed, counts from the next search on. A course they don't read is a 404, as on the other routes; the search index away is a 503 (`SEARCH_UNAVAILABLE`)
 - with no `OPENSEARCH_URL` there's no search: the route is a 404 and the tool isn't listed
 - 20 searches a minute per user, REST and MCP counted together (`X-RateLimit-*-search`)
 
@@ -183,7 +183,7 @@ How a portal's accounts are linked is set per portal in `PORTAL_LINKS` (`canvas=
 - `token`: each user links an account of their own by pasting a token the portal gave them; `/admins` lets only admins link one
 - only `token` exists so far beside it; a portal's consent page (OAuth) and a user's own connector come later, and `PORTAL_LINKS` refuses them. The app doesn't start with a mode the portal's connector doesn't name (`links`, Plugins above)
 
-Nothing reads with a linked account yet: the portal is still read as shared, and an account is only linked, listed and unlinked. The token is a setting that's written, never read:
+No connector reads with a linked account yet: an account is linked, listed and unlinked, and the portal's reads are cut to its view (below), which nothing fills so far. The token is a setting that's written, never read:
 
 - `PUT /api/me/portals/{portal}/token` with `{ "token": "…" }`: 204 once the portal's connector says whose it is (`identify`) and when it expires. Of the portal's user only their id on the portal is kept, never a name or an email. It needs a session signed in within the last day, as making an API key does (403 `SESSION_NOT_FRESH`), and takes 10 a minute per user (`X-RateLimit-*-link`), as each one asks the portal. A portal not linked by token, or one for admins to anyone else, is a 404; a token the portal doesn't take a 422 that says only that; the portal away, or no answer within 30 s, a 503. A token of the same portal user keeps the account, another's makes a new one in its place
 - `DELETE` on the same path unlinks: the account and its token go together
@@ -192,7 +192,17 @@ Nothing reads with a linked account yet: the portal is still read as shared, and
 
 Tokens are sealed with AES-256-GCM (`node:crypto`), each for its own account, under `PORTAL_CREDENTIALS_SECRETS="2:…,1:…"`: keys of their own (`openssl rand -base64 32` each), never `BETTER_AUTH_SECRET`, needed once a portal links by token. The highest version seals, any listed opens: to rotate, add a higher version and keep the older ones while tokens sealed under them remain (a token set again is sealed under the new one). A version taken off leaves what it sealed unreadable, the copies in old backups too. Whoever holds both the database and the keys can open them; the hub has to, to use them.
 
-What portals send is kept as versions: each course, post and file as the accounts that see it saw it, and a sight per account and version, since when its view shows it, whether it may be opened and since when, and since when it's gone from it. Catalog knows accounts by ids alone, never users. Only a portal linked in another mode than `shared` will be read with its users' own accounts, each user then reading what their own accounts see; one that's `shared` stays as it was, with no delay or hold before anything shows, admins reading every course and the others the courses granted them. So far every portal is read as shared: a record's one version is the shared account's, under the record's own id and changed in place, as records were before, and every read is of the shared account's view. Versions no account sees any longer are kept.
+What portals send is kept as versions: each course, post and file as the accounts that see it saw it, and a sight per account and version, since when its view shows it, whether it may be opened (not locked for it) and since when, and since when it's gone from it. Catalog knows accounts by ids alone, never users. A portal that's `shared` is read as it always was, with no delay or hold before anything shows, admins reading every course and the others the courses granted them: its records' one version is the shared account's, under the record's own id and changed in place, as records were before. Versions no account sees any longer are kept.
+
+A portal linked in another mode is read with its users' own accounts, every read and search cut to what the user's own account sees (access's viewers: their accounts of those portals that are linked and not expired, none for a banned user):
+
+- grants give nothing of it, and admins read it only through accounts of their own; the shared account's view of it, from before it was linked so, is read by no one
+- a course a user reads holds the portal courses their account sees, and those parts alone; a portal course no course links is a course of its own, by the slug `{portal}~{externalId}` (`canvas~101`), or for an id of other than URL-safe characters `{portal}~~` and 22 characters of a hash of it: stable, and never an admin's slug or another's
+- a post or a file is the version the user's account sees, under that version's id: two accounts that see one differently read two ids, and a post shown, or a file's post, is always the user's own version
+- a file's content (`hasContent`, the bytes, its texts and members) and what search finds of files and posts open only once the user's view opens them (`openFrom`); a file locked for their account stays listed, and closed
+- another account's post, file or course answers as one that isn't there, the same 404
+
+Nothing sends an account's view yet (the pass API comes next), so so far a linked account sees nothing at all.
 
 The Canvas connector takes `token`. A token a user pastes has no scopes, so the Canvas client only reads (GET and HEAD), and only from the school's Canvas. Canvas's [OAuth docs](https://canvas.instructure.com/doc/api/file.oauth.html) say an app that several users use must get their tokens by OAuth, and that asking other users to make a token and enter it violates Instructure's API policy: on a Canvas Instructure hosts, keep `token` to `/admins` (in practice, yourself) until OAuth comes. A Canvas a school hosts itself follows that school's own rules instead: ask its Canvas admins before opening it to anyone.
 

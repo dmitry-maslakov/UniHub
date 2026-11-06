@@ -1,68 +1,63 @@
-import type { Query, QueryBus } from '@nestjs/cqrs';
+import type { QueryBus } from '@nestjs/cqrs';
 import {
-  FindCourseQuery,
   GetCourseFileQuery,
   GetCourseItemQuery,
   ListCoursesQuery,
-  type Slug,
+  type CourseSlug,
 } from '../../catalog/contracts.js';
-import { ReadScopeQuery } from '../../identity/contracts.js';
 import { NotReadableError } from './errors.js';
+import { viewersOfUser } from './viewers.js';
 
 // What a user may read, for each use case of access. The rules are the
-// owners': catalog finds only what a course shows, identity's ReadScope says
-// which courses the user reads. Here they are asked together, and whatever the
-// user can't read is a NotReadableError, so a caller can't tell "not yours"
-// from "doesn't exist".
+// owners': identity's ReadScope and accounts' accounts say whose views the
+// user reads (viewers.ts), catalog finds only what those views show. Here
+// they are asked together, and whatever the user can't read is a
+// NotReadableError, so a caller can't tell "not yours" from "doesn't
+// exist".
 
-// the courses the user's scope allows; both asked for at once
+// the courses the user reads, each with its portal courses in their view
 export async function readableCourses(queries: QueryBus, userId: string) {
-  const [courses, scope] = await Promise.all([
-    queries.execute(new ListCoursesQuery()),
-    queries.execute(new ReadScopeQuery(userId)),
-  ]);
-  return courses.filter(({ id }) => scope.allows(id));
+  const viewers = await viewersOfUser(queries, userId);
+  return {
+    viewers,
+    courses: await queries.execute(new ListCoursesQuery(viewers)),
+  };
 }
 
-export const readableCourse = (queries: QueryBus, userId: string, slug: Slug) =>
-  readable(queries, userId, 'course', {
-    query: new FindCourseQuery({ slug }),
-    courseOf: ({ id }) => id,
-  });
+export async function readableCourse(
+  queries: QueryBus,
+  userId: string,
+  slug: CourseSlug,
+) {
+  const viewers = await viewersOfUser(queries, userId);
+  const courses = await queries.execute(new ListCoursesQuery(viewers, slug));
+  const course = courses.find((c) => c.slug === slug);
+  if (!course) throw new NotReadableError('course');
+  return {
+    viewers,
+    course,
+    portalCourseIds: course.portalCourses.map(({ id }) => id),
+  };
+}
 
-export const readableItem = (
+export async function readableItem(
   queries: QueryBus,
   userId: string,
   itemId: string,
-) =>
-  readable(queries, userId, 'item', {
-    query: new GetCourseItemQuery(itemId),
-    courseOf: ({ courseId }) => courseId,
-  });
+) {
+  const viewers = await viewersOfUser(queries, userId);
+  const item = await queries.execute(new GetCourseItemQuery(viewers, itemId));
+  if (!item) throw new NotReadableError('item');
+  return item;
+}
 
-export const readableFile = (
+export async function readableFile(
   queries: QueryBus,
   userId: string,
   fileId: string,
-) =>
-  readable(queries, userId, 'file', {
-    query: new GetCourseFileQuery(fileId),
-    courseOf: ({ courseId }) => courseId,
-  });
-
-// what the query finds, if the user may read the course it is in; the
-// thing and the user's scope are asked for at once
-async function readable<T>(
-  queries: QueryBus,
-  userId: string,
-  what: NotReadableError['what'],
-  find: { query: Query<T | null>; courseOf: (found: T) => string },
 ) {
-  const [found, scope] = await Promise.all([
-    queries.execute(find.query),
-    queries.execute(new ReadScopeQuery(userId)),
-  ]);
-  if (!found || !scope.allows(find.courseOf(found)))
-    throw new NotReadableError(what);
-  return found;
+  const viewers = await viewersOfUser(queries, userId);
+  const file = await queries.execute(new GetCourseFileQuery(viewers, fileId));
+  if (!file) throw new NotReadableError('file');
+  return file;
 }

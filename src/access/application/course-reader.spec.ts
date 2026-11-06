@@ -2,17 +2,18 @@ import { MediaType, PluginName, PortalId } from '@app/kernel';
 import { FakeBus } from '../../../test/fake-bus.js';
 import { InMemoryBlobs } from '../../../test/in-memory-blobs.js';
 import { sha256 } from '../../../test/sha256.js';
+import { ViewingAccountsQuery } from '../../accounts/contracts.js';
 import {
-  FindCourseQuery,
+  CourseSlug,
   GetCourseFileQuery,
   GetCourseItemQuery,
   ListCourseFilesQuery,
   ListCourseItemsQuery,
   ListCoursesQuery,
-  Slug,
   type CourseFileDto,
   type CourseItemDto,
   type CourseRef,
+  type Viewers,
 } from '../../catalog/contracts.js';
 import { ReadScopeQuery } from '../../identity/contracts.js';
 import {
@@ -77,36 +78,49 @@ const main = {
   texts: [text],
 };
 
-// ana reads os; catalog has os and net, three files and a text of f1
+// ana is granted os, and has an account of moodle, a portal read with
+// users' own accounts: those are her viewers
+const viewers: Viewers = {
+  accounts: ['ana-moodle'],
+  shared: { courses: [os.id], except: [PortalId.parse('moodle')] },
+};
+// catalog's cut, as the fake makes it: the courses granted
+const seen =
+  ({ shared }: Viewers) =>
+  ({ courseId }: { courseId: string }) =>
+    shared.courses?.includes(courseId) ?? true;
+
+// catalog has os and net, three files and a text of f1
 function reader() {
   const queries = new FakeBus([
-    [ReadScopeQuery, () => ({ allows: (id: string) => id === os.id })],
+    [ReadScopeQuery, () => ({ granted: [os.id], ownAccounts: true })],
     [
-      ListCoursesQuery,
-      () =>
-        [os, net].map((c) => ({
-          ...c,
-          portalCourses: [
-            { id: 'pc', portal, externalId: 'c1', name: c.name, year: 2026 },
-          ],
-        })),
+      ViewingAccountsQuery,
+      () => ({ portals: viewers.shared.except, accounts: viewers.accounts }),
     ],
     [
-      FindCourseQuery,
-      ({ by }: FindCourseQuery) =>
-        [os, net].find((c) => 'slug' in by && c.slug === by.slug) ?? null,
+      ListCoursesQuery,
+      ({ viewers }: ListCoursesQuery) =>
+        [os, net]
+          .filter(({ id }) => seen(viewers)({ courseId: id }))
+          .map((c) => ({
+            ...c,
+            portalCourses: [
+              { id: 'pc', portal, externalId: 'c1', name: c.name, year: 2026 },
+            ],
+          })),
     ],
     [ListCourseItemsQuery, () => []],
     [ListCourseFilesQuery, () => [files[0]]],
     [
       GetCourseFileQuery,
-      ({ fileId }: GetCourseFileQuery) =>
-        files.find((f) => f.id === fileId) ?? null,
+      ({ viewers, fileId }: GetCourseFileQuery) =>
+        files.filter(seen(viewers)).find((f) => f.id === fileId) ?? null,
     ],
     [
       GetCourseItemQuery,
-      ({ itemId }: GetCourseItemQuery) =>
-        items.find((i) => i.id === itemId) ?? null,
+      ({ viewers, itemId }: GetCourseItemQuery) =>
+        items.filter(seen(viewers)).find((i) => i.id === itemId) ?? null,
     ],
     [ListTextsQuery, () => [text]],
     [ListMembersQuery, () => [main]],
@@ -128,8 +142,8 @@ function reader() {
 }
 
 describe('CourseReader', () => {
-  it("lists the courses the user's scope allows, without catalog's ids", async () => {
-    const { reader: r } = reader();
+  it("lists the courses the user's viewers read, without catalog's ids", async () => {
+    const { reader: r, queries } = reader();
     expect(await r.courses('ana')).toEqual([
       {
         slug: 'os',
@@ -137,33 +151,38 @@ describe('CourseReader', () => {
         portalCourses: [{ portal, name: 'OS', year: 2026 }],
       },
     ]);
+    expect(queries.sent).toContainEqual(new ListCoursesQuery(viewers));
   });
 
   it('pages a course it may read, and finds none of the others', async () => {
     const { reader: r, queries } = reader();
     const page = { offset: 10, limit: 5 };
 
-    expect(await r.files('ana', Slug.parse('os'), page)).toEqual([
+    expect(await r.files('ana', CourseSlug.parse('os'), page)).toEqual([
       expect.objectContaining({ id: 'f1', hasContent: true }),
     ]);
-    expect(queries.sent).toContainEqual(new ListCourseFilesQuery(os.id, 10, 5));
+    // of its portal courses in the user's view, as the viewers see them
+    expect(queries.sent).toContainEqual(
+      new ListCourseFilesQuery(viewers, ['pc'], 10, 5),
+    );
     for (const slug of ['net', 'nope'])
-      await expect(r.items('ana', Slug.parse(slug), page)).rejects.toThrowError(
-        new NotReadableError('course'),
-      );
+      await expect(
+        r.items('ana', CourseSlug.parse(slug), page),
+      ).rejects.toThrowError(new NotReadableError('course'));
   });
 
-  it('asks for a file and the scope at once', async () => {
+  it("asks for the user's scope and accounts at once, then for the file as their viewers see it", async () => {
     const { reader: r, queries } = reader();
     const reading = r.file('ana', 'f1');
     // both asked before either answered
     expect(queries.sent.map((q) => q.constructor)).toEqual([
-      GetCourseFileQuery,
       ReadScopeQuery,
+      ViewingAccountsQuery,
     ]);
     expect(await reading).toEqual(
       expect.objectContaining({ id: 'f1', texts: [text] }),
     );
+    expect(queries.sent).toContainEqual(new GetCourseFileQuery(viewers, 'f1'));
   });
 
   it("answers the same for a file of someone else's course and none", async () => {
