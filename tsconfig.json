@@ -36,6 +36,12 @@
       "@app/plugin-sdk/*": [
         "./libs/plugin-sdk/src/*"
       ],
+      "@app/plugins/archives": [
+        "./libs/plugins/archives/src/index.ts"
+      ],
+      "@app/plugins/archives/*": [
+        "./libs/plugins/archives/src/*"
+      ],
       "@app/plugins/canvas": [
         "./libs/plugins/canvas/src/index.ts"
       ],

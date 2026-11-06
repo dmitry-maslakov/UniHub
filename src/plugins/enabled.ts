@@ -1,4 +1,5 @@
 import { ConditionalModule } from '@nestjs/config';
+import { ArchivesModule } from '@app/plugins/archives';
 import { CanvasModule } from '@app/plugins/canvas';
 import { OfficeTextModule } from '@app/plugins/office-text';
 import { PlainTextModule } from '@app/plugins/plain-text';
@@ -18,6 +19,7 @@ export function plugin(
 
 // built-in plugins, each turned on by its name
 export const plugins = [
+  plugin('archives', ArchivesModule),
   plugin('canvas', CanvasModule),
   plugin('office-text', OfficeTextModule),
   plugin('plain-text', PlainTextModule),
