@@ -164,7 +164,7 @@ describe('views of accounts of their own', { timeout: 60_000 }, () => {
       app.get(IngestService),
       Connection.of({ portal: LMS, account: account[who] }),
       new AbortController().signal,
-      { shown: () => at },
+      { shown: () => at, leaseMs: 60 * 60_000 },
     );
   // ana's posts of c1 as her first passes send them
   const anasPosts = ['news', 'section', 'edited', 'gone', 'going'];
@@ -624,6 +624,42 @@ describe('views of accounts of their own', { timeout: 60_000 }, () => {
     expect(await titles('bo', `${LMS}~c1`)).toEqual(
       expect.arrayContaining(['news']),
     );
+  });
+
+  it('gives a version left without bytes those of its stamp at its next pass', async () => {
+    const anas = await ingestOf('ana').pass('c1');
+    await file(anas, 'ana', { externalId: 'notes' });
+    await anas.end();
+    const { hash } = await anas.content(
+      'notes',
+      Readable.from(['beleske semafora']),
+    );
+    // bo's, renamed: another version of the same bytes
+    const renamed = { externalId: 'notes', name: 'renamed.txt', size: 16 };
+    const bos = await ingestOf('bo').pass('c1');
+    await bos.file(renamed);
+    await bos.end();
+    const his = await prisma.fileVersion.findFirstOrThrow({
+      where: {
+        file: { portal: LMS, externalId: 'notes' },
+        name: 'renamed.txt',
+      },
+    });
+    expect(his.contentHash).toBe(hash);
+    // as one made while ana's bytes came in leaves it: the hub has them,
+    // so no run fetches them for it
+    await prisma.fileVersion.update({
+      where: { id: his.id },
+      data: { contentHash: null },
+    });
+
+    const again = await ingestOf('bo').pass('c1');
+    expect(await again.file(renamed)).toEqual({ fetch: false });
+    await again.end();
+    expect(
+      (await prisma.fileVersion.findUniqueOrThrow({ where: { id: his.id } }))
+        .contentHash,
+    ).toBe(hash);
   });
 
   it('forgets an account unlinked: its runs, and what it saw', async () => {

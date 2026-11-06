@@ -65,8 +65,8 @@ export class ConnectorsWorker extends WorkerHost implements OnModuleDestroy {
       this.shutdown.signal,
       ...(signal ? [signal] : []),
     ]);
-    const ctx = await this.directory.context(connection, run);
-    if (!ctx) {
+    const found = await this.directory.context(connection, run);
+    if (!found) {
       await this.schedules.remove(connection);
       return false;
     }
@@ -80,12 +80,12 @@ export class ConnectorsWorker extends WorkerHost implements OnModuleDestroy {
     try {
       if (!run.aborted)
         await Promise.race([
-          connector.instance.poll(ctx),
+          connector.instance.poll(found.context),
           once(run, 'abort', { signal: settled.signal }),
         ]);
     } catch (error) {
-      if (error instanceof CredentialRejectedError && !connection.shared)
-        await this.rejected(connection);
+      if (error instanceof CredentialRejectedError && found.seal !== null)
+        await this.rejected(connection, found.seal);
       throw error;
     } finally {
       settled.abort();
@@ -94,8 +94,11 @@ export class ConnectorsWorker extends WorkerHost implements OnModuleDestroy {
     return true;
   }
 
-  private async rejected(connection: Connection) {
-    await this.commands.execute(new AccountRejectedCommand(connection.account));
+  // the credential the run had, not one the account was linked by since
+  private async rejected(connection: Connection, seal: string) {
+    await this.commands.execute(
+      new AccountRejectedCommand(connection.account, seal),
+    );
     await this.schedules.remove(connection);
   }
 

@@ -14,17 +14,20 @@ import { settle, SyncState } from './listings.js';
 import { courseRecord } from './records.js';
 
 // One run: every open course the token's user is in, sent as the hub's
-// courses, then each one's records in a pass of its own, its listings
-// saved and the pass ended with what's gone from a listing that went
-// through (only what one had before and no longer has: a listing that
-// failed, or one never saved, takes nothing away); then the files the hub
-// asked for are downloaded. The listings are saved before the end, so the
-// hub never has what they don't. A run cut short goes on from the courses
-// it got through. A course no longer listed is gone from a user's
-// account's view, and keeps its records for the shared account, its
-// listings kept for when it's back. A course Canvas fails on, or whose
-// record the hub refuses, keeps what its view had: the others go on, and
-// the run fails once they're through.
+// courses, then each one's records in a pass of its own, ended with what's
+// gone from a listing that went through (only what one had before and no
+// longer has: a listing that failed, or one never saved, takes nothing
+// away); then, once every pass has ended, the files the hub asked for are
+// downloaded, so when a pass ends says nothing of what the hub had of
+// another course's files. Before the end the listings are saved with what
+// they had too, so the hub never has what they don't, and an end that
+// fails leaves what's gone for the next run to name; once it's through,
+// as they are. A run cut short goes on from the courses it got through. A
+// course no longer listed is gone from a user's account's view, and keeps
+// its records for the shared account, its listings kept for when it's
+// back. A course Canvas fails on, or whose record the hub refuses, keeps
+// what its view had: the others go on, and the run fails once they're
+// through.
 export class CanvasSync {
   private readonly logger = new Logger(CanvasSync.name);
 
@@ -51,12 +54,18 @@ export class CanvasSync {
       return Number(externalId);
     });
     const courses = open.filter((c) => !skipped.includes(c.id));
+    const ended: { pass: CoursePass; fetch: FoundFile[] }[] = [];
     for (const course of courses) {
-      const synced = await this.skipRefused(`course ${course.id}`, () =>
-        this.sync(course, state),
+      const synced = await this.skipRefused(`course ${course.id}`, async () =>
+        ended.push(await this.sync(course, state)),
       );
       if (!synced) skipped.push(course.id);
     }
+    for (const { pass, fetch } of ended)
+      for (const { record, download } of fetch)
+        await this.skipRefused(`file ${record.externalId}`, async () =>
+          pass.content(record.externalId, await this.api.download(download)),
+        );
     if (skipped.length)
       throw new Error(
         `canvas courses ${skipped.join(', ')} skipped this run, see the warnings`,
@@ -67,18 +76,17 @@ export class CanvasSync {
     const walk = new CourseWalk(this.api, this.base, course.id, this.view);
     const content = await walk.read();
     const pass = await this.ingest.pass(String(course.id));
-    const { listings, gone } = settle(
+    const { listings, ending, gone } = settle(
       state.courses[course.id],
       content.listings,
     );
     const fetch = await this.send(pass, content);
-    state.courses[course.id] = listings;
+    state.courses[course.id] = ending;
     await this.ingest.saveState(state);
     await pass.end(gone);
-    for (const { record, download } of fetch)
-      await this.skipRefused(`file ${record.externalId}`, async () =>
-        pass.content(record.externalId, await this.api.download(download)),
-      );
+    state.courses[course.id] = listings;
+    await this.ingest.saveState(state);
+    return { pass, fetch };
   }
 
   // the course's records; the files whose content the hub asks for

@@ -69,10 +69,10 @@ export class PushConnections implements OnModuleDestroy {
       const started = Date.now();
       let outcome: RunOutcome = 'ended';
       try {
-        const ctx = await this.directory.context(connection, signal);
+        const found = await this.directory.context(connection, signal);
         // an account that no longer reads
-        if (!ctx) return;
-        await connector.run(ctx);
+        if (!found) return;
+        await connector.run(found.context);
       } catch (err) {
         outcome = 'failed';
         if (!signal.aborted)

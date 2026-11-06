@@ -14,7 +14,7 @@ const at = {
   shownFrom: new Date('2026-11-06T12:10:00Z'),
   openFrom: new Date('2026-11-06T12:25:00Z'),
 };
-const run: Run = { shown: () => at };
+const run: Run = { shown: () => at, leaseMs: 90 * 60_000 };
 const post = (externalId: string) => ({ externalId, kind: 'post', raw: {} });
 const updatedAt = '2026-11-01T10:00:00Z';
 const file = (externalId: string, more = {}) => ({
@@ -122,8 +122,12 @@ describe("a pass of a user's own account", () => {
     expect(await first.file(file('f3', { size: 101 }), undefined)).toEqual({
       fetch: false,
     });
-    // nor a lease for one it couldn't store
-    expect([...leases.taken].filter((key) => key.includes('f3'))).toEqual([]);
+    // nor a lease for one it couldn't store; each for as long as a run
+    // may take
+    expect(
+      [...leases.taken.keys()].filter((key) => key.includes('f3')),
+    ).toEqual([]);
+    expect(new Set(leases.taken.values())).toEqual(new Set([run.leaseMs]));
   });
 
   it('stores bytes for the version the pass saw, once it has ended, of a file open to the account', async () => {
@@ -189,7 +193,7 @@ describe("an account's courses", () => {
     };
     expect(sent).toEqual([
       new catalog.UpsertPortalCourseCommand(input),
-      new catalog.ViewCoursesCommand('ana', portal, [input], at),
+      new catalog.ViewCoursesCommand('ana', portal, [input], ['c2'], at),
     ]);
     await expect(service.courses(ana, course, run)).rejects.toThrow(
       MalformedRecordError,

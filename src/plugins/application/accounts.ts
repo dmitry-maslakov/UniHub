@@ -17,18 +17,29 @@ export class PortalReadersQuery extends Query<PortalReaders> {
   }
 }
 
-// the credential a user's account was linked by, for a run of it; null
-// once it no longer reads
-export class AccountCredentialQuery extends Query<Credential | null> {
+// the credential a user's account was linked by, for a run of it, and
+// which seal of it that is (nothing of the credential), to say which one
+// the portal refused
+export interface AccountCredential {
+  credential: Credential;
+  seal: string;
+}
+
+// null once the account no longer reads
+export class AccountCredentialQuery extends Query<AccountCredential | null> {
   constructor(readonly account: string) {
     super();
   }
 }
 
-// the portal no longer takes the account's credential: it reads nothing
-// till it's linked again
+// The portal no longer takes the account's credential of `seal`: it reads
+// nothing till it's linked again. One linked again since, by another
+// credential, stays as it is.
 export class AccountRejectedCommand extends Command<void> {
-  constructor(readonly account: string) {
+  constructor(
+    readonly account: string,
+    readonly seal: string,
+  ) {
     super();
   }
 }

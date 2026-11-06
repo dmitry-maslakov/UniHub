@@ -183,7 +183,10 @@ describe('ConnectorsWorker', () => {
     await expect(w.process(job(POLL, 'lms', 'ana'))).rejects.toThrow(
       CredentialRejectedError,
     );
-    expect(commands.sent).toEqual([new AccountRejectedCommand('ana')]);
+    // the credential the run had, by its seal
+    expect(commands.sent).toEqual([
+      new AccountRejectedCommand('ana', 'seal-of-ana'),
+    ]);
     expect(remove).toHaveBeenCalledOnce();
 
     // the shared account's is the owner's to replace

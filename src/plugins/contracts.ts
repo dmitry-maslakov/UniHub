@@ -7,5 +7,6 @@ export {
   AccountRejectedCommand,
   AccountsChangedCommand,
   PortalReadersQuery,
+  type AccountCredential,
   type PortalReaders,
 } from './application/accounts.js';

@@ -353,16 +353,21 @@ describe('PortalAccounts', () => {
       shared: false,
       accounts: [id('ana'), id('bo')],
     });
-    expect((await service.credential(id('bo'), before))?.token.reveal()).toBe(
-      '1~bo-pasted-token',
-    );
+    const bo = await service.credential(id('bo'), before);
+    expect(bo?.credential).toEqual({
+      kind: 'token',
+      token: expect.any(Secret),
+    });
+    if (bo?.credential.kind === 'token')
+      expect(bo.credential.token.reveal()).toBe('1~bo-pasted-token');
     // past its expiry, or one the portal rejected since: none
     expect(await service.readers(MOODLE, until)).toEqual({
       shared: false,
       accounts: [],
     });
+    const ana = await service.credential(id('ana'), before);
     expect(await service.credential(id('ana'), until)).toBeNull();
-    await service.rejected(id('ana'));
+    await service.rejected(id('ana'), ana!.seal);
     expect(store.rows.get('ana:moodle')!.account.status).toBe('revoked');
     expect(await service.credential(id('ana'), before)).toBeNull();
     expect(await service.readers(MOODLE, before)).toEqual({
@@ -370,6 +375,23 @@ describe('PortalAccounts', () => {
       accounts: [id('bo')],
     });
     expect(await service.credential('nobody')).toBeNull();
+  });
+
+  it('revokes the credential a run had, not one the account was linked by again since', async () => {
+    const { service, store, setToken } = accounts();
+    await setToken('ana', MOODLE, '1~old');
+    const { id } = store.rows.get('ana:moodle')!.account;
+    const old = await service.credential(id);
+    // linked again by the same portal user while a run on the old one goes
+    await setToken('ana', MOODLE, '1~new');
+    expect(store.rows.get('ana:moodle')!.account.id).toBe(id);
+
+    await service.rejected(id, old!.seal);
+    expect(store.rows.get('ana:moodle')!.account.status).toBe('linked');
+    const fresh = await service.credential(id);
+    expect(fresh?.seal).not.toBe(old!.seal);
+    await service.rejected(id, fresh!.seal);
+    expect(store.rows.get('ana:moodle')!.account.status).toBe('revoked');
   });
 
   it("opens no credential of an account of a portal that's read as shared since", async () => {

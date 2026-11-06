@@ -61,10 +61,10 @@ export class PrismaPortalAccountRepository extends PortalAccountRepository {
     return { account: toAccount(account), sealed: credential.sealed };
   }
 
-  async saveStatus(account: PortalAccount) {
+  async saveStatus(account: PortalAccount, sealed: string) {
     const { id, status } = account.snapshot;
     await this.txHost.tx.portalAccount.updateMany({
-      where: { id },
+      where: { id, credential: { is: { sealed } } },
       data: { status },
     });
   }

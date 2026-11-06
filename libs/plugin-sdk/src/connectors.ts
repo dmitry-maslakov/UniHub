@@ -72,19 +72,22 @@ export interface Seen {
 
 // One account's view of one course, sent as it sees it: every record the
 // account sees there, then end(), then the content of the files file()
-// said to fetch. A course courses() didn't send is an UnknownReferenceError
-// (at end(), for a user's account), and so is a file's item the pass
-// didn't send before it. Records seen alike by several accounts are kept
-// once, so leave out of a record what says how the account stands (read or
-// not, its submission): it would make a version per account. A file's
-// bytes are fetched once per version of them (its size and updatedAt), by
-// the run that gets fetch: true; the others go on without them.
+// said to fetch, once every pass of the run has ended (when a pass ends
+// would otherwise tell how long the downloads before it took, and so what
+// the hub had already). A course courses() didn't send is an
+// UnknownReferenceError (at end(), for a user's account), and so is a
+// file's item the pass didn't send before it. Records seen alike by several
+// accounts are kept once, so leave out of a record what says how the
+// account stands (read or not, its submission): it would make a version per
+// account. A file's bytes are fetched once per version of them (its size
+// and updatedAt), by the run that gets fetch: true; the others go on
+// without them.
 export interface CoursePass {
   // the record names this pass's course, or none
   item(record: ItemRecord, seen?: Seen): Promise<void>;
-  // fetch: this run downloads the file's content and sends it once the pass
-  // has ended; false when the hub has it, or another run is fetching it,
-  // or it's locked or too large
+  // fetch: this run downloads the file's content and sends it once every
+  // pass of the run has ended; false when the hub has it, or another run is
+  // fetching it, or it's locked or too large
   file(record: FileRecord, seen?: Seen): Promise<{ fetch: boolean }>;
   // The account's view of the course is now what this pass sent, and what
   // it sent before but what `gone` names, by the portal's ids: what a
@@ -92,8 +95,9 @@ export interface CoursePass {
   // that failed had stays, so a connector that can't tell gone from not
   // listed this time names none.
   end(gone?: { items?: string[]; files?: string[] }): Promise<void>;
-  // content of a file of the pass, after end(); past the hub's limit for
-  // one file it is an InvalidRecordError (CONTENT_TOO_LARGE)
+  // content of a file of the pass, once every pass of the run has ended;
+  // past the hub's limit for one file it is an InvalidRecordError
+  // (CONTENT_TOO_LARGE)
   content(
     fileExternalId: string,
     content: Readable,

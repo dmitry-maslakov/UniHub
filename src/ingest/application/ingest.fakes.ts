@@ -28,11 +28,12 @@ export class FakeStates extends SyncStateRepository {
 
 // a lease for the first to ask for a key
 export class FakeLeases extends FetchLeases {
-  readonly taken = new Set<string>();
+  // each key taken, for how long
+  readonly taken = new Map<string, number>();
 
-  async take(key: string) {
+  async take(key: string, ms: number) {
     if (this.taken.has(key)) return false;
-    this.taken.add(key);
+    this.taken.set(key, ms);
     return true;
   }
 }

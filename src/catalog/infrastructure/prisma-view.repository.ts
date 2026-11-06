@@ -107,6 +107,14 @@ export class PrismaViewRepository extends ViewRepository {
       await this.made(kind, id, recordId, data);
       return id;
     }
+    if (kind === 'file') {
+      const found = await this.txHost.tx.fileVersion.findFirstOrThrow({
+        where: { fileId: recordId, fingerprint },
+        select: { id: true, contentHash: true },
+      });
+      if (!found.contentHash) await this.shareBytes(recordId, data as Stamp);
+      return found.id;
+    }
     const found = await versions.findFirstOrThrow({
       where: {
         [record]: recordId,
@@ -118,7 +126,7 @@ export class PrismaViewRepository extends ViewRepository {
   }
 
   // A post new to the hub is news to plugins and the index; so is a file
-  // version whose bytes the hub has already, from another version of them
+  // version whose bytes the hub has already (shareBytes)
   private async made(kind: Kind, id: string, recordId: string, data: unknown) {
     const { tx } = this.txHost;
     if (kind === 'item') {
@@ -132,11 +140,17 @@ export class PrismaViewRepository extends ViewRepository {
         },
       ]);
     }
-    if (kind !== 'file') return;
-    const stamp = data as Stamp;
-    const sibling = await tx.fileVersion.findFirst({
+    if (kind === 'file') await this.shareBytes(recordId, data as Stamp);
+  }
+
+  // The bytes the hub has of a file at this stamp, from another version of
+  // them, given to its versions without them: one just made, or one made
+  // while they came in (its transaction saw none, and storing them saw no
+  // version), at its next pass.
+  private async shareBytes(fileId: string, stamp: Stamp) {
+    const sibling = await this.txHost.tx.fileVersion.findFirst({
       where: {
-        fileId: recordId,
+        fileId,
         contentHash: { not: null },
         contentStale: false,
         ...stampOf(stamp),
@@ -144,7 +158,7 @@ export class PrismaViewRepository extends ViewRepository {
       select: { contentHash: true },
     });
     if (sibling?.contentHash)
-      await this.storeBytes(recordId, stamp, sibling.contentHash);
+      await this.storeBytes(fileId, stamp, sibling.contentHash);
   }
 
   async sightings(kind: Kind, account: string, portalCourseId: string | null) {

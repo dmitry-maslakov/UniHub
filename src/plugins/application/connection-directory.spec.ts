@@ -1,5 +1,8 @@
 import { PortalId, Secret } from '@app/plugin-sdk';
-import { directoryOf } from '../../../test/discovered-plugins.js';
+import {
+  directoryOf,
+  pluginSettings,
+} from '../../../test/discovered-plugins.js';
 import { Connection, type IngestService } from '../../ingest/contracts.js';
 
 const lms = PortalId.parse('lms');
@@ -24,22 +27,27 @@ describe('ConnectionDirectory', () => {
     const { everyMs, offsetMs } = directory.gridOf(ana);
     const slot = Date.UTC(2026, 10, 6) + offsetMs;
 
-    const ctx = await directory.context(
+    const found = await directory.context(
       ana,
       new AbortController().signal,
       new Date(slot + everyMs / 2),
     );
-    await ctx!.ingest.courses([]);
+    const ctx = found!.context;
+    await ctx.ingest.courses([]);
 
     const [[, , run]] = courses.mock.calls as unknown as [
-      [unknown, unknown, { shown: (ended: Date) => object }],
+      [unknown, unknown, { shown: (ended: Date) => object; leaseMs: number }],
     ];
     // PUBLISH_DELAY_MINUTES and HOLD_MINUTES as they are by default
     expect(run.shown(new Date(slot + 60_000))).toEqual({
       shownFrom: new Date(slot + 10 * 60_000),
       openFrom: new Date(slot + 25 * 60_000),
     });
-    expect(ctx!.account.kind).toBe('user');
+    // a file's lease, as long as the run may take
+    expect(run.leaseMs).toBe(pluginSettings().pollTimeoutMs);
+    expect(ctx.account.kind).toBe('user');
+    // which seal of its credential, to say which one the portal refused
+    expect(found!.seal).toBe('seal-of-ana');
   });
 
   it("gives no run to an account that no longer reads, and the shared account's its own", async () => {
@@ -51,8 +59,9 @@ describe('ConnectionDirectory', () => {
         signal,
       ),
     ).toBeNull();
-    expect(
-      (await directory.context(Connection.shared(lms), signal))!.account,
-    ).toEqual({ kind: 'shared' });
+    expect(await directory.context(Connection.shared(lms), signal)).toEqual({
+      context: expect.objectContaining({ account: { kind: 'shared' } }),
+      seal: null,
+    });
   });
 });

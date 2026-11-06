@@ -38,33 +38,43 @@ export class ConnectionDirectory {
   }
 
   // What a run that started at `start` gets: a user's account's, its
-  // credential, and what it finds shows at its slot. Null for an account
-  // that no longer reads.
+  // credential, and what it finds shows at its slot; and which seal of the
+  // credential that is, to say which one the portal refused (none for the
+  // shared account's, the owner's to replace). Null for an account that no
+  // longer reads.
   async context(
     connection: Connection,
     signal: AbortSignal,
     start = new Date(),
-  ): Promise<ConnectorContext | null> {
+  ): Promise<{ context: ConnectorContext; seal: string | null } | null> {
     const { portal, account } = connection;
     const base = { connection: { portal, account }, signal };
     if (connection.shared)
       return {
-        ...base,
-        account: { kind: 'shared' },
-        ingest: new SdkPortalIngest(this.ingest, connection, signal),
+        context: {
+          ...base,
+          account: { kind: 'shared' },
+          ingest: new SdkPortalIngest(this.ingest, connection, signal),
+        },
+        seal: null,
       };
-    const credential = await this.queries.execute(
+    const found = await this.queries.execute(
       new AccountCredentialQuery(account),
     );
-    if (!credential) return null;
+    if (!found) return null;
+    const { credential, seal } = found;
     const slot = slotOf(start, this.gridOf(connection));
     const run: Run = {
       shown: (ended) => publication(slot, ended, this.config.publishing),
+      leaseMs: this.config.pollTimeoutMs,
     };
     return {
-      ...base,
-      account: { kind: 'user', credential: async () => credential },
-      ingest: new SdkPortalIngest(this.ingest, connection, signal, run),
+      context: {
+        ...base,
+        account: { kind: 'user', credential: async () => credential },
+        ingest: new SdkPortalIngest(this.ingest, connection, signal, run),
+      },
+      seal,
     };
   }
 }

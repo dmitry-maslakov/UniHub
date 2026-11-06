@@ -188,6 +188,18 @@ describe('CanvasConnector', () => {
     expect(ingest.removedFiles).toEqual(['3003']);
   });
 
+  it('removes on the next run what was gone when the end failed', async () => {
+    const ingest = new RecordingIngest();
+    await run(ingest);
+    without(`${COURSE}/assignments`, 901);
+    ingest.failingEnds = 1;
+
+    await expect(run(ingest)).rejects.toThrow('the database is away');
+    expect(ingest.removedItems).toEqual([]);
+    await run(ingest);
+    expect(ingest.removedItems).toEqual(['assignment:901']);
+  });
+
   it('removes nothing for a listing refused or a tab hidden since', async () => {
     const ingest = new RecordingIngest();
     await run(ingest);
@@ -410,6 +422,37 @@ describe("CanvasConnector, on a user's own token", () => {
     expect(canvas.asked.filter((path) => path.startsWith('download'))).toEqual(
       [],
     );
+  });
+
+  it("downloads once every course's pass has ended, so when one ends says nothing of another's files", async () => {
+    (canvas.answers['/api/v1/courses'] as object[]).push({
+      id: 103,
+      name: 'Networks',
+      course_code: 'NET-2026',
+      start_at: null,
+      end_at: null,
+    });
+    const ingest = new RecordingIngest();
+    await runAs(ingest);
+
+    expect(ingest.log.slice(0, 2)).toEqual(['end 101', 'end 103']);
+    expect(ingest.log.slice(2).sort()).toEqual([
+      'content 3001',
+      'content 3002',
+    ]);
+  });
+
+  it('takes nothing out of the view of a course whose record the hub refuses, and keeps its listings', async () => {
+    const ingest = new RecordingIngest();
+    await runAs(ingest);
+    const saved = structuredClone(ingest.saved);
+    without(`${COURSE}/assignments`, 901);
+    ingest.refusing.add('101');
+
+    await expect(runAs(ingest)).rejects.toThrow('canvas courses 101 skipped');
+    expect(ingest.removedItems).toEqual([]);
+    expect(ingest.items.has('assignment:901')).toBe(true);
+    expect(ingest.saved).toEqual(saved);
   });
 
   it('leaves out of the view what a listing that went through no longer has, and a course the user left', async () => {

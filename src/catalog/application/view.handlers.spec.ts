@@ -60,9 +60,20 @@ const hash = ContentHash.parse('a'.repeat(64));
 async function viewing() {
   const fakes = await onFakes();
   const { commands, views } = fakes;
-  const courses = (account: string, ids: string[], minute = 0) =>
+  const courses = (
+    account: string,
+    ids: string[],
+    minute = 0,
+    refused: string[] = [],
+  ) =>
     commands.execute(
-      new ViewCoursesCommand(account, portal, ids.map(course), at(minute)),
+      new ViewCoursesCommand(
+        account,
+        portal,
+        ids.map(course),
+        refused,
+        at(minute),
+      ),
     );
   const pass = (
     account: string,
@@ -186,6 +197,22 @@ describe('views of users’ accounts', () => {
       'Course c2': { hiddenFrom: null },
       news: hidden,
       'slides.pdf': hidden,
+    });
+  });
+
+  it('keeps a course whose record was refused, with what the account saw in it', async () => {
+    const { courses, pass, sees } = await viewing();
+    await courses('ana', ['c1', 'c2']);
+    await pass('ana', [open(post('news'))], [open(file('slides'))]);
+    // c1 listed, its record refused; c2 no longer listed
+    await courses('ana', [], 60, ['c1']);
+
+    const shown = { hiddenFrom: null };
+    expect(sees('ana')).toMatchObject({
+      'Course c1': shown,
+      'Course c2': { hiddenFrom: at(60).shownFrom },
+      news: shown,
+      'slides.pdf': shown,
     });
   });
 

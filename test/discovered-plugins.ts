@@ -114,7 +114,10 @@ export const directoryOf = (
       ],
       [
         AccountCredentialQuery,
-        ({ account }: AccountCredentialQuery) => credentials[account] ?? null,
+        ({ account }: AccountCredentialQuery) =>
+          credentials[account]
+            ? { credential: credentials[account], seal: `seal-of-${account}` }
+            : null,
       ],
     ]).queries,
     pluginSettings(),

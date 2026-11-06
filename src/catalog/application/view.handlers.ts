@@ -44,7 +44,7 @@ export class ViewCoursesHandler implements ICommandHandler<ViewCoursesCommand> {
   constructor(private readonly views: ViewRepository) {}
 
   @Transactional()
-  async execute({ account, portal, courses, at }: ViewCoursesCommand) {
+  async execute({ account, portal, courses, kept, at }: ViewCoursesCommand) {
     const ids = await this.views.recordIds(
       'course',
       portal,
@@ -62,19 +62,20 @@ export class ViewCoursesHandler implements ICommandHandler<ViewCoursesCommand> {
       );
       sent.push({ recordId, versionId, open: true });
     }
-    const { hide } = await changeView(
-      this.views,
-      'course',
-      account,
-      null,
-      sent,
-      // a whole listing: what it didn't send is gone
-      undefined,
-      at,
+    // a whole listing: what it didn't send is gone, but for the courses
+    // whose records were refused, kept with what the account saw in them
+    const refused = new Set(
+      (await this.views.recordIds('course', portal, kept, false)).values(),
     );
+    const before = await this.views.sightings('course', account, null);
+    const gone = new Set(
+      before.map((s) => s.recordId).filter((id) => !refused.has(id)),
+    );
+    const change = viewChange(before, sent, gone);
+    await this.views.apply('course', account, change, at);
     // what it saw in a course it's no longer in goes with the course
     const still = new Set(sent.map((s) => s.recordId));
-    for (const { recordId: course } of hide.filter(
+    for (const { recordId: course } of change.hide.filter(
       (s) => !still.has(s.recordId),
     ))
       for (const kind of ['item', 'file'] as const)

@@ -41,10 +41,10 @@ export class InMemoryAccounts extends PortalAccountRepository {
       : null;
   }
 
-  async saveStatus(account: PortalAccount) {
+  async saveStatus(account: PortalAccount, sealed: string) {
     const { userId, portal, status } = account.snapshot;
     const row = this.rows.get(`${userId}:${portal}`);
-    if (row?.account.id === account.id)
+    if (row?.account.id === account.id && row.sealed === sealed)
       row.account = { ...row.account, status };
   }
 

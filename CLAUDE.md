@@ -66,7 +66,7 @@ Put off:
 - bodies with a version stamp fetched once per version (the design's `sight(externalId, version)`, the record sent only when the hub lacks it): Canvas lists its pages with their bodies, so a body costs no request of its own; a portal that serves each body by a request of its own would want it
 - a lock that comes for a version an account sees takes hold at its pass, not at its slot: a sight has one `open`, and it tells only the account's own user anything. One that goes opens at the pass's hold
 - a user's token's expiry is the one the portal gave at linking: a run doesn't renew it (the design's `expiresAt(at)`), and finds it `revoked` once the portal refuses it
-- a fetch lease isn't released: a run that took one and failed the download keeps that version's bytes from the other accounts' runs for the lease's hour
+- a fetch lease isn't released: a run that took one and failed the download keeps that version's bytes from the other accounts' runs for the lease's time, as long as a run may take (`CONNECTOR_POLL_TIMEOUT_MINUTES`)
 - `CONNECTOR_CONCURRENCY` is per worker process and for every portal at once, not per portal
 - OAuth as a link mode: the portal's consent page, the access and refresh tokens sealed as a pasted token is (Canvas needs a developer key from the school)
 - connector keys (#33) bound to a user's account, accounts over gRPC and the `connector` mode

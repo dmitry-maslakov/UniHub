@@ -13,9 +13,16 @@ import { toFileInput, toItemInput } from './records.js';
 // publication rule).
 export interface Run {
   shown(ended: Date): catalog.Shown;
+  // how long a file's fetch lease it takes holds: as long as the run may
+  // take, as it downloads once its passes have ended
+  leaseMs: number;
 }
 
-export const sharedRun: Run = { shown: (ended) => catalog.atOnce(ended) };
+// the shared account's passes take no leases
+export const sharedRun: Run = {
+  shown: (ended) => catalog.atOnce(ended),
+  leaseMs: 0,
+};
 
 // what the sdk's Seen says, checked
 export interface Seen {
@@ -221,7 +228,10 @@ export class AccountPass extends CoursePass {
     const has = await this.ports.queries.execute(
       new catalog.HasBytesQuery(file, stamp),
     );
-    return !has && this.ports.leases.take(JSON.stringify([file, stamp]));
+    return (
+      !has &&
+      this.ports.leases.take(JSON.stringify([file, stamp]), this.run.leaseMs)
+    );
   }
 
   protected async close(gone: Gone) {

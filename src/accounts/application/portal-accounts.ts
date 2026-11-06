@@ -1,7 +1,8 @@
+import { createHash } from 'node:crypto';
 import { Injectable, type OnApplicationBootstrap } from '@nestjs/common';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { z } from 'zod';
-import { CredentialRejectedError, type Credential } from '@app/plugin-sdk';
+import { CredentialRejectedError } from '@app/plugin-sdk';
 import {
   StoredText,
   type LinkMode,
@@ -12,6 +13,7 @@ import { IsAdminQuery } from '../../identity/contracts.js';
 import {
   AccountsChangedCommand,
   PluginCatalog,
+  type AccountCredential,
   type PortalReaders,
 } from '../../plugins/contracts.js';
 import { CredentialVault } from '../domain/credential-vault.js';
@@ -32,6 +34,12 @@ const nameOf = (error: unknown) => {
   const name = error instanceof Error ? error.name : typeof error;
   return /^[A-Za-z][\w$]{0,63}$/.test(name) ? name : 'Error';
 };
+
+// Which seal of an account's credential a run had, and nothing of the
+// credential: a hash of what's sealed, new each time it's sealed (a fresh
+// nonce), so a link again by the same token is another
+const sealOf = (sealed: string) =>
+  createHash('sha256').update(sealed).digest('base64url');
 
 // what the hub keeps of a connector's answer; anything else is the
 // connector failing
@@ -125,8 +133,12 @@ export class PortalAccounts implements OnApplicationBootstrap {
     return { shared: false, accounts: accounts.map(({ id }) => id) };
   }
 
-  // The credential of an account that reads now, opened for its run
-  async credential(id: string, now = new Date()): Promise<Credential | null> {
+  // The credential of an account that reads now, opened for its run, and
+  // which seal of it that is
+  async credential(
+    id: string,
+    now = new Date(),
+  ): Promise<AccountCredential | null> {
     const found = await this.accounts.withCredential(id);
     if (!found) return null;
     const { account, sealed } = found;
@@ -134,15 +146,17 @@ export class PortalAccounts implements OnApplicationBootstrap {
       this.links.of(account.portal).mode === account.snapshot.mode &&
       account.statusAt(now) === 'linked';
     if (!reads) return null;
-    return { kind: 'token', token: this.vault.open(sealed, account.snapshot) };
+    const token = this.vault.open(sealed, account.snapshot);
+    return { credential: { kind: 'token', token }, seal: sealOf(sealed) };
   }
 
-  // a run found the portal no longer takes the account's credential
-  async rejected(id: string) {
+  // A run found the portal no longer takes the account's credential of
+  // `seal`: revoked, unless it was linked again since by another one
+  async rejected(id: string, seal: string) {
     const found = await this.accounts.withCredential(id);
-    if (!found) return;
+    if (!found || sealOf(found.sealed) !== seal) return;
     found.account.revoke();
-    await this.accounts.saveStatus(found.account);
+    await this.accounts.saveStatus(found.account, found.sealed);
   }
 
   // The user's account of the portal, linked by the token once the portal

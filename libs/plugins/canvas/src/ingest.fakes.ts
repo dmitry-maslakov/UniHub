@@ -20,7 +20,7 @@ import {
 // before end() or of a file locked for the account. A record sent again
 // replaces the one before; at end() what it says is gone is removed,
 // unless the pass sent it; the hub has a file's content once content() got
-// it.
+// it. An end() made to fail takes nothing away.
 export class RecordingIngest implements PortalIngest {
   readonly listedCourses = new Map<string, CourseRecord>();
   // the courses whose records the hub refuses
@@ -32,6 +32,10 @@ export class RecordingIngest implements PortalIngest {
   readonly contents = new Map<string, string>();
   readonly removedItems: string[] = [];
   readonly removedFiles: string[] = [];
+  // what the passes did, in order: each end() and content()
+  readonly log: string[] = [];
+  // how many end()s to fail, as the hub's database away would
+  failingEnds = 0;
   saved: Json | null = null;
 
   async courses(records: CourseRecord[]) {
@@ -75,7 +79,12 @@ export class RecordingIngest implements PortalIngest {
       },
       end: async (gone = {}) => {
         open();
+        if (this.failingEnds > 0) {
+          this.failingEnds--;
+          throw new Error('the database is away');
+        }
         ended = true;
+        this.log.push(`end ${course}`);
         this.drop(this.items, sent.items, gone.items, this.removedItems);
         this.drop(this.files, sent.files, gone.files, this.removedFiles);
       },
@@ -86,6 +95,7 @@ export class RecordingIngest implements PortalIngest {
           throw new InvalidRecordError(['locked']);
         const body = await text(content);
         this.contents.set(fileExternalId, body);
+        this.log.push(`content ${fileExternalId}`);
         const hash = createHash('sha256').update(body).digest('hex');
         return { hash: ContentHash.parse(hash) };
       },

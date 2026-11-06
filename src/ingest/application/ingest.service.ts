@@ -52,7 +52,8 @@ export class IngestService {
 
   // The account's courses, after a listing of them that went through: a
   // user's account sees these alone from now on, the shared account keeps
-  // every course it ever sent. A record refused is left out, and named.
+  // every course it ever sent. A record refused is left out, and named; a
+  // user's account keeps what it saw of that course.
   async courses(connection: Connection, raws: unknown, run: Run = sharedRun) {
     if (!Array.isArray(raws))
       throw new MalformedRecordError(['courses: a list']);
@@ -77,6 +78,7 @@ export class IngestService {
           connection.account,
           connection.portal,
           courses,
+          refused.map(({ externalId }) => externalId),
           run.shown(new Date()),
         ),
       );

@@ -36,7 +36,7 @@ export class AccountCredentialHandler implements IQueryHandler<AccountCredential
 export class AccountRejectedHandler implements ICommandHandler<AccountRejectedCommand> {
   constructor(private readonly accounts: PortalAccounts) {}
 
-  execute({ account }: AccountRejectedCommand) {
-    return this.accounts.rejected(account);
+  execute({ account, seal }: AccountRejectedCommand) {
+    return this.accounts.rejected(account, seal);
   }
 }
