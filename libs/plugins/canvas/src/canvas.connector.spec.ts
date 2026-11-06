@@ -19,14 +19,30 @@ const store = new CuttingFileStore().listen();
 const COURSE = '/api/v1/courses/101';
 const TOKEN_PATH = '/api/v1/users/self/tokens/1~abc';
 
+const portal = PortalId.parse('canvas');
+const connector = (token: string | null = TOKEN) =>
+  new CanvasConnector({ url: CANVAS_URL, token, userAgent: 'test' });
+// the shared account's run, on the owner's token
 const run = (
   ingest: RecordingIngest,
   { signal = new AbortController().signal, token = TOKEN } = {},
 ) =>
-  new CanvasConnector({ url: CANVAS_URL, token, userAgent: 'test' }).poll({
-    connection: { portal: PortalId.parse('canvas'), account: 'shared' },
+  connector(token).poll({
+    connection: { portal, account: 'shared' },
+    account: { kind: 'shared' },
     ingest,
     signal,
+  });
+// a user's own account's, on their token; the owner's is none
+const runAs = (ingest: RecordingIngest, token = TOKEN) =>
+  connector(null).poll({
+    connection: { portal, account: 'a-1' },
+    account: {
+      kind: 'user',
+      credential: async () => ({ kind: 'token', token: new Secret(token) }),
+    },
+    ingest,
+    signal: new AbortController().signal,
   });
 
 const without = (path: string, id: number) => {
@@ -45,7 +61,7 @@ describe('CanvasConnector', () => {
     const ingest = new RecordingIngest();
     await run(ingest);
 
-    expect([...ingest.courses.values()].map((c) => c.name)).toEqual([
+    expect([...ingest.listedCourses.values()].map((c) => c.name)).toEqual([
       'Operating Systems',
     ]);
     expect(canvas.asked.filter((path) => path.startsWith('/'))).toEqual([
@@ -260,7 +276,7 @@ describe('CanvasConnector', () => {
     expect(warn).toHaveBeenCalledWith(
       expect.stringMatching(/^course 101 skipped: canvas answered 400/),
     );
-    expect(ingest.courses.has('103')).toBe(true);
+    expect(ingest.listedCourses.has('103')).toBe(true);
     // course 101's listings as they were, so nothing of it is taken for gone
     expect(ingest.saved).toEqual({
       courses: { '103': { items: {}, files: {} } },
@@ -309,7 +325,7 @@ describe('CanvasConnector', () => {
     await run(ingest);
 
     expect(warn).not.toHaveBeenCalled();
-    expect(ingest.courses.size).toBe(1);
+    expect(ingest.listedCourses.size).toBe(1);
   });
 
   it('fails the run, saying why, when Canvas no longer takes the token', async () => {
@@ -318,7 +334,78 @@ describe('CanvasConnector', () => {
 
     await expect(failed).rejects.toBeInstanceOf(TokenRejectedError);
     await expect(failed).rejects.toThrow(/expired or was revoked/);
-    expect(ingest.courses.size).toBe(0);
+    expect(ingest.listedCourses.size).toBe(0);
+  });
+});
+
+describe("CanvasConnector, on a user's own token", () => {
+  let warn: MockInstance<Logger['warn']>;
+  beforeEach(() => {
+    warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => warn.mockRestore());
+
+  it('reads each course as the user sees it: what some of it see, the dates as they are for the user', async () => {
+    const ingest = new RecordingIngest();
+    await runAs(ingest);
+
+    expect(ingest.items.has('topic:702')).toBe(true);
+    expect(ingest.items.has('assignment:902')).toBe(true);
+    expect(canvas.asked).toContain(`${COURSE}/assignments`);
+    const urls: string[] = [];
+    canvas.server.events.on('request:start', ({ request }) => {
+      urls.push(request.url);
+    });
+    await runAs(new RecordingIngest());
+    canvas.server.events.removeAllListeners();
+    expect(urls.join(' ')).not.toContain('override_assignment_dates');
+    // how the user stands still stays out, and so does what a module lists
+    expect(ingest.items.get('topic:701')!.raw).not.toHaveProperty('read_state');
+    expect(ingest.items.get('module:501')!.raw).not.toHaveProperty('items');
+    // the owner's token isn't asked about
+    expect(canvas.asked).not.toContain(TOKEN_PATH);
+  });
+
+  it('sends a file locked for the user as locked, and downloads what the hub asks for after the pass', async () => {
+    const ingest = new RecordingIngest();
+    await runAs(ingest);
+
+    expect([...ingest.locked]).toEqual(['3003']);
+    expect([...ingest.contents.keys()].sort()).toEqual(['3001', '3002']);
+    canvas.asked = [];
+    await runAs(ingest);
+    expect(canvas.asked.filter((path) => path.startsWith('download'))).toEqual(
+      [],
+    );
+  });
+
+  it('leaves out of the view what a listing that went through no longer has, and a course the user left', async () => {
+    const ingest = new RecordingIngest();
+    await runAs(ingest);
+    without(`${COURSE}/assignments`, 901);
+    await runAs(ingest);
+    expect(ingest.removedItems).toEqual(['assignment:901']);
+
+    canvas.answers['/api/v1/courses'] = [];
+    await runAs(ingest);
+    expect(ingest.listedCourses.size).toBe(0);
+  });
+
+  it('takes a token Canvas no longer takes for the credential rejected', async () => {
+    await expect(runAs(new RecordingIngest(), '1~revoked')).rejects.toThrow(
+      CredentialRejectedError,
+    );
+  });
+
+  it("refuses to read as shared without the owner's token", async () => {
+    await expect(
+      connector(null).poll({
+        connection: { portal, account: 'shared' },
+        account: { kind: 'shared' },
+        ingest: new RecordingIngest(),
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toThrow(/set CANVAS_TOKEN/);
   });
 });
 

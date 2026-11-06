@@ -32,11 +32,11 @@ async function expiryOf(api: CanvasApi, token: string) {
   return found?.expires_at ? new Date(found.expires_at) : null;
 }
 
-// Canvas courses as the hub owner sees them, every hour, on the owner's
-// own token: the one account is 'shared', so the owner sees to it that
-// they may show the hub's readers what they see (README). Users may link
-// tokens of their own too (README, Portal accounts), which nothing reads
-// with yet.
+// Canvas courses read as shared: as the hub owner sees them, every hour, on
+// the owner's own token, what the whole course sees, so the owner sees to
+// it that they may show the hub's readers what they see (README). Read
+// with users' own tokens (README, Portal accounts): each user's account as
+// it sees its courses, on its own grid.
 @PollConnector({ portal: 'canvas', schedule: '0 * * * *', links: ['token'] })
 @Injectable()
 export class CanvasConnector implements PollsPortal, IdentifiesAccounts {
@@ -47,10 +47,31 @@ export class CanvasConnector implements PollsPortal, IdentifiesAccounts {
     private readonly config: ConfigType<typeof canvasConfig>,
   ) {}
 
-  async poll({ ingest, signal }: ConnectorContext) {
-    const api = new CanvasApi({ ...this.config, signal });
-    await this.warnOfExpiry(api);
-    await new CanvasSync(api, ingest, this.config.url).run();
+  async poll({ ingest, signal, account }: ConnectorContext) {
+    if (account.kind === 'shared') {
+      const { token } = this.config;
+      if (!token)
+        throw new Error(
+          'canvas is read as shared, on the hub owner’s token: set CANVAS_TOKEN',
+        );
+      const api = new CanvasApi({ ...this.config, token, signal });
+      await this.warnOfExpiry(api, token);
+      return new CanvasSync(api, ingest, this.config.url).run();
+    }
+    // the user's: its expiry is theirs to see to
+    const { token } = await account.credential();
+    const api = new CanvasApi({
+      ...this.config,
+      token: token.reveal(),
+      signal,
+    });
+    try {
+      await new CanvasSync(api, ingest, this.config.url, 'own').run();
+    } catch (error) {
+      if (error instanceof TokenRejectedError)
+        throw new CredentialRejectedError();
+      throw error;
+    }
   }
 
   // Whose a pasted token is, by Canvas's id for its user (nothing else of
@@ -78,8 +99,8 @@ export class CanvasConnector implements PollsPortal, IdentifiesAccounts {
 
   // A token Canvas doesn't find by its hint, or won't show, goes unchecked;
   // one it no longer takes fails the run here, before anything is read.
-  private async warnOfExpiry(api: CanvasApi) {
-    const expiresAt = await expiryOf(api, this.config.token);
+  private async warnOfExpiry(api: CanvasApi, token: string) {
+    const expiresAt = await expiryOf(api, token);
     if (expiresAt && expiresAt.getTime() - Date.now() < WARN_BEFORE_MS)
       this.logger.warn(
         `the canvas token expires at ${expiresAt.toISOString()}: make a new one and set CANVAS_TOKEN before then`,

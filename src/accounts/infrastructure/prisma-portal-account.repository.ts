@@ -39,6 +39,36 @@ export class PrismaPortalAccountRepository extends PortalAccountRepository {
     return rows.map(toAccount);
   }
 
+  async linkedOf(portal: PortalId, now: Date) {
+    const rows = await this.txHost.tx.portalAccount.findMany({
+      where: {
+        portal,
+        status: 'linked',
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      },
+      orderBy: { id: 'asc' },
+    });
+    return rows.map(toAccount);
+  }
+
+  async withCredential(id: string) {
+    const row = await this.txHost.tx.portalAccount.findUnique({
+      where: { id },
+      include: { credential: { select: { sealed: true } } },
+    });
+    if (!row?.credential) return null;
+    const { credential, ...account } = row;
+    return { account: toAccount(account), sealed: credential.sealed };
+  }
+
+  async saveStatus(account: PortalAccount) {
+    const { id, status } = account.snapshot;
+    await this.txHost.tx.portalAccount.updateMany({
+      where: { id },
+      data: { status },
+    });
+  }
+
   // One upsert per (user, portal), so two at once leave one account: a new
   // account's id takes the old one's place, its credential carried along by
   // the key (ON UPDATE CASCADE), then given the new seal.
@@ -58,13 +88,26 @@ export class PrismaPortalAccountRepository extends PortalAccountRepository {
   }
 
   async remove(userId: string, portal: PortalId) {
-    const { count } = await this.txHost.tx.portalAccount.deleteMany({
-      where: { userId, portal },
-    });
-    return count > 0;
+    const [gone] = await this.removeWhere({ userId, portal });
+    return gone?.id ?? null;
   }
 
-  async removeAllOf(userId: string) {
-    await this.txHost.tx.portalAccount.deleteMany({ where: { userId } });
+  removeAllOf(userId: string) {
+    return this.removeWhere({ userId });
+  }
+
+  // which went: Prisma's deleteMany answers a count alone. By their ids,
+  // so one linked anew meanwhile, another account, stays
+  @Transactional()
+  private async removeWhere(where: { userId: string; portal?: PortalId }) {
+    const { tx } = this.txHost;
+    const rows = await tx.portalAccount.findMany({
+      where,
+      select: { id: true, portal: true },
+    });
+    await tx.portalAccount.deleteMany({
+      where: { id: { in: rows.map((r) => r.id) } },
+    });
+    return rows.map(({ id, portal }) => ({ id, portal: portal as PortalId }));
   }
 }

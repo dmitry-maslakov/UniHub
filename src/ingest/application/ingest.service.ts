@@ -5,8 +5,17 @@ import { Outbox } from '@nestjs/outbox';
 import * as catalog from '../../catalog/contracts.js';
 import { BlobStore } from '../../storage/contracts.js';
 import type { Connection } from '../domain/connection.js';
-import { RemovalNotAllowedError } from '../domain/errors.js';
+import { MalformedRecordError, SharedOnlyError } from '../domain/errors.js';
+import { FetchLeases } from '../domain/fetch-leases.js';
 import { SyncStateRepository } from '../domain/sync-state.js';
+import {
+  AccountPass,
+  SharedPass,
+  sharedRun,
+  type CoursePass,
+  type PassPorts,
+  type Run,
+} from './course-pass.js';
 import {
   toFileInput,
   toItemInput,
@@ -17,19 +26,66 @@ import {
 
 // What a connector does, whichever way it talks to the hub: what it sends
 // (records, ids, state) is checked here and handed to catalog and storage.
-// Errors are domain errors; the adapters (the sdk's PortalIngest, gRPC)
-// answer them their own way.
+// A user's own account sends what it sees by passes alone; the shared
+// account by passes or record by record. Errors are domain errors; the
+// adapters (the sdk's PortalIngest, gRPC) answer them their own way.
 @Injectable()
 export class IngestService {
+  private readonly ports: PassPorts;
+
   constructor(
     private readonly commands: CommandBus,
     private readonly queries: QueryBus,
     private readonly blobs: BlobStore,
     private readonly states: SyncStateRepository,
     private readonly outbox: Outbox,
-  ) {}
+    leases: FetchLeases,
+  ) {
+    this.ports = {
+      commands,
+      queries,
+      blobs,
+      leases,
+      notify: () => this.outbox.notify(),
+    };
+  }
+
+  // The account's courses, after a listing of them that went through: a
+  // user's account sees these alone from now on, the shared account keeps
+  // every course it ever sent
+  async courses(connection: Connection, raws: unknown, run: Run = sharedRun) {
+    if (!Array.isArray(raws))
+      throw new MalformedRecordError(['courses: a list']);
+    const courses = raws.map((raw) => toPortalCourseInput(connection, raw));
+    if (connection.shared) {
+      for (const course of courses)
+        await this.commands.execute(
+          new catalog.UpsertPortalCourseCommand(course),
+        );
+      return;
+    }
+    const { account, portal } = connection;
+    await this.commands.execute(
+      new catalog.ViewCoursesCommand(
+        account,
+        portal,
+        courses,
+        run.shown(new Date()),
+      ),
+    );
+  }
+
+  // one account's view of one course, sent as a whole (CoursePass)
+  pass(connection: Connection, course: unknown, run: Run = sharedRun) {
+    const { externalId } = toRef(connection, course);
+    const pass: CoursePass = connection.shared
+      ? new SharedPass(connection, externalId, this.ports)
+      : new AccountPass(connection, externalId, this.ports, run);
+    return pass;
+  }
 
   async course(connection: Connection, raw: unknown) {
+    this.sharedOnly(connection);
     const { changed } = await this.commands.execute(
       new catalog.UpsertPortalCourseCommand(
         toPortalCourseInput(connection, raw),
@@ -39,6 +95,7 @@ export class IngestService {
   }
 
   async item(connection: Connection, raw: unknown) {
+    this.sharedOnly(connection);
     const { changed } = await this.commands.execute(
       new catalog.UpsertItemCommand(toItemInput(connection, raw)),
     );
@@ -46,6 +103,7 @@ export class IngestService {
   }
 
   async file(connection: Connection, raw: unknown) {
+    this.sharedOnly(connection);
     const file = toFileInput(connection, raw);
     const { changed, needsContent } = await this.commands.execute(
       new catalog.UpsertFileCommand(file),
@@ -91,7 +149,13 @@ export class IngestService {
     await this.states.save(connection, toState(raw));
   }
 
+  // the connection's gone: what it saved
+  forget(connection: Connection) {
+    return this.states.remove(connection);
+  }
+
   private async knownFile(connection: Connection, id: string) {
+    this.sharedOnly(connection);
     const file = toRef(connection, id);
     if (!(await this.queries.execute(new catalog.FindFileQuery(file))))
       throw new catalog.UnknownReferenceError(file.portal, file.externalId);
@@ -99,9 +163,12 @@ export class IngestService {
   }
 
   private removable(connection: Connection, id: unknown) {
-    if (!connection.mayRemoveRecords)
-      throw new RemovalNotAllowedError(connection);
+    this.sharedOnly(connection);
     return toRef(connection, id);
+  }
+
+  private sharedOnly(connection: Connection) {
+    if (!connection.shared) throw new SharedOnlyError(connection);
   }
 
   // a change committed a message; wake the relay instead of waiting for its poll

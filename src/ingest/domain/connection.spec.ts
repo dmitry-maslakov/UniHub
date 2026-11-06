@@ -11,13 +11,11 @@ describe('Connection', () => {
     );
   });
 
-  it('removes records only for what everyone sees', () => {
-    expect(Connection.shared(PortalId.parse('moodle')).mayRemoveRecords).toBe(
-      true,
+  it('is the shared account, whose records everyone sees, or a user’s', () => {
+    expect(Connection.shared(PortalId.parse('moodle')).shared).toBe(true);
+    expect(Connection.of({ portal: 'moodle', account: 'someone' }).shared).toBe(
+      false,
     );
-    expect(
-      Connection.of({ portal: 'moodle', account: 'someone' }).mayRemoveRecords,
-    ).toBe(false);
   });
 
   it("refuses what a key or a job id can't take apart", () => {

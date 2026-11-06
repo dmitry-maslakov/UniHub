@@ -103,9 +103,14 @@ model CourseVersion {
   name           String
   url            String?
   meta           Json?
+  // a hash of the record as a user's account saw it: the accounts that see
+  // it alike share the version, never changed; null for the shared
+  // account's, changed in place
+  fingerprint    String?
   updatedAt      DateTime      @updatedAt
   sights         CourseSight[]
 
+  @@unique([portalCourseId, fingerprint])
   @@index([portalCourseId])
 }
 
@@ -120,6 +125,8 @@ model ItemVersion {
   url            String?
   publishedAt    DateTime?
   raw            Json
+  // a hash of the record as a user's account saw it (CourseVersion)
+  fingerprint    String?
   // when the hub last changed it: its record, or its removal
   updatedAt      DateTime      @updatedAt
   sights         ItemSight[]
@@ -128,6 +135,7 @@ model ItemVersion {
   // postgres doesn't index foreign keys: cascades, and course listings in
   // their order (newest first, the undated last: NULLS LAST in the migration)
   @@index([portalCourseId, publishedAt(sort: Desc)])
+  @@unique([itemId, fingerprint])
 }
 
 model FileVersion {
@@ -151,6 +159,8 @@ model FileVersion {
   contentHash     String?
   // the portal changed the file since its content was stored
   contentStale    Boolean       @default(false)
+  // a hash of the record as a user's account saw it (CourseVersion)
+  fingerprint     String?
   updatedAt       DateTime      @updatedAt
   sights          FileSight[]
 
@@ -161,6 +171,7 @@ model FileVersion {
   @@index([itemId])
   // processing asks which files hold some content
   @@index([contentHash])
+  @@unique([fileId, fingerprint])
 }
 
 // An account's sight of a version: since when its view shows it, whether

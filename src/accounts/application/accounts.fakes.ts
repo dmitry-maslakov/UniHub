@@ -28,6 +28,26 @@ export class InMemoryAccounts extends PortalAccountRepository {
       .map(({ account }) => PortalAccount.restore(account));
   }
 
+  async linkedOf(portal: PortalId, now: Date) {
+    return [...this.rows.values()]
+      .map(({ account }) => PortalAccount.restore(account))
+      .filter((a) => a.portal === portal && a.statusAt(now) === 'linked');
+  }
+
+  async withCredential(id: string) {
+    const row = [...this.rows.values()].find((r) => r.account.id === id);
+    return row
+      ? { account: PortalAccount.restore(row.account), sealed: row.sealed }
+      : null;
+  }
+
+  async saveStatus(account: PortalAccount) {
+    const { userId, portal, status } = account.snapshot;
+    const row = this.rows.get(`${userId}:${portal}`);
+    if (row?.account.id === account.id)
+      row.account = { ...row.account, status };
+  }
+
   async save(account: PortalAccount, sealed: string) {
     const state = account.snapshot;
     this.rows.set(`${state.userId}:${state.portal}`, {
@@ -37,12 +57,20 @@ export class InMemoryAccounts extends PortalAccountRepository {
   }
 
   async remove(userId: string, portal: PortalId) {
-    return this.rows.delete(`${userId}:${portal}`);
+    const key = `${userId}:${portal}`;
+    const id = this.rows.get(key)?.account.id ?? null;
+    this.rows.delete(key);
+    return id;
   }
 
   async removeAllOf(userId: string) {
+    const removed: { id: string; portal: PortalId }[] = [];
     for (const [key, { account }] of this.rows)
-      if (account.userId === userId) this.rows.delete(key);
+      if (account.userId === userId) {
+        removed.push({ id: account.id, portal: account.portal });
+        this.rows.delete(key);
+      }
+    return removed;
   }
 }
 

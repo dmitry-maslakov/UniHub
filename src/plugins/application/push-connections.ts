@@ -41,10 +41,10 @@ export class PushConnections implements OnModuleDestroy {
   ) {}
 
   @Timeout('push-connections', 0)
-  start() {
+  async start() {
     if (!this.config.runConnectors) return;
     for (const { spec, instance } of this.catalog.pushConnectors)
-      for (const connection of this.directory.connections(spec.portal)) {
+      for (const connection of await this.directory.connections(spec.portal)) {
         const controller = new AbortController();
         // not awaited: a slow or broken connector mustn't hold up the app
         const done = this.keepRunning(instance, connection, controller.signal);
@@ -69,7 +69,10 @@ export class PushConnections implements OnModuleDestroy {
       const started = Date.now();
       let outcome: RunOutcome = 'ended';
       try {
-        await connector.run(this.directory.context(connection, signal));
+        const ctx = await this.directory.context(connection, signal);
+        // an account that no longer reads
+        if (!ctx) return;
+        await connector.run(ctx);
       } catch (err) {
         outcome = 'failed';
         if (!signal.aborted)

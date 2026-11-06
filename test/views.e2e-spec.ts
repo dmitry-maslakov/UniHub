@@ -2,10 +2,15 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { Injectable, Module, type INestApplication } from '@nestjs/common';
 import { CommandBus } from '@nestjs/cqrs';
+import { getQueueToken } from '@nestjs/bullmq';
 import type { Client } from '@opensearch-project/opensearch';
+import type { Queue } from 'bullmq';
 import {
   PollConnector,
+  type ConnectorContext,
+  type CoursePass,
   type Credential,
+  type FileRecord,
   type IdentifiesAccounts,
   type PollsPortal,
   type PortalIngest,
@@ -16,9 +21,15 @@ import {
   CourseName,
   CreateCourseCommand,
   Slug,
+  type Shown,
 } from '../src/catalog/contracts.js';
 import { GrantCourseAccessCommand } from '../src/identity/contracts.js';
 import type { Mail } from '../src/identity/domain/mailer.js';
+import {
+  Connection,
+  IngestService,
+  SdkPortalIngest,
+} from '../src/ingest/contracts.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
 import { OPENSEARCH } from '../src/platform/search/opensearch.module.js';
 import {
@@ -27,6 +38,10 @@ import {
 } from '../src/processing/application/ports.js';
 import { keyId } from '../src/processing/domain/representation.js';
 import { indexName } from '../src/processing/infrastructure/search/text-index.mapping.js';
+import {
+  CONNECTORS_QUEUE,
+  type ConnectorJob,
+} from '../src/plugins/infrastructure/connectors.queue.js';
 import { accounts } from './accounts.js';
 import { bootApp } from './app.js';
 import { testEnv, testVectors } from './env.js';
@@ -34,14 +49,18 @@ import { FakePluginsModule } from './fake-plugins.js';
 import { portalIngest } from './ingest.js';
 
 // A portal read with users' own accounts, as the whole app reads it: each
-// user reads what their own account sees and nothing of another's, by
-// every route and by search, a section's post and a file locked for one of
-// them included; an admin reads it through an account of their own alone,
-// and a grant gives none of it. Whose views a user reads, and how catalog
-// cuts a query by them, are checked on fakes (viewers.spec.ts,
-// course-reader.spec.ts, course-search.spec.ts). Until connectors send
-// accounts' views (the pass API), what each account sees is written here
-// as sights of the versions the shared connection sends.
+// user's account sends what it sees by passes, and each user reads what
+// their own account sees and nothing of another's, by every route and by
+// search, a section's post and a file locked for one of them included; an
+// admin reads it through an account of their own alone, and a grant gives
+// none of it. Linking an account puts it on its grid and polls it with its
+// credential; unlinking forgets what it saw. Whose views a user reads, how
+// catalog cuts a query by them, what a pass makes of a view and when it
+// shows, are checked on fakes (viewers.spec.ts, course-reader.spec.ts,
+// course-search.spec.ts, view.handlers.spec.ts, course-pass.spec.ts,
+// publication.spec.ts). The passes here are sent as a run of each account
+// would send them, shown from a time past (or opened from one to come)
+// rather than at the slot a run would have.
 
 const LMS = PortalId.parse('views-lms');
 const CAMPUS = PortalId.parse('views-campus');
@@ -50,11 +69,23 @@ const fakeText = PluginName.parse('fake-text');
 const past = new Date('2026-01-01T00:00:00Z');
 const future = new Date('2999-01-01T00:00:00Z');
 
+// the runs the worker started, by whose token they had
+const polled: {
+  account: ConnectorContext['account']['kind'];
+  token: string;
+}[] = [];
+
 // whoever's token it is, by the name before ~
 @PollConnector({ portal: LMS, schedule: '0 0 1 1 *', links: ['token'] })
 @Injectable()
 class LmsPortal implements PollsPortal, IdentifiesAccounts {
-  async poll() {}
+  async poll({ account }: ConnectorContext) {
+    const token =
+      account.kind === 'user'
+        ? (await account.credential()).token.reveal()
+        : '';
+    polled.push({ account: account.kind, token });
+  }
 
   async identify({ token }: Credential): Promise<PortalUser> {
     return { id: token.reveal().split('~')[0], expiresAt: null };
@@ -79,11 +110,10 @@ describe('views of accounts of their own', { timeout: 60_000 }, () => {
   let prisma: PrismaService;
   const as: Record<string, string> = {};
   const account: Record<string, string> = {};
-  // the versions the shared connection sent, by the portal's id
+  // the versions the accounts saw, by the portal's id, or a post's title
   const version: Record<string, string> = {};
-  // the lms's portal courses, by the portal's id
-  const portalCourse: Record<string, string> = {};
-  let lms: PortalIngest;
+  // whether file() told each account's pass to fetch a file
+  const fetch: Record<string, boolean> = {};
 
   const get = (who: string, path: string) =>
     http().get(path).set('cookie', as[who]);
@@ -125,44 +155,52 @@ describe('views of accounts of their own', { timeout: 60_000 }, () => {
       { timeout: 20_000, interval: 200 },
     );
 
-  // what an account sees: a course, or a version of a post or a file
-  const sees = (
+  // what a run of the account sends, shown as `at` says
+  const ingestOf = (
     who: string,
-    kind: 'course' | 'item' | 'file',
-    versionId: string,
-    {
-      open = true,
-      openFrom = past,
-      shownFrom = past,
-      hiddenFrom = null as Date | null,
-    } = {},
-  ) => {
-    const data = {
-      account: account[who],
-      versionId,
-      open,
-      shownFrom,
-      openFrom,
-      hiddenFrom,
-    };
-    return kind === 'course'
-      ? prisma.courseSight.create({ data })
-      : kind === 'item'
-        ? prisma.itemSight.create({ data })
-        : prisma.fileSight.create({ data });
-  };
-  const idOf = async (
+    at: Shown = { shownFrom: past, openFrom: past },
+  ): PortalIngest =>
+    new SdkPortalIngest(
+      app.get(IngestService),
+      Connection.of({ portal: LMS, account: account[who] }),
+      new AbortController().signal,
+      { shown: () => at },
+    );
+  // ana's posts of c1 as her first passes send them
+  const anasPosts = ['news', 'section', 'edited', 'gone', 'going'];
+  const post = (externalId: string, title = externalId) => ({
+    externalId,
+    kind: 'announcement',
+    title,
+    raw: { message: `${title} poruka` },
+  });
+  const file = (
+    pass: CoursePass,
+    who: string,
+    record: Omit<FileRecord, 'name'>,
+    locked = false,
+  ) =>
+    pass
+      .file(
+        { ...record, name: `${record.externalId}.txt`, size: 16 },
+        { locked },
+      )
+      .then(
+        (answer) => (fetch[`${who} ${record.externalId}`] ??= answer.fetch),
+      );
+  const versionOf = async (
     table: 'itemVersion' | 'fileVersion',
     externalId: string,
+    key = externalId,
   ) => {
     const where = { portal: LMS, externalId };
     const row =
       table === 'itemVersion'
-        ? await prisma.itemVersion.findFirstOrThrow({ where: { item: where } })
-        : await prisma.fileVersion.findFirstOrThrow({
-            where: { file: where },
-          });
-    return (version[externalId] = row.id);
+        ? await prisma.itemVersion.findFirstOrThrow({
+            where: { item: where, title: key },
+          })
+        : await prisma.fileVersion.findFirstOrThrow({ where: { file: where } });
+    return (version[key] = row.id);
   };
 
   beforeAll(async () => {
@@ -194,43 +232,75 @@ describe('views of accounts of their own', { timeout: 60_000 }, () => {
       ).id;
     }
 
-    // what the portals have: the lms's records as the shared connection
-    // sends them, a campus portal read as shared
-    lms = portalIngest(app, LMS);
+    // a campus portal read as shared, record by record
     const campus: PortalIngest = portalIngest(app, CAMPUS);
-    for (const c of ['c1', 'c2'])
-      await lms.course({ externalId: c, name: `Course ${c}` });
     await campus.course({ externalId: 'campus-os', name: 'Campus OS' });
-    const post = (ingest: PortalIngest, externalId: string, course: string) =>
-      ingest.item({
-        externalId,
-        course,
-        kind: 'announcement',
-        title: externalId,
-        raw: { message: `${externalId} poruka` },
-      });
-    for (const id of [
-      'news',
-      'section',
-      'edited',
-      'soon',
-      'gone',
-      'going',
-      'sealed',
-    ])
-      await post(lms, id, 'c1');
-    await post(lms, 'c2-news', 'c2');
-    await post(campus, 'campus-news', 'campus-os');
-    for (const [id, text] of [
-      ['slides', 'slajdovi semafor'],
-      ['later', 'kasnije semafor'],
-    ]) {
-      await lms.file({ externalId: id, course: 'c1', name: `${id}.txt` });
-      const { hash } = await lms.content(id, Readable.from([text]));
+    await campus.item({ ...post('campus-news'), course: 'campus-os' });
+
+    // ana's account sees c1 and c2, the section's post, slides; bo's c1
+    // alone, slides locked, the edited post as it is now, another version
+    // of it, and a post locked for him; a handout attached to the edited
+    // post, for both
+    const ana = ingestOf('ana');
+    await ana.courses([
+      { externalId: 'c1', name: 'Course c1' },
+      { externalId: 'c2', name: 'Course c2' },
+    ]);
+    const anas = await ana.pass('c1');
+    for (const id of anasPosts) await anas.item(post(id));
+    await file(anas, 'ana', { externalId: 'slides' });
+    await file(anas, 'ana', { externalId: 'handout', item: 'edited' });
+    await anas.end();
+    const anasC2 = await ana.pass('c2');
+    await anasC2.item(post('c2-news'));
+    await anasC2.end();
+
+    const bo = ingestOf('bo');
+    await bo.courses([{ externalId: 'c1', name: 'Course c1' }]);
+    const bos = await bo.pass('c1');
+    await bos.item(post('news'));
+    await bos.item(post('edited', 'edited since'));
+    await file(bos, 'bo', { externalId: 'slides' }, true);
+    await file(bos, 'bo', { externalId: 'handout', item: 'edited' });
+    await bos.item(post('sealed'), { locked: true });
+    await bos.end();
+
+    // the slides' bytes, fetched by the one run told to; then a later file
+    // of ana's, its content to open at a time to come
+    const { hash: slides } = await anas.content(
+      'slides',
+      Readable.from(['slajdovi semafor']),
+    );
+    const later = await ingestOf('ana', {
+      shownFrom: past,
+      openFrom: future,
+    }).pass('c1');
+    for (const id of anasPosts) await later.item(post(id));
+    for (const id of ['slides', 'later'])
+      await file(later, 'ana', { externalId: id });
+    await file(later, 'ana', { externalId: 'handout', item: 'edited' });
+    await later.end();
+    // then passes that hide a post from a time past, and show one and hide
+    // another from a time to come, keeping the rest
+    const keeping = (...items: string[]) => ({
+      items,
+      files: ['slides', 'later', 'handout'],
+    });
+    await (
+      await ingestOf('ana').pass('c1')
+    ).end(keeping('news', 'section', 'edited', 'going'));
+    const toCome = await ingestOf('ana', {
+      shownFrom: future,
+      openFrom: future,
+    }).pass('c1');
+    await toCome.item(post('soon'));
+    await toCome.end(keeping('news', 'section', 'edited'));
+    const { hash: kasnije } = await later.content(
+      'later',
+      Readable.from(['kasnije semafor']),
+    );
+    for (const hash of [slides, kasnije])
       await indexed(keyId({ hash, processor: fakeText, version: 1 }));
-    }
-    // a handout attached to the edited post, the same file for both
-    await lms.file({ externalId: 'handout', item: 'edited', name: 'h.pdf' });
 
     // the course: lms's c1 and the campus's; c2 no course links
     const { id: course } = await commands.execute(
@@ -249,56 +319,20 @@ describe('views of accounts of their own', { timeout: 60_000 }, () => {
       new GrantCourseAccessCommand(await userId('dee@views.test'), course),
     );
 
-    // ana's account sees c1 and c2, the section's post, slides open and
-    // the later file not open yet; bo's c1 alone, slides locked, and the
-    // edited post as it is now, another version of it
-    const courses = await prisma.portalCourse.findMany({
-      where: { portal: LMS },
-    });
-    for (const { externalId, id } of courses) portalCourse[externalId] = id;
-    const of = (c: string) => portalCourse[c];
-    for (const c of ['c1', 'c2']) await sees('ana', 'course', of(c));
-    await sees('bo', 'course', of('c1'));
-    for (const id of ['news', 'section', 'edited', 'c2-news'])
-      await sees('ana', 'item', await idOf('itemVersion', id));
-    await sees('bo', 'item', version.news);
-    // ana's: a post shown from a time to come, one hidden since a time past
-    // and one hidden from a time to come; bo's: a post locked for him
-    await sees('ana', 'item', await idOf('itemVersion', 'soon'), {
-      shownFrom: future,
-    });
-    await sees('ana', 'item', await idOf('itemVersion', 'gone'), {
-      hiddenFrom: past,
-    });
-    await sees('ana', 'item', await idOf('itemVersion', 'going'), {
-      hiddenFrom: future,
-    });
-    await sees('bo', 'item', await idOf('itemVersion', 'sealed'), {
-      open: false,
-    });
-    const edited = await prisma.itemVersion.create({
-      data: {
-        id: randomUUID(),
-        itemId: (
-          await prisma.itemVersion.findUniqueOrThrow({
-            where: { id: version.edited },
-          })
-        ).itemId,
-        portalCourseId: of('c1'),
-        kind: 'announcement',
-        title: 'edited since',
-        raw: { message: 'edited since' },
-      },
-    });
-    version['edited since'] = edited.id;
-    await sees('bo', 'item', edited.id);
-    await sees('ana', 'file', await idOf('fileVersion', 'slides'));
-    await sees('bo', 'file', version.slides, { open: false });
-    await sees('ana', 'file', await idOf('fileVersion', 'later'), {
-      openFrom: future,
-    });
-    for (const who of ['ana', 'bo'])
-      await sees(who, 'file', await idOf('fileVersion', 'handout'));
+    for (const id of [
+      'news',
+      'section',
+      'edited',
+      'c2-news',
+      'soon',
+      'gone',
+      'going',
+      'sealed',
+    ])
+      await versionOf('itemVersion', id);
+    await versionOf('itemVersion', 'edited', 'edited since');
+    for (const id of ['slides', 'later', 'handout'])
+      await versionOf('fileVersion', id);
     for (const id of ['news', 'section', 'soon', 'gone', 'going', 'sealed'])
       await indexed(`post__${version[id]}`);
   }, 60_000);
@@ -312,6 +346,47 @@ describe('views of accounts of their own', { timeout: 60_000 }, () => {
         .expect(204);
     await app.close();
     vi.unstubAllEnvs();
+  });
+
+  it('runs each linked account on a grid of its own, with its own credential', async () => {
+    const queue = app.get<Queue<ConnectorJob>>(getQueueToken(CONNECTORS_QUEUE));
+    const schedulers = await queue.getJobSchedulers();
+    for (const who of ['ana', 'bo'])
+      expect(
+        schedulers.find((s) => s.key === `${LMS}__${account[who]}`),
+      ).toMatchObject({ every: 60 * 60_000 });
+    // linking polled each at once
+    await vi.waitFor(
+      () =>
+        expect(
+          polled
+            .map((p) => [p.account, p.token.split('~')[0]])
+            .sort(([, a], [, b]) => a.localeCompare(b)),
+        ).toEqual([
+          ['user', 'ana'],
+          ['user', 'bo'],
+        ]),
+      { timeout: 20_000, interval: 200 },
+    );
+  });
+
+  it('keeps one version of what both accounts see alike, and fetches its bytes once', async () => {
+    expect(
+      await prisma.itemVersion.count({
+        where: { item: { portal: LMS, externalId: 'news' } },
+      }),
+    ).toBe(1);
+    expect(
+      await prisma.itemSight.count({ where: { versionId: version.news } }),
+    ).toBe(2);
+    expect(fetch).toEqual({
+      'ana slides': true,
+      'ana handout': true,
+      'bo slides': false,
+      // ana's run holds its lease
+      'bo handout': false,
+      'ana later': true,
+    });
   });
 
   it('lists to each user the courses their own views hold, those parts alone', async () => {
@@ -396,11 +471,14 @@ describe('views of accounts of their own', { timeout: 60_000 }, () => {
         ),
       );
     expect(await files('ana')).toEqual({
-      'h.pdf': false,
+      'handout.txt': false,
       'later.txt': false,
       'slides.txt': true,
     });
-    expect(await files('bo')).toEqual({ 'h.pdf': false, 'slides.txt': false });
+    expect(await files('bo')).toEqual({
+      'handout.txt': false,
+      'slides.txt': false,
+    });
     // the post it came with, as each one's view has it
     for (const [who, post] of [
       ['ana', version.edited],
@@ -484,14 +562,21 @@ describe('views of accounts of their own', { timeout: 60_000 }, () => {
         where: { userId: await userId('ed@views.test') },
       })
     ).id;
-    await sees('ed', 'course', portalCourse.c1);
-    await sees('ed', 'item', version.news);
+    const ed = ingestOf('ed');
+    await ed.courses([{ externalId: 'c1', name: 'Course c1' }]);
+    const eds = await ed.pass('c1');
+    await eds.item(post('news'));
+    await eds.end();
 
     expect(await listed('ed')).toEqual([['views-os', [CAMPUS, LMS]]]);
     expect(sorted(await titles('ed', 'views-os'))).toEqual([
       'campus-news',
       'news',
     ]);
+    await http()
+      .delete(`/api/me/portals/${LMS}/token`)
+      .set('cookie', as.ed)
+      .expect(204);
   });
 
   it('shows a portal course an admin linked before anything of it was sent, once sent, to an account that sees it', async () => {
@@ -500,22 +585,17 @@ describe('views of accounts of their own', { timeout: 60_000 }, () => {
       .set('cookie', as.ed)
       .send({ course: 'views-os' })
       .expect(204);
-    await lms.course({ externalId: 'never-sent', name: 'Sent at last' });
-    await lms.item({
-      externalId: 'late-news',
-      course: 'never-sent',
-      kind: 'announcement',
-      title: 'late-news',
-      raw: { message: 'late-news poruka' },
-    });
-    const sent = await prisma.portalCourse.findFirstOrThrow({
-      where: { portal: LMS, externalId: 'never-sent' },
-    });
-    // a post of a portal course the account isn't shown is no one's
-    await sees('ana', 'item', await idOf('itemVersion', 'late-news'));
-    await get('ana', `/api/items/${version['late-news']}`).expect(404);
-    await sees('ana', 'course', sent.id);
-    await get('ana', `/api/items/${version['late-news']}`).expect(200);
+    const ana = ingestOf('ana');
+    await ana.courses(
+      ['c1', 'c2', 'never-sent'].map((externalId) => ({
+        externalId,
+        name:
+          externalId === 'never-sent' ? 'Sent at last' : `Course ${externalId}`,
+      })),
+    );
+    const sent = await ana.pass('never-sent');
+    await sent.item(post('late-news'));
+    await sent.end();
 
     const [os] = (
       (await body('ana', '/api/courses')) as {
@@ -549,5 +629,29 @@ describe('views of accounts of their own', { timeout: 60_000 }, () => {
     expect(await titles('bo', `${LMS}~c1`)).toEqual(
       expect.arrayContaining(['news']),
     );
+  });
+
+  it('forgets an account unlinked: its runs, and what it saw', async () => {
+    await http()
+      .delete(`/api/me/portals/${LMS}/token`)
+      .set('cookie', as.bo)
+      .expect(204);
+
+    const queue = app.get<Queue<ConnectorJob>>(getQueueToken(CONNECTORS_QUEUE));
+    const keys = (await queue.getJobSchedulers()).map((s) => s.key);
+    expect(keys).toContain(`${LMS}__${account.ana}`);
+    expect(keys).not.toContain(`${LMS}__${account.bo}`);
+    const where = { account: account.bo };
+    expect(
+      await Promise.all([
+        prisma.courseSight.count({ where }),
+        prisma.itemSight.count({ where }),
+        prisma.fileSight.count({ where }),
+      ]),
+    ).toEqual([0, 0, 0]);
+    // ana's view, the same version of a post among it, stays
+    expect(
+      await prisma.itemSight.count({ where: { versionId: version.news } }),
+    ).toBe(1);
   });
 });

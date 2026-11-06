@@ -12,7 +12,7 @@ describe('listings', () => {
     expect(SyncState.parse(null)).toEqual({ courses: {} });
   });
 
-  it('find gone what a source that went through no longer has', () => {
+  it('keep no more of what a source that went through had than it has now', () => {
     const last = {
       items: { assignments: ['assignment:1', 'assignment:2'] },
       files: { files: ['10', '11'] },
@@ -23,7 +23,7 @@ describe('listings', () => {
     };
     expect(settle(last, now)).toEqual({
       listings: now,
-      gone: { items: ['assignment:1'], files: ['11'] },
+      kept: { items: ['assignment:2', 'assignment:3'], files: ['10'] },
     });
   });
 
@@ -35,27 +35,27 @@ describe('listings', () => {
     const now = { items: { assignments: ['assignment:1'] }, files: {} };
     expect(settle(last, now)).toEqual({
       listings: last,
-      gone: { items: [], files: [] },
+      kept: { items: ['page:1', 'page:2', 'assignment:1'], files: ['10'] },
     });
   });
 
-  it('find nothing gone that another source still has', () => {
+  it('keep what another source still has', () => {
     // the pages tab hidden since: the page is still in a module
     const last = {
       items: { pages: ['page:1'], 'module-pages': ['page:1'] },
       files: {},
     };
     const now = { items: { pages: [], 'module-pages': ['page:1'] }, files: {} };
-    expect(settle(last, now).gone.items).toEqual([]);
+    expect(settle(last, now).kept.items).toEqual(['page:1']);
     expect(
-      settle(last, { items: { pages: [], 'module-pages': [] }, files: {} }).gone
+      settle(last, { items: { pages: [], 'module-pages': [] }, files: {} }).kept
         .items,
-    ).toEqual(['page:1']);
+    ).toEqual([]);
   });
 
-  it('find nothing gone on a course seen for the first time', () => {
+  it('keep what a course seen for the first time has', () => {
     expect(
-      settle(undefined, { items: { modules: ['module:1'] }, files: {} }).gone,
-    ).toEqual({ items: [], files: [] });
+      settle(undefined, { items: { modules: ['module:1'] }, files: {} }).kept,
+    ).toEqual({ items: ['module:1'], files: [] });
   });
 });

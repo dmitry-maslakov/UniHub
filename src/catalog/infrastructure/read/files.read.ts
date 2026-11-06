@@ -34,19 +34,20 @@ import {
 } from './viewers.js';
 
 // a version, with its record's ids and whether any account sees it
-const select = {
-  id: true,
-  portalCourseId: true,
-  itemId: true,
-  name: true,
-  path: true,
-  url: true,
-  size: true,
-  mime: true,
-  contentHash: true,
-  file: recordRef,
-  sights: liveSights,
-} satisfies Prisma.FileVersionSelect;
+const select = (now = new Date()) =>
+  ({
+    id: true,
+    portalCourseId: true,
+    itemId: true,
+    name: true,
+    path: true,
+    url: true,
+    size: true,
+    mime: true,
+    contentHash: true,
+    file: recordRef,
+    sights: liveSights(now),
+  }) satisfies Prisma.FileVersionSelect;
 
 const byFolderAndName = [
   { path: 'asc' },
@@ -58,7 +59,9 @@ const toDto = ({
   file,
   sights,
   ...row
-}: Prisma.FileVersionGetPayload<{ select: typeof select }>): FileDto => ({
+}: Prisma.FileVersionGetPayload<{
+  select: ReturnType<typeof select>;
+}>): FileDto => ({
   ...row,
   ...fileValues(row),
   portal: portalOf(file),
@@ -70,7 +73,7 @@ const toDto = ({
 // its post as they see it
 const forViewers = (viewers: Viewers, now: Date) =>
   ({
-    ...select,
+    ...select(now),
     _count: { select: { sights: { where: opening(viewers, now) } } },
     item: {
       select: {
@@ -178,7 +181,7 @@ export class GetFileHandler implements IQueryHandler<GetFileQuery> {
   async execute({ id }: GetFileQuery) {
     const row = await this.txHost.tx.fileVersion.findUnique({
       where: { id },
-      select,
+      select: select(),
     });
     return row && toDto(row);
   }
@@ -191,7 +194,7 @@ export class FindFileHandler implements IQueryHandler<FindFileQuery> {
   async execute({ file }: FindFileQuery) {
     const row = await this.txHost.tx.fileVersion.findFirst({
       where: { file: ofRecord(file), sights: { some: sharedSight } },
-      select,
+      select: select(),
     });
     return row && toDto(row);
   }
@@ -203,9 +206,9 @@ export class ListFilesOfContentHandler implements IQueryHandler<ListFilesOfConte
 
   async execute({ hash }: ListFilesOfContentQuery) {
     const rows = await this.txHost.tx.fileVersion.findMany({
-      where: { contentHash: hash, sights: seen },
+      where: { contentHash: hash, sights: seen() },
       orderBy: { id: 'asc' },
-      select,
+      select: select(),
     });
     return rows.map(toDto);
   }
@@ -219,12 +222,12 @@ export class ListFilesWithContentHandler implements IQueryHandler<ListFilesWithC
     const rows = await this.txHost.tx.fileVersion.findMany({
       where: {
         contentHash: { not: null },
-        sights: seen,
+        sights: seen(),
         ...(after && { id: { gt: after } }),
       },
       orderBy: { id: 'asc' },
       take: limit,
-      select,
+      select: select(),
     });
     return rows.map(toDto);
   }

@@ -2,14 +2,17 @@ import { addAbortSignal, type Readable } from 'node:stream';
 import {
   InvalidRecordError,
   UnknownReferenceError,
+  type CoursePass,
   type CourseRecord,
   type FileRecord,
   type ItemRecord,
   type Json,
   type PortalIngest,
+  type Seen,
 } from '@app/plugin-sdk';
 import { DomainError } from '@app/kernel';
 import * as catalog from '../../../catalog/contracts.js';
+import { sharedRun, type Run } from '../../application/course-pass.js';
 import type { IngestService } from '../../application/ingest.service.js';
 import type { Connection } from '../../domain/connection.js';
 import { MalformedRecordError } from '../../domain/errors.js';
@@ -36,7 +39,31 @@ export class SdkPortalIngest implements PortalIngest {
     private readonly ingest: IngestService,
     private readonly connection: Connection,
     private readonly signal: AbortSignal,
+    private readonly run: Run = sharedRun,
   ) {}
+
+  courses(records: CourseRecord[]) {
+    return this.sdk(() =>
+      this.ingest.courses(this.connection, records, this.run),
+    );
+  }
+
+  async pass(course: string): Promise<CoursePass> {
+    const pass = await this.sdk(async () =>
+      this.ingest.pass(this.connection, course, this.run),
+    );
+    return {
+      item: (record: ItemRecord, seen?: Seen) =>
+        this.sdk(() => pass.item(record, seen)),
+      file: (record: FileRecord, seen?: Seen) =>
+        this.sdk(() => pass.file(record, seen)),
+      end: (kept) => this.sdk(() => pass.end(kept)),
+      content: (fileExternalId: string, content: Readable) => {
+        const cut = addAbortSignal(this.signal, content);
+        return this.sdk(() => pass.content(fileExternalId, cut));
+      },
+    };
+  }
 
   course(record: CourseRecord) {
     return this.sdk(() => this.ingest.course(this.connection, record));

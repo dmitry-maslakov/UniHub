@@ -1,10 +1,13 @@
 import { once } from 'node:events';
 import { Inject, Logger, type OnModuleDestroy } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
+import { CommandBus } from '@nestjs/cqrs';
 import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import type { Job } from 'bullmq';
+import { CredentialRejectedError } from '@app/plugin-sdk';
 import { Connection } from '../../ingest/contracts.js';
 import { roleConfig } from '../../platform/role/role.config.js';
+import { AccountRejectedCommand } from '../application/accounts.js';
 import { ConnectionDirectory } from '../application/connection-directory.js';
 import { ConnectorRuns } from '../application/connector-runs.js';
 import { ConnectorSchedules } from '../application/connector-schedules.js';
@@ -19,8 +22,13 @@ import {
 
 // A poll gets the job's abort signal (BullMQ hands it to a processor that
 // takes three arguments), aborted past CONNECTOR_POLL_TIMEOUT_MINUTES and at
-// shutdown too. A poll job answers whether it polled.
-@Processor(CONNECTORS_QUEUE, { concurrency: 4 })
+// shutdown too. A poll job answers whether it polled: not for a user's
+// account that no longer reads, whose schedule goes, nor one whose
+// credential the portal rejects, which reads nothing from then on. Up to
+// CONNECTOR_CONCURRENCY polls at once: the decorator's options can't read
+// settings, so the worker starts with one at a time and is given more once
+// it's ready.
+@Processor(CONNECTORS_QUEUE, { concurrency: 1 })
 export class ConnectorsWorker extends WorkerHost implements OnModuleDestroy {
   private readonly logger = new Logger(ConnectorsWorker.name);
   private readonly shutdown = new AbortController();
@@ -34,8 +42,15 @@ export class ConnectorsWorker extends WorkerHost implements OnModuleDestroy {
     @Inject(roleConfig.KEY)
     private readonly role: ConfigType<typeof roleConfig>,
     private readonly runs: ConnectorRuns,
+    private readonly commands: CommandBus,
   ) {
     super();
+  }
+
+  // BullMQ's own way to change a worker's concurrency once it's made
+  @OnWorkerEvent('ready')
+  ready() {
+    this.worker.concurrency = this.config.concurrency;
   }
 
   async process(job: Job<ConnectorJob>, _token?: string, signal?: AbortSignal) {
@@ -50,7 +65,11 @@ export class ConnectorsWorker extends WorkerHost implements OnModuleDestroy {
       this.shutdown.signal,
       ...(signal ? [signal] : []),
     ]);
-    const ctx = this.directory.context(connection, run);
+    const ctx = await this.directory.context(connection, run);
+    if (!ctx) {
+      await this.schedules.remove(connection);
+      return false;
+    }
     // let go of at the signal even when the connector doesn't listen to it,
     // so the job ends and the next tick can poll again. once()'s listener
     // holds the run till then: nothing else holds a poll that waits on
@@ -64,11 +83,20 @@ export class ConnectorsWorker extends WorkerHost implements OnModuleDestroy {
           connector.instance.poll(ctx),
           once(run, 'abort', { signal: settled.signal }),
         ]);
+    } catch (error) {
+      if (error instanceof CredentialRejectedError && !connection.shared)
+        await this.rejected(connection);
+      throw error;
     } finally {
       settled.abort();
     }
     if (run.aborted) throw new Error(`poll stopped: ${String(run.reason)}`);
     return true;
+  }
+
+  private async rejected(connection: Connection) {
+    await this.commands.execute(new AccountRejectedCommand(connection.account));
+    await this.schedules.remove(connection);
   }
 
   // another instance may run the job now: this run stops rather than going

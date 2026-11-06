@@ -3,63 +3,121 @@ import type { Readable } from 'node:stream';
 import { text } from 'node:stream/consumers';
 import {
   ContentHash,
+  InvalidRecordError,
   UnknownReferenceError,
+  type CoursePass,
   type CourseRecord,
   type FileRecord,
   type ItemRecord,
   type Json,
   type PortalIngest,
+  type Seen,
 } from '@app/plugin-sdk';
 
-// What the hub would keep of a connector's run, as the hub refuses a
-// reference to what wasn't sent first. Sent again, a record replaces the
-// one before; the hub has a file's content once content() got it.
+// What the hub would keep of one account's runs, as it refuses what the
+// sdk says it does: a pass of a course the courses didn't name, a file's
+// post the pass didn't send before it, content before end() or of a file
+// locked for the account. A record sent again replaces the one before; at
+// end() what the account saw of the course and the pass neither sent nor
+// kept is removed; the hub has a file's content once content() got it.
 export class RecordingIngest implements PortalIngest {
-  readonly courses = new Map<string, CourseRecord>();
+  readonly listedCourses = new Map<string, CourseRecord>();
   readonly items = new Map<string, ItemRecord>();
   readonly files = new Map<string, FileRecord>();
+  // the files sent locked for the account, as of the last pass
+  readonly locked = new Set<string>();
   readonly contents = new Map<string, string>();
   readonly removedItems: string[] = [];
   readonly removedFiles: string[] = [];
   saved: Json | null = null;
 
-  async course(record: CourseRecord) {
-    this.courses.set(record.externalId, record);
-    return { changed: true };
+  async courses(records: CourseRecord[]) {
+    this.listedCourses.clear();
+    for (const record of records)
+      this.listedCourses.set(record.externalId, record);
   }
 
-  async item(record: ItemRecord) {
-    this.known(this.courses, record.course);
-    this.items.set(record.externalId, record);
-    return { changed: true };
-  }
-
-  async file(record: FileRecord) {
-    this.known(this.courses, record.course);
-    this.known(this.items, record.item);
-    this.files.set(record.externalId, record);
+  async pass(course: string): Promise<CoursePass> {
+    if (!this.listedCourses.has(course))
+      throw new UnknownReferenceError(course);
+    const sent = { items: new Set<string>(), files: new Set<string>() };
+    let ended = false;
+    const open = () => {
+      if (ended) throw new InvalidRecordError(['pass: ended']);
+    };
     return {
-      changed: true,
-      needsContent: !this.contents.has(record.externalId),
+      item: async (record: ItemRecord) => {
+        open();
+        this.items.set(record.externalId, { ...record, course });
+        sent.items.add(record.externalId);
+      },
+      file: async (record: FileRecord, seen?: Seen) => {
+        open();
+        if (record.item !== undefined && !sent.items.has(record.item))
+          throw new UnknownReferenceError(record.item);
+        this.files.set(record.externalId, { ...record, course });
+        sent.files.add(record.externalId);
+        if (seen?.locked) this.locked.add(record.externalId);
+        else this.locked.delete(record.externalId);
+        return {
+          fetch: !seen?.locked && !this.contents.has(record.externalId),
+        };
+      },
+      end: async (kept = {}) => {
+        open();
+        ended = true;
+        this.drop(
+          this.items,
+          course,
+          sent.items,
+          kept.items,
+          this.removedItems,
+        );
+        this.drop(
+          this.files,
+          course,
+          sent.files,
+          kept.files,
+          this.removedFiles,
+        );
+      },
+      content: async (fileExternalId: string, content: Readable) => {
+        if (!ended || !sent.files.has(fileExternalId))
+          throw new UnknownReferenceError(fileExternalId);
+        if (this.locked.has(fileExternalId))
+          throw new InvalidRecordError(['locked']);
+        const body = await text(content);
+        this.contents.set(fileExternalId, body);
+        const hash = createHash('sha256').update(body).digest('hex');
+        return { hash: ContentHash.parse(hash) };
+      },
     };
   }
 
-  async content(fileExternalId: string, content: Readable) {
-    this.known(this.files, fileExternalId);
-    const body = await text(content);
-    this.contents.set(fileExternalId, body);
-    const hash = createHash('sha256').update(body).digest('hex');
-    return { hash: ContentHash.parse(hash), changed: true };
+  // Record by record is for the shared account of a portal that sends so
+  // (gRPC); Canvas sends passes.
+  async course(): Promise<never> {
+    throw new Error('canvas sends passes');
   }
 
-  async removeItem(externalId: string) {
-    this.removedItems.push(externalId);
-    return { changed: this.items.delete(externalId) };
+  async item(): Promise<never> {
+    throw new Error('canvas sends passes');
   }
 
-  async removeFile(externalId: string) {
-    this.removedFiles.push(externalId);
-    return { changed: this.files.delete(externalId) };
+  async file(): Promise<never> {
+    throw new Error('canvas sends passes');
+  }
+
+  async content(): Promise<never> {
+    throw new Error('canvas sends passes');
+  }
+
+  async removeItem(): Promise<never> {
+    throw new Error('canvas sends passes');
+  }
+
+  async removeFile(): Promise<never> {
+    throw new Error('canvas sends passes');
   }
 
   async state() {
@@ -71,8 +129,17 @@ export class RecordingIngest implements PortalIngest {
     this.saved = structuredClone(state);
   }
 
-  private known(records: Map<string, unknown>, id: string | undefined) {
-    if (id !== undefined && !records.has(id))
-      throw new UnknownReferenceError(id);
+  private drop(
+    records: Map<string, { course?: string }>,
+    course: string,
+    sent: Set<string>,
+    kept: string[] = [],
+    removed: string[],
+  ) {
+    for (const [id, record] of records)
+      if (record.course === course && !sent.has(id) && !kept.includes(id)) {
+        records.delete(id);
+        removed.push(id);
+      }
   }
 }

@@ -66,6 +66,11 @@ export class PortalAccount {
     return { ...this.state };
   }
 
+  // the portal no longer takes its credential
+  revoke() {
+    this.state.status = 'revoked';
+  }
+
   // as it stands at `now`: past its expiry it's expired, whatever was last
   // found
   statusAt(now = new Date()): AccountStatus {
@@ -83,12 +88,22 @@ export abstract class PortalAccountRepository {
   ): Promise<PortalAccount | null>;
   // the user's, by portal
   abstract ofUser(userId: string): Promise<PortalAccount[]>;
+  // the portal's accounts that are linked and not past their expiry
+  abstract linkedOf(portal: PortalId, now: Date): Promise<PortalAccount[]>;
+  // the account by its id, with its sealed credential
+  abstract withCredential(
+    id: string,
+  ): Promise<{ account: PortalAccount; sealed: string } | null>;
+  // its status as it now is, nothing else of it
+  abstract saveStatus(account: PortalAccount): Promise<void>;
   // The account and its sealed credential, at once, in place of any account
   // the user had of the portal and its credential
   abstract save(account: PortalAccount, sealed: string): Promise<void>;
-  // the user's account of the portal and its credential, at once; false if
-  // there was none
-  abstract remove(userId: string, portal: PortalId): Promise<boolean>;
-  // all of a user's, and their credentials
-  abstract removeAllOf(userId: string): Promise<void>;
+  // the user's account of the portal and its credential, at once: its id,
+  // null if there was none
+  abstract remove(userId: string, portal: PortalId): Promise<string | null>;
+  // all of a user's, and their credentials: which they were
+  abstract removeAllOf(
+    userId: string,
+  ): Promise<{ id: string; portal: PortalId }[]>;
 }

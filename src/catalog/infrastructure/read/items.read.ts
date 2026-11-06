@@ -23,18 +23,19 @@ import {
 } from './viewers.js';
 
 // a version, with its record's ids and whether any account sees it
-const select = {
-  id: true,
-  portalCourseId: true,
-  kind: true,
-  title: true,
-  url: true,
-  publishedAt: true,
-  raw: true,
-  updatedAt: true,
-  item: recordRef,
-  sights: liveSights,
-} satisfies Prisma.ItemVersionSelect;
+const select = (now = new Date()) =>
+  ({
+    id: true,
+    portalCourseId: true,
+    kind: true,
+    title: true,
+    url: true,
+    publishedAt: true,
+    raw: true,
+    updatedAt: true,
+    item: recordRef,
+    sights: liveSights(now),
+  }) satisfies Prisma.ItemVersionSelect;
 
 const newestFirst = [
   { publishedAt: { sort: 'desc', nulls: 'last' } },
@@ -45,7 +46,9 @@ const toDto = ({
   item,
   sights,
   ...row
-}: Prisma.ItemVersionGetPayload<{ select: typeof select }>): ItemDto => ({
+}: Prisma.ItemVersionGetPayload<{
+  select: ReturnType<typeof select>;
+}>): ItemDto => ({
   ...row,
   ...itemValues(row),
   portal: portalOf(item),
@@ -56,7 +59,7 @@ const toDto = ({
 // a post as the viewers read it: its body once their view opens it
 const forViewers = (viewers: Viewers, now: Date) =>
   ({
-    ...select,
+    ...select(now),
     _count: { select: { sights: { where: itemOpening(viewers, now) } } },
   }) satisfies Prisma.ItemVersionSelect;
 
@@ -99,7 +102,7 @@ export class GetItemHandler implements IQueryHandler<GetItemQuery> {
   async execute({ id }: GetItemQuery) {
     const row = await this.txHost.tx.itemVersion.findUnique({
       where: { id },
-      select,
+      select: select(),
     });
     return row && toDto(row);
   }
@@ -157,7 +160,7 @@ export class ListItemsHandler implements IQueryHandler<ListItemsQuery> {
 
   async execute({ after, limit }: ListItemsQuery) {
     const rows = await this.txHost.tx.itemVersion.findMany({
-      where: { sights: seen, ...(after && { id: { gt: after } }) },
+      where: { sights: seen(), ...(after && { id: { gt: after } }) },
       orderBy: { id: 'asc' },
       take: limit,
       select: { id: true, updatedAt: true },

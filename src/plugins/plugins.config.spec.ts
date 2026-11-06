@@ -29,4 +29,30 @@ describe('plugins settings', () => {
           .success,
       ).toBe(false);
   });
+
+  it("set users' accounts' grids and their publication, in ms, within sane bounds", () => {
+    expect(pluginsSettings.parse({})).toMatchObject({
+      concurrency: 4,
+      publishing: {
+        slotMs: 60 * 60_000,
+        delayMs: 10 * 60_000,
+        holdMs: 15 * 60_000,
+      },
+    });
+    for (const bad of [
+      { VIEW_MINUTES: '4' },
+      { VIEW_MINUTES: '1441' },
+      { HOLD_MINUTES: '-1' },
+      { HOLD_MINUTES: '2.5' },
+      { PUBLISH_DELAY_MINUTES: '60' },
+      { VIEW_MINUTES: '15', PUBLISH_DELAY_MINUTES: '20' },
+      { CONNECTOR_CONCURRENCY: '0' },
+      { CONNECTOR_CONCURRENCY: '65' },
+    ])
+      expect(pluginsSettings.safeParse(bad).success).toBe(false);
+    expect(
+      pluginsSettings.parse({ PUBLISH_DELAY_MINUTES: '0', HOLD_MINUTES: '0' })
+        .publishing,
+    ).toMatchObject({ delayMs: 0, holdMs: 0 });
+  });
 });

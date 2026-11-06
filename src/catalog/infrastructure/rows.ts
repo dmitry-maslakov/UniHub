@@ -11,6 +11,7 @@ import type {
   ItemVersion,
 } from '../../generated/prisma/client.js';
 import type { PortalRef } from '../domain/portal-ref.js';
+import type { Stamp } from '../domain/view/view.repository.js';
 
 // What the repositories and the read side both know of catalog's rows: a
 // record's ids (PortalCourse, Item, File), its versions, and the accounts'
@@ -31,13 +32,18 @@ export const recordRef = { select: { portal: true, externalId: true } };
 export const sharedSight = { account: SHARED_ACCOUNT };
 export const seenByShared = { some: { ...sharedSight, hiddenFrom: null } };
 
-// a version some account sees now: one none sees is removed
-export const seen = { some: { hiddenFrom: null } };
-export const liveSights = {
-  where: { hiddenFrom: null },
+// A version some account sees now: one none sees is removed. A pass hides
+// what a user's account no longer sees from a slot to come, so it's seen
+// till then.
+const unhidden = (now: Date) => ({
+  OR: [{ hiddenFrom: null }, { hiddenFrom: { gt: now } }],
+});
+export const seen = (now = new Date()) => ({ some: unhidden(now) });
+export const liveSights = (now = new Date()) => ({
+  where: unhidden(now),
   select: { account: true },
   take: 1,
-};
+});
 
 // A row's columns as the kernel's values. They were checked on the way in
 // (media types of older rows by their migration too), so reading them back
@@ -65,4 +71,10 @@ export const itemValues = (row: Pick<ItemVersion, 'raw'>) => ({
 
 export const courseValues = (row: Pick<CourseVersion, 'meta'>) => ({
   meta: row.meta as Json | null,
+});
+
+// a file's version of its bytes, as its columns hold it
+export const stampOf = ({ size, sourceUpdatedAt }: Stamp) => ({
+  size: size === null ? null : BigInt(size),
+  sourceUpdatedAt,
 });

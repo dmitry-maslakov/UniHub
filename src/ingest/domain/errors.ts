@@ -11,10 +11,14 @@ export class MalformedRecordError extends InvalidError {
   }
 }
 
-export class RemovalNotAllowedError extends InvalidError {
-  readonly reason = 'REMOVAL_NOT_ALLOWED';
+// a record sent, or removed, one by one for a user's own account, which
+// sends what it sees by passes
+export class SharedOnlyError extends InvalidError {
+  readonly reason = 'SHARED_ONLY';
 
   constructor(connection: Connection) {
-    super(`${connection.key} can't remove records, only shared accounts can`);
+    super(
+      `${connection.portal} sends a user's account's records by passes, only the shared account's one by one`,
+    );
   }
 }
