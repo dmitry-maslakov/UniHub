@@ -2,9 +2,10 @@ import type { INestApplication, INestApplicationContext } from '@nestjs/common';
 import request from 'supertest';
 import { bootApp, bootWorker } from './app.js';
 
-// away from a developer's own, as gRPC's is (test/env.ts)
-const API_PORT = 59464;
-const WORKER_PORT = 59465;
+// away from a developer's own, as gRPC's is (test/env.ts), and below the
+// ports the system hands out to outgoing connections
+const API_PORT = 19464;
+const WORKER_PORT = 19465;
 
 // what a scrape of the port reads: the metrics' names, and a metric's
 // series by their labels
@@ -61,6 +62,7 @@ describe('metrics', () => {
             ]),
           );
         expect([...ofApi.names]).not.toContain('unihub_queue_jobs');
+        expect([...ofWorker.names]).toContain('unihub_queue_counts_read');
         expect(ofWorker.series('unihub_queue_rate_limited')).toEqual([
           'unihub_queue_rate_limited{queue="connectors"}',
           'unihub_queue_rate_limited{queue="plugins"}',

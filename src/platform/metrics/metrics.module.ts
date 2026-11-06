@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { ConfigModule, type ConfigType } from '@nestjs/config';
 import { PrometheusExporter } from '@opentelemetry/exporter-prometheus';
-import { HostMetrics } from '@opentelemetry/host-metrics';
+import { HostMetricsInstrumentation } from '@opentelemetry/instrumentation-host-metrics';
 import { RuntimeNodeInstrumentation } from '@opentelemetry/instrumentation-runtime-node';
 import { MeterProvider } from '@opentelemetry/sdk-metrics';
 import { metricsConfig } from './metrics.config.js';
@@ -60,7 +60,9 @@ async function meterProvider({ port }: ConfigType<typeof metricsConfig>) {
 })
 export class MetricsModule implements OnModuleInit, OnApplicationShutdown {
   private readonly logger = new Logger(MetricsModule.name);
-  private runtime?: RuntimeNodeInstrumentation;
+  private instrumentations: (
+    HostMetricsInstrumentation | RuntimeNodeInstrumentation
+  )[] = [];
 
   constructor(
     private readonly provider: MeterProvider,
@@ -68,23 +70,29 @@ export class MetricsModule implements OnModuleInit, OnApplicationShutdown {
     private readonly config: ConfigType<typeof metricsConfig>,
   ) {}
 
-  // the process's own: its CPU and memory, the event loop's delay, GC and
-  // the heap, all read when a scrape asks
+  // The process's own: its CPU and memory, the event loop's delay, GC and
+  // the heap, read when a scrape asks. Enabled on the app's provider only,
+  // never having been on the global one.
   onModuleInit() {
     if (this.config.port === null) return;
-    new HostMetrics({
-      meterProvider: this.provider,
-      metricGroups: ['process.cpu', 'process.memory'],
-    }).start();
-    this.runtime = new RuntimeNodeInstrumentation({ enabled: false });
-    this.runtime.setMeterProvider(this.provider);
-    this.runtime.enable();
+    this.instrumentations = [
+      new HostMetricsInstrumentation({
+        enabled: false,
+        metricGroups: ['process.cpu', 'process.memory'],
+      }),
+      new RuntimeNodeInstrumentation({ enabled: false }),
+    ];
+    for (const instrumentation of this.instrumentations) {
+      instrumentation.setMeterProvider(this.provider);
+      instrumentation.enable();
+    }
     this.logger.log(`metrics on port ${this.config.port}`);
   }
 
   // closes the exporter's server too
   async onApplicationShutdown() {
-    this.runtime?.disable();
+    for (const instrumentation of this.instrumentations)
+      instrumentation.disable();
     await this.provider.shutdown();
   }
 }

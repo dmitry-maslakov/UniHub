@@ -51,8 +51,11 @@ describe('ConnectorsWorker', () => {
     const seen: ConnectorContext[] = [];
     const { w } = worker(async (ctx) => void seen.push(ctx));
 
-    await w.process(job(POLL), 'token', new AbortController().signal);
-    await w.process(job(POLL, 'gone'));
+    expect(
+      await w.process(job(POLL), 'token', new AbortController().signal),
+    ).toBe(true);
+    // turned off since: no poll
+    expect(await w.process(job(POLL, 'gone'))).toBe(false);
 
     expect(seen.map((ctx) => [ctx.connection, ctx.signal.aborted])).toEqual([
       [{ portal: 'moodle', account: 'shared' }, false],
@@ -98,8 +101,8 @@ describe('ConnectorsWorker', () => {
     const { w, runs } = worker(async () => {});
     const error = vi.spyOn(Logger.prototype, 'error').mockReturnValue();
 
-    w.completed(job(POLL));
-    w.completed(job(TICK));
+    w.completed(job(POLL), true);
+    w.completed(job(TICK), undefined);
     w.failed(job(POLL, 'canvas'), new Error('canvas token expired'));
     w.failed(job(TICK), new Error('redis is away'));
     w.failed(undefined, new Error('a job gone meanwhile'));
@@ -109,6 +112,18 @@ describe('ConnectorsWorker', () => {
       ['canvas', 'failed'],
     ]);
     expect(error).toHaveBeenCalledTimes(1);
+    error.mockRestore();
+  });
+
+  it('counts neither a poll whose connector was turned off nor one stopped at shutdown', async () => {
+    const { w, runs } = worker(async () => {});
+    const error = vi.spyOn(Logger.prototype, 'error').mockReturnValue();
+
+    w.completed(job(POLL, 'gone'), await w.process(job(POLL, 'gone')));
+    await w.onModuleDestroy();
+    w.failed(job(POLL), new Error('poll stopped: the app is shutting down'));
+
+    expect(runs.ended).not.toHaveBeenCalled();
     error.mockRestore();
   });
 
