@@ -1,8 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
 import type { Json, MediaType, PluginName, PortalId } from '@app/kernel';
-import type {
-  LeftOut,
-  MemberInfo,
+import {
+  LEFT_OUT,
+  type LeftOut,
+  type MemberInfo,
   Snippet,
   TextInfo,
   TextPage,
@@ -96,7 +97,7 @@ export class MemberResponse implements MemberInfo {
   @ApiProperty({
     type: String,
     nullable: true,
-    enum: ['TOO_LARGE', 'OVER_BUDGET', 'DUPLICATE_PATH', 'TOO_DEEP'],
+    enum: LEFT_OUT,
     description:
       "why the hub kept none of it: past a member's limit, past the archive's, a path listed twice, an archive nested too deep to open; null if kept",
   })

@@ -56,10 +56,14 @@ export class CourseReader {
   }
 
   // a page of the members of an archive (or another container) the file
-  // holds, none if it holds none
+  // holds, none if it holds none, or no content yet
   async members(userId: string, fileId: string, { offset, limit }: Page) {
-    const { hash } = await this.readableContent(userId, fileId);
-    return this.queries.execute(new ListMembersQuery(hash, offset, limit));
+    const file = await readableFile(this.queries, userId, fileId);
+    return file.contentHash
+      ? this.queries.execute(
+          new ListMembersQuery(file.contentHash, offset, limit),
+        )
+      : [];
   }
 
   // one page of the file's text, or a member's; the first processor's

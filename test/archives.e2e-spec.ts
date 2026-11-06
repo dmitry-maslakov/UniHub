@@ -140,8 +140,18 @@ describe('archives', { timeout: 60_000 }, () => {
   });
 
   it("reads an archive's members through the API, each by its path", async () => {
-    const members = (await get(`/api/files/${fileId}/members`).expect(200))
-      .body;
+    // once the processors are done with them; none takes the tgz itself
+    const members = await vi.waitFor(
+      async () => {
+        const { body } = await get(`/api/files/${fileId}/members`).expect(200);
+        const read = body.filter(
+          ({ texts }: { texts: unknown[] }) => texts.length,
+        );
+        expect(read).toHaveLength(5);
+        return body;
+      },
+      { timeout: 45_000, interval: 500 },
+    );
     expect(members).toContainEqual({
       path: 'lab/semafor.c',
       size: semafor.length,

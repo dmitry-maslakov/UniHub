@@ -47,7 +47,13 @@ describe('memberSchema', () => {
     expect(memberSchema.parse({ member: 'lab/main.c' })).toEqual({
       member: 'lab/main.c',
     });
-    for (const member of ['', 'a'.repeat(1025), ['a.c', 'b.c']])
+    for (const member of ['', 'a'.repeat(1025), ['a.c', 'b.c'], 'a\u0000.c'])
       expect(memberSchema.safeParse({ member }).success).toBe(false);
+  });
+
+  it('composes its letters, as the hub keeps them', () => {
+    expect(memberSchema.parse({ member: 'Ve\u017ebe/c\u030cas.c' })).toEqual({
+      member: 'Ve\u017ebe/\u010das.c',
+    });
   });
 });

@@ -15,13 +15,13 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { create as contentDisposition } from 'content-disposition';
-import type { z } from 'zod';
 import { CurrentUserId } from '../../../identity/contracts.js';
 import { CourseReader } from '../../application/course-reader.js';
 import {
   memberSchema,
   pageSchema,
   textPageSchema,
+  type MemberAt,
   type Page,
   type TextAt,
 } from '../../application/page.js';
@@ -89,8 +89,7 @@ export class FilesController {
   async content(
     @CurrentUserId() userId: string,
     @Param('id', ParseUUIDPipe) id: string,
-    @Query({ schema: memberSchema })
-    { member }: z.output<typeof memberSchema>,
+    @Query({ schema: memberSchema }) { member }: MemberAt,
   ) {
     const file = await this.reader.content(userId, id, member);
     return new StreamableFile(file.stream, {

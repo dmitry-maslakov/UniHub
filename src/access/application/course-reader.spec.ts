@@ -90,8 +90,10 @@ function reader() {
     [ListMembersQuery, () => [main]],
     [
       FindMemberQuery,
-      ({ path }: FindMemberQuery) =>
-        path === main.path ? { hash: sha256(code), mime: cMime } : null,
+      ({ hash: container, path }: FindMemberQuery) =>
+        container === hash && path === main.path
+          ? { hash: sha256(code), mime: cMime }
+          : null,
     ],
     [
       GetTextPageQuery,
@@ -181,6 +183,8 @@ describe('CourseReader', () => {
     await expect(
       r.members('ana', 'f2', { offset: 0, limit: 10 }),
     ).rejects.toThrowError(new NotReadableError('file'));
+    // no content yet, so no members
+    expect(await r.members('ana', 'f3', { offset: 0, limit: 10 })).toEqual([]);
   });
 
   it('reads a member kept in a file it may read, by its path', async () => {
@@ -189,6 +193,10 @@ describe('CourseReader', () => {
     expect(
       await r.text('ana', 'f1', { page: 1, member: 'lab/main.c' }),
     ).toEqual(expect.objectContaining({ text: 'page 1' }));
+    // looked up in the tree of the file's own content, and no other
+    expect(queries.sent).toContainEqual(
+      new FindMemberQuery(hash, 'lab/main.c'),
+    );
     expect(queries.sent).toContainEqual(
       new GetTextPageQuery(sha256(code), 1, undefined),
     );
@@ -197,7 +205,7 @@ describe('CourseReader', () => {
     expect((await stream.toArray()).join('')).toBe(code);
   });
 
-  it("answers the same for a member that isn't kept and a file it may not read", async () => {
+  it('finds no member not kept, and looks up none in a file it may not read', async () => {
     const { reader: r, queries } = reader();
 
     await expect(

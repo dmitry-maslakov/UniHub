@@ -76,7 +76,7 @@ export class CourseTools {
   @Tool({
     name: 'read_file',
     description:
-      'One page (slide, section) of the text made from a file, or from a file inside an archive (`member`, its path from list_members or search), with how many pages there are. Read the next page with page + 1. A file can have a text per processor, each paged on its own: read a page from search with the processor it names.',
+      'One page (slide, section) of the text made from a file, or from a file inside an archive (`member`, its path from list_members), with how many pages there are. Read the next page with page + 1. A file can have a text per processor, each paged on its own: read a page from search with the processor it names.',
     parameters: fileText,
     annotations: readOnly,
   })

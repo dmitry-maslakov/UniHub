@@ -95,6 +95,13 @@ describe('MCP', { timeout: 20_000 }, () => {
           mime: null,
           leftOut: null,
         },
+        {
+          path: 'video.mp4',
+          hash: null,
+          size: 3e9,
+          mime: null,
+          leftOut: 'TOO_LARGE',
+        },
       ],
       cutShort: null,
     });
@@ -213,12 +220,20 @@ describe('MCP', { timeout: 20_000 }, () => {
     const members = await call('list_members', { file: fileId });
     expect(JSON.parse(members.content[0].text)).toEqual([
       expect.objectContaining({ path: 'docs/notes.md' }),
+      expect.objectContaining({ path: 'video.mp4', leftOut: 'TOO_LARGE' }),
     ]);
     const member = await call('read_file', {
       file: fileId,
       member: 'docs/notes.md',
     });
     expect(member.content[0].text).toContain('heapsort');
+    // listed, not kept
+    const large = await call('read_file', {
+      file: fileId,
+      member: 'video.mp4',
+    });
+    expect(large.isError).toBe(true);
+    expect(large.content[0].text).toContain('member not found');
   });
 
   it('answers with an error the model can read', async () => {

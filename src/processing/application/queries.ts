@@ -60,12 +60,14 @@ export class ListMembersQuery extends Query<MemberInfo[]> {
   }
 }
 
-// the content of the member kept at `path` in the tree of some content,
-// null if none is
-export class FindMemberQuery extends Query<{
+export interface MemberContent {
   hash: ContentHash;
   mime: MediaType | null;
-} | null> {
+}
+
+// the content of the member kept at `path` in the tree of some content,
+// null if none is
+export class FindMemberQuery extends Query<MemberContent | null> {
   constructor(
     public readonly hash: ContentHash,
     public readonly path: string,
