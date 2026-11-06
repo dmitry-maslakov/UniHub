@@ -40,8 +40,7 @@ Put off:
 - monitoring: traces, errors and logs go to NestJS Observe (see AGENTS.md), on OpenTelemetry's global providers; the metrics stay on the app's own `MeterProvider`, served only to a scraper on `METRICS_PORT` (README, Metrics), so neither gets the other's. Alerts on them (downtime, dead letters, a connector's last success) are the scraper's to set; disk space isn't among them
 - connector API keys, and moving the "portal both built-in and external" check to key creation (#33)
 - cursor paging for MCP, if agents need it
-- OAuth for MCP clients (claude.ai connectors need it); API keys until then
-- an `Origin` allowlist on the MCP transport (the spec asks for it against DNS rebinding); MCP takes no cookies, so a page can't call it as the user
+- MCP's OAuth: a list of the apps a user let in and a way to remove one (removing a consent leaves its refresh tokens in Better Auth 1.7; a new password ends them); dynamic client registration, for apps without CIMD (`allowDynamicClientRegistration`); a DPoP-bound token whose proof fails gets the Bearer challenge, not RFC 9449's DPoP one (`AccessTokens` answers refused or short of scope, not why)
 - MCP tools answer JSON as text, not `structuredContent` with an `outputSchema`
 - device sign-in: approval screen details and shorter device sessions, with the web portal
 - helmet's `Cross-Origin-Resource-Policy: same-origin` stops another origin embedding file content (`<img>`, `<iframe>`); `same-site` if the web portal lives on a sibling subdomain

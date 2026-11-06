@@ -9,7 +9,8 @@ export { UserDeletedEvent } from './domain/events.js';
 export type { ReadScope } from './domain/read-scope.js';
 export { UnknownUserError } from './domain/errors.js';
 export { ADMIN_ROLE } from './domain/reader.js';
-export { ApiKeyAuth } from './infrastructure/http/api-key.guard.js';
+export { McpAuth } from './infrastructure/http/agent.guard.js';
+export { TrustedOrigins } from './infrastructure/mcp-settings.js';
 export { FreshSession } from './infrastructure/http/fresh-session.guard.js';
 // @AllowAnonymous() for a route anyone may call, signed in or not (health);
 // @Roles([ADMIN_ROLE]) for one only admins may

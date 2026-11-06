@@ -9,7 +9,7 @@ export const mcpRequestOf = (ctx: ExecutionContext) =>
     .getContext<McpContext>()
     .getRawRequest<Parameters<typeof userIdOf>[0]>() ?? {};
 
-// The user an MCP tool is called for: the one the key guard put on the HTTP
+// The user an MCP tool is called for: the one McpAuth's guard put on the HTTP
 // request the call came with.
 export const McpUserId = createParamDecorator(
   (_: unknown, ctx: ExecutionContext) => userIdOf(mcpRequestOf(ctx)),
