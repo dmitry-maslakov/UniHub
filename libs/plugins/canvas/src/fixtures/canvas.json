@@ -1,4 +1,13 @@
 {
+  "/api/v1/users/self": {
+    "id": 4242,
+    "name": "Ana Student",
+    "sortable_name": "Student, Ana",
+    "short_name": "Ana",
+    "avatar_url": "https://canvas.example.edu/images/messages/avatar-50.png",
+    "locale": null,
+    "effective_locale": "en"
+  },
   "/api/v1/users/self/tokens/1~abc": {
     "id": 31,
     "purpose": "UniHub",

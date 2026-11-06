@@ -20,6 +20,9 @@ const LIMITS = {
   // whole minute at its 20 candidates on amd64 (README, Deploying search):
   // the others' searches meanwhile keep the index's order
   search: 20,
+  // setting a portal token, per user (accounts): each one asks the portal
+  // whose it is, so the hub mustn't become a way to try tokens out
+  link: 10,
 };
 type Limit = keyof typeof LIMITS;
 
@@ -29,6 +32,7 @@ const LimitOf = Reflector.createDecorator<Limit>();
 // limit, so each one skips the routes that aren't its own. The count is per
 // user, so the guard that finds the user must run first: on REST routes it's
 // the global session guard; on MCP, ApiKeyAuth applies this after its own.
+// On a route or its controller, not both: the guard would count it twice.
 export const Limited = (name: Limit) =>
   applyDecorators(LimitOf(name), UseGuards(ThrottlerGuard));
 

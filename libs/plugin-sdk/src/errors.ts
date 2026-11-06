@@ -24,3 +24,13 @@ export class InvalidRecordError extends InvalidError {
     super(`invalid record: ${issues.join('; ')}`);
   }
 }
+
+// The portal doesn't take a credential a user linked (expired, revoked, or
+// never valid). It says nothing of the credential, nor of whose it was.
+export class CredentialRejectedError extends InvalidError {
+  readonly reason = 'CREDENTIAL_REJECTED';
+
+  constructor() {
+    super('the portal did not take the credential');
+  }
+}

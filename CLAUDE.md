@@ -58,5 +58,12 @@ Put off:
 - random access for unpackers, a container's size and a ranged `content()` over its blob (yauzl's `RandomAccessReader`): an unpacker gets a stream from the start, as a processor does, so a zip, its directory at its end, is read whole into memory up to the unpacker's limit; when memory calls for it
 - search in health and monitoring (`/api/health/search`, OpenSearch's disk; the `search-index` queue's backlog and its outages are metrics now): `/api/health` leaves search out, so an index away doesn't take down the app caddy waits on
 - trees keyed by content and unpacker, with a second unpacker: one tree per content now, so the same bytes in files two unpackers take (`x.zip`, `x.epub`) would be walked by turns, each seeing the other's tree as not current
+- portal accounts, after the token setting and the vault: catalog's records as versions shared by the accounts that see them alike, with a sight per account and record, today's data the shared account's view
+- reads and searches cut by sights: a user's viewers (their linked accounts that haven't expired, the shared account of the courses granted them), content opened only past its hold, unlinked portal courses as entries of their own, admins' links answering the same whether the hub knows a course or not
+- the pass API: a connector sends what one account sees as it sees it, bytes and bodies fetched once per version under a lease, each account on a grid of its own, its changes shown at a fixed slot and content at a hold after, `CONNECTOR_CONCURRENCY`; Canvas then reads with linked accounts
+- OAuth as a link mode: the portal's consent page, the access and refresh tokens sealed as a pasted token is (Canvas needs a developer key from the school)
+- connector keys (#33) bound to a user's account, accounts over gRPC and the `connector` mode
+- a deleted user's accounts go by an event Better Auth's delete hook sends once the delete has committed, on the in-process bus: a crash in between leaves them, unreachable (no session is the user's); a sweep against identity's users, once something reads with accounts
+- a malformed JSON body's 400 quotes a few characters of it (V8's `JSON.parse` message, which Nest answers with): a token sent so shows a part of itself to its own sender, and isn't logged
 
 Done the standard way after all: global prefix, gRPC guard (#36).

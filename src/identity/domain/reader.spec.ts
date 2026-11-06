@@ -31,6 +31,14 @@ describe('Reader', () => {
     expect(reads(new Reader([ADMIN_ROLE], new Ban(null)), 'other')).toBe(false);
   });
 
+  it('is an admin by the role, and no more while banned', () => {
+    expect(new Reader(['user', ADMIN_ROLE], null).adminAt(now)).toBe(true);
+    expect(new Reader(['user'], null).adminAt(now)).toBe(false);
+    const banned = new Reader([ADMIN_ROLE], new Ban(tomorrow));
+    expect(banned.adminAt(now)).toBe(false);
+    expect(banned.adminAt(tomorrow)).toBe(true);
+  });
+
   it('reads again once a ban is over', () => {
     const was = new Reader(['user'], new Ban(yesterday));
     expect(was.bannedAt(now)).toBe(false);

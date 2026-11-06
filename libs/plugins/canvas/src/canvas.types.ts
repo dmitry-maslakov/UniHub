@@ -84,3 +84,8 @@ export interface Folder {
 export interface Token {
   expires_at: string | null;
 }
+
+// the token's user; of all it says (names, an avatar), only the id is read
+export interface User {
+  id: number;
+}

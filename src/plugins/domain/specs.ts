@@ -2,6 +2,7 @@ import { extname } from 'node:path';
 import { CronExpressionParser } from 'cron-parser';
 import type { z } from 'zod';
 import {
+  AccountLink,
   InvalidValueError,
   MediaType,
   PluginName,
@@ -39,13 +40,14 @@ const schedule = (pattern: string) => {
   return pattern;
 };
 
-export interface PollSpec {
-  portal: PortalId;
-  schedule: string;
-}
-
 export interface PushSpec {
   portal: PortalId;
+  // how users may link accounts of their own; shared needs no naming
+  links: readonly AccountLink[];
+}
+
+export interface PollSpec extends PushSpec {
+  schedule: string;
 }
 
 export interface AggregatorSpec<T extends string = string> {
@@ -53,16 +55,23 @@ export interface AggregatorSpec<T extends string = string> {
   topics: readonly T[];
 }
 
+export const pushSpec = (options: {
+  portal: string;
+  links?: readonly string[];
+}): PushSpec => ({
+  portal: valid(PortalId, 'connector portal', options.portal),
+  links: [...new Set(options.links ?? [])].map((link) =>
+    valid(AccountLink, 'connector link', link),
+  ),
+});
+
 export const pollSpec = (options: {
   portal: string;
   schedule: string;
+  links?: readonly string[];
 }): PollSpec => ({
-  portal: valid(PortalId, 'connector portal', options.portal),
+  ...pushSpec(options),
   schedule: schedule(options.schedule),
-});
-
-export const pushSpec = (options: { portal: string }): PushSpec => ({
-  portal: valid(PortalId, 'connector portal', options.portal),
 });
 
 export const aggregatorSpec = <T extends string>(options: {

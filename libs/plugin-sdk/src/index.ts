@@ -1,6 +1,15 @@
 // What a plugin may depend on. The hub's side of the decorators is host.ts,
 // which isn't exported here.
-export { ContentHash, MediaType, PortalId, type Json } from '@app/kernel';
+export {
+  AccountLink,
+  ContentHash,
+  LinkMode,
+  MediaType,
+  PortalId,
+  Secret,
+  type Json,
+} from '@app/kernel';
+export * from './accounts.js';
 export * from './aggregators.js';
 export * from './connectors.js';
 export * from './decorators.js';

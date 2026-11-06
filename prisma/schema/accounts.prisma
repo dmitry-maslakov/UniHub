@@ -1,0 +1,27 @@
+// users' own accounts of portals (README, Portal accounts), one per user and
+// portal. userId is identity's, not a foreign key: modules keep their own
+// tables, and a user's delete takes theirs (UserDeletedEvent)
+model PortalAccount {
+  id         String            @id
+  userId     String
+  portal     String
+  // how it was linked: token
+  mode       String
+  // the portal's own id for its user, never a name or an email
+  portalUser String
+  // linked, expired or revoked
+  status     String            @default("linked")
+  expiresAt  DateTime?
+  credential PortalCredential?
+
+  @@unique([userId, portal])
+}
+
+// an account's credential, sealed (CredentialVault), in a table of its own
+// so nothing that reads accounts reads it; deleted with its account
+model PortalCredential {
+  accountId String        @id
+  account   PortalAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  sealed    String
+  updatedAt DateTime      @updatedAt
+}

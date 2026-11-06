@@ -3,6 +3,7 @@ import {
   aggregatorSpec,
   pollSpec,
   ProcessorSpec,
+  pushSpec,
   UnpackerSpec,
 } from './specs.js';
 
@@ -66,6 +67,20 @@ describe('plugin specs', () => {
     for (const good of ['0 * * * *', '*/30 * * * * *', '@hourly'])
       expect(pollSpec({ portal: 'moodle', schedule: good }).schedule).toBe(
         good,
+      );
+  });
+
+  it('take the links a connector names, once each, and no other', () => {
+    expect(
+      pushSpec({ portal: 'moodle', links: ['token', 'token'] }).links,
+    ).toEqual(['token']);
+    expect(pollSpec({ portal: 'moodle', schedule: '@hourly' }).links).toEqual(
+      [],
+    );
+    // shared isn't a link: every connector serves it
+    for (const bad of ['shared', 'oauth', 'TOKEN'])
+      expect(() => pushSpec({ portal: 'moodle', links: [bad] })).toThrow(
+        new InvalidValueError('connector link', bad),
       );
   });
 

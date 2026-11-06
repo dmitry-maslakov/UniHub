@@ -12,6 +12,7 @@ import { RedisModule } from './platform/redis/redis.module.js';
 import { roleConfig } from './platform/role/role.config.js';
 import { ValidationModule } from './platform/validation/validation.module.js';
 import { AccessModule } from './access/access.module.js';
+import { AccountsModule } from './accounts/accounts.module.js';
 import { HealthModule } from './health/health.module.js';
 import { CatalogModule } from './catalog/catalog.module.js';
 import { IdentityModule } from './identity/identity.module.js';
@@ -61,6 +62,7 @@ import { PluginsModule } from './plugins/plugins.module.js';
     CatalogModule,
     IdentityModule,
     AccessModule,
+    AccountsModule,
     HealthModule,
     IngestModule,
     StorageModule,

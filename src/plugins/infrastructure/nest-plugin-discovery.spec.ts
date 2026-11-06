@@ -16,10 +16,13 @@ class Poller {
   async poll() {}
 }
 
-@PushConnector({ portal: 'teams' })
+@PushConnector({ portal: 'teams', links: ['token'] })
 @Injectable()
 class Pusher {
   async run() {}
+  async identify() {
+    return { id: '7', expiresAt: null };
+  }
 }
 
 @ContentProcessor({ name: 'pdf', version: 2, accepts: ['.PDF'] })
@@ -56,7 +59,10 @@ describe('NestPluginDiscovery', () => {
     const found = (await discovery(Poller, Pusher, Pdf)).find();
 
     expect(found.polls.map(({ spec }) => spec)).toEqual([
-      { portal: 'moodle', schedule: '*/15 * * * *' },
+      { portal: 'moodle', schedule: '*/15 * * * *', links: [] },
+    ]);
+    expect(found.pushes.map(({ spec }) => spec)).toEqual([
+      { portal: 'teams', links: ['token'] },
     ]);
     expect(found.polls[0].instance).toBeInstanceOf(Poller);
     expect(found.pushes[0].instance).toBeInstanceOf(Pusher);

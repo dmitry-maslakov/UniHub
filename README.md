@@ -20,7 +20,7 @@ Search by meaning needs an embedding model: `docker compose --profile models up 
 
 ## Layout
 
-- `src/` — the hub: its modules (`catalog`, `ingest`, `storage`, `processing`, `plugins`, `identity`, `access`), each used by the others only through its `contracts.ts` (a lint rule checks it)
+- `src/` — the hub: its modules (`catalog`, `ingest`, `storage`, `processing`, `plugins`, `identity`, `access`, `accounts`), each used by the others only through its `contracts.ts` (a lint rule checks it)
 - `src/platform/` — what the modules run on: `database` (Prisma, `@Transactional()`), `redis`, `queues` (BullMQ), `messaging` (the outbox; `AppModule` names its transports), `role` (`APP_ROLE`, what this process runs), `errors` (one answer per kind of domain error), `validation` (a route's schemas), `search` (the OpenSearch client), `metrics` (the app's own OpenTelemetry meter, served on `METRICS_PORT`); `app.module.ts` lists the modules and wires them into the platform, `app.setup.ts` sets the app up (HTTP, MCP and gRPC) for `main.ts` and the e2e tests alike, `main.ts` starts it, or a worker with no server
 - `libs/plugin-sdk` — everything a plugin may depend on, plugins never import the core directly; its `host.ts` is the hub's side (how it finds plugins), which plugins can't import
 - `libs/plugins/` — the built-in plugins (`canvas`, `office-text`, `plain-text`), each on the sdk alone. A worker thread's file is run by node as it is in the tests, types stripped, so it and what it imports name each other's `.ts` (`rewriteRelativeImportExtensions` lets tsc take that)
@@ -71,6 +71,8 @@ OpenAPI at `/api/docs`. A signed-in user reads the courses they were given:
 
 Everything goes through `CourseReader` and `CourseSearch` (`src/access`), which MCP shares; 1200 calls a minute per user, and searches apart, 20 a minute.
 
+A user's own accounts of portals, by a token they set and never read back, are under `/api/me/portals` (Portal accounts, below).
+
 Admins set the courses up (`@Roles([ADMIN_ROLE])`):
 
 - `POST /api/courses` with `{ slug, name }`: a course
@@ -110,6 +112,7 @@ A plugin is a Nest module that depends only on `@app/plugin-sdk` (a lint rule ch
 
 - `@PollConnector({ portal, schedule })` — the hub calls `poll(ctx)` on the cron schedule (or at once on `SyncConnectionCommand`), one run per account at a time; a schedule BullMQ's parser (cron-parser) refuses stops the app at start. `ctx.signal` aborts past `CONNECTOR_POLL_TIMEOUT_MINUTES` (60), when another instance has taken the run over, or at shutdown; the hub lets go of the run then, and the next one goes on from the state it saved
 - `@PushConnector({ portal })` — `run(ctx)` keeps its own connection until `ctx.signal` aborts, only in a process that runs the background work (`APP_ROLE`, Running the API and the worker apart) and has `RUN_CONNECTORS=true` (the default). A run that ends or fails is started again after a second, then twice as long each time it ends soon again, up to `CONNECTOR_RESTART_MAX_SECONDS` (60); a run that stayed up longer than that starts over at a second; at shutdown all are stopped at once, each given `CONNECTOR_STOP_SECONDS` (10)
+- either way, `links: ['token']` in the decorator lets users link accounts of their own on the portal by a token (Portal accounts, below); the connector then implements `identify(credential, signal)`, saying whose a credential is and when it expires, or else it doesn't compile
 - either way data goes in only through `ctx.ingest`, bound to `ctx.connection` (the portal and account). A record it refuses rejects with `InvalidRecordError` (fix it or skip it) or `UnknownReferenceError` (send what it refers to first), and their `reason` says which rule it broke, the same reasons gRPC connectors get
 - `@ContentProcessor({ name, version, accepts })` turns file content into text for models, once per content and version whichever files hold it; it gets only files it accepts, and `input.matched` says which `accepts` entry the file matched (its extension first, then its media type). The sdk's `readUpTo` reads content up to a limit and `firstMessage` waits for a worker thread that parses it, as the built-in processors do
 - `@ContentUnpacker({ name, version, accepts })` lists the members of a container (an archive): `unpack(input)` yields each one's `path` as the container names it, its `content` as a stream, and its `size` and `mime` when the container says; `input.signal` aborts past the hub's time. One unpacker takes a format: two that accept the same extension or media type stop the app at start, and a file one takes by its extension and another by its media type goes by its extension. An extension is a file's last (`.gz` of `labs.tar.gz`): an `accepts` entry of two (`.tar.gz`) stops the app at start
@@ -144,7 +147,7 @@ Without `OPENSEARCH_URL` none of this is loaded, and processing runs as it did; 
 
 ### Canvas
 
-The `canvas` connector (`libs/plugins/canvas`) polls a school's [Canvas LMS](https://canvas.instructure.com/doc/api/) every hour, on the hub owner's own personal access token. It's one account, `shared`: whoever the hub lets read a course reads it as the owner sees it. It isn't in `PLUGINS` by default, and turning it on is the owner's call: the school's Canvas policies come first. Instructure's API policy has the school told when an app hands Canvas content to generative AI (the hub's MCP does) and doesn't let one user's access serve others, so tell the school (its Canvas admins or IT) what the hub reads and who reads it, and until the school or the teachers say otherwise, grant its courses to no one but yourself.
+The `canvas` connector (`libs/plugins/canvas`) polls a school's [Canvas LMS](https://canvas.instructure.com/doc/api/) every hour, on the hub owner's own personal access token. It's one account, `shared`: whoever the hub lets read a course reads it as the owner sees it. It takes users' own tokens too (Portal accounts, below), which nothing reads with yet. It isn't in `PLUGINS` by default, and turning it on is the owner's call: the school's Canvas policies come first. Instructure's API policy has the school told when an app hands Canvas content to generative AI (the hub's MCP does) and doesn't let one user's access serve others, so tell the school (its Canvas admins or IT) what the hub reads and who reads it, and until the school or the teachers say otherwise, grant its courses to no one but yourself.
 
 To turn it on:
 
@@ -161,6 +164,25 @@ What it reads, of the courses you're active in:
 - not discussion replies, quizzes, grades, submissions, the calendar, groups, finished courses, or files linked only from inside a page's text
 
 A record gone from a listing that went through to the end is removed. Nothing is removed for a listing that failed, was cut short or refused, or a tab hidden since. A course Canvas fails on (a listing still failing after the retries, a bad request) is skipped for that run and logged, the others go on, and the run is marked failed once they're through; a request that gets no answer after the retries (the network, a page that isn't JSON) fails the run there. A download Canvas refuses or fails, one that gets no answer after the retries, and one cut off partway are logged and tried again the next run. It sends one request at a time, 100 records a page; a throttled or failing request, or one the network failed, is tried again after about 1, 2, 4, 8 and 16 seconds; a request has a minute for its answer, redirects included, and then fails once a minute goes by without a byte read (for a download, also when the hub's storage takes none for that long); and each request waits 2 seconds while the token's quota is low. The token goes to the school's Canvas only: a link Canvas gives to another address is refused and fails the run, and a redirect to one leaves the token out. That's about ten requests per course an hour, and the files that changed.
+
+### Portal accounts
+
+How a portal's accounts are linked is set per portal in `PORTAL_LINKS` (`canvas=token/admins, moodle=token`):
+
+- `shared`, every portal's unless it says otherwise, as before: the one account the plugin's settings give (`CANVAS_TOKEN`), read by whoever an admin lets read a course
+- `token`: each user links an account of their own by pasting a token the portal gave them; `/admins` lets only admins link one
+- only `token` exists so far beside it; a portal's consent page (OAuth) and a user's own connector come later, and `PORTAL_LINKS` refuses them. The app doesn't start with a mode the portal's connector doesn't name (`links`, Plugins above)
+
+Nothing reads with a linked account yet: the portal is still read as shared, and an account is only linked, listed and unlinked. The token is a setting that's written, never read:
+
+- `PUT /api/me/portals/{portal}/token` with `{ "token": "…" }`: 204 once the portal's connector says whose it is (`identify`) and when it expires. Of the portal's user only their id on the portal is kept, never a name or an email. It needs a session signed in within the last day, as making an API key does (403 `SESSION_NOT_FRESH`), and takes 10 a minute per user (`X-RateLimit-*-link`), as each one asks the portal. A portal not linked by token, or one for admins to anyone else, is a 404; a token the portal doesn't take a 422 that says only that; the portal away, or no answer within 30 s, a 503. A token of the same portal user keeps the account, another's makes a new one in its place
+- `DELETE` on the same path unlinks: the account and its token go together
+- `GET /api/me/portals`: `[{ portal, mode, linked, status, expiresAt }]`, for each portal you may link an account of and each you have one of; `status` is `linked`, `expired` (past `expiresAt`) or `revoked`, null when not linked. Never the token or any hint of it, and nothing of anyone else: each user's account is their own, so the same portal user linked by two people is no conflict
+- no MCP tool sets or shows any of it, and the token goes in no log, error, job, Redis, the outbox or sync state. A deleted user's accounts go with them
+
+Tokens are sealed with AES-256-GCM (`node:crypto`), each for its own account, under `PORTAL_CREDENTIALS_SECRETS="2:…,1:…"`: keys of their own (`openssl rand -base64 32` each), never `BETTER_AUTH_SECRET`, needed once a portal links by token. The highest version seals, any listed opens: to rotate, add a higher version and keep the older ones while tokens sealed under them remain (a token set again is sealed under the new one). A version taken off leaves what it sealed unreadable, the copies in old backups too. Whoever holds both the database and the keys can open them; the hub has to, to use them.
+
+The Canvas connector takes `token`. A token a user pastes has no scopes, so the Canvas client only reads (GET and HEAD), and only from the school's Canvas. Canvas's [OAuth docs](https://canvas.instructure.com/doc/api/file.oauth.html) say an app that several users use must get their tokens by OAuth, and that asking other users to make a token and enter it violates Instructure's API policy: on a Canvas Instructure hosts, keep `token` to `/admins` (in practice, yourself) until OAuth comes. A Canvas a school hosts itself follows that school's own rules instead: ask its Canvas admins before opening it to anyone.
 
 ## External connectors
 

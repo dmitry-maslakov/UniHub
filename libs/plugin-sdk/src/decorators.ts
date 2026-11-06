@@ -1,3 +1,5 @@
+import type { AccountLink } from '@app/kernel';
+import type { IdentifiesAccounts } from './accounts.js';
 import type { AggregatorOptions, HandlesMessages } from './aggregators.js';
 import type {
   PollConnectorOptions,
@@ -25,19 +27,28 @@ import type {
 // digits and dashes. Connectors outside the repo talk to the hub over gRPC.
 //
 // Each decorator only fits a class that implements its kind, so a poll
-// connector without poll(), or an aggregator that doesn't handle every
-// topic it listens to, doesn't compile.
+// connector without poll(), one that names links without identify(), or an
+// aggregator that doesn't handle every topic it listens to, doesn't compile.
 
 type Class<T> = abstract new (...args: any[]) => T;
 
-export function PollConnector(options: PollConnectorOptions) {
-  return <C extends Class<PollsPortal>>(target: C) => {
+// what a connector implements for the links it names: none, nothing more
+type Linking<L extends AccountLink> = [L] extends [never]
+  ? unknown
+  : IdentifiesAccounts;
+
+export function PollConnector<L extends AccountLink = never>(
+  options: PollConnectorOptions<L>,
+) {
+  return <C extends Class<PollsPortal & Linking<L>>>(target: C) => {
     PollConnectorMark(options)(target);
   };
 }
 
-export function PushConnector(options: PushConnectorOptions) {
-  return <C extends Class<PushesFromPortal>>(target: C) => {
+export function PushConnector<L extends AccountLink = never>(
+  options: PushConnectorOptions<L>,
+) {
+  return <C extends Class<PushesFromPortal & Linking<L>>>(target: C) => {
     PushConnectorMark(options)(target);
   };
 }

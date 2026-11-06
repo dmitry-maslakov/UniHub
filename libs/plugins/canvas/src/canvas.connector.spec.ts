@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { http, HttpResponse, passthrough } from 'msw';
 import type { MockInstance } from 'vitest';
-import { PortalId } from '@app/plugin-sdk';
+import { CredentialRejectedError, PortalId, Secret } from '@app/plugin-sdk';
 import { CanvasConnector, WARN_BEFORE_MS } from './canvas.connector.js';
 import {
   CANVAS_URL,
@@ -10,7 +10,7 @@ import {
   refusal,
   TOKEN,
 } from './canvas.fakes.js';
-import { TokenRejectedError } from './errors.js';
+import { CanvasError, TokenRejectedError } from './errors.js';
 import { RecordingIngest } from './ingest.fakes.js';
 import { SyncState } from './listings.js';
 
@@ -319,5 +319,52 @@ describe('CanvasConnector', () => {
     await expect(failed).rejects.toBeInstanceOf(TokenRejectedError);
     await expect(failed).rejects.toThrow(/expired or was revoked/);
     expect(ingest.courses.size).toBe(0);
+  });
+});
+
+describe('CanvasConnector, as a user links a token', () => {
+  // the owner's token is another, which Canvas doesn't take: each goes
+  // with its own requests
+  const identify = (token = TOKEN) =>
+    new CanvasConnector({
+      url: CANVAS_URL,
+      token: '1~the-owners-own',
+      userAgent: 'test',
+    }).identify(
+      { kind: 'token', token: new Secret(token) },
+      new AbortController().signal,
+    );
+
+  it("says whose it is by Canvas's id alone, and when it expires", async () => {
+    const found = await identify();
+
+    expect(found).toEqual({
+      id: '4242',
+      expiresAt: new Date('2026-12-30T08:00:00Z'),
+    });
+    expect(canvas.asked).toEqual(['/api/v1/users/self', TOKEN_PATH]);
+  });
+
+  it("takes one that never expires, or whose expiry Canvas won't show", async () => {
+    canvas.answers[TOKEN_PATH] = { expires_at: null };
+    expect((await identify()).expiresAt).toBeNull();
+    delete canvas.answers[TOKEN_PATH];
+    expect(await identify()).toEqual({ id: '4242', expiresAt: null });
+  });
+
+  it("rejects one Canvas doesn't take, or whose user it won't show", async () => {
+    await expect(identify('1~revoked')).rejects.toBeInstanceOf(
+      CredentialRejectedError,
+    );
+    canvas.answers['/api/v1/users/self'] = 403;
+    await expect(identify()).rejects.toBeInstanceOf(CredentialRejectedError);
+  });
+
+  it('fails as Canvas does otherwise, rejecting nothing', async () => {
+    canvas.answers['/api/v1/users/self'] = 400;
+    await expect(identify()).rejects.toBeInstanceOf(CanvasError);
+    await expect(identify()).rejects.not.toBeInstanceOf(
+      CredentialRejectedError,
+    );
   });
 });

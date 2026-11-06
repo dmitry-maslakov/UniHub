@@ -9,6 +9,7 @@ import { admin, bearer, deviceAuthorization } from 'better-auth/plugins';
 import { apiKey } from '@better-auth/api-key';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
 import type { PrismaClient } from '../../generated/prisma/client.js';
+import { FRESH_AGE_SECONDS } from '../domain/fresh-session.js';
 import type { Mail, Mailer } from '../domain/mailer.js';
 import { ADMIN_ROLE } from '../domain/reader.js';
 
@@ -29,6 +30,8 @@ export interface AuthDeps {
   baseURL: string;
   trustedOrigins: string[];
   google?: { clientId: string; clientSecret: string };
+  // once a user's delete has committed: what other modules keep of them goes
+  onUserDeleted: (userId: string) => void;
 }
 
 const logger = new Logger('Auth');
@@ -40,6 +43,7 @@ export function createAuth({
   baseURL,
   trustedOrigins,
   google,
+  onUserDeleted,
 }: AuthDeps) {
   // not awaited, so how long sending takes doesn't tell whether an account
   // exists (Better Auth's advice)
@@ -101,11 +105,19 @@ export function createAuth({
         }),
     },
     socialProviders: google ? { google } : {},
+    // Better Auth's default, set here as the hub's routes check the same
+    // (FreshSession)
+    session: { freshAge: FRESH_AGE_SECONDS },
+    // run once the delete has committed (Better Auth queues them after its
+    // transaction), so nothing goes for a user still there
+    databaseHooks: {
+      user: { delete: { after: async (user) => onUserDeleted(user.id) } },
+    },
     hooks: {
       // A key outlives the session that made it, and a screen approved by QR
       // gets a session of its own, new and so fresh. So only a session
-      // signed in within a day (Better Auth's freshAge) does either: an old
-      // cookie someone stole doesn't, nor does a session kept alive for
+      // signed in within a day (freshAge, fresh-session.ts) does either: an
+      // old cookie someone stole doesn't, nor does a session kept alive for
       // weeks. Before hooks all get the request as it came, before bearer()
       // turns a token into the cookie, so the session is read through
       // auth.api, which runs bearer() first, and left where the middleware
