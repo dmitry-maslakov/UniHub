@@ -4,6 +4,7 @@ import { TerminusModule } from '@nestjs/terminus';
 import { whenSearchOn } from '../platform/search/opensearch.config.js';
 import { PluginsModule } from '../plugins/contracts.js';
 import { StorageModule } from '../storage/contracts.js';
+import { PostTextHandler } from './application/post-text.handler.js';
 import { DeliverMessage } from './application/deliver-message.js';
 import { Dispatch } from './application/dispatch.js';
 import { Holders } from './application/holders.js';
@@ -22,6 +23,7 @@ import { UnpackingRepository } from './domain/unpacking.js';
 import { BullmqPluginJobQueue } from './infrastructure/bullmq-plugin-job-queue.js';
 import { CatalogFileFacts } from './infrastructure/catalog-file-facts.js';
 import { OtelSearchMetrics } from './infrastructure/otel-search-metrics.js';
+import { HtmlTextModule } from './infrastructure/html-text.module.js';
 import { PLUGINS_QUEUE } from './infrastructure/plugins.queue.js';
 import { PluginsWorker } from './infrastructure/plugins.worker.js';
 import { PrismaRepresentationRepository } from './infrastructure/prisma-representation.repository.js';
@@ -59,6 +61,8 @@ const DAY = 24 * 60 * 60;
     TerminusModule,
     StorageModule,
     PluginsModule,
+    // a post's text is read with search off too
+    HtmlTextModule,
     // with search off nothing is indexed, ProcessContent queues nothing and
     // SearchTexts answers it's off
     whenSearchOn(TextSearchModule),
@@ -69,6 +73,7 @@ const DAY = 24 * 60 * 60;
     ListMembersHandler,
     FindMemberHandler,
     ListContainedHandler,
+    PostTextHandler,
     SearchTexts,
     Dispatch,
     IndexMessages,

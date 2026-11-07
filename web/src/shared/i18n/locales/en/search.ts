@@ -24,11 +24,11 @@ export default {
     other: "Couldn't search just now. Try again.",
   },
   result: {
-    download: 'Download',
-    inCourse: 'In the course',
-    openPost: 'Open post',
-    postIn: 'Post in {{course}}',
     inArchive: 'In {{archive}}',
-    page: 'page {{n}}',
+    nameMatch: 'Name matches',
+  },
+  scope: {
+    course: 'In {{name}}',
+    remove: 'Search all courses',
   },
 };

@@ -24,9 +24,11 @@ import { Route as AuthResetPasswordRouteImport } from './routes/_auth/reset-pass
 import { Route as AuthSignInRouteImport } from './routes/_auth/sign-in'
 import { Route as AuthSignUpRouteImport } from './routes/_auth/sign-up'
 import { Route as AppCoursesIndexRouteImport } from './routes/_app/courses/index'
-import { Route as AppCoursesSlugRouteImport } from './routes/_app/courses/$slug'
 import { Route as AppSettingsApiKeysRouteImport } from './routes/_app/settings/api-keys'
 import { Route as AppSettingsPortalsRouteImport } from './routes/_app/settings/portals'
+import { Route as AppCoursesSlugIndexRouteImport } from './routes/_app/courses/$slug/index'
+import { Route as AppCoursesSlugFilesFileIdRouteImport } from './routes/_app/courses/$slug/files/$fileId'
+import { Route as AppCoursesSlugPostsItemIdRouteImport } from './routes/_app/courses/$slug/posts/$itemId'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -101,11 +103,6 @@ const AppCoursesIndexRoute = AppCoursesIndexRouteImport.update({
   path: '/courses/',
   getParentRoute: () => AppRoute,
 } as any)
-const AppCoursesSlugRoute = AppCoursesSlugRouteImport.update({
-  id: '/courses/$slug',
-  path: '/courses/$slug',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppSettingsApiKeysRoute = AppSettingsApiKeysRouteImport.update({
   id: '/settings/api-keys',
   path: '/settings/api-keys',
@@ -116,6 +113,23 @@ const AppSettingsPortalsRoute = AppSettingsPortalsRouteImport.update({
   path: '/settings/portals',
   getParentRoute: () => AppRoute,
 } as any)
+const AppCoursesSlugIndexRoute = AppCoursesSlugIndexRouteImport.update({
+  id: '/courses/$slug/',
+  path: '/courses/$slug/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppCoursesSlugFilesFileIdRoute =
+  AppCoursesSlugFilesFileIdRouteImport.update({
+    id: '/courses/$slug/files/$fileId',
+    path: '/courses/$slug/files/$fileId',
+    getParentRoute: () => AppRoute,
+  } as any)
+const AppCoursesSlugPostsItemIdRoute =
+  AppCoursesSlugPostsItemIdRouteImport.update({
+    id: '/courses/$slug/posts/$itemId',
+    path: '/courses/$slug/posts/$itemId',
+    getParentRoute: () => AppRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
@@ -130,10 +144,12 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof AuthResetPasswordRoute
   '/sign-in': typeof AuthSignInRoute
   '/sign-up': typeof AuthSignUpRoute
-  '/courses/$slug': typeof AppCoursesSlugRoute
   '/settings/api-keys': typeof AppSettingsApiKeysRoute
   '/settings/portals': typeof AppSettingsPortalsRoute
   '/courses/': typeof AppCoursesIndexRoute
+  '/courses/$slug/': typeof AppCoursesSlugIndexRoute
+  '/courses/$slug/files/$fileId': typeof AppCoursesSlugFilesFileIdRoute
+  '/courses/$slug/posts/$itemId': typeof AppCoursesSlugPostsItemIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
@@ -148,10 +164,12 @@ export interface FileRoutesByTo {
   '/reset-password': typeof AuthResetPasswordRoute
   '/sign-in': typeof AuthSignInRoute
   '/sign-up': typeof AuthSignUpRoute
-  '/courses/$slug': typeof AppCoursesSlugRoute
   '/settings/api-keys': typeof AppSettingsApiKeysRoute
   '/settings/portals': typeof AppSettingsPortalsRoute
   '/courses': typeof AppCoursesIndexRoute
+  '/courses/$slug': typeof AppCoursesSlugIndexRoute
+  '/courses/$slug/files/$fileId': typeof AppCoursesSlugFilesFileIdRoute
+  '/courses/$slug/posts/$itemId': typeof AppCoursesSlugPostsItemIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -169,10 +187,12 @@ export interface FileRoutesById {
   '/_auth/sign-in': typeof AuthSignInRoute
   '/_auth/sign-up': typeof AuthSignUpRoute
   '/_app/': typeof AppIndexRoute
-  '/_app/courses/$slug': typeof AppCoursesSlugRoute
   '/_app/settings/api-keys': typeof AppSettingsApiKeysRoute
   '/_app/settings/portals': typeof AppSettingsPortalsRoute
   '/_app/courses/': typeof AppCoursesIndexRoute
+  '/_app/courses/$slug/': typeof AppCoursesSlugIndexRoute
+  '/_app/courses/$slug/files/$fileId': typeof AppCoursesSlugFilesFileIdRoute
+  '/_app/courses/$slug/posts/$itemId': typeof AppCoursesSlugPostsItemIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -189,10 +209,12 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/sign-in'
     | '/sign-up'
-    | '/courses/$slug'
     | '/settings/api-keys'
     | '/settings/portals'
     | '/courses/'
+    | '/courses/$slug/'
+    | '/courses/$slug/files/$fileId'
+    | '/courses/$slug/posts/$itemId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -207,10 +229,12 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/sign-in'
     | '/sign-up'
-    | '/courses/$slug'
     | '/settings/api-keys'
     | '/settings/portals'
     | '/courses'
+    | '/courses/$slug'
+    | '/courses/$slug/files/$fileId'
+    | '/courses/$slug/posts/$itemId'
   id:
     | '__root__'
     | '/_app'
@@ -227,10 +251,12 @@ export interface FileRouteTypes {
     | '/_auth/sign-in'
     | '/_auth/sign-up'
     | '/_app/'
-    | '/_app/courses/$slug'
     | '/_app/settings/api-keys'
     | '/_app/settings/portals'
     | '/_app/courses/'
+    | '/_app/courses/$slug/'
+    | '/_app/courses/$slug/files/$fileId'
+    | '/_app/courses/$slug/posts/$itemId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -346,13 +372,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCoursesIndexRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/courses/$slug': {
-      id: '/_app/courses/$slug'
-      path: '/courses/$slug'
-      fullPath: '/courses/$slug'
-      preLoaderRoute: typeof AppCoursesSlugRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/settings/api-keys': {
       id: '/_app/settings/api-keys'
       path: '/settings/api-keys'
@@ -367,6 +386,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsPortalsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/courses/$slug/': {
+      id: '/_app/courses/$slug/'
+      path: '/courses/$slug'
+      fullPath: '/courses/$slug/'
+      preLoaderRoute: typeof AppCoursesSlugIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/courses/$slug/files/$fileId': {
+      id: '/_app/courses/$slug/files/$fileId'
+      path: '/courses/$slug/files/$fileId'
+      fullPath: '/courses/$slug/files/$fileId'
+      preLoaderRoute: typeof AppCoursesSlugFilesFileIdRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/courses/$slug/posts/$itemId': {
+      id: '/_app/courses/$slug/posts/$itemId'
+      path: '/courses/$slug/posts/$itemId'
+      fullPath: '/courses/$slug/posts/$itemId'
+      preLoaderRoute: typeof AppCoursesSlugPostsItemIdRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
@@ -378,10 +418,12 @@ interface AppRouteChildren {
   AppSearchRoute: typeof AppSearchRoute
   AppSourcesRoute: typeof AppSourcesRoute
   AppIndexRoute: typeof AppIndexRoute
-  AppCoursesSlugRoute: typeof AppCoursesSlugRoute
   AppSettingsApiKeysRoute: typeof AppSettingsApiKeysRoute
   AppSettingsPortalsRoute: typeof AppSettingsPortalsRoute
   AppCoursesIndexRoute: typeof AppCoursesIndexRoute
+  AppCoursesSlugIndexRoute: typeof AppCoursesSlugIndexRoute
+  AppCoursesSlugFilesFileIdRoute: typeof AppCoursesSlugFilesFileIdRoute
+  AppCoursesSlugPostsItemIdRoute: typeof AppCoursesSlugPostsItemIdRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -392,10 +434,12 @@ const AppRouteChildren: AppRouteChildren = {
   AppSearchRoute: AppSearchRoute,
   AppSourcesRoute: AppSourcesRoute,
   AppIndexRoute: AppIndexRoute,
-  AppCoursesSlugRoute: AppCoursesSlugRoute,
   AppSettingsApiKeysRoute: AppSettingsApiKeysRoute,
   AppSettingsPortalsRoute: AppSettingsPortalsRoute,
   AppCoursesIndexRoute: AppCoursesIndexRoute,
+  AppCoursesSlugIndexRoute: AppCoursesSlugIndexRoute,
+  AppCoursesSlugFilesFileIdRoute: AppCoursesSlugFilesFileIdRoute,
+  AppCoursesSlugPostsItemIdRoute: AppCoursesSlugPostsItemIdRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

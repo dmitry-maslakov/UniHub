@@ -105,6 +105,12 @@ describe('REST API', { timeout: 20_000 }, () => {
         Buffer.from('PK homework'),
       ],
       ['removed', { course: 'c1', name: 'old.pdf' }, Buffer.from('%PDF old')],
+      // a page that would run in the hub's own origin if a browser showed it
+      [
+        'page',
+        { course: 'c1', name: 'page.html', mime: 'text/html' },
+        Buffer.from('<script>alert(1)</script>'),
+      ],
       // the same bytes, in a course the student wasn't given
       ['copy', { course: 'c2', name: 'copy.pdf' }, slides],
       ['no-content', { course: 'c1', name: 'notes.pdf' }, null],
@@ -223,6 +229,7 @@ describe('REST API', { timeout: 20_000 }, () => {
         'Predavanje 1 — procesi.pdf',
         'homework.docx',
         'notes.pdf',
+        'page.html',
       ].sort(),
     );
     expect(byName['homework.docx'].itemId).toBe(items.body[0].id);
@@ -249,6 +256,39 @@ describe('REST API', { timeout: 20_000 }, () => {
     await get(`/api/items/${gone.id}`, student).expect(404);
     await get(`/api/items/${newest.id}`, stranger).expect(404);
     await get('/api/items/not-an-id', student).expect(400);
+  });
+
+  it("answers a post's text, as the hub reads it", async () => {
+    const [newest] = (await get('/api/courses/sys/items', student).expect(200))
+      .body;
+
+    expect(
+      (await get(`/api/items/${newest.id}/text`, student).expect(200)).body,
+    ).toEqual({ text: 'text of new' });
+    await get(`/api/items/${newest.id}/text`, stranger).expect(404);
+    await get('/api/items/not-an-id/text', student).expect(400);
+  });
+
+  it('lists only the files of the post named', async () => {
+    const [newest, oldest] = (
+      await get('/api/courses/sys/items', student).expect(200)
+    ).body;
+
+    const attached = await get(
+      `/api/courses/sys/files?item=${newest.id}`,
+      student,
+    ).expect(200);
+    expect(attached.body.map((f: { name: string }) => f.name)).toEqual([
+      'homework.docx',
+    ]);
+    expect(
+      (
+        await get(`/api/courses/sys/files?item=${oldest.id}`, student).expect(
+          200,
+        )
+      ).body,
+    ).toEqual([]);
+    await get('/api/courses/sys/files?item=not-an-id', student).expect(400);
   });
 
   it('pages lists', async () => {
@@ -319,6 +359,26 @@ describe('REST API', { timeout: 20_000 }, () => {
     );
     expect(odd.headers['content-type']).toBe('application/octet-stream');
     expect(odd.headers['content-disposition']).toMatch(/^attachment; /);
+  });
+
+  it('serves a PDF inline when asked, and an HTML file never', async () => {
+    const pdf = await download(
+      `/api/files/${ids.slides}/content?disposition=inline`,
+      student,
+    ).expect(200);
+    expect(pdf.headers['content-disposition']).toMatch(/^inline; /);
+    expect(pdf.headers['x-content-type-options']).toBe('nosniff');
+
+    // asked or not, a page that runs is saved, not shown
+    for (const query of ['?disposition=inline', ''])
+      expect(
+        (await download(`/api/files/${ids.page}/content${query}`, student))
+          .headers['content-disposition'],
+      ).toMatch(/^attachment; /);
+    await get(
+      `/api/files/${ids.slides}/content?disposition=run`,
+      student,
+    ).expect(400);
   });
 
   it('finds no file a course does not show, nor one of a course not given', async () => {

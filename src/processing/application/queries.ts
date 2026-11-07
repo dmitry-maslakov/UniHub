@@ -1,5 +1,5 @@
 import { Query } from '@nestjs/cqrs';
-import type { ContentHash, MediaType, PluginName } from '@app/kernel';
+import type { ContentHash, Json, MediaType, PluginName } from '@app/kernel';
 import type { RecordKind } from '../domain/records.js';
 import type { LeftOut } from '../domain/unpacking.js';
 
@@ -152,6 +152,14 @@ export class SearchTextsQuery extends Query<TextHit[]> {
     public readonly among: SearchScope,
     public readonly limit: number,
   ) {
+    super();
+  }
+}
+
+// a post's text as the hub reads it, from what the portal sent of it: every
+// string of `raw` but links and dates, HTML read as plain text
+export class GetPostTextQuery extends Query<string> {
+  constructor(public readonly raw: Json) {
     super();
   }
 }
