@@ -1,0 +1,5 @@
+.snippet mark {
+  background: var(--mantine-primary-color-light);
+  color: inherit;
+  border-radius: 2px;
+}

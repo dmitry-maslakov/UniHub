@@ -1,12 +1,12 @@
+import { useTranslation } from 'react-i18next';
 import { PageTitle } from '@/shared/ui';
 import { SourceCards } from '@/widgets/sources';
 
 export function SourcesPage() {
+  const { t } = useTranslation('sources');
   return (
     <>
-      <PageTitle description="Where the hub reads your courses from. Link your own account, and the hub reads the courses you follow there, as you see them; on a public site, pick the courses you follow.">
-        Sources
-      </PageTitle>
+      <PageTitle description={t('description')}>{t('title')}</PageTitle>
       <SourceCards order={2} />
     </>
   );

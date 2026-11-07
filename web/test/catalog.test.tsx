@@ -59,6 +59,7 @@ const mine = (slug: string, name: string, via = 'account'): Course => ({
 // the course each is shown with; the user's courses, and the one os is
 // suggested to go with
 function hub({
+  listed = courses,
   own = [] as Course[],
   suggested = null as string | null,
   picked = [] as string[],
@@ -76,7 +77,9 @@ function hub({
       const query = new URL(request.url).searchParams;
       asked.push(query);
       const q = query.get('q')?.toLowerCase();
-      const found = courses
+      const offset = Number(query.get('offset') ?? 0);
+      const limit = Number(query.get('limit') ?? listed.length);
+      const found = listed
         .filter((c) => !q || c.name.toLowerCase().includes(q))
         .map((c) => {
           const on = picks.has(c.externalId);
@@ -87,7 +90,10 @@ function hub({
             suggestedInto: on && c.externalId === 'os' ? suggested : null,
           };
         });
-      return HttpResponse.json({ total: found.length, courses: found });
+      return HttpResponse.json({
+        total: found.length,
+        courses: found.slice(offset, offset + limit),
+      });
     }),
     http.put(api('/me/picks/catalog/:id'), async ({ params, request }) => {
       const body = (await request.text()) || null;
@@ -103,6 +109,10 @@ function hub({
   );
   return { picks, asked, sent };
 }
+
+const long = Array.from({ length: 25 }, (_, i) =>
+  course(`c${i + 1}`, `Course ${String(i + 1).padStart(2, '0')}`),
+);
 
 describe('a public portal’s catalog', () => {
   it('lists its courses with what is new, and picks and unpicks one', async () => {
@@ -273,5 +283,33 @@ describe('a public portal’s catalog', () => {
       await screen.findByText('Shown with Algorithms, as an admin linked it.'),
     ).toBeVisible();
     expect(screen.queryByLabelText('Show with')).toBeNull();
+  });
+
+  it('shows a long catalog ten courses a page, and starts again at the first for new words', async () => {
+    signedIn();
+    const { asked } = hub({ listed: long });
+    renderApp('/sources');
+
+    const list = await screen.findByRole('list', { name: 'Course catalog' });
+    expect(within(list).getAllByRole('checkbox')).toHaveLength(10);
+    expect(asked.at(-1)?.get('limit')).toBe('10');
+    expect(asked.at(-1)?.get('offset')).toBe('0');
+    expect(
+      screen.queryByRole('button', { name: 'Show more courses' }),
+    ).toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Page 2' }));
+    await waitFor(() => expect(asked.at(-1)?.get('offset')).toBe('10'));
+    expect(
+      await screen.findByRole('checkbox', { name: 'Course 11' }),
+    ).toBeVisible();
+    expect(within(list).getAllByRole('checkbox')).toHaveLength(10);
+
+    await userEvent.type(screen.getByLabelText('Find a course'), 'course 2');
+    await waitFor(() => expect(asked.at(-1)?.get('q')).toBe('course 2'));
+    expect(asked.at(-1)?.get('offset')).toBe('0');
+    expect(
+      await screen.findByRole('checkbox', { name: 'Course 20' }),
+    ).toBeVisible();
   });
 });

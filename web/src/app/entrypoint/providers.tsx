@@ -1,3 +1,4 @@
+import '@/shared/i18n';
 import '@fontsource-variable/onest';
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
@@ -18,7 +19,12 @@ export function Providers({
 }) {
   return (
     <QueryClientProvider client={queryClient}>
-      <MantineProvider theme={theme} defaultColorScheme="auto">
+      <MantineProvider
+        theme={theme}
+        defaultColorScheme="auto"
+        // no fading in a test (Mantine's Vitest guide)
+        env={import.meta.env.MODE === 'test' ? 'test' : 'default'}
+      >
         <ModalsProvider>
           <Notifications position="top-center" />
           {children}

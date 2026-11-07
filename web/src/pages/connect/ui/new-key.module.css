@@ -1,0 +1,12 @@
+.newKey {
+  padding: var(--mantine-spacing-lg);
+  border-radius: var(--mantine-radius-lg);
+  background: var(--mantine-primary-color-light);
+}
+
+.secret {
+  word-break: break-all;
+  white-space: pre-wrap;
+  font-size: var(--mantine-font-size-sm);
+  background: var(--mantine-color-body);
+}

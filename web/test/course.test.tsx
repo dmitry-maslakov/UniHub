@@ -54,6 +54,7 @@ const setup = (items: unknown[] = posts, files: unknown[] = []) => {
       return HttpResponse.json(items.slice(offset, offset + 50));
     }),
     http.get(api('/courses/os/files'), () => HttpResponse.json(files)),
+    http.get(api('/me/portals'), () => HttpResponse.json([])),
   );
 };
 
@@ -80,9 +81,7 @@ describe('course page', () => {
     renderApp('/courses/os');
 
     expect(
-      await screen.findByText(
-        /Announcement.*Not available yet|announcement.*Not available yet/,
-      ),
+      await screen.findByText(/Announcement.*Not available yet/),
     ).toBeVisible();
     expect(
       await screen.findByText(/lectures · 1.4 MB · Not available yet/),
@@ -160,5 +159,42 @@ describe('course page', () => {
     expect(within(picked).getByText('catalog')).toBeVisible();
     expect(within(picked).queryByRole('link')).toBeNull();
     expect(within(picked).getByText(/picked by you/)).toBeVisible();
+  });
+
+  it('names the portal a post opens on by its label', async () => {
+    setup([{ ...post(1), url: 'https://canvas.example.edu/courses/1/a/1' }]);
+    server.use(
+      http.get(api('/me/portals'), () =>
+        HttpResponse.json([
+          {
+            portal: 'canvas',
+            label: 'Canvas',
+            mode: 'token',
+            linked: true,
+            instance: null,
+            status: 'linked',
+            expiresAt: null,
+            picked: null,
+          },
+        ]),
+      ),
+    );
+    renderApp('/courses/os');
+
+    expect(
+      await screen.findByRole('link', { name: 'Open Post 1 on Canvas' }),
+    ).toHaveTextContent('On Canvas');
+  });
+
+  it('says the course is not found when it is not in the list', async () => {
+    setup();
+    renderApp('/courses/other');
+
+    expect(
+      await screen.findByRole('heading', { name: 'Course not found' }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole('link', { name: 'Back to My courses' }),
+    ).toHaveAttribute('href', '/');
   });
 });

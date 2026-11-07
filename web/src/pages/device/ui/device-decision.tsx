@@ -1,6 +1,7 @@
 import { Alert, Button, Group, Stack, Text } from '@mantine/core';
 import { IconCheck, IconX } from '@tabler/icons-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Trans, useTranslation } from 'react-i18next';
 import { useSession } from '@/entities/session';
 import { isSessionNotFresh, SignInAgain } from '@/features/sign-in-again';
 import { authClient, authError } from '@/shared/api';
@@ -17,6 +18,7 @@ export function DeviceDecision({
   code: string;
   clientId?: string;
 }) {
+  const { t } = useTranslation('device');
   const { user } = useSession();
   const queryClient = useQueryClient();
   const answer = useMutation({
@@ -31,29 +33,29 @@ export function DeviceDecision({
     <Stack gap="xl">
       <Stack gap="xs">
         <Text>
-          {appName(clientId)} wants to sign in as <strong>{user.email}</strong>.
+          <Trans
+            t={t}
+            i18nKey="asks"
+            values={{ app: appName(t, clientId), email: user.email }}
+            components={{ strong: <strong /> }}
+          />
         </Text>
         <Text
           className={classes.code}
-          aria-label={`Code ${code.split('').join(' ')}`}
+          aria-label={t('codeAria', { spelled: code.split('').join(' ') })}
         >
           {displayCode(code)}
         </Text>
         <Text c="dimmed" size="sm">
-          Approve only if this code is on a screen in front of you right now.
-          Anyone who sent you a code can't see your courses unless you approve
-          it.
+          {t('warning')}
         </Text>
       </Stack>
       {answer.isError &&
         (isSessionNotFresh(answer.error) ? (
-          <SignInAgain action="approve a screen" />
+          <SignInAgain message={t('freshSession')} />
         ) : (
           <Alert color="red" role="alert">
-            {authMessage(
-              authError(answer.error),
-              "Couldn't send your answer. Try again.",
-            )}
+            {authMessage(authError(answer.error), t('failed'))}
           </Alert>
         ))}
       <Group gap="sm">
@@ -63,7 +65,7 @@ export function DeviceDecision({
           disabled={answer.isPending}
           onClick={() => answer.mutate(true)}
         >
-          Approve
+          {t('approve')}
         </Button>
         <Button
           variant="default"
@@ -72,7 +74,7 @@ export function DeviceDecision({
           disabled={answer.isPending}
           onClick={() => answer.mutate(false)}
         >
-          Deny
+          {t('deny')}
         </Button>
       </Group>
     </Stack>

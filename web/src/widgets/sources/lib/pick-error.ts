@@ -1,30 +1,27 @@
-import { ApiError } from '@/shared/api';
+import type { TFunction } from 'i18next';
+import { ApiError, errorCode } from '@/shared/api';
 
-const codeOf = (error: ApiError) =>
-  (error.error as { code?: unknown } | null)?.code;
+// the most courses a user may pick (the hub's limit)
+export const MAX_PICKS = 100;
 
 // What a refused pick says, and what to do next
-export function pickErrorText(error: unknown, pick: boolean) {
+export function pickErrorText(
+  t: TFunction<'sources'>,
+  error: unknown,
+  pick: boolean,
+) {
   const status = error instanceof ApiError ? error.status : undefined;
-  switch (status) {
-    case 404:
-      return 'That course is no longer in the catalog. Reload the page.';
-    case 422:
-      return 'You can pick up to 100 courses. Unpick one first.';
-    case 429:
-      return 'Too many changes in a short time. Wait a minute, then try again.';
-    default:
-      return pick
-        ? "Couldn't pick the course. Try again."
-        : "Couldn't unpick the course. Try again.";
-  }
+  if (status === 404) return t('pick.gone');
+  if (errorCode(error) === 'TOO_MANY_PICKS')
+    return t('pick.tooMany', { max: MAX_PICKS });
+  if (status === 429) return t('pick.tooFast');
+  return pick ? t('pick.failed') : t('pick.unpickFailed');
 }
 
 // What a refused "show with" says, and what to do next
-export function showWithErrorText(error: unknown) {
-  if (error instanceof ApiError && codeOf(error) === 'NOT_YOUR_COURSE')
-    return "That course isn't one you read through your own account any more. Reload the page.";
+export function showWithErrorText(t: TFunction<'sources'>, error: unknown) {
+  if (errorCode(error) === 'NOT_YOUR_COURSE') return t('showWith.notYours');
   if (error instanceof ApiError && [404, 429].includes(error.status))
-    return pickErrorText(error, true);
-  return "Couldn't move the course. Try again.";
+    return pickErrorText(t, error, true);
+  return t('showWith.failed');
 }

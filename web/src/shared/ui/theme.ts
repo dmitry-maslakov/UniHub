@@ -1,4 +1,13 @@
-import { createTheme, type MantineColorsTuple } from '@mantine/core';
+import {
+  ActionIcon,
+  Badge,
+  Button,
+  Checkbox,
+  createTheme,
+  type MantineColorsTuple,
+  Pagination,
+  Skeleton,
+} from '@mantine/core';
 
 // The look (DESIGN.md): one restrained petrol accent over cool neutral
 // grays, Onest throughout, an 8 px rhythm and few borders.
@@ -87,7 +96,46 @@ export const theme = createTheme({
   cursorType: 'pointer',
   focusRing: 'auto',
   components: {
-    Button: { defaultProps: { size: 'md' } },
+    Button: Button.extend({
+      defaultProps: { size: 'md' },
+      // text on a filled petrol button: white in light, ink in dark (7:1)
+      vars: (_, props) =>
+        (props.variant ?? 'filled') === 'filled' &&
+        (!props.color || props.color === 'petrol')
+          ? { root: { '--button-color': 'var(--unihub-on-primary)' } }
+          : { root: {} },
+    }),
+    ActionIcon: ActionIcon.extend({
+      vars: (_, props) =>
+        (props.variant ?? 'filled') === 'filled' &&
+        (!props.color || props.color === 'petrol')
+          ? { root: { '--ai-color': 'var(--unihub-on-primary)' } }
+          : { root: {} },
+    }),
+    Pagination: Pagination.extend({
+      vars: () => ({
+        root: { '--pagination-active-color': 'var(--unihub-on-primary)' },
+      }),
+    }),
+    Checkbox: Checkbox.extend({
+      vars: () => ({
+        root: { '--checkbox-icon-color': 'var(--unihub-on-primary)' },
+      }),
+    }),
+    // badges read as words ("Course catalog", "This device"), so not upper
+    // case, and small
+    Badge: Badge.extend({
+      defaultProps: {
+        variant: 'light',
+        color: 'gray',
+        radius: 'sm',
+        size: 'md',
+        fz: 'xs',
+        fw: 500,
+        tt: 'none',
+      },
+    }),
+    Skeleton: Skeleton.extend({ defaultProps: { radius: 'sm' } }),
     TextInput: { defaultProps: { size: 'md' } },
     PasswordInput: { defaultProps: { size: 'md' } },
     Alert: { defaultProps: { variant: 'light' } },

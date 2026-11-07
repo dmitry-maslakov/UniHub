@@ -14,6 +14,7 @@ import { Route as AuthRouteImport } from './routes/_auth'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppAccountRouteImport } from './routes/_app/account'
+import { Route as AppConnectRouteImport } from './routes/_app/connect'
 import { Route as AppConsentRouteImport } from './routes/_app/consent'
 import { Route as AppDeviceRouteImport } from './routes/_app/device'
 import { Route as AppSearchRouteImport } from './routes/_app/search'
@@ -48,6 +49,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
 const AppAccountRoute = AppAccountRouteImport.update({
   id: '/account',
   path: '/account',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppConnectRoute = AppConnectRouteImport.update({
+  id: '/connect',
+  path: '/connect',
   getParentRoute: () => AppRoute,
 } as any)
 const AppConsentRoute = AppConsentRouteImport.update({
@@ -115,6 +121,7 @@ export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/privacy': typeof PrivacyRoute
   '/account': typeof AppAccountRoute
+  '/connect': typeof AppConnectRoute
   '/consent': typeof AppConsentRoute
   '/device': typeof AppDeviceRoute
   '/search': typeof AppSearchRoute
@@ -132,6 +139,7 @@ export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
   '/privacy': typeof PrivacyRoute
   '/account': typeof AppAccountRoute
+  '/connect': typeof AppConnectRoute
   '/consent': typeof AppConsentRoute
   '/device': typeof AppDeviceRoute
   '/search': typeof AppSearchRoute
@@ -151,6 +159,7 @@ export interface FileRoutesById {
   '/_auth': typeof AuthRouteWithChildren
   '/privacy': typeof PrivacyRoute
   '/_app/account': typeof AppAccountRoute
+  '/_app/connect': typeof AppConnectRoute
   '/_app/consent': typeof AppConsentRoute
   '/_app/device': typeof AppDeviceRoute
   '/_app/search': typeof AppSearchRoute
@@ -171,6 +180,7 @@ export interface FileRouteTypes {
     | '/'
     | '/privacy'
     | '/account'
+    | '/connect'
     | '/consent'
     | '/device'
     | '/search'
@@ -188,6 +198,7 @@ export interface FileRouteTypes {
     | '/'
     | '/privacy'
     | '/account'
+    | '/connect'
     | '/consent'
     | '/device'
     | '/search'
@@ -206,6 +217,7 @@ export interface FileRouteTypes {
     | '/_auth'
     | '/privacy'
     | '/_app/account'
+    | '/_app/connect'
     | '/_app/consent'
     | '/_app/device'
     | '/_app/search'
@@ -262,6 +274,13 @@ declare module '@tanstack/react-router' {
       path: '/account'
       fullPath: '/account'
       preLoaderRoute: typeof AppAccountRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/connect': {
+      id: '/_app/connect'
+      path: '/connect'
+      fullPath: '/connect'
+      preLoaderRoute: typeof AppConnectRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/consent': {
@@ -353,6 +372,7 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteChildren {
   AppAccountRoute: typeof AppAccountRoute
+  AppConnectRoute: typeof AppConnectRoute
   AppConsentRoute: typeof AppConsentRoute
   AppDeviceRoute: typeof AppDeviceRoute
   AppSearchRoute: typeof AppSearchRoute
@@ -366,6 +386,7 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppAccountRoute: AppAccountRoute,
+  AppConnectRoute: AppConnectRoute,
   AppConsentRoute: AppConsentRoute,
   AppDeviceRoute: AppDeviceRoute,
   AppSearchRoute: AppSearchRoute,

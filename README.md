@@ -62,7 +62,9 @@ npm run dev            # or Vite on :5173, /api proxied to the hub
 npm run lint && npm run steiger && npm run typecheck && npm test
 ```
 
-Its home page is My courses: the courses the user reads, one list by name, each with the sources it comes from; a first visit with none shows the sources to link or pick from right there, as `/sources` does. A course's page names each source it's made of and how the user reads it, and a picked course of a public portal's catalog has a "Show with" choice (Matching, below). The account is at `/account`.
+Its home page is My courses: the courses the user reads, one list by name, each with the sources it comes from; a first visit with none shows the sources to link or pick from right there, as `/sources` does. A course's page names each source it's made of and how the user reads it, and a picked course of a public portal's catalog has a "Show with" choice (Matching, below). The account is at `/account`, and the main navigation is My courses, Search, Sources and Connect AI (where API keys are made); the user's menu holds Account, the color scheme, the language, Privacy and Sign out.
+
+The app speaks Serbian (Latin) and English, taken from the browser and switchable from the user menu (or the header of the sign-in pages), the choice kept in the browser. Its strings are i18next namespaces in `web/src/shared/i18n/locales/<lang>/`, both languages kept in step (a test checks the keys, the plurals and that no text is empty); dates and sizes come from `Intl` through `useFormat()`.
 
 For `npm run dev`, add `http://localhost:5173` to `TRUSTED_ORIGINS`: Better Auth refuses calls from an origin it doesn't trust. Without `SMTP_URL`, the confirmation and reset links are in the hub's log.
 

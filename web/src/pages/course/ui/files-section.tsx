@@ -1,8 +1,18 @@
-import { Anchor, Button, Loader, Stack, Text, Title } from '@mantine/core';
+import { Anchor, Button } from '@mantine/core';
+import { useTranslation } from 'react-i18next';
 import { api } from '@/shared/api';
-import { fileSize } from '../lib/format';
+import { useFormat } from '@/shared/i18n';
+import {
+  EmptyState,
+  ListSkeleton,
+  QueryState,
+  Row,
+  RowAction,
+  RowList,
+  RowText,
+  Section,
+} from '@/shared/ui';
 import { useDeepLink } from '../lib/use-deep-link';
-import classes from './course.module.css';
 
 const PAGE = 50;
 
@@ -10,6 +20,8 @@ const PAGE = 50;
 // the content route, which the browser saves or shows as the portal's type
 // says.
 export function FilesSection({ slug }: { slug: string }) {
+  const { t } = useTranslation(['courses', 'common']);
+  const { size } = useFormat();
   const files = api.useInfiniteQuery(
     'get',
     '/api/courses/{slug}/files',
@@ -32,46 +44,45 @@ export function FilesSection({ slug }: { slug: string }) {
   );
 
   return (
-    <Stack component="section" gap="xs" aria-labelledby="files">
-      <Title order={2} id="files">
-        Files
-      </Title>
-      {files.isPending && <Loader size="sm" aria-label="Loading files" />}
-      {files.isError && (
-        <Text c="red" role="alert">
-          Couldn't load the files. Reload the page to try again.
-        </Text>
-      )}
-      {files.data && !rows.length && (
-        <Text c="dimmed">No files in this course yet.</Text>
-      )}
-      {rows.length > 0 && (
-        <ul className={classes.list} aria-labelledby="files">
-          {rows.map((file) => (
-            <li key={file.id} id={`file-${file.id}`} className={classes.row}>
-              <Stack gap={2} miw={0}>
-                <Text fw={600} style={{ overflowWrap: 'anywhere' }}>
-                  {file.name}
-                </Text>
-                <Text size="sm" c="dimmed">
-                  {[file.path, fileSize(file.size)].filter(Boolean).join(' · ')}
-                  {!file.hasContent &&
-                    `${file.path || file.size !== null ? ' · ' : ''}Not available yet`}
-                </Text>
-              </Stack>
-              {file.hasContent && (
-                <Anchor
-                  href={`/api/files/${file.id}/content`}
-                  size="sm"
-                  aria-label={`Download ${file.name}`}
-                >
-                  Download
-                </Anchor>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
+    <Section title={t('files.title')} id="files">
+      <QueryState
+        query={files}
+        loading={<ListSkeleton label={t('files.loading')} />}
+        isEmpty={() => !rows.length}
+        empty={
+          <EmptyState title={t('files.empty.title')}>
+            {t('files.empty.body')}
+          </EmptyState>
+        }
+      >
+        {() => (
+          <RowList label={t('files.title')}>
+            {rows.map((file) => (
+              <Row key={file.id} id={`file-${file.id}`}>
+                <RowText
+                  title={file.name}
+                  meta={[
+                    file.path,
+                    size(file.size),
+                    !file.hasContent && t('common:state.notAvailableYet'),
+                  ]}
+                />
+                {file.hasContent && (
+                  <RowAction>
+                    <Anchor
+                      href={`/api/files/${file.id}/content`}
+                      size="sm"
+                      aria-label={t('files.downloadAria', { name: file.name })}
+                    >
+                      {t('files.download')}
+                    </Anchor>
+                  </RowAction>
+                )}
+              </Row>
+            ))}
+          </RowList>
+        )}
+      </QueryState>
       {files.hasNextPage && (
         <Button
           variant="default"
@@ -79,9 +90,9 @@ export function FilesSection({ slug }: { slug: string }) {
           loading={files.isFetchingNextPage}
           onClick={() => void files.fetchNextPage()}
         >
-          Show more files
+          {t('files.more')}
         </Button>
       )}
-    </Stack>
+    </Section>
   );
 }

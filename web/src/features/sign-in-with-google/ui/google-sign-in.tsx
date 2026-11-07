@@ -1,6 +1,7 @@
 import { Button, Divider, Stack } from '@mantine/core';
 import { IconBrandGoogle } from '@tabler/icons-react';
 import { useMutation } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { authClient } from '@/shared/api';
 import { useSignInMethods } from '../api/use-sign-in-methods';
 
@@ -8,6 +9,7 @@ import { useSignInMethods } from '../api/use-sign-in-methods';
 // answers with Google's address and its client goes there: the whole page
 // leaves, and Google sends the user back to `next`.
 export function GoogleSignIn({ next }: { next: string }) {
+  const { t } = useTranslation('auth');
   const { data } = useSignInMethods();
   const google = useMutation({
     mutationFn: () =>
@@ -26,9 +28,9 @@ export function GoogleSignIn({ next }: { next: string }) {
         loading={google.isPending || google.isSuccess}
         onClick={() => google.mutate()}
       >
-        Continue with Google
+        {t('google.action')}
       </Button>
-      <Divider label="or with your email" labelPosition="center" />
+      <Divider label={t('signIn.orEmail')} labelPosition="center" />
     </Stack>
   );
 }

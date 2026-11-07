@@ -1,8 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { SourcesPage } from '@/pages/sources';
-import { pageHead } from '@/shared/lib';
+import { i18n, pageHead } from '@/shared/i18n';
 
 export const Route = createFileRoute('/_app/sources')({
-  head: pageHead('Sources'),
+  head: pageHead(() => i18n.t('sources:title')),
   component: SourcesPage,
 });

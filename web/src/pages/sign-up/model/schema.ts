@@ -1,11 +1,13 @@
+import type { TFunction } from 'i18next';
 import { z } from 'zod';
 
 // Better Auth's own limits for a password: 8 to 128 characters
-export const signUpSchema = z.object({
-  name: z.string().trim().min(1, 'Enter your name'),
-  email: z.email('Enter an email you can open now'),
-  password: z
-    .string()
-    .min(8, 'Use at least 8 characters')
-    .max(128, 'Use at most 128 characters'),
-});
+export const signUpSchema = (t: TFunction<'auth'>) =>
+  z.object({
+    name: z.string().trim().min(1, t('signUp.name.required')),
+    email: z.email(t('signUp.email.invalid')),
+    password: z
+      .string()
+      .min(8, t('signUp.password.tooShort'))
+      .max(128, t('signUp.password.tooLong')),
+  });

@@ -2,15 +2,16 @@ import { AppShell, Burger, Container, Group } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { Link } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
-import { ColorSchemeToggle } from '@/features/toggle-color-scheme';
+import { useTranslation } from 'react-i18next';
 import { Wordmark } from '@/shared/ui';
 import classes from './app-layout.module.css';
 import { DrawerNav, MainNav } from './main-nav';
 import { UserMenu } from './user-menu';
 
-// The signed-in shell: the name, the navigation, light or dark and the
-// user's menu over one narrow column
+// The signed-in shell: the name, the one navigation and the user's menu over
+// one narrow column
 export function AppLayout({ children }: { children: ReactNode }) {
+  const { t } = useTranslation('shell');
   const [opened, { toggle, close }] = useDisclosure();
   return (
     <AppShell
@@ -29,7 +30,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
               onClick={toggle}
               hiddenFrom="sm"
               size="sm"
-              aria-label={opened ? 'Close navigation' : 'Open navigation'}
+              aria-label={opened ? t('nav.close') : t('nav.open')}
             />
             <Link to="/" className={classes.home}>
               <Wordmark />
@@ -38,17 +39,14 @@ export function AppLayout({ children }: { children: ReactNode }) {
               <MainNav />
             </Group>
           </Group>
-          <Group gap="xs" wrap="nowrap">
-            <ColorSchemeToggle />
-            <UserMenu />
-          </Group>
+          <UserMenu />
         </Group>
       </AppShell.Header>
       <AppShell.Navbar p="md">
         {opened && <DrawerNav onNavigate={close} />}
       </AppShell.Navbar>
       <AppShell.Main>
-        <Container size="40rem" px="md" pt="xxl" pb="xxl">
+        <Container size="40rem" px="md" pt={{ base: 'xl', sm: 'xxl' }} pb="xxl">
           {children}
         </Container>
       </AppShell.Main>

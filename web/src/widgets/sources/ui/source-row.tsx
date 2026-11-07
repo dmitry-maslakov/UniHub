@@ -10,7 +10,9 @@ import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Schemas } from '@/shared/api';
+import { useFormat } from '@/shared/i18n';
 import { deleteToken } from '../api/portals';
 import { isSitePortal } from '../lib/site';
 import { statusText } from '../lib/status';
@@ -25,34 +27,32 @@ export function SourceRow({
   portal: Schemas['PortalResponse'];
   order: TitleOrder;
 }) {
+  const { t } = useTranslation('sources');
+  const { t: common } = useTranslation('common');
+  const format = useFormat();
   const queryClient = useQueryClient();
   const [unavailable, setUnavailable] = useState(false);
   const { label } = portal;
   const unlink = useMutation({
     mutationFn: () => deleteToken(portal.portal),
     onSuccess: async () => {
-      notifications.show({ message: `${label} is unlinked.` });
+      notifications.show({ message: t('notify.unlinked', { label }) });
       await queryClient.invalidateQueries({
         queryKey: ['get', '/api/me/portals'],
       });
     },
     onError: () =>
-      notifications.show({
-        color: 'red',
-        message: "Couldn't unlink the account. Try again.",
-      }),
+      notifications.show({ color: 'red', message: t('unlink.failed') }),
   });
 
   const confirmUnlink = () =>
     modals.openConfirmModal({
-      title: `Unlink ${label}?`,
-      children: (
-        <Text size="sm">
-          The hub forgets your token and stops reading {label} as you. Courses
-          only your account saw stop showing up. You can link it again later.
-        </Text>
-      ),
-      labels: { confirm: 'Unlink', cancel: 'Keep it' },
+      title: t('unlink.confirm.title', { label }),
+      children: <Text size="sm">{t('unlink.confirm.body', { label })}</Text>,
+      labels: {
+        confirm: t('unlink.confirm.action'),
+        cancel: common('action.keep'),
+      },
       confirmProps: { color: 'red' },
       onConfirm: () => unlink.mutate(),
     });
@@ -65,8 +65,8 @@ export function SourceRow({
             <Title order={order}>{label}</Title>
             <Text size="sm" c="dimmed">
               {unavailable
-                ? `Linking your own account isn't open to you on ${label}. Ask an admin of the hub if you need it.`
-                : statusText(portal)}
+                ? t('unavailable', { label })
+                : statusText(t, portal, format.date)}
             </Text>
           </Stack>
           {portal.linked && (
@@ -74,11 +74,12 @@ export function SourceRow({
               variant="subtle"
               color="red"
               size="sm"
+              style={{ flex: 'none' }}
               loading={unlink.isPending}
               onClick={confirmUnlink}
-              aria-label={`Unlink ${label}`}
+              aria-label={t('unlink.aria', { label })}
             >
-              Unlink
+              {t('unlink.action')}
             </Button>
           )}
         </Group>

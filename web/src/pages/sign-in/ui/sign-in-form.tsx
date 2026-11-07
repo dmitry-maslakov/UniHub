@@ -9,24 +9,28 @@ import {
 import { schemaResolver, useForm } from '@mantine/form';
 import { useMutation } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
+import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { z } from 'zod';
 import { useSessionActions } from '@/entities/session';
 import { authClient, authError } from '@/shared/api';
 import { authMessage } from '@/shared/lib';
+import { AnchorLink } from '@/shared/ui';
 import { signInSchema } from '../model/schema';
 import { ConfirmEmailFirst } from './confirm-email-first';
-import { AnchorLink } from '@/shared/ui';
 
 export function SignInForm({ next }: { next: string }) {
+  const { t } = useTranslation('auth');
+  const schema = useMemo(() => signInSchema(t), [t]);
   const router = useRouter();
   const { refresh } = useSessionActions();
-  const form = useForm<z.infer<typeof signInSchema>>({
+  const form = useForm<z.infer<typeof schema>>({
     mode: 'uncontrolled',
     initialValues: { email: '', password: '' },
-    validate: schemaResolver(signInSchema, { sync: true }),
+    validate: schemaResolver(schema, { sync: true }),
   });
   const signIn = useMutation({
-    mutationFn: (values: z.infer<typeof signInSchema>) =>
+    mutationFn: (values: z.infer<typeof schema>) =>
       authClient.signIn.email(values),
     onSuccess: async (data) => {
       // an OAuth client's sign-in: Better Auth's client goes on to it
@@ -48,12 +52,12 @@ export function SignInForm({ next }: { next: string }) {
         ) : (
           signIn.isError && (
             <Alert color="red" role="alert">
-              {authMessage(error, "Couldn't sign you in. Try again.")}
+              {authMessage(error, t('signIn.failed'))}
             </Alert>
           )
         )}
         <TextInput
-          label="Email"
+          label={t('signIn.email.label')}
           type="email"
           autoComplete="email"
           key={form.key('email')}
@@ -61,14 +65,14 @@ export function SignInForm({ next }: { next: string }) {
         />
         <Stack gap={6}>
           <PasswordInput
-            label="Password"
+            label={t('signIn.password.label')}
             autoComplete="current-password"
             key={form.key('password')}
             {...form.getInputProps('password')}
           />
           <Group justify="flex-end">
             <AnchorLink to="/reset-password" size="sm">
-              Forgot your password?
+              {t('signIn.forgot')}
             </AnchorLink>
           </Group>
         </Stack>
@@ -77,7 +81,7 @@ export function SignInForm({ next }: { next: string }) {
           fullWidth
           loading={signIn.isPending || signIn.isSuccess}
         >
-          Sign in
+          {t('signIn.action')}
         </Button>
       </Stack>
     </form>

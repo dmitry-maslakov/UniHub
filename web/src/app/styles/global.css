@@ -19,3 +19,22 @@ h3 {
 p {
   text-wrap: pretty;
 }
+
+/* Text on a filled petrol control: white in light, ink in dark (DESIGN.md) */
+:root {
+  --unihub-on-primary: var(--mantine-color-white);
+}
+
+:root[data-mantine-color-scheme='dark'] {
+  --unihub-on-primary: var(--mantine-color-dark-7);
+  --mantine-color-red-light-color: var(--mantine-color-red-4);
+}
+
+/* placeholders at 4.5:1 or better, on white and on the dark inputs */
+.mantine-Input-input::placeholder {
+  color: var(--mantine-color-gray-6);
+}
+
+:root[data-mantine-color-scheme='dark'] .mantine-Input-input::placeholder {
+  color: var(--mantine-color-dark-2);
+}

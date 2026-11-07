@@ -2,24 +2,28 @@ import { Alert, Button, PasswordInput, Stack, TextInput } from '@mantine/core';
 import { schemaResolver, useForm } from '@mantine/form';
 import { useMutation } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
+import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { z } from 'zod';
 import { authClient, authError } from '@/shared/api';
 import { authMessage } from '@/shared/lib';
-import { signUpSchema } from '../model/schema';
 import { AnchorLink } from '@/shared/ui';
+import { signUpSchema } from '../model/schema';
 
 const taken = ['USER_ALREADY_EXISTS', 'USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL'];
 
 export function SignUpForm({ next }: { next: string }) {
+  const { t } = useTranslation('auth');
+  const schema = useMemo(() => signUpSchema(t), [t]);
   const navigate = useNavigate();
-  const form = useForm<z.infer<typeof signUpSchema>>({
+  const form = useForm<z.infer<typeof schema>>({
     mode: 'uncontrolled',
     initialValues: { name: '', email: '', password: '' },
-    validate: schemaResolver(signUpSchema, { sync: true }),
+    validate: schemaResolver(schema, { sync: true }),
   });
   const signUp = useMutation({
     // the link in the confirmation mail signs in and goes on to `next`
-    mutationFn: (values: z.infer<typeof signUpSchema>) =>
+    mutationFn: (values: z.infer<typeof schema>) =>
       authClient.signUp.email({ ...values, callbackURL: next }),
     onSuccess: (_, { email }) =>
       navigate({ to: '/check-email', search: { email, next } }),
@@ -34,37 +38,37 @@ export function SignUpForm({ next }: { next: string }) {
       <Stack gap="md">
         {signUp.isError && (
           <Alert color="red" role="alert">
-            {authMessage(error, "Couldn't create your account. Try again.")}{' '}
+            {authMessage(error, t('signUp.failed'))}{' '}
             {error?.code && taken.includes(error.code) && (
               <AnchorLink to="/sign-in" search={{ next }} size="sm" inherit>
-                Sign in instead
+                {t('signUp.signInInstead')}
               </AnchorLink>
             )}
           </Alert>
         )}
         <TextInput
-          label="Name"
+          label={t('signUp.name.label')}
           autoComplete="name"
           key={form.key('name')}
           {...form.getInputProps('name')}
         />
         <TextInput
-          label="Email"
+          label={t('signUp.email.label')}
           type="email"
           autoComplete="email"
-          description="We'll send a link to confirm it."
+          description={t('signUp.email.help')}
           key={form.key('email')}
           {...form.getInputProps('email')}
         />
         <PasswordInput
-          label="Password"
+          label={t('signUp.password.label')}
           autoComplete="new-password"
-          description="At least 8 characters."
+          description={t('signUp.password.help')}
           key={form.key('password')}
           {...form.getInputProps('password')}
         />
         <Button type="submit" fullWidth loading={signUp.isPending}>
-          Create account
+          {t('signUp.action')}
         </Button>
       </Stack>
     </form>

@@ -1,7 +1,7 @@
 import { Text } from '@mantine/core';
 import type { Schemas } from '@/shared/api';
 import { highlight } from '../lib/highlight';
-import classes from './search.module.css';
+import classes from './snippet.module.css';
 
 // The index's text with the matched words marked. Plain text only, set as
 // React text, whatever HTML the file had.

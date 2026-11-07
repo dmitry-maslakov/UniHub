@@ -1,10 +1,10 @@
-import { Alert, Loader, Text } from '@mantine/core';
+import { Alert, Box } from '@mantine/core';
 import { getRouteApi } from '@tanstack/react-router';
+import { useTranslation } from 'react-i18next';
 import { api } from '@/shared/api';
-import { PageTitle } from '@/shared/ui';
+import { EmptyState, ListSkeleton, PageTitle, RowList } from '@/shared/ui';
 import { resultKey } from '../lib/result-key';
-import { searchErrorText } from '../lib/search-error';
-import classes from './search.module.css';
+import { searchErrorKey } from '../lib/search-error';
 import { ResultRow } from './result-row';
 import { SearchForm } from './search-form';
 
@@ -13,6 +13,7 @@ const route = getRouteApi('/_app/search');
 // Words searched across the user's courses: posts, files and what's inside
 // archives
 export function SearchPage() {
+  const { t } = useTranslation('search');
   const { q = '' } = route.useSearch();
   const search = api.useQuery(
     'get',
@@ -25,32 +26,29 @@ export function SearchPage() {
 
   return (
     <>
-      <PageTitle description="Find a word in the posts and files of your courses, including the text inside slides, documents and archives.">
-        Search
-      </PageTitle>
+      <PageTitle description={t('description')}>{t('title')}</PageTitle>
       <SearchForm key={q} q={q} />
-      <div aria-live="polite">
-        {search.isFetching && (
-          <Loader size="sm" mt="xl" aria-label="Searching" />
-        )}
+      <Box aria-live="polite" mt="xl">
+        {search.isFetching && <ListSkeleton rows={3} label={t('searching')} />}
         {search.isError && (
-          <Alert color="red" role="alert" mt="xl">
-            {searchErrorText(search.error)}
+          // no retry: the form is the retry
+          <Alert color="red" role="alert">
+            {t(searchErrorKey(search.error))}
           </Alert>
         )}
         {results && !results.length && !search.isFetching && (
-          <Text c="dimmed" mt="xl">
-            Nothing in your courses matches “{q}”. Try other words, or fewer.
-          </Text>
+          <EmptyState title={t('empty.title', { q })}>
+            {t('empty.body')}
+          </EmptyState>
         )}
         {results && results.length > 0 && !search.isFetching && (
-          <ul className={classes.list} aria-label="Results">
+          <RowList label={t('results.aria')}>
             {results.map((result) => (
               <ResultRow key={resultKey(result)} result={result} />
             ))}
-          </ul>
+          </RowList>
         )}
-      </div>
+      </Box>
     </>
   );
 }
