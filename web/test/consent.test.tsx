@@ -8,9 +8,12 @@ import { auth, refused, server, signedIn } from './server';
 
 vi.mock('@/shared/lib/leave', () => ({ leaveTo: vi.fn() }));
 
-const query = (redirect = 'https://claude.example/api/callback') =>
+const query = (
+  redirect = 'https://claude.example/api/callback',
+  scope = 'courses:read',
+) =>
   `client_id=${encodeURIComponent('https://claude.example/oauth/client.json')}` +
-  `&redirect_uri=${encodeURIComponent(redirect)}&scope=courses%3Aread` +
+  `&redirect_uri=${encodeURIComponent(redirect)}&scope=${encodeURIComponent(scope)}` +
   '&sig=abc&exp=1&ba_param=client_id&ba_param=redirect_uri&ba_param=scope';
 
 let body: unknown;
@@ -52,6 +55,28 @@ describe('consent', () => {
     expect(screen.queryByRole('img')).toBeNull();
     expect(document.querySelector('img, [src*="logo"]')).toBeNull();
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('promises an app that asked for no refresh token an hour, not 30 days', async () => {
+    renderApp(`/consent?${query()}`);
+
+    expect(
+      await screen.findByText(
+        'Connected for an hour; then the app asks you again.',
+      ),
+    ).toBeVisible();
+    expect(screen.queryByText(/Stay connected/)).toBeNull();
+  });
+
+  it('says an app that asked for offline_access stays connected', async () => {
+    renderApp(`/consent?${query(undefined, 'courses:read offline_access')}`);
+
+    expect(
+      await screen.findByText(
+        'Stay connected until you change your password, or for 30 days after you last use it',
+      ),
+    ).toBeVisible();
+    expect(screen.queryByText(/Connected for an hour/)).toBeNull();
   });
 
   it('sends the signed query back with the answer, then goes on to the url', async () => {

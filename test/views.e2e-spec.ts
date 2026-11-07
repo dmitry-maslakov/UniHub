@@ -24,6 +24,7 @@ import {
   type Shown,
 } from '../src/catalog/contracts.js';
 import { GrantCourseAccessCommand } from '../src/identity/contracts.js';
+import { SyncConnectionCommand } from '../src/plugins/contracts.js';
 import type { Mail } from '../src/identity/domain/mailer.js';
 import {
   Connection,
@@ -54,13 +55,15 @@ import { portalIngest } from './ingest.js';
 // search, a section's post and a file locked for one of them included; an
 // admin reads it through an account of their own alone, and a grant gives
 // none of it. Linking an account puts it on its grid and polls it with its
-// credential; unlinking forgets what it saw. Whose views a user reads, how
-// catalog cuts a query by them, what a pass makes of a view and when it
-// shows, are checked on fakes (viewers.spec.ts, course-reader.spec.ts,
-// course-search.spec.ts, view.handlers.spec.ts, course-pass.spec.ts,
-// publication.spec.ts). The passes here are sent as a run of each account
-// would send them, shown from a time past (or opened from one to come)
-// rather than at the slot a run would have.
+// credential, what that first run finds shown as each pass ends and a
+// later run's at its slot; unlinking forgets what it saw. Whose views a user
+// reads, how catalog cuts a query by them, what a pass makes of a view and
+// when it shows, are checked on fakes (viewers.spec.ts,
+// course-reader.spec.ts, course-search.spec.ts, view.handlers.spec.ts,
+// course-pass.spec.ts, publication.spec.ts, connection-directory.spec.ts).
+// Past cy's runs, the passes here are sent as a run of each account would
+// send them, shown from a time past (or opened from one to come) rather
+// than at the slot a run would have.
 
 const LMS = PortalId.parse('views-lms');
 const CAMPUS = PortalId.parse('views-campus');
@@ -75,16 +78,40 @@ const polled: {
   token: string;
 }[] = [];
 
+// cy's runs, the only ones that send anything: her first, once the spec
+// lets it go, lists c3 and sends a post of it; a later one lists c4 too,
+// and sends a post of that
+const cy = { runs: 0, ended: 0, letGo: () => {} };
+const cysFirst = new Promise<void>((resolve) => (cy.letGo = resolve));
+async function cysRun(ingest: PortalIngest) {
+  if (cy.runs++ === 0) await cysFirst;
+  const courses = cy.runs === 1 ? ['c3'] : ['c3', 'c4'];
+  const course = courses.at(-1)!;
+  await ingest.courses(
+    courses.map((id) => ({ externalId: id, name: `Course ${id}` })),
+  );
+  const pass = await ingest.pass(course);
+  await pass.item({
+    externalId: `${course}-news`,
+    kind: 'announcement',
+    title: `${course}-news`,
+    raw: { message: 'cy poruka' },
+  });
+  await pass.end();
+  cy.ended++;
+}
+
 // whoever's token it is, by the name before ~
 @PollConnector({ portal: LMS, schedule: '0 0 1 1 *', links: ['token'] })
 @Injectable()
 class LmsPortal implements PollsPortal, IdentifiesAccounts {
-  async poll({ account }: ConnectorContext) {
+  async poll({ account, ingest }: ConnectorContext) {
     const token =
       account.kind === 'user'
         ? (await account.credential()).token.reveal()
         : '';
     polled.push({ account: account.kind, token });
+    if (token.startsWith('cy~')) await cysRun(ingest);
   }
 
   async identify({ token }: Credential): Promise<PortalUser> {
@@ -340,19 +367,21 @@ describe('views of accounts of their own', { timeout: 60_000 }, () => {
   }, 60_000);
 
   afterAll(async () => {
+    // a run of cy's still waiting goes on, so the app can stop
+    cy.letGo();
     // the accounts and their credentials, which other specs count
-    for (const who of ['ana', 'bo', 'ed'])
+    for (const who of ['ana', 'bo', 'ed', 'cy'].filter((who) => as[who]))
       await http()
         .delete(`/api/me/portals/${LMS}/token`)
         .set('cookie', as[who])
         .expect(204);
     // and what they saw out of the index, by this app, so no spec after it
-    // starts behind its removals
-    for (const id of ['news', 'section', 'soon', 'going'])
-      await unindexed(`post__${version[id]}`);
+    // starts behind its removals: a few seconds each
+    for (const id of ['news', 'section', 'soon', 'going', 'c3-news', 'c4-news'])
+      if (version[id]) await unindexed(`post__${version[id]}`);
     await app.close();
     vi.unstubAllEnvs();
-  });
+  }, 30_000);
 
   it('runs each linked account on a grid of its own, with its own credential', async () => {
     const queue = app.get<Queue<ConnectorJob>>(getQueueToken(CONNECTORS_QUEUE));
@@ -374,6 +403,68 @@ describe('views of accounts of their own', { timeout: 60_000 }, () => {
         ]),
       { timeout: 20_000, interval: 200 },
     );
+  });
+
+  it("shows what a newly linked account's first run finds as each pass ends, a later run's at its slot", async () => {
+    as.cy = await signUp('cy@views.test');
+    await http()
+      .put(`/api/me/portals/${LMS}/token`)
+      .set('cookie', as.cy)
+      .send({ token: `cy~${randomBytes(8).toString('hex')}` })
+      .expect(204);
+    account.cy = (
+      await prisma.portalAccount.findFirstOrThrow({
+        where: { userId: await userId('cy@views.test') },
+      })
+    ).id;
+    const firstSync = async () =>
+      (
+        (await body('cy', '/api/me/portals')) as {
+          portal: string;
+          firstSync: boolean;
+        }[]
+      ).find(({ portal }) => portal === LMS)?.firstSync;
+
+    // linking ran her account at once: read for the first time, nothing shown
+    await vi.waitFor(() => expect(cy.runs).toBe(1), {
+      timeout: 20_000,
+      interval: 100,
+    });
+    expect(await firstSync()).toBe(true);
+    expect(await listed('cy')).toEqual([]);
+
+    // what the run finds shows as it ends, no slot waited for
+    cy.letGo();
+    await vi.waitFor(() => expect(cy.ended).toBe(1), {
+      timeout: 20_000,
+      interval: 100,
+    });
+    expect(await listed('cy')).toEqual([[`${LMS}~c3`, [LMS]]]);
+    expect(await titles('cy', `${LMS}~c3`)).toEqual(['c3-news']);
+    expect(await firstSync()).toBe(false);
+    await versionOf('itemVersion', 'c3-news');
+
+    // a later run's shows at its slot
+    await app
+      .get(CommandBus)
+      .execute(
+        new SyncConnectionCommand(
+          Connection.of({ portal: LMS, account: account.cy }),
+        ),
+      );
+    await vi.waitFor(() => expect(cy.ended).toBe(2), {
+      timeout: 20_000,
+      interval: 100,
+    });
+    await versionOf('itemVersion', 'c4-news');
+    expect(await listed('cy')).toEqual([[`${LMS}~c3`, [LMS]]]);
+    const sight = await prisma.courseSight.findFirstOrThrow({
+      where: {
+        account: account.cy,
+        version: { portalCourse: { portal: LMS, externalId: 'c4' } },
+      },
+    });
+    expect(sight.shownFrom.getTime()).toBeGreaterThan(Date.now());
   });
 
   it('keeps one version of what both accounts see alike, and fetches its bytes once', async () => {
@@ -689,8 +780,9 @@ describe('views of accounts of their own', { timeout: 60_000 }, () => {
         prisma.courseSight.count({ where }),
         prisma.itemSight.count({ where }),
         prisma.fileSight.count({ where }),
+        prisma.accountView.count({ where }),
       ]),
-    ).toEqual([0, 0, 0]);
+    ).toEqual([0, 0, 0, 0]);
     // ana's view, the same version of a post among it, stays
     expect(
       await prisma.itemSight.count({ where: { versionId: version.news } }),

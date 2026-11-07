@@ -12,6 +12,7 @@ const canvas: Schemas['PortalResponse'] = {
   status: 'linked',
   expiresAt: '2026-12-30T08:00:00.000Z',
   picked: null,
+  firstSync: false,
 };
 
 const t = i18n.getFixedT('en', 'sources');
@@ -30,6 +31,21 @@ describe("a source's status", () => {
     );
     expect(statusText(t, { ...canvas, expiresAt: null }, date)).toBe(
       'Linked to canvas.example.edu.',
+    );
+  });
+
+  it('says an account just linked is being read for the first time', () => {
+    expect(statusText(t, { ...canvas, firstSync: true }, date)).toBe(
+      'Reading it for the first time: your courses show up in a few minutes.',
+    );
+    expect(
+      statusText(
+        i18n.getFixedT('sr-Latn', 'sources'),
+        { ...canvas, firstSync: true },
+        formatters('sr-Latn').date,
+      ),
+    ).toBe(
+      'Prvi put ga čitamo: tvoji predmeti će se pojaviti za nekoliko minuta.',
     );
   });
 

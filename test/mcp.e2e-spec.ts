@@ -14,7 +14,7 @@ import type { Mail } from '../src/identity/domain/mailer.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
 import { UnpackingRepository } from '../src/processing/domain/unpacking.js';
 import { bootApp } from './app.js';
-import { accounts } from './accounts.js';
+import { accounts, ORIGIN } from './accounts.js';
 import { processorsOn } from './fake-plugins.js';
 import { portalIngest } from './ingest.js';
 import { sha256 } from './sha256.js';
@@ -251,6 +251,25 @@ describe('MCP', { timeout: 20_000 }, () => {
     });
     expect(large.isError).toBe(true);
     expect(large.content[0].text).toContain('member not found');
+  });
+
+  it('says why a user reads no course, and where to connect a source', async () => {
+    const none = await signUp('none@mcp.test');
+    const theirs = (
+      await post('/api-key/create', { name: 'claude' }, none).expect(200)
+    ).body.key;
+    const res = await rpc(
+      'tools/call',
+      { name: 'list_courses', arguments: {} },
+      { 'x-api-key': theirs },
+    ).expect(200);
+    const [list, note] = res.body.result.content as { text: string }[];
+    expect(JSON.parse(list.text)).toEqual([]);
+    expect(note.text).toBe(
+      `No courses: the user hasn't connected a source yet. They can at ${ORIGIN}/sources.`,
+    );
+    // one who reads a course gets the list alone
+    expect((await call('list_courses')).content).toHaveLength(1);
   });
 
   it('answers with an error the model can read', async () => {

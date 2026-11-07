@@ -11,6 +11,16 @@ export class McpResource {
   constructor(readonly url: string) {}
 }
 
+// The web app's pages, on the hub's own address (BETTER_AUTH_URL): where
+// MCP's tools send a user, by way of their agent
+export class HubPages {
+  constructor(private readonly baseURL: string) {}
+
+  url(path: `/${string}`) {
+    return new URL(path, this.baseURL).href;
+  }
+}
+
 // The hostnames of the sites whose pages may call the hub: its own
 // (BETTER_AUTH_URL) and TRUSTED_ORIGINS'. MCP turns away any other Origin
 // (access's McpRequestMiddleware), against DNS rebinding.
@@ -24,6 +34,11 @@ export const mcpSettings: Provider[] = [
     inject: [identityConfig.KEY],
     useFactory: ({ baseURL }: Settings) =>
       new McpResource(mcpResource(baseURL)),
+  },
+  {
+    provide: HubPages,
+    inject: [identityConfig.KEY],
+    useFactory: ({ baseURL }: Settings) => new HubPages(baseURL),
   },
   {
     provide: TrustedOrigins,

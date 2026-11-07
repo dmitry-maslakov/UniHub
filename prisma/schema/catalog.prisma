@@ -223,3 +223,13 @@ model FileSight {
   @@id([account, versionId])
   @@index([versionId])
 }
+
+// Since when a user's account's view shows: the earliest a listing of its
+// courses showed from. An account with none shown yet has had no pass
+// shown since it was linked (or replaced by another portal user's, a new
+// account), so its next run is its first, each pass shown as it ends
+// (README, Portal accounts). Kept until the account is forgotten
+model AccountView {
+  account   String   @id
+  shownFrom DateTime
+}

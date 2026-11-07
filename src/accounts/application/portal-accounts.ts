@@ -14,6 +14,7 @@ import {
   type LinkMode,
   type PortalId,
 } from '@app/kernel';
+import { ViewsShownQuery } from '../../catalog/contracts.js';
 import { IsAdminQuery } from '../../identity/contracts.js';
 import {
   AccountsChangedCommand,
@@ -93,6 +94,10 @@ export interface PortalView {
   expiresAt: Date | null;
   // of a public portal's catalog; null for any other portal
   picked: number | null;
+  // the user's own account of it reads and has had no pass shown since it
+  // was linked: its first run is reading it. No counts or times, which
+  // could tell how long a pass took
+  firstSync: boolean;
 }
 
 // Each user's own accounts of the portals that link them (PortalLinks),
@@ -136,6 +141,17 @@ export class PortalAccounts implements OnApplicationBootstrap {
     const theirs = new Map(accounts.map((a) => [a.portal, a]));
     const portals = new Set([...this.links.openTo(admin), ...theirs.keys()]);
     const now = new Date();
+    const reading = accounts.filter((a) => this.reads(a, now));
+    const shown = new Set(
+      reading.length
+        ? await this.queries.execute(
+            new ViewsShownQuery(
+              reading.map(({ id }) => id),
+              now,
+            ),
+          )
+        : [],
+    );
     return [...portals].sort().map((portal) => {
       const { mode } = this.links.of(portal);
       // a public portal links no account, whatever one is left of before
@@ -149,6 +165,10 @@ export class PortalAccounts implements OnApplicationBootstrap {
         status: account?.statusAt(now) ?? null,
         expiresAt: account?.expiresAt ?? null,
         picked: picked.get(portal) ?? null,
+        firstSync:
+          account !== undefined &&
+          this.reads(account, now) &&
+          !shown.has(account.id),
       };
     });
   }
@@ -192,10 +212,7 @@ export class PortalAccounts implements OnApplicationBootstrap {
     const found = await this.accounts.withCredential(id);
     if (!found) return null;
     const { account, sealed } = found;
-    const reads =
-      this.links.of(account.portal).mode === account.snapshot.mode &&
-      account.statusAt(now) === 'linked';
-    if (!reads) return null;
+    if (!this.reads(account, now)) return null;
     const opened = this.vault.open(sealed, account.snapshot);
     return {
       credential: credentialOf({
@@ -249,6 +266,15 @@ export class PortalAccounts implements OnApplicationBootstrap {
     await this.picks.removeAllOf(userId);
     for (const { id, portal } of await this.accounts.removeAllOf(userId))
       await this.changed(portal, { gone: [id] });
+  }
+
+  // the account is run now: linked in the mode its portal links by, and
+  // neither expired nor revoked
+  private reads(account: PortalAccount, now: Date) {
+    return (
+      this.links.of(account.portal).mode === account.snapshot.mode &&
+      account.statusAt(now) === 'linked'
+    );
   }
 
   private changed(

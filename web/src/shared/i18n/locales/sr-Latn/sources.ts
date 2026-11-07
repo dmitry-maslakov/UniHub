@@ -26,6 +26,8 @@ export default {
     revoked:
       '{{label}} više ne prihvata tvoj token. Zameni ga da bi UniHub ponovo čitao {{label}}.',
     notLinked: 'Nije povezano.',
+    firstSync:
+      'Prvi put ga čitamo: tvoji predmeti će se pojaviti za nekoliko minuta.',
   },
   unavailable:
     'Povezivanje sopstvenog naloga ti nije dostupno za {{label}}. Ako ti treba, javi se administratoru.',

@@ -1,8 +1,6 @@
 import { Stack } from '@mantine/core';
-import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { coursesQuery } from '@/entities/course';
 import { SourceBadge } from '@/entities/source';
 import {
   AnchorLink,
@@ -17,6 +15,8 @@ import {
   Section,
 } from '@/shared/ui';
 import { SourceCards } from '@/widgets/sources';
+import { useMyCourses } from '../model/use-my-courses';
+import { FirstSyncState } from './first-sync-state';
 
 const byName = new Intl.Collator('und', { numeric: true });
 
@@ -28,10 +28,12 @@ const yearsOf = (portalCourses: { year: number | null }[]) =>
 
 // The courses the user reads, one list by name whatever they come from,
 // each with its sources. A first visit with none shows where to add some,
-// and keeps showing it as the first ones come in.
+// and keeps showing it as the first ones come in; with none while an
+// account just linked is read for the first time, that it is, in their
+// place.
 export function MyCoursesPage() {
   const { t } = useTranslation('courses');
-  const courses = useQuery(coursesQuery());
+  const { courses, syncing } = useMyCourses();
   // whether the first answer of this visit had none: React's way to keep
   // what an earlier render found
   const [firstVisit, setFirstVisit] = useState<boolean>();
@@ -42,7 +44,7 @@ export function MyCoursesPage() {
     <>
       <PageTitle
         description={
-          courses.data?.length === 0
+          courses.data?.length === 0 && !syncing
             ? t('list.descriptionEmpty')
             : t('list.description')
         }
@@ -55,7 +57,9 @@ export function MyCoursesPage() {
           loading={<ListSkeleton rows={4} label={t('list.loading')} />}
           isEmpty={(data) => !data.length}
           empty={
-            firstVisit ? null : (
+            syncing ? (
+              <FirstSyncState label={syncing.label} />
+            ) : firstVisit ? null : (
               <EmptyState
                 title={t('list.empty.title')}
                 action={
@@ -92,7 +96,7 @@ export function MyCoursesPage() {
             </RowList>
           )}
         </QueryState>
-        {firstVisit && (
+        {firstVisit && !(syncing && courses.data?.length === 0) && (
           <Section title={t('list.addSource.title')}>
             <SourceCards order={3} />
           </Section>

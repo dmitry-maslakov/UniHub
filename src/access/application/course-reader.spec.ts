@@ -2,7 +2,10 @@ import { MediaType, PluginName, PortalId } from '@app/kernel';
 import { FakeBus } from '../../../test/fake-bus.js';
 import { InMemoryBlobs } from '../../../test/in-memory-blobs.js';
 import { sha256 } from '../../../test/sha256.js';
-import { ViewingAccountsQuery } from '../../accounts/contracts.js';
+import {
+  UserPortalsQuery,
+  ViewingAccountsQuery,
+} from '../../accounts/contracts.js';
 import {
   CourseSlug,
   GetCourseFileQuery,
@@ -132,6 +135,22 @@ function reader() {
     [ListCourseItemsQuery, () => []],
     [ListCourseFilesQuery, () => [files[0]]],
     [
+      UserPortalsQuery,
+      () => [
+        {
+          portal,
+          label: 'Canvas',
+          mode: 'token',
+          linked: true,
+          instance: null,
+          status: 'linked',
+          expiresAt: null,
+          picked: null,
+          firstSync: true,
+        },
+      ],
+    ],
+    [
       GetCourseFileQuery,
       ({ viewers, fileId }: GetCourseFileQuery) =>
         files.filter(seen(viewers)).find((f) => f.id === fileId) ?? null,
@@ -185,6 +204,14 @@ describe('CourseReader', () => {
       },
     ]);
     expect(queries.sent).toContainEqual(new ListCoursesQuery(viewers));
+  });
+
+  it('tells why she reads no course by how her own sources stand', async () => {
+    const { reader: r, queries } = reader();
+    expect(await r.noCourses('ana', 'https://hub.example.edu/sources')).toMatch(
+      /^No courses yet: the user's Canvas account was just linked/,
+    );
+    expect(queries.sent).toContainEqual(new UserPortalsQuery('ana'));
   });
 
   it('pages a course it may read, and finds none of the others', async () => {

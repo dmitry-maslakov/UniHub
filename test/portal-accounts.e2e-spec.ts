@@ -147,6 +147,8 @@ describe('portal accounts', { timeout: 20_000 }, () => {
         status: 'linked',
         expiresAt: EXPIRES_AT,
         picked: null,
+        // its runs send nothing here: no pass of it has shown
+        firstSync: true,
       },
       expect.objectContaining({ portal: 'school', label: 'school' }),
     ]);
@@ -159,7 +161,11 @@ describe('portal accounts', { timeout: 20_000 }, () => {
 
     keep(await http().delete(tokenOf('linked')).set('cookie', ana).expect(204));
     expect(await list(ana)).toContainEqual(
-      expect.objectContaining({ portal: 'linked', linked: false }),
+      expect.objectContaining({
+        portal: 'linked',
+        linked: false,
+        firstSync: false,
+      }),
     );
     expect(await prisma.portalCredential.count()).toBe(0);
   });

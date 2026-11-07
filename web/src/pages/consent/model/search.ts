@@ -5,5 +5,6 @@ import { z } from 'zod';
 export const consentSearch = z.looseObject({
   client_id: z.string().optional().catch(undefined),
   redirect_uri: z.string().optional().catch(undefined),
+  scope: z.string().optional().catch(undefined),
   sig: z.string().optional().catch(undefined),
 });

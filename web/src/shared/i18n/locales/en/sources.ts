@@ -21,6 +21,8 @@ export default {
     revoked:
       '{{label}} no longer takes your token. Replace it to read {{label}} again.',
     notLinked: 'Not linked.',
+    firstSync:
+      'Reading it for the first time: your courses show up in a few minutes.',
   },
   unavailable:
     "Linking your own account isn't open to you on {{label}}. Ask an admin of the hub if you need it.",

@@ -29,7 +29,8 @@ export const pluginsSettings = z
     // Users' own accounts (README, Portal accounts): each passes every
     // VIEW_MINUTES on a grid of its own, what a pass finds shows
     // PUBLISH_DELAY_MINUTES after its slot (or at a later slot, should it
-    // end past that), and content HOLD_MINUTES after that
+    // end past that; in the account's first run, as it ends), and content
+    // HOLD_MINUTES after that
     VIEW_MINUTES: minutes(5).default(60),
     PUBLISH_DELAY_MINUTES: minutes(0).default(10),
     HOLD_MINUTES: minutes(0).default(15),

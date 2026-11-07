@@ -20,6 +20,7 @@ const portals: Schemas['PortalResponse'][] = [
     status: 'linked',
     expiresAt: null,
     picked: null,
+    firstSync: false,
   },
   {
     portal: 'canvas',
@@ -30,6 +31,7 @@ const portals: Schemas['PortalResponse'][] = [
     status: null,
     expiresAt: null,
     picked: null,
+    firstSync: false,
   },
 ];
 
@@ -77,6 +79,28 @@ describe('sources', () => {
     expect(screen.getByLabelText("Your school's Canvas")).toHaveValue(SCHOOL);
     expect(screen.getByRole('button', { name: 'Replace token' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Unlink Campus' })).toBeVisible();
+  });
+
+  it('says a source just linked is being read for the first time, in place of where it is linked', async () => {
+    signedIn();
+    listPortals([
+      {
+        ...portals[1],
+        linked: true,
+        status: 'linked',
+        instance: SCHOOL,
+        firstSync: true,
+      },
+    ]);
+    renderApp('/sources');
+
+    const list = await screen.findByRole('list', { name: 'Sources' });
+    expect(
+      within(list).getByText(
+        'Reading it for the first time: your courses show up in a few minutes.',
+      ),
+    ).toBeVisible();
+    expect(within(list).queryByText(/^Linked/)).toBeNull();
   });
 
   it('takes the old address to Sources', async () => {
@@ -303,6 +327,7 @@ describe('sources', () => {
         status: null,
         expiresAt: null,
         picked: 0,
+        firstSync: false,
       },
       portals[1],
     ]);

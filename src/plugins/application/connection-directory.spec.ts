@@ -41,11 +41,18 @@ describe('ConnectionDirectory', () => {
     expect(await keys('lms')).toEqual(['lms__ana', 'lms__bo']);
   });
 
-  it("gives a user's account's run its credential, and shows what it finds at the slot it started in", async () => {
+  // the run a user's account's context gives its ingest, for a run that
+  // started half a period past a slot of the account's grid
+  const runOf = async (shown: string[]) => {
     const courses = vi.fn(async () => ({ refused: [] }));
-    const directory = directoryOf({ lms: ['ana'] }, { ana: credential }, {
-      courses,
-    } as unknown as IngestService);
+    const directory = directoryOf(
+      { lms: ['ana'] },
+      { ana: credential },
+      { courses } as unknown as IngestService,
+      undefined,
+      undefined,
+      shown,
+    );
     const ana = Connection.of({ portal: lms, account: 'ana' });
     const { everyMs, offsetMs } = directory.gridOf(ana);
     const slot = Date.UTC(2026, 10, 6) + offsetMs;
@@ -55,12 +62,17 @@ describe('ConnectionDirectory', () => {
       new AbortController().signal,
       new Date(slot + everyMs / 2),
     );
-    const ctx = found!.context;
-    await ctx.ingest.courses([]);
-
+    await found!.context.ingest.courses([]);
     const [[, , run]] = courses.mock.calls as unknown as [
       [unknown, unknown, { shown: (ended: Date) => object; leaseMs: number }],
     ];
+    return { found: found!, run, slot };
+  };
+
+  it("gives a user's account's run its credential, and shows what it finds at the slot it started in", async () => {
+    const { found, run, slot } = await runOf(['ana']);
+    const ctx = found.context;
+
     // PUBLISH_DELAY_MINUTES and HOLD_MINUTES as they are by default
     expect(run.shown(new Date(slot + 60_000))).toEqual({
       shownFrom: new Date(slot + 10 * 60_000),
@@ -70,7 +82,17 @@ describe('ConnectionDirectory', () => {
     expect(run.leaseMs).toBe(pluginSettings().pollTimeoutMs);
     expect(ctx.account.kind).toBe('user');
     // which seal of its credential, to say which one the portal refused
-    expect(found!.seal).toBe('seal-of-ana');
+    expect(found.seal).toBe('seal-of-ana');
+  });
+
+  it("shows what an account's first run finds as each pass ends, nothing of it shown yet", async () => {
+    const { run, slot } = await runOf([]);
+    const ended = new Date(slot + 40 * 60_000);
+
+    expect(run.shown(ended)).toEqual({
+      shownFrom: ended,
+      openFrom: new Date(ended.getTime() + 15 * 60_000),
+    });
   });
 
   it("reads the shared account's records at the site the portal's settings name, a user's at their account's", async () => {

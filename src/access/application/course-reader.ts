@@ -14,8 +14,10 @@ import {
   ListMembersQuery,
   ListTextsQuery,
 } from '../../processing/contracts.js';
+import { UserPortalsQuery } from '../../accounts/contracts.js';
 import { BlobStore } from '../../storage/contracts.js';
 import { NotReadableError } from './errors.js';
+import { noCoursesNote } from './no-courses.js';
 import type { FilesAt, Page, TextAt } from './page.js';
 import {
   fileOf,
@@ -39,6 +41,13 @@ export class CourseReader {
   async courses(userId: string) {
     const { courses } = await readableCourses(this.queries, userId);
     return courses.map(courseView);
+  }
+
+  // why the user reads no course, for an agent to tell them, by how their
+  // own sources stand; `sourcesUrl` is where they connect one
+  async noCourses(userId: string, sourcesUrl: string) {
+    const sources = await this.queries.execute(new UserPortalsQuery(userId));
+    return noCoursesNote(sources, sourcesUrl);
   }
 
   async items(userId: string, slug: CourseSlug, { offset, limit }: Page) {

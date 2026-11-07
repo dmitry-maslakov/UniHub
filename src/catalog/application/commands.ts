@@ -134,7 +134,8 @@ export interface Seen<T> {
 // What a user's account sees of a portal's courses on its site, from now
 // on (none it saw before but these, and those `kept` names by the portal's
 // ids: listed, but their records refused, so what the account saw of them
-// stays), shown at `at`
+// stays), shown at `at`; the account's view shows from then on, if it
+// didn't before
 export class ViewCoursesCommand extends Command<void> {
   constructor(
     public readonly account: string,

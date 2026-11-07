@@ -7,3 +7,8 @@ export const readOnly = { readOnlyHint: true, openWorldHint: false };
 export const json = (value: unknown) => ({
   content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }],
 });
+
+// JSON, and a word for the model to relay after it
+export const jsonWithNote = (value: unknown, note: string) => ({
+  content: [...json(value).content, { type: 'text' as const, text: note }],
+});

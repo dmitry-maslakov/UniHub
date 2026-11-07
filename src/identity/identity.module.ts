@@ -28,6 +28,7 @@ import {
 import { WellKnownController } from './infrastructure/http/well-known.controller.js';
 import { MailModule } from './infrastructure/mail.module.js';
 import {
+  HubPages,
   McpResource,
   mcpSettings,
   TrustedOrigins,
@@ -104,7 +105,7 @@ import { SignInMethodsController } from './infrastructure/http/sign-in-methods.c
     { provide: CourseAccessRepository, useClass: PrismaCourseAccessRepository },
   ],
   // for AgentGuard and AgentChallengeFilter, wherever a route says
-  // @McpAuth(), and for MCP's Origin check
-  exports: [AuthenticateAgent, McpResource, TrustedOrigins],
+  // @McpAuth(), for MCP's Origin check, and for the pages its tools name
+  exports: [AuthenticateAgent, McpResource, TrustedOrigins, HubPages],
 })
 export class IdentityModule {}

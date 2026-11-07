@@ -1,7 +1,7 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { renderApp } from './render';
 import { server, signedIn } from './server';
 
@@ -17,6 +17,7 @@ const portals = [
     status: 'linked',
     expiresAt: null,
     picked: null,
+    firstSync: false,
   },
   {
     portal: 'catalog',
@@ -27,6 +28,7 @@ const portals = [
     status: null,
     expiresAt: null,
     picked: 0,
+    firstSync: false,
   },
 ];
 const part = (portal: string, year: number | null, via: string) => ({
@@ -124,6 +126,90 @@ describe('My courses', () => {
       screen.getByRole('heading', { name: 'Course catalog', level: 3 }),
     ).toBeVisible();
     expect(screen.queryByText(/Nothing to read yet/)).toBeNull();
+  });
+
+  it('says an account just linked is read for the first time, in place of the sources, and asks again every 30 s', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      signedIn();
+      let read = false;
+      server.use(
+        http.get(api('/courses'), () => HttpResponse.json(read ? [os] : [])),
+        http.get(api('/me/portals'), () =>
+          HttpResponse.json([{ ...portals[0], firstSync: !read }, portals[1]]),
+        ),
+      );
+      renderApp('/');
+
+      const status = (
+        await screen.findByText('Reading your Canvas for the first time')
+      ).closest('output')!;
+      expect(status).toHaveTextContent(
+        'Your courses show up here in a few minutes. You can leave this page open.',
+      );
+      expect(
+        screen.queryByRole('heading', { name: 'Add a source' }),
+      ).toBeNull();
+      expect(screen.queryByText(/Nothing to read yet/)).toBeNull();
+
+      read = true;
+      await vi.advanceTimersByTimeAsync(30_000);
+      const list = await screen.findByRole('list', { name: 'Your courses' });
+      expect(
+        within(list).getByRole('link', { name: /Operativni sistemi/ }),
+      ).toBeVisible();
+      expect(
+        screen.queryByText('Reading your Canvas for the first time'),
+      ).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('asks for the courses once more as the first read ends, whichever answer comes first', async () => {
+    signedIn();
+    let read = false;
+    server.use(
+      http.get(api('/courses'), () => HttpResponse.json(read ? [os] : [])),
+      http.get(api('/me/portals'), () =>
+        HttpResponse.json([{ ...portals[0], firstSync: !read }, portals[1]]),
+      ),
+    );
+    const { queryClient } = renderApp('/');
+    expect(
+      await screen.findByText('Reading your Canvas for the first time'),
+    ).toBeVisible();
+
+    // the sources say it ended before the courses were asked again
+    read = true;
+    await queryClient.refetchQueries({ queryKey: ['get', '/api/me/portals'] });
+
+    const list = await screen.findByRole('list', { name: 'Your courses' });
+    expect(
+      within(list).getByRole('link', { name: /Operativni sistemi/ }),
+    ).toBeVisible();
+  });
+
+  it('keeps the sources for a user with nothing linked or picked', async () => {
+    signedIn();
+    server.use(
+      http.get(api('/courses'), () => HttpResponse.json([])),
+      http.get(api('/me/portals'), () =>
+        HttpResponse.json([
+          { ...portals[0], linked: false, status: null, instance: null },
+          portals[1],
+        ]),
+      ),
+      http.get(api('/portals/catalog/catalog'), () =>
+        HttpResponse.json({ total: 0, courses: [] }),
+      ),
+    );
+    renderApp('/');
+
+    expect(
+      await screen.findByRole('heading', { name: 'Add a source' }),
+    ).toBeVisible();
+    expect(screen.queryByText(/for the first time/)).toBeNull();
   });
 
   it('takes the old courses address home, and keeps the account at its own', async () => {

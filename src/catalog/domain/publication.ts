@@ -1,14 +1,24 @@
 // When what an account's pass found shows (README, Portal accounts): at
 // its slot on the account's grid plus a delay, whatever the pass did, so
 // how long it took, and whether the hub had it all already, tell no one
-// anything; a pass that ends past that shows at the next slot. Content
-// opens a hold after that, the same for content new to the hub and content
-// it had. The shared account's shows at once.
+// anything; a pass that ends past that shows at the next slot. A run that
+// is the account's first, with nothing of it shown yet since it was linked
+// or replaced, shows each pass as it ends: the user knows when they linked,
+// and that view is their own account's, so its time tells no one anything.
+// Content opens a hold after that, the same for content new to the hub and
+// content it had. The shared account's shows at once.
 export interface Publishing {
   delayMs: number;
   // the account's grid, one slot after another
   slotMs: number;
   holdMs: number;
+}
+
+// a run of an account: the slot it is of, and whether it is the account's
+// first
+export interface RunTiming {
+  slot: Date;
+  first: boolean;
 }
 
 export interface Shown {
@@ -17,11 +27,11 @@ export interface Shown {
 }
 
 export function publication(
-  slot: Date,
+  { slot, first }: RunTiming,
   ended: Date,
   { delayMs, slotMs, holdMs }: Publishing,
 ): Shown {
-  let shown = slot.getTime() + delayMs;
+  let shown = first ? ended.getTime() : slot.getTime() + delayMs;
   while (ended.getTime() > shown) shown += slotMs;
   return { shownFrom: new Date(shown), openFrom: new Date(shown + holdMs) };
 }

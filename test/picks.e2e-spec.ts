@@ -183,6 +183,7 @@ describe('public portals and picks', { timeout: 60_000 }, () => {
         status: null,
         expiresAt: null,
         picked: 1,
+        firstSync: false,
       },
     ]);
 

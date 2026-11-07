@@ -702,6 +702,8 @@ export interface components {
             expiresAt: string | null;
             /** @description how many courses of a public portal's catalog you picked; null for any other portal */
             picked: number | null;
+            /** @description your own account of it was just linked and is being read for the first time: true until what that first read finds shows; false when not linked, expired or revoked. No counts or times, which could tell how long a read took */
+            firstSync: boolean;
         };
         CatalogCourseResponse: {
             /** @description the course's id on its portal */

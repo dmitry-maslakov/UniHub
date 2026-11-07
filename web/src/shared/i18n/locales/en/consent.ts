@@ -9,6 +9,8 @@ export default {
     read: 'Read and search your courses, posts and files (read-only)',
     stay: 'Stay connected until you change your password, or for 30 days after you last use it',
   },
+  // in place of can.stay, for an app that asked for no refresh token
+  hourOnly: 'Connected for an hour; then the app asks you again.',
   returnTo: "You'll return to <strong>{{host}}</strong>",
   notEncrypted: '(not encrypted)',
   loopback: {

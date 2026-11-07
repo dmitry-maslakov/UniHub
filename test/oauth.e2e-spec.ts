@@ -163,12 +163,16 @@ describe('OAuth for MCP clients', { timeout: 20_000 }, () => {
       '/.well-known/oauth-protected-resource/api/mcp',
       '/.well-known/oauth-protected-resource',
     ]) {
-      const { body } = await http().get(path).expect(200);
+      const { body, headers } = await http().get(path).expect(200);
+      // offline_access too, so an app that asks for what the resource names
+      // gets a refresh token
       expect(body).toMatchObject({
         resource: RESOURCE,
         authorization_servers: [ISSUER],
-        scopes_supported: ['courses:read'],
+        bearer_methods_supported: ['header'],
+        scopes_supported: ['courses:read', 'offline_access'],
       });
+      expect(headers['cache-control']).toContain('max-age=');
     }
 
     const { body } = await http()
@@ -214,7 +218,7 @@ describe('OAuth for MCP clients', { timeout: 20_000 }, () => {
     ]) {
       const res = await rpc(headers).expect(401);
       expect(res.headers['www-authenticate']).toBe(
-        `Bearer resource_metadata="${ORIGIN}/.well-known/oauth-protected-resource/api/mcp", scope="courses:read"`,
+        `Bearer resource_metadata="${ORIGIN}/.well-known/oauth-protected-resource/api/mcp", scope="courses:read offline_access"`,
       );
       expect(res.body).toMatchObject({
         jsonrpc: '2.0',

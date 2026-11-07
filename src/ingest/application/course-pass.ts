@@ -9,8 +9,8 @@ import type { FetchLeases } from '../domain/fetch-leases.js';
 import { toFileInput, toItemInput, toRef } from './records.js';
 
 // A run of a connection: when what its passes find shows. The shared
-// account's shows at once; a user's account's at its slot (catalog's
-// publication rule).
+// account's shows at once; a user's account's at its slot, or as each
+// pass ends in the account's first run (catalog's publication rule).
 export interface Run {
   shown(ended: Date): catalog.Shown;
   // how long a file's fetch lease it takes holds: as long as the run may

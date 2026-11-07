@@ -3,11 +3,12 @@ import { Payload } from '@nestjs/microservices';
 import { McpController, Tool } from '@rekog/mcp-nest';
 import { z } from 'zod';
 import { CourseSlug } from '../../../catalog/contracts.js';
+import { HubPages } from '../../../identity/contracts.js';
 import { CourseReader } from '../../application/course-reader.js';
 import { pageSchema, textPageSchema } from '../../application/page.js';
 import { McpErrorsFilter } from './mcp-errors.filter.js';
 import { McpUserId } from './mcp-user-id.js';
-import { json, readOnly } from './tool-results.js';
+import { json, jsonWithNote, readOnly } from './tool-results.js';
 
 const inCourse = pageSchema.extend({
   course: CourseSlug.describe('course slug'),
@@ -23,17 +24,24 @@ const fileMembers = pageSchema.extend({ file });
 @McpController()
 @UseFilters(McpErrorsFilter)
 export class CourseTools {
-  constructor(private readonly reader: CourseReader) {}
+  constructor(
+    private readonly reader: CourseReader,
+    private readonly pages: HubPages,
+  ) {}
 
   @Tool({
     name: 'list_courses',
     description:
-      "The user's courses as they see them, each with the portal courses (Canvas, a course site...) it is made of and `sources`, their portals. `via` says how the user reads a portal course: `account`, their own account; `pick`, a public site's course they picked; `link`, a course an admin set up. A pick the user shows with a course of their own is inside that course.",
+      "The user's courses as they see them, each with the portal courses (Canvas, a course site...) it is made of and `sources`, their portals. `via` says how the user reads a portal course: `account`, their own account; `pick`, a public site's course they picked; `link`, a course an admin set up. A pick the user shows with a course of their own is inside that course. When the list is empty, a second text may say why, to tell the user: an account of theirs just linked and still being read for the first time, or no source connected yet and where to connect one.",
     parameters: z.object({}),
     annotations: readOnly,
   })
   async courses(@McpUserId() userId: string) {
-    return json(await this.reader.courses(userId));
+    const courses = await this.reader.courses(userId);
+    const note = courses.length
+      ? null
+      : await this.reader.noCourses(userId, this.pages.url('/sources'));
+    return note ? jsonWithNote(courses, note) : json(courses);
   }
 
   @Tool({
