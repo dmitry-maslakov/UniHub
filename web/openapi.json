@@ -312,11 +312,23 @@
               "minimum": 1,
               "maximum": 200
             }
+          },
+          {
+            "name": "item",
+            "required": false,
+            "in": "query",
+            "description": "only the files attached to this post, by its id",
+            "schema": {
+              "description": "only the files attached to this post, by its id",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "by folder and name",
+            "description": "by folder and name; with `item`, only the files attached to that post",
             "content": {
               "application/json": {
                 "schema": {
@@ -362,6 +374,44 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ItemResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "items"
+        ]
+      }
+    },
+    "/api/items/{id}/text": {
+      "get": {
+        "operationId": "ItemsController_text",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the post's text as the hub reads it: every string the portal sent but links and dates, HTML read as plain text",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostTextResponse"
                 }
               }
             }
@@ -576,11 +626,26 @@
               "minLength": 1,
               "maxLength": 1024
             }
+          },
+          {
+            "name": "disposition",
+            "required": false,
+            "in": "query",
+            "description": "inline asks the browser to show a PDF, picture or plain text itself; anything else is sent as a download whatever is asked",
+            "schema": {
+              "default": "attachment",
+              "description": "inline asks the browser to show a PDF, picture or plain text itself; anything else is sent as a download whatever is asked",
+              "type": "string",
+              "enum": [
+                "attachment",
+                "inline"
+              ]
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "the file as the portal had it, or a file inside it as its archive had it"
+            "description": "the file as the portal had it, or a file inside it as its archive had it; a download, unless `disposition=inline` asks to show a PDF, picture or plain text in the browser"
           },
           "404": {
             "description": ""
@@ -1413,6 +1478,18 @@
           "size",
           "mime",
           "hasContent"
+        ]
+      },
+      "PostTextResponse": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "the post's text as the hub reads it, plain text: render it as text"
+          }
+        },
+        "required": [
+          "text"
         ]
       },
       "TextInfoResponse": {

@@ -15,6 +15,15 @@ export const pageSchema = z.object({
 });
 export type Page = z.output<typeof pageSchema>;
 
+// A course's files: a page of them, or those attached to one post
+export const courseFilesSchema = pageSchema.extend({
+  item: z
+    .uuid()
+    .optional()
+    .describe('only the files attached to this post, by its id'),
+});
+export type FilesAt = z.output<typeof courseFilesSchema>;
+
 // A member of an archive (or another container) a file holds, by its path
 // as the file's members list it; without one, the file itself. As long as
 // the hub keeps a path, its letters composed as the hub's are (a Mac's
@@ -40,3 +49,15 @@ export const textPageSchema = memberSchema.extend({
 });
 export type TextAt = z.output<typeof textPageSchema>;
 export type MemberAt = z.output<typeof memberSchema>;
+
+// A file's bytes: as a download, or in the browser for the few types it
+// shows safely (inline.ts)
+export const contentSchema = memberSchema.extend({
+  disposition: z
+    .enum(['attachment', 'inline'])
+    .default('attachment')
+    .describe(
+      'inline asks the browser to show a PDF, picture or plain text itself; anything else is sent as a download whatever is asked',
+    ),
+});
+export type ContentAt = z.output<typeof contentSchema>;

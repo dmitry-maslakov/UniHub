@@ -1,4 +1,4 @@
-import { Alert, Stack, Text, ThemeIcon } from '@mantine/core';
+import { Alert, Stack, Text, ThemeIcon, Title } from '@mantine/core';
 import { IconCircleCheck, IconCircleX } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -38,14 +38,14 @@ export function DeviceRequestView({ code }: { code: string }) {
     <Stack gap="md" align="flex-start">
       <ThemeIcon
         variant="transparent"
-        size={32}
+        size={40}
         c={approved ? 'petrol' : 'dimmed'}
       >
         <Icon size={32} stroke={1.5} />
       </ThemeIcon>
-      <Text fw={600} size="lg">
+      <Title order={2}>
         {approved ? t('approved.title') : t('denied.title')}
-      </Text>
+      </Title>
       <Text c="dimmed">{approved ? t('approved.body') : t('denied.body')}</Text>
       <AnchorLink to="/">{t('shell:notFound.home')}</AnchorLink>
     </Stack>

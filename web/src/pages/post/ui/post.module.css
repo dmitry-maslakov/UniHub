@@ -1,0 +1,6 @@
+/* a post's text is read: a measure a reader can follow, long words wrap */
+.body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-width: 60ch;
+}

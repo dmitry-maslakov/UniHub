@@ -40,7 +40,7 @@ export default {
   },
   keeping: {
     title: 'Čuvanje i brisanje podataka',
-    body: 'Kad se nalog obriše, brišu se i njegove sesije, API ključevi, povezani nalozi na portalima i tokeni, kao i saglasnosti i tokeni povezanih aplikacija, a s njima i ono što su povezani nalozi na portalima doneli, a ne vidi ga nijedan drugi nalog. Sadržaj predmeta koji vide i drugi nalozi ostaje dok ga oni vide. Da bi se tvoj nalog obrisao, piši na <mail>{{contact}}</mail>.',
+    body: 'Kad se nalog obriše, brišu se i njegove sesije, API ključevi, povezani nalozi na portalima i tokeni, kao i saglasnosti i tokeni povezanih aplikacija, a s njima i ono što su povezani nalozi na portalima doneli, a ne vidi ga nijedan drugi nalog. Sadržaj predmeta koji vide i drugi nalozi ostaje dok ga oni vide. Nalog možeš da obrišeš u delu Nalog, ili piši na <mail>{{contact}}</mail>.',
   },
   security: {
     title: 'Bezbednost',

@@ -24,6 +24,15 @@ export default {
       description: "It may have been removed, or it isn't one of yours.",
       back: 'Back to My courses',
     },
+    tabs: {
+      files: 'Files',
+      filesCount: 'Files ({{count}})',
+      posts: 'Posts',
+    },
+    search: {
+      label: 'Search in this course',
+      placeholder: 'Search its files and posts',
+    },
   },
   sources: {
     aria: 'Sources',
@@ -35,7 +44,6 @@ export default {
     },
   },
   posts: {
-    title: 'Posts',
     aria: 'Posts',
     loading: 'Loading posts',
     empty: {
@@ -43,18 +51,20 @@ export default {
       body: "Posts from this course's portals show up here once UniHub reads them.",
     },
     more: 'Show more posts',
-    openOn: 'On {{portal}}',
-    openOnAria: 'Open {{title}} on {{portal}}',
   },
   files: {
-    title: 'Files',
+    aria: 'Files by folder',
+    count_one: '{{count}} file',
+    count_few: '{{count}} files',
+    count_other: '{{count}} files',
+    capped: 'Showing the first 2,000. Search finds the rest.',
+    folderCount_one: '{{count}} file',
+    folderCount_few: '{{count}} files',
+    folderCount_other: '{{count}} files',
     loading: 'Loading files',
     empty: {
       title: 'No files yet',
       body: "Files from this course's portals show up here once UniHub reads them.",
     },
-    more: 'Show more files',
-    download: 'Download',
-    downloadAria: 'Download {{name}}',
   },
 };

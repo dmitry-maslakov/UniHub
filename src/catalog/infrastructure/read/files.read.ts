@@ -110,10 +110,18 @@ export class ListCourseFilesHandler implements IQueryHandler<ListCourseFilesQuer
     portalCourseIds,
     offset,
     limit,
+    itemId,
   }: ListCourseFilesQuery) {
     const now = new Date();
     const rows = await this.txHost.tx.fileVersion.findMany({
-      where: { AND: [inCourses(portalCourseIds), fileSeen(viewers, now)] },
+      where: {
+        AND: [
+          inCourses(portalCourseIds),
+          fileSeen(viewers, now),
+          // a post is matched by the version the viewers' view shows
+          itemId ? { item: { versions: { some: { id: itemId } } } } : {},
+        ],
+      },
       orderBy: byFolderAndName,
       skip: offset,
       take: limit,

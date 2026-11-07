@@ -27,11 +27,11 @@ export default {
     other: 'Pretraga trenutno nije uspela. Pokušaj ponovo.',
   },
   result: {
-    download: 'Preuzmi',
-    inCourse: 'U predmetu',
-    openPost: 'Otvori objavu',
-    postIn: 'Objava u predmetu {{course}}',
     inArchive: 'U arhivi {{archive}}',
-    page: 'strana {{n}}',
+    nameMatch: 'Poklapa se ime',
+  },
+  scope: {
+    course: 'U predmetu {{name}}',
+    remove: 'Pretraži sve predmete',
   },
 } satisfies Messages<typeof en>;

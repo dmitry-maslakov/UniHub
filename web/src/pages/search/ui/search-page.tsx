@@ -7,6 +7,7 @@ import { resultKey } from '../lib/result-key';
 import { searchErrorKey } from '../lib/search-error';
 import { ResultRow } from './result-row';
 import { SearchForm } from './search-form';
+import { SearchScope } from './search-scope';
 
 const route = getRouteApi('/_app/search');
 
@@ -14,11 +15,11 @@ const route = getRouteApi('/_app/search');
 // archives
 export function SearchPage() {
   const { t } = useTranslation('search');
-  const { q = '' } = route.useSearch();
+  const { q = '', course } = route.useSearch();
   const search = api.useQuery(
     'get',
     '/api/search',
-    { params: { query: { q } } },
+    { params: { query: { q, course } } },
     // a refused search is refused again, and a limit is waited out
     {
       enabled: q.length >= 2,
@@ -32,7 +33,12 @@ export function SearchPage() {
   return (
     <>
       <PageTitle description={t('description')}>{t('title')}</PageTitle>
-      <SearchForm key={q} q={q} />
+      <SearchForm key={q} q={q} course={course} />
+      {course && (
+        <Box mt="md">
+          <SearchScope course={course} />
+        </Box>
+      )}
       <Box aria-live="polite" mt="xl">
         {search.isLoading && <ListSkeleton rows={3} label={t('searching')} />}
         {search.isError && (
@@ -49,7 +55,12 @@ export function SearchPage() {
         {results && results.length > 0 && (
           <RowList label={t('results.aria')}>
             {results.map((result) => (
-              <ResultRow key={resultKey(result)} result={result} />
+              <ResultRow
+                key={resultKey(result)}
+                result={result}
+                q={q}
+                scope={course}
+              />
             ))}
           </RowList>
         )}

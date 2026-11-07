@@ -1,0 +1,7 @@
+/* the text of a file is read: its line breaks and spacing are kept, long
+   words and paths wrap instead of widening the page */
+.text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-width: 75ch;
+}

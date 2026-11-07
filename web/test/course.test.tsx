@@ -1,7 +1,8 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { i18n } from '@/shared/i18n';
 import { renderApp } from './render';
 import { server, signedIn } from './server';
 
@@ -17,12 +18,12 @@ const post = (n: number, raw: object | null = {}) => ({
   raw,
 });
 
-const file = (n: number, hasContent = true) => ({
+const file = (n: number, hasContent = true, path = 'lectures') => ({
   id: `f${n}`,
   portal: 'canvas',
   itemId: null,
   name: `file-${n}.pdf`,
-  path: 'lectures',
+  path,
   url: null,
   size: 1_400_000,
   mime: 'application/pdf',
@@ -31,10 +32,12 @@ const file = (n: number, hasContent = true) => ({
 
 const posts = Array.from({ length: 51 }, (_, i) => post(i + 1));
 const offsets: number[] = [];
+const fileOffsets: number[] = [];
 
-const setup = (items: unknown[] = posts, files: unknown[] = []) => {
+const setup = (items: unknown[] = posts, files: unknown[] = [file(1)]) => {
   signedIn();
   offsets.length = 0;
+  fileOffsets.length = 0;
   server.use(
     http.get(api('/courses'), () =>
       HttpResponse.json([
@@ -53,15 +56,77 @@ const setup = (items: unknown[] = posts, files: unknown[] = []) => {
       offsets.push(offset);
       return HttpResponse.json(items.slice(offset, offset + 50));
     }),
-    http.get(api('/courses/os/files'), () => HttpResponse.json(files)),
+    http.get(api('/courses/os/files'), ({ request }) => {
+      const query = new URL(request.url).searchParams;
+      const offset = Number(query.get('offset') ?? 0);
+      const limit = Number(query.get('limit') ?? 50);
+      fileOffsets.push(offset);
+      return HttpResponse.json(files.slice(offset, offset + limit));
+    }),
     http.get(api('/me/portals'), () => HttpResponse.json([])),
   );
 };
 
-describe('course page', () => {
-  it('shows a full page of posts, and the next one on request', async () => {
-    setup();
+const manyFiles = (n: number) =>
+  Array.from({ length: n }, (_, i) => file(i + 1, true, `folder ${i % 3}`));
+
+describe('a course', () => {
+  it('opens on Files with the folders of a course that has files', async () => {
+    setup(posts, [file(1, true, 'Predavanja'), file(2, true, 'Vežbe')]);
+    const { router } = renderApp('/courses/os');
+
+    expect(
+      await screen.findByRole('tab', { name: 'Files (2)', selected: true }),
+    ).toBeVisible();
+    const tree = screen.getByRole('navigation', { name: 'Files by folder' });
+    expect(within(tree).getByText('Predavanja')).toBeVisible();
+    expect(within(tree).getByText('Vežbe')).toBeVisible();
+    // Files come first
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
+      'Files (2)',
+      'Posts',
+    ]);
+    expect(screen.queryByText('Post 1')).toBeNull();
+    expect(router.state.location.search).toEqual({});
+  });
+
+  it('opens on Posts for a course without files', async () => {
+    setup(posts, []);
     renderApp('/courses/os');
+
+    expect(
+      await screen.findByRole('tab', { name: 'Posts', selected: true }),
+    ).toBeVisible();
+    expect(await screen.findByText('Post 1')).toBeVisible();
+  });
+
+  it('keeps the tab chosen in the address', async () => {
+    setup();
+    const { router } = renderApp('/courses/os');
+
+    await userEvent.click(await screen.findByRole('tab', { name: 'Posts' }));
+    expect(await screen.findByText('Post 1')).toBeVisible();
+    expect(router.state.location.search).toEqual({ tab: 'posts' });
+
+    await userEvent.click(screen.getByRole('tab', { name: /^Files/ }));
+    expect(router.state.location.search).toEqual({ tab: 'files' });
+  });
+
+  it('shows its posts newest first, each linking to its page', async () => {
+    setup();
+    renderApp('/courses/os?tab=posts');
+
+    const list = await screen.findByRole('list', { name: 'Posts' });
+    const link = within(list).getByRole('link', { name: /Post 1\b/ });
+    expect(link).toHaveAttribute('href', '/courses/os/posts/i1');
+    expect(link).toHaveTextContent(/Announcement · Nov 1, 2026/);
+    // the portal's own link isn't on the row any more
+    expect(within(list).queryByText(/On /)).toBeNull();
+  });
+
+  it('pages through posts on request', async () => {
+    setup();
+    renderApp('/courses/os?tab=posts');
 
     expect(await screen.findByText('Post 50')).toBeVisible();
     expect(screen.queryByText('Post 51')).toBeNull();
@@ -89,7 +154,7 @@ describe('course page', () => {
           : HttpResponse.json(posts.slice(offset, offset + 50));
       }),
     );
-    renderApp('/courses/os');
+    renderApp('/courses/os?tab=posts');
     expect(await screen.findByText('Post 50')).toBeVisible();
     await userEvent.click(
       screen.getByRole('button', { name: 'Show more posts' }),
@@ -105,29 +170,106 @@ describe('course page', () => {
     expect(await screen.findByText('Post 51')).toBeVisible();
   }, 20000);
 
+  it('shows files as folders on the Files tab, and opens one in its page', async () => {
+    setup(posts, [
+      file(1, true, 'Predavanja/2026'),
+      { ...file(2), path: 'Predavanja', name: 'plan.pdf' },
+      { ...file(3), path: '', name: 'ispit.pdf', mime: null, size: 2300 },
+    ]);
+    renderApp('/courses/os?tab=files');
+
+    const tree = await screen.findByRole('navigation', {
+      name: 'Files by folder',
+    });
+    expect(screen.getByText('3 files')).toBeVisible();
+    const folder = within(tree).getByText('Predavanja');
+    expect(within(tree).getByText('2 files')).toBeVisible();
+    // a small course starts open: the subfolder and its file are there
+    expect(within(tree).getByText('2026')).toBeVisible();
+    expect(
+      within(tree).getByRole('link', { name: /file-1\.pdf/ }),
+    ).toHaveAttribute('href', '/courses/os/files/f1');
+    expect(
+      within(tree).getByRole('link', { name: /ispit\.pdf/ }),
+    ).toHaveTextContent('2.3 kB');
+    // folders first, then the files of the top
+    const names = within(tree)
+      .getAllByRole('link')
+      .map((link) => link.textContent);
+    expect(names.at(-1)).toMatch(/ispit\.pdf/);
+    await userEvent.click(folder);
+    expect(within(tree).queryByText('2026')).not.toBeVisible();
+  });
+
+  it('starts the folders closed past fifty files', async () => {
+    setup(posts, manyFiles(51));
+    renderApp('/courses/os');
+
+    const tree = await screen.findByRole('navigation', {
+      name: 'Files by folder',
+    });
+    expect(within(tree).getByText('folder 0')).toBeVisible();
+    expect(within(tree).getAllByText('17 files')).toHaveLength(3);
+    expect(
+      within(tree).queryByRole('link', { name: /file-1\.pdf/ }),
+    ).toBeNull();
+    // a folder is a button the keyboard reaches
+    const folder = within(tree).getByRole('button', {
+      name: /folder 1/,
+      expanded: false,
+    });
+    for (let i = 0; i < 20 && document.activeElement !== folder; i++)
+      await userEvent.tab();
+    expect(folder).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    expect(
+      await within(tree).findByRole('link', { name: /file-2\.pdf/ }),
+    ).toBeVisible();
+  });
+
+  it('reads every page of files, up to 2,000', async () => {
+    setup(posts, manyFiles(450));
+    renderApp('/courses/os');
+
+    expect(
+      await screen.findByRole('tab', { name: 'Files (450)' }),
+    ).toBeVisible();
+    // two full pages, then a short one that ends it
+    expect(fileOffsets).toEqual([0, 200, 400]);
+    expect(screen.queryByText(/Showing the first/)).toBeNull();
+  });
+
+  it('stops at 2,000 files, and says so', async () => {
+    setup(posts, manyFiles(2100));
+    renderApp('/courses/os');
+
+    expect(await screen.findByText(/Showing the first 2,000/)).toBeVisible();
+    expect(fileOffsets).toHaveLength(10);
+    // a count that may be short isn't put on the tab
+    expect(screen.getByRole('tab', { name: 'Files' })).toBeVisible();
+  });
+
   it('says a locked post and a file without content are not available yet', async () => {
     setup([post(1, null)], [file(1, false), file(2)]);
-    renderApp('/courses/os');
+    renderApp('/courses/os?tab=posts');
 
     expect(
       await screen.findByText(/Announcement.*Not available yet/),
     ).toBeVisible();
+    await userEvent.click(screen.getByRole('tab', { name: /^Files/ }));
     expect(
-      await screen.findByText(/lectures · 1.4 MB · Not available yet/),
+      await screen.findByText(/1\.4 MB · Not available yet/),
     ).toBeVisible();
-    expect(screen.getAllByRole('link', { name: /Download/ })).toHaveLength(1);
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
-  it('fetches on until the post a search result links to is there, and scrolls to it', async () => {
-    setup();
-    const scroll = vi.spyOn(HTMLElement.prototype, 'scrollIntoView');
-    renderApp('/courses/os#item-i51');
+  it('says there is nothing in a tab with nothing in it', async () => {
+    setup([], []);
+    renderApp('/courses/os?tab=files');
 
-    await waitFor(() => expect(offsets).toEqual([0, 50]));
-    await waitFor(() => expect(scroll).toHaveBeenCalled());
-    expect(scroll.mock.contexts.at(-1)).toHaveProperty('id', 'item-i51');
-    scroll.mockRestore();
+    expect(await screen.findByText('No files yet')).toBeVisible();
+    await userEvent.click(screen.getByRole('tab', { name: 'Posts' }));
+    expect(await screen.findByText('No posts yet')).toBeVisible();
   });
 
   it('shows where the course comes from: each source, how she reads it, and a link to it', async () => {
@@ -190,29 +332,31 @@ describe('course page', () => {
     expect(within(picked).getByText(/picked by you/)).toBeVisible();
   });
 
-  it('names the portal a post opens on by its label', async () => {
-    setup([{ ...post(1), url: 'https://canvas.example.edu/courses/1/a/1' }]);
+  it('searches the course from its page', async () => {
+    setup();
     server.use(
-      http.get(api('/me/portals'), () =>
-        HttpResponse.json([
-          {
-            portal: 'canvas',
-            label: 'Canvas',
-            mode: 'token',
-            linked: true,
-            instance: null,
-            status: 'linked',
-            expiresAt: null,
-            picked: null,
-          },
-        ]),
-      ),
+      http.get(api('/search'), () => HttpResponse.json({ results: [] })),
     );
-    renderApp('/courses/os');
+    const { router } = renderApp('/courses/os');
 
+    const field = await screen.findByRole('searchbox', {
+      name: 'Search in this course',
+    });
+    expect(field).toHaveAttribute('placeholder', 'Search its files and posts');
+    // nothing, or one character, to search for
+    await userEvent.type(field, '   {Enter}');
+    expect(router.state.location.pathname).toBe('/courses/os');
+    await userEvent.clear(field);
+    await userEvent.type(field, 'a{Enter}');
     expect(
-      await screen.findByRole('link', { name: 'Open Post 1 on Canvas' }),
-    ).toHaveTextContent('On Canvas');
+      await screen.findByText('Type at least 2 characters to search'),
+    ).toBeVisible();
+    expect(router.state.location.pathname).toBe('/courses/os');
+
+    await userEvent.clear(field);
+    await userEvent.type(field, ' stack {Enter}');
+    await waitFor(() => expect(router.state.location.pathname).toBe('/search'));
+    expect(router.state.location.search).toEqual({ q: 'stack', course: 'os' });
   });
 
   it('says the course is not found when it is not in the list', async () => {
@@ -225,5 +369,18 @@ describe('course page', () => {
     expect(
       screen.getByRole('link', { name: 'Back to My courses' }),
     ).toHaveAttribute('href', '/');
+  });
+});
+
+describe('the count of files in Serbian', () => {
+  it('has the form each number takes', async () => {
+    const count = (n: number) =>
+      i18n.t('courses:files.count', { count: n, lng: 'sr-Latn' });
+    expect([1, 2, 5, 21].map(count)).toEqual([
+      '1 fajl',
+      '2 fajla',
+      '5 fajlova',
+      '21 fajl',
+    ]);
   });
 });

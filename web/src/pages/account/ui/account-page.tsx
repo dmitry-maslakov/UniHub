@@ -1,34 +1,24 @@
-import { Button, Stack } from '@mantine/core';
-import { useTranslation } from 'react-i18next';
-import { useSession, useSessionActions } from '@/entities/session';
-import { AnchorLink, PageTitle, Section } from '@/shared/ui';
+import { Stack } from '@mantine/core';
+import { useSession } from '@/entities/session';
+import { PageTitle } from '@/shared/ui';
+import { DeleteSection } from './delete-section';
+import { PasswordSection } from './password-section';
+import { ProfileSection } from './profile-section';
+import { ScreenSection } from './screen-section';
+import { SessionsSection } from './sessions-section';
 
+// The user's own: name, password, where they're signed in, and the way out
 export function AccountPage() {
-  const { t } = useTranslation('account');
   const { user } = useSession();
-  const { signOut } = useSessionActions();
   return (
     <>
       <PageTitle description={user.email}>{user.name}</PageTitle>
       <Stack gap="xxl">
-        <Section
-          title={t('screen.title')}
-          description={t('screen.description')}
-        >
-          <AnchorLink to="/device">{t('screen.action')}</AnchorLink>
-        </Section>
-        <Section
-          title={t('signOut.title')}
-          description={t('signOut.description')}
-        >
-          <Button
-            variant="default"
-            w="fit-content"
-            onClick={() => void signOut()}
-          >
-            {t('signOut.action')}
-          </Button>
-        </Section>
+        <ProfileSection />
+        <PasswordSection />
+        <SessionsSection />
+        <ScreenSection />
+        <DeleteSection />
       </Stack>
     </>
   );

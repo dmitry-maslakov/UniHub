@@ -26,6 +26,8 @@ const LIMITS = {
   // picking a public portal's course or unpicking it, per user (accounts):
   // each one may have its connector sync another course
   picks: 30,
+  // a post's text, per user: HTML is read in a worker thread each
+  text: 60,
 };
 type Limit = keyof typeof LIMITS;
 

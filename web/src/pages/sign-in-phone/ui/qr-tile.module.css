@@ -1,0 +1,10 @@
+/* light in both schemes: a scanner reads dark modules on light */
+.tile {
+  background: #fff;
+  padding: var(--mantine-spacing-md);
+  border: 1px solid var(--mantine-color-default-border);
+  border-radius: var(--mantine-radius-lg);
+  width: fit-content;
+  margin-inline: auto;
+  line-height: 0;
+}
