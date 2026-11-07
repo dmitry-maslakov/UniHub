@@ -1,5 +1,12 @@
 import { FILE_REMOVED, ITEM_INGESTED, ITEM_REMOVED } from '@app/plugin-sdk';
-import { MediaType, PluginName, PortalId } from '@app/kernel';
+import {
+  Instance,
+  InvalidValueError,
+  MediaType,
+  NO_INSTANCE,
+  PluginName,
+  PortalId,
+} from '@app/kernel';
 import {
   aggregator,
   catalogOf,
@@ -113,6 +120,40 @@ describe('PluginCatalog', () => {
     expect(served.external(portal('catalog'))).toBe(true);
     expect(served.external(portal('moodle'))).toBe(false);
     expect(served.external(portal('elsewhere'))).toBe(false);
+  });
+
+  it("knows which portals are a site per school, and the site each one's settings read", () => {
+    const sited = (url: string | null) => ({
+      poll: async () => {},
+      identify: async () => ({ id: '7', expiresAt: null }),
+      configuredInstance: () => url as Instance | null,
+    });
+    const sites = catalogOf({
+      polls: [
+        poll('canvas', sited('https://Canvas.example.edu/'), ['token'], true),
+        poll('lms', sited(null), ['token'], true),
+        poll('moodle'),
+      ],
+    });
+    const portal = (id: string) => PortalId.parse(id);
+
+    expect(sites.hasInstances(portal('canvas'))).toBe(true);
+    expect(sites.hasInstances(portal('moodle'))).toBe(false);
+    expect(sites.hasInstances(portal('elsewhere'))).toBe(false);
+    expect(sites.configuredInstance(portal('canvas'))).toBe(
+      'https://canvas.example.edu',
+    );
+    for (const none of ['lms', 'moodle', 'elsewhere'])
+      expect(sites.configuredInstance(portal(none))).toBe(NO_INSTANCE);
+    expect(sites.configuredInstances).toEqual([
+      { portal: 'canvas', instance: 'https://canvas.example.edu' },
+    ]);
+    // a site its settings name that is none stops the app at start
+    expect(() =>
+      catalogOf({
+        polls: [poll('canvas', sited('http://10.0.0.1'), ['token'], true)],
+      }),
+    ).toThrow(InvalidValueError);
   });
 
   it('stops the app on plugins that break the rules', () => {

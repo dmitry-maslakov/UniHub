@@ -70,6 +70,31 @@ describe('PORTAL_LABELS', () => {
   });
 });
 
+describe('PORTAL_LABELS', () => {
+  it('names portals where people read them, none by default', () => {
+    expect(parse({}).data?.labels.size).toBe(0);
+    expect([
+      ...parse({ PORTAL_LABELS: 'catalog=Course catalog, canvas=Canvas' }).data!
+        .labels,
+    ]).toEqual([
+      ['catalog', 'Course catalog'],
+      ['canvas', 'Canvas'],
+    ]);
+  });
+
+  it('refuses a name it would misread, a long one, or a portal twice', () => {
+    for (const bad of [
+      'canvas',
+      'canvas=',
+      'Canvas=Canvas',
+      'canvas=a=b',
+      `canvas=${'x'.repeat(41)}`,
+      'canvas=Canvas, canvas=LMS',
+    ])
+      expect(parse({ PORTAL_LABELS: bad }).success, bad).toBe(false);
+  });
+});
+
 describe('PORTAL_CREDENTIALS_SECRETS', () => {
   it('takes keys by version, the newest first', () => {
     const { data } = parse({

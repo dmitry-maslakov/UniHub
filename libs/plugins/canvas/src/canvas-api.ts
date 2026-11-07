@@ -8,6 +8,7 @@ import axios, {
 } from 'axios';
 import axiosRetry, { exponentialDelay } from 'axios-retry';
 import LinkHeader from 'http-link-header';
+import { portalRequests } from '@app/plugin-sdk';
 import {
   CanvasError,
   DownloadFailedError,
@@ -48,7 +49,9 @@ const TIMEOUT_MS = 60_000;
 // what a request may do with the token: read
 const READS = new Set(['get', 'head']);
 
-// Canvas's REST API, one request at a time.
+// Canvas's REST API, one request at a time, through the sdk's guard on
+// what a portal's requests reach (portalRequests): whichever address a
+// user gave, it and every redirect from it reach public addresses alone.
 export class CanvasApi {
   private readonly http: AxiosInstance;
 
@@ -56,6 +59,7 @@ export class CanvasApi {
     const { url, token, userAgent, signal, timeoutMs = TIMEOUT_MS } = options;
     const canvas = new URL(url).origin;
     this.http = axios.create({
+      ...portalRequests,
       baseURL: url,
       // axios leaves Authorization out of a redirect to another origin
       headers: { Authorization: `Bearer ${token}`, 'User-Agent': userAgent },
@@ -118,10 +122,12 @@ export class CanvasApi {
   }
 
   // A file's content as it comes. Its url redirects to where Canvas keeps
-  // files, on another origin, which never gets the token.
+  // files, on another origin, which never gets the token. Its size is the
+  // hub's to cap, as it stores it, not an answer's.
   async download(url: string): Promise<Readable> {
     const { data } = await this.http.get<Readable>(url, {
       responseType: 'stream',
+      maxContentLength: -1,
     });
     const content = Readable.from(chunks(data, url), { objectMode: false });
     // let go of unread, it lets go of the connection

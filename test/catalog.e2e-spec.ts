@@ -4,7 +4,7 @@ import {
   TransactionHost,
   TransactionNotActiveError,
 } from '@nestjs-cls/transactional';
-import { PortalId } from '@app/kernel';
+import { NO_INSTANCE, PortalId } from '@app/kernel';
 import {
   CourseName,
   CreateCourseCommand,
@@ -32,10 +32,15 @@ import { sha256 } from './sha256.js';
 // the queries find, the locks and the outbox.
 
 const portal = PortalId.parse('catalog-test');
-const ref = (externalId: string) => ({ portal, externalId });
+const ref = (externalId: string) => ({
+  portal,
+  instance: NO_INSTANCE,
+  externalId,
+});
 
 const item = (fields: Partial<ItemInput> = {}): ItemInput => ({
   portal,
+  instance: NO_INSTANCE,
   externalId: 'post-1',
   course: null,
   kind: 'post',
@@ -48,6 +53,7 @@ const item = (fields: Partial<ItemInput> = {}): ItemInput => ({
 
 const file = (fields: Partial<FileInput> = {}): FileInput => ({
   portal,
+  instance: NO_INSTANCE,
   externalId: 'file-1',
   course: null,
   item: null,
@@ -76,6 +82,7 @@ describe('catalog', { timeout: 20_000 }, () => {
   it('reads a portal course back as it was written', async () => {
     const course = {
       portal,
+      instance: NO_INSTANCE,
       externalId: 'os',
       name: 'OS',
       url: null,
@@ -123,7 +130,7 @@ describe('catalog', { timeout: 20_000 }, () => {
     expect(await sights()).toEqual([shown]);
   });
 
-  it('refuses what an app from before versions writes to the old columns', async () => {
+  it('refuses what an app from before versions writes, any column of a record but its site', async () => {
     const { id } = await commands.execute(
       new UpsertItemCommand(item({ externalId: 'post-old-app' })),
     );
@@ -135,6 +142,10 @@ describe('catalog', { timeout: 20_000 }, () => {
     await expect(
       prisma.portalCourse.updateMany({ where: { portal }, data: { portal } }),
     ).rejects.toMatchObject(conflict);
+    // and lets a record's site be stamped, the one update this app makes
+    const site = 'https://lms.example.edu';
+    for (const instance of [site, NO_INSTANCE])
+      await prisma.item.update({ where: { id }, data: { instance } });
     // a new record with its old columns, which this app's client can't name
     for (const insert of [
       prisma.$executeRaw`INSERT INTO "Item" (id, portal, "externalId", kind, raw, "updatedAt") VALUES ('old-app', ${portal}, 'old-app', 'post', '{}', now())`,
@@ -227,7 +238,11 @@ describe('catalog', { timeout: 20_000 }, () => {
     ).toEqual([]);
     await commands.execute(
       new UpsertItemCommand(
-        item({ portal: PortalId.parse('committed'), externalId: 'a' }),
+        item({
+          portal: PortalId.parse('committed'),
+          instance: NO_INSTANCE,
+          externalId: 'a',
+        }),
       ),
     );
 
@@ -279,6 +294,7 @@ describe('catalog', { timeout: 20_000 }, () => {
     await commands.execute(
       new UpsertPortalCourseCommand({
         portal,
+        instance: NO_INSTANCE,
         externalId: 'course-a',
         name: 'A',
         url: null,
@@ -300,10 +316,10 @@ describe('catalog', { timeout: 20_000 }, () => {
     const [row, course, post] = await Promise.all([
       prisma.fileVersion.findFirstOrThrow({ where: { file: ref('attached') } }),
       prisma.portalCourse.findUniqueOrThrow({
-        where: { portal_externalId: ref('course-a') },
+        where: { portal_instance_externalId: ref('course-a') },
       }),
       prisma.item.findUniqueOrThrow({
-        where: { portal_externalId: ref('post-a') },
+        where: { portal_instance_externalId: ref('post-a') },
       }),
     ]);
     expect(row).toMatchObject({ portalCourseId: course.id, itemId: post.id });
@@ -330,6 +346,7 @@ describe('catalog', { timeout: 20_000 }, () => {
       await commands.execute(
         new UpsertPortalCourseCommand({
           portal,
+          instance: NO_INSTANCE,
           externalId: name,
           name,
           url: null,

@@ -125,20 +125,22 @@ describe('PushConnections', () => {
   });
 
   it('stops them all at once, not waiting past its time for any', async () => {
+    const started = vi.fn();
     const stopped = vi.fn();
     const running = connections({
       a: { run: never },
       b: { run: never },
       c: { run: never },
-      d: { run: (ctx) => untilStopped(ctx).then(stopped) },
+      d: { run: (ctx) => (started(), untilStopped(ctx).then(stopped)) },
     });
     await running.start();
+    await vi.waitFor(() => expect(started).toHaveBeenCalled());
 
-    const started = performance.now();
+    const stopping = performance.now();
     await running.onModuleDestroy();
 
     // one after another, the three that never stop would take 300 ms
-    expect(performance.now() - started).toBeLessThan(250);
+    expect(performance.now() - stopping).toBeLessThan(250);
     expect(stopped).toHaveBeenCalled();
   });
 });

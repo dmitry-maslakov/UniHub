@@ -24,6 +24,10 @@ import {
 // the wait on a low quota; the backoff runs on fake timers
 const { sleep } = vi.hoisted(() => ({ sleep: vi.fn(async () => {}) }));
 vi.mock('node:timers/promises', () => ({ setTimeout: sleep }));
+// the file store listens on loopback (CuttingFileStore)
+vi.mock('request-filtering-agent', async (original) =>
+  (await import('./canvas.fakes.js')).letInLoopback(original),
+);
 
 const CANVAS = 'https://canvas.example.edu';
 const server = setupServer();

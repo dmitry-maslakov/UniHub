@@ -4,9 +4,11 @@ import {
   type ICommandHandler,
   type IQueryHandler,
 } from '@nestjs/cqrs';
+import { Transactional } from '@nestjs-cls/transactional';
 import {
   AccountCredentialQuery,
   AccountRejectedCommand,
+  AdoptAccountsCommand,
   PortalReadersQuery,
 } from '../../plugins/contracts.js';
 import { PortalAccounts } from './portal-accounts.js';
@@ -38,5 +40,17 @@ export class AccountRejectedHandler implements ICommandHandler<AccountRejectedCo
 
   execute({ account, seal }: AccountRejectedCommand) {
     return this.accounts.rejected(account, seal);
+  }
+}
+
+// in the transaction of whoever asks, beside the records' own (plugins'
+// InstanceAdoption)
+@CommandHandler(AdoptAccountsCommand)
+export class AdoptAccountsHandler implements ICommandHandler<AdoptAccountsCommand> {
+  constructor(private readonly accounts: PortalAccounts) {}
+
+  @Transactional()
+  execute({ portal, instance }: AdoptAccountsCommand) {
+    return this.accounts.adopt(portal, instance);
   }
 }

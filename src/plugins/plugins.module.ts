@@ -7,7 +7,9 @@ import { roleConfig } from '../platform/role/role.config.js';
 import { AccountsChangedHandler } from './application/accounts-changed.handler.js';
 import { ConnectionDirectory } from './application/connection-directory.js';
 import { ConnectorRuns } from './application/connector-runs.js';
+import { ConfiguredInstanceHandler } from './application/configured-instance.handler.js';
 import { ConnectorSchedules } from './application/connector-schedules.js';
+import { InstanceAdoption } from './application/instance-adoption.js';
 import { PluginCatalog } from './application/plugin-catalog.js';
 import { PluginDiscovery } from './application/plugin-discovery.js';
 import { PollSchedule } from './application/poll-schedule.js';
@@ -45,6 +47,8 @@ import { pluginsConfig } from './plugins.config.js';
     PluginCatalog,
     { provide: PluginDiscovery, useClass: NestPluginDiscovery },
     ConnectionDirectory,
+    InstanceAdoption,
+    ConfiguredInstanceHandler,
     PollSchedule,
     PushConnections,
     SyncConnectionHandler,

@@ -1,9 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import type { PortalId } from '@app/kernel';
 import { UnknownReferenceError } from '../domain/errors.js';
 import { ItemRepository } from '../domain/item/item.repository.js';
 import { PortalCourseRepository } from '../domain/portal-course/portal-course.repository.js';
-import type { PortalRef } from '../domain/portal-ref.js';
+import type { PortalRef, PortalSite } from '../domain/portal-ref.js';
 
 // What a record names by the portal's ids: an item its course, a file its
 // course and post. A name the portal never sent is a bug in the plugin, so
@@ -27,14 +26,16 @@ export class References {
     return found;
   }
 
-  // a name a record may leave out
-  courseNamed(portal: PortalId, externalId: string | null) {
+  // a name a record of the site may leave out
+  courseNamed({ portal, instance }: PortalSite, externalId: string | null) {
     return externalId === null
       ? null
-      : this.portalCourse({ portal, externalId });
+      : this.portalCourse({ portal, instance, externalId });
   }
 
-  itemNamed(portal: PortalId, externalId: string | null) {
-    return externalId === null ? null : this.item({ portal, externalId });
+  itemNamed({ portal, instance }: PortalSite, externalId: string | null) {
+    return externalId === null
+      ? null
+      : this.item({ portal, instance, externalId });
   }
 }

@@ -1,7 +1,11 @@
-import { PortalId } from '@app/kernel';
+import { NO_INSTANCE, PortalId } from '@app/kernel';
 import { PortalCourse } from './portal-course.js';
 
-const ref = { portal: PortalId.parse('moodle'), externalId: 'os-101' };
+const ref = {
+  portal: PortalId.parse('moodle'),
+  instance: NO_INSTANCE,
+  externalId: 'os-101',
+};
 const props = { name: 'OS', url: null, meta: { semester: 5 } };
 
 describe('PortalCourse', () => {

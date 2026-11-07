@@ -15,13 +15,44 @@ export class TokenRefusedError extends InvalidError {
   }
 }
 
-// The portal couldn't say whose a credential is, for now: away, slow, or
-// its connector failing. Try again later. Of what failed only a name is
-// kept (the plugin error's, as `failure`), never the error: a user's secret
-// was in play, and a plugin's error may hold it (its request's headers, a
-// url). What's logged of it is this much.
-export class PortalUnavailableError extends UnavailableError {
-  readonly reason = 'PORTAL_UNAVAILABLE';
+// The portal's site lets no app use a token a user pastes, whichever it is:
+// a Canvas Instructure hosts, which allows OAuth alone (README, Canvas
+// tokens).
+export class TokensNotAllowedError extends InvalidError {
+  readonly reason = 'TOKENS_NOT_ALLOWED';
+
+  constructor() {
+    super("this portal's site takes no pasted tokens: only OAuth would do");
+  }
+}
+
+// A portal that is a site per school (Canvas) is linked with its site's
+// address: which school's
+export class SiteNeededError extends InvalidError {
+  readonly reason = 'URL_NEEDED';
+
+  constructor(readonly portal: PortalId) {
+    super(`portal "${portal}" is a site per school: give its address (url)`);
+  }
+}
+
+// and a portal of one site with none
+export class SiteNotTakenError extends InvalidError {
+  readonly reason = 'URL_NOT_TAKEN';
+
+  constructor(readonly portal: PortalId) {
+    super(`portal "${portal}" is one site: it takes no url`);
+  }
+}
+
+// The portal couldn't say whose a credential is, for now: away, slow, not
+// that portal at all at the address given, or its connector failing. Try
+// again later. Of what failed only a name is kept (the plugin error's, as
+// `failure`), never the error: a user's secret was in play, and a plugin's
+// error may hold it (its request's headers, a url). What's logged of it is
+// this much.
+export class PortalUnreachableError extends UnavailableError {
+  readonly reason = 'PORTAL_UNREACHABLE';
 
   constructor(
     readonly portal: PortalId,

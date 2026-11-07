@@ -56,7 +56,7 @@ export abstract class PrismaIngestedRepository<
   }
 
   protected async lockFor(ref: PortalRef) {
-    const key = `${ref.portal}:${ref.externalId}`;
+    const key = JSON.stringify([ref.portal, ref.instance, ref.externalId]);
     await this.txHost.tx
       .$executeRaw`SELECT pg_advisory_xact_lock(${this.lock}::int, hashtext(${key}))`;
   }

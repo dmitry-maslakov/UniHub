@@ -5,8 +5,8 @@ import classes from './app-layout.module.css';
 const items = [
   { to: '/courses', label: 'Courses' },
   { to: '/search', label: 'Search' },
+  { to: '/sources', label: 'Sources' },
   { to: '/', label: 'Account' },
-  { to: '/settings/portals', label: 'Portal accounts' },
   { to: '/settings/api-keys', label: 'API keys' },
 ] as const;
 

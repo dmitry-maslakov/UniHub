@@ -16,6 +16,7 @@ import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppConsentRouteImport } from './routes/_app/consent'
 import { Route as AppDeviceRouteImport } from './routes/_app/device'
 import { Route as AppSearchRouteImport } from './routes/_app/search'
+import { Route as AppSourcesRouteImport } from './routes/_app/sources'
 import { Route as AuthCheckEmailRouteImport } from './routes/_auth/check-email'
 import { Route as AuthResetPasswordRouteImport } from './routes/_auth/reset-password'
 import { Route as AuthSignInRouteImport } from './routes/_auth/sign-in'
@@ -56,6 +57,11 @@ const AppDeviceRoute = AppDeviceRouteImport.update({
 const AppSearchRoute = AppSearchRouteImport.update({
   id: '/search',
   path: '/search',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSourcesRoute = AppSourcesRouteImport.update({
+  id: '/sources',
+  path: '/sources',
   getParentRoute: () => AppRoute,
 } as any)
 const AuthCheckEmailRoute = AuthCheckEmailRouteImport.update({
@@ -105,6 +111,7 @@ export interface FileRoutesByFullPath {
   '/consent': typeof AppConsentRoute
   '/device': typeof AppDeviceRoute
   '/search': typeof AppSearchRoute
+  '/sources': typeof AppSourcesRoute
   '/check-email': typeof AuthCheckEmailRoute
   '/reset-password': typeof AuthResetPasswordRoute
   '/sign-in': typeof AuthSignInRoute
@@ -120,6 +127,7 @@ export interface FileRoutesByTo {
   '/consent': typeof AppConsentRoute
   '/device': typeof AppDeviceRoute
   '/search': typeof AppSearchRoute
+  '/sources': typeof AppSourcesRoute
   '/check-email': typeof AuthCheckEmailRoute
   '/reset-password': typeof AuthResetPasswordRoute
   '/sign-in': typeof AuthSignInRoute
@@ -137,6 +145,7 @@ export interface FileRoutesById {
   '/_app/consent': typeof AppConsentRoute
   '/_app/device': typeof AppDeviceRoute
   '/_app/search': typeof AppSearchRoute
+  '/_app/sources': typeof AppSourcesRoute
   '/_auth/check-email': typeof AuthCheckEmailRoute
   '/_auth/reset-password': typeof AuthResetPasswordRoute
   '/_auth/sign-in': typeof AuthSignInRoute
@@ -155,6 +164,7 @@ export interface FileRouteTypes {
     | '/consent'
     | '/device'
     | '/search'
+    | '/sources'
     | '/check-email'
     | '/reset-password'
     | '/sign-in'
@@ -170,6 +180,7 @@ export interface FileRouteTypes {
     | '/consent'
     | '/device'
     | '/search'
+    | '/sources'
     | '/check-email'
     | '/reset-password'
     | '/sign-in'
@@ -186,6 +197,7 @@ export interface FileRouteTypes {
     | '/_app/consent'
     | '/_app/device'
     | '/_app/search'
+    | '/_app/sources'
     | '/_auth/check-email'
     | '/_auth/reset-password'
     | '/_auth/sign-in'
@@ -254,6 +266,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSearchRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/sources': {
+      id: '/_app/sources'
+      path: '/sources'
+      fullPath: '/sources'
+      preLoaderRoute: typeof AppSourcesRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_auth/check-email': {
       id: '/_auth/check-email'
       path: '/check-email'
@@ -317,6 +336,7 @@ interface AppRouteChildren {
   AppConsentRoute: typeof AppConsentRoute
   AppDeviceRoute: typeof AppDeviceRoute
   AppSearchRoute: typeof AppSearchRoute
+  AppSourcesRoute: typeof AppSourcesRoute
   AppIndexRoute: typeof AppIndexRoute
   AppCoursesSlugRoute: typeof AppCoursesSlugRoute
   AppSettingsApiKeysRoute: typeof AppSettingsApiKeysRoute
@@ -328,6 +348,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppConsentRoute: AppConsentRoute,
   AppDeviceRoute: AppDeviceRoute,
   AppSearchRoute: AppSearchRoute,
+  AppSourcesRoute: AppSourcesRoute,
   AppIndexRoute: AppIndexRoute,
   AppCoursesSlugRoute: AppCoursesSlugRoute,
   AppSettingsApiKeysRoute: AppSettingsApiKeysRoute,

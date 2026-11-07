@@ -4,6 +4,7 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
+import type * as agents from 'request-filtering-agent';
 
 // A Canvas for the specs, made up: canvas.example.edu, one course.
 
@@ -78,7 +79,10 @@ export class FakeCanvas {
 // A file store on a socket of its own, for what msw can't fake: it sends
 // part of a file and ends the connection; under /held/ it keeps it open
 // instead, and under /silent/ it never answers. Behind msw, a spec lets it
-// through (passthrough()).
+// through (passthrough()). It listens on loopback, which the sdk's guard
+// on portal requests refuses (its own spec checks that), so a spec that
+// downloads from it lets that one address in: vi.mock of
+// request-filtering-agent with letInLoopback.
 export class CuttingFileStore {
   url = '';
   // the paths asked for, in order
@@ -119,4 +123,26 @@ export class CuttingFileStore {
     });
     return this;
   }
+}
+
+// request-filtering-agent's agents, letting in the file store's address
+export async function letInLoopback(
+  original: () => Promise<typeof agents>,
+): Promise<typeof agents> {
+  const { RequestFilteringHttpAgent, RequestFilteringHttpsAgent, ...rest } =
+    await original();
+  const allow = { allowIPAddressList: ['127.0.0.1'] };
+  return {
+    ...rest,
+    RequestFilteringHttpAgent: class extends RequestFilteringHttpAgent {
+      constructor(options?: object) {
+        super({ ...options, ...allow });
+      }
+    },
+    RequestFilteringHttpsAgent: class extends RequestFilteringHttpsAgent {
+      constructor(options?: object) {
+        super({ ...options, ...allow });
+      }
+    },
+  };
 }

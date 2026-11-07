@@ -7,7 +7,7 @@ import { CommandBus } from '@nestjs/cqrs';
 import tar from 'tar-stream';
 import yazl from 'yazl';
 import type { Client } from '@opensearch-project/opensearch';
-import { PluginName, PortalId } from '@app/kernel';
+import { NO_INSTANCE, PluginName, PortalId } from '@app/kernel';
 import { ArchivesModule } from '@app/plugins/archives';
 import { OfficeTextModule } from '@app/plugins/office-text';
 import { PlainTextModule } from '@app/plugins/plain-text';
@@ -118,7 +118,13 @@ describe('archives', { timeout: 60_000 }, () => {
     const idOf = async (externalId: string) =>
       (
         await prisma.file.findUniqueOrThrow({
-          where: { portal_externalId: { portal: PORTAL, externalId } },
+          where: {
+            portal_instance_externalId: {
+              instance: NO_INSTANCE,
+              portal: PORTAL,
+              externalId,
+            },
+          },
         })
       ).id;
     await ingest.course({ externalId: 'c1', name: 'Arhitektura' });
@@ -145,7 +151,7 @@ describe('archives', { timeout: 60_000 }, () => {
       await commands.execute(
         new LinkPortalCourseCommand(
           Slug.parse(slug),
-          { portal: PortalId.parse(PORTAL), externalId },
+          { portal: PortalId.parse(PORTAL), instance: NO_INSTANCE, externalId },
           null,
         ),
       );

@@ -24,6 +24,9 @@ import {
   toState,
 } from './records.js';
 
+// the portal and site a connection's records are of
+const siteOf = ({ portal, instance }: Connection) => ({ portal, instance });
+
 // What a connector does, whichever way it talks to the hub: what it sends
 // (records, ids, state) is checked here and handed to catalog and storage.
 // A user's own account sends what it sees by passes alone; the shared
@@ -76,7 +79,7 @@ export class IngestService {
       await this.commands.execute(
         new catalog.ViewCoursesCommand(
           connection.account,
-          connection.portal,
+          siteOf(connection),
           courses,
           refused.map(({ externalId }) => externalId),
           run.shown(new Date()),

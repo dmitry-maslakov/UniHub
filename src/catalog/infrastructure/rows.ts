@@ -1,6 +1,7 @@
 import {
   SHARED_ACCOUNT,
   type ContentHash,
+  type Instance,
   type Json,
   type MediaType,
   type PortalId,
@@ -17,10 +18,11 @@ import type { Stamp } from '../domain/view/view.repository.js';
 // record's ids (PortalCourse, Item, File), its versions, and the accounts'
 // sights of them (catalog.prisma).
 
-// the record a version is of, in a relation filter, from the two fields
+// the record a version is of, in a relation filter, from the three fields
 // alone: Prisma refuses any other a caller's object may carry
-export const ofRecord = ({ portal, externalId }: PortalRef) => ({
+export const ofRecord = ({ portal, instance, externalId }: PortalRef) => ({
   portal,
+  instance,
   externalId,
 });
 
@@ -51,6 +53,9 @@ export const liveSights = (now = new Date()) => ({
 
 // every record has one; the course listing reads it without the rest
 export const portalOf = (row: { portal: string }) => row.portal as PortalId;
+
+export const instanceOf = (row: { instance: string }) =>
+  row.instance as Instance;
 
 // the content listing reads it without the rest
 export const contentOf = (row: Pick<FileVersion, 'contentHash'>) =>

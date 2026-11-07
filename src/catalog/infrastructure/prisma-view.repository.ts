@@ -7,6 +7,7 @@ import {
 } from '@nestjs-cls/transactional';
 import { Outbox } from '@nestjs/outbox';
 import type { ContentHash, PortalId } from '@app/kernel';
+import type { PortalSite } from '../domain/portal-ref.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import { jsonInput } from '../../platform/database/json-input.js';
 import type { PrismaTxHost } from '../../platform/database/prisma.service.js';
@@ -63,7 +64,7 @@ export class PrismaViewRepository extends ViewRepository {
   @Transactional(Propagation.Mandatory)
   async recordIds(
     kind: Kind,
-    portal: PortalId,
+    { portal, instance }: PortalSite,
     externalIds: readonly string[],
     make = true,
   ) {
@@ -75,12 +76,13 @@ export class PrismaViewRepository extends ViewRepository {
         data: ids.map((externalId) => ({
           id: randomUUID(),
           portal,
+          instance,
           externalId,
         })),
         skipDuplicates: true,
       });
     const rows = await records.findMany({
-      where: { portal, externalId: { in: ids } },
+      where: { portal, instance, externalId: { in: ids } },
       select: { id: true, externalId: true },
     });
     return new Map(rows.map((row) => [row.externalId, row.id]));

@@ -14,11 +14,11 @@ export class UpsertItemHandler implements ICommandHandler<UpsertItemCommand> {
 
   @Transactional()
   async execute({
-    data: { portal, externalId, course, ...props },
+    data: { portal, instance, externalId, course, ...props },
   }: UpsertItemCommand) {
+    const ref = { portal, instance, externalId };
     const portalCourseId =
-      (await this.references.courseNamed(portal, course))?.id ?? null;
-    const ref = { portal, externalId };
+      (await this.references.courseNamed(ref, course))?.id ?? null;
     const found = await this.items.getForUpdate(ref);
     const item = found ?? Item.create(ref, props, portalCourseId);
     const changed = found ? found.sync(props, portalCourseId) : true;

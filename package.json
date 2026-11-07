@@ -24,7 +24,8 @@
     "postinstall": "prisma generate && npm run -s proto:generate",
     "proto:generate": "proto-loader-gen-types --longs=Number --grpcLib=@grpc/grpc-js --importFileExtension=.js -O src/ingest/infrastructure/grpc/generated proto/ingest.proto",
     "auth:generate": "auth generate --config src/identity/auth.cli.ts --output prisma/schema/identity.prisma --yes",
-    "auth:create-admin": "auth create-admin --config src/identity/auth.cli.ts"
+    "auth:create-admin": "auth create-admin --config src/identity/auth.cli.ts",
+    "instances:adopt": "APP_ROLE=api node dist/main.js adopt-instances"
   },
   "dependencies": {
     "@better-auth/api-key": "^1.7.18",
@@ -80,6 +81,7 @@
     "p-retry": "^9.0.0",
     "protobufjs": "^7.6.6",
     "reflect-metadata": "^0.2.2",
+    "request-filtering-agent": "^3.2.1",
     "rxjs": "^7.8.1",
     "tar-stream": "^3.2.2",
     "yauzl": "^3.4.0",

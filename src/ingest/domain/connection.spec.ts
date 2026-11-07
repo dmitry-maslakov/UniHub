@@ -1,4 +1,4 @@
-import { PortalId, SHARED_ACCOUNT } from '@app/kernel';
+import { Instance, NO_INSTANCE, PortalId, SHARED_ACCOUNT } from '@app/kernel';
 import { Connection } from './connection.js';
 
 describe('Connection', () => {
@@ -16,6 +16,21 @@ describe('Connection', () => {
     expect(Connection.of({ portal: 'moodle', account: 'someone' }).shared).toBe(
       false,
     );
+  });
+
+  it('reads a site of its portal, none unless told, which its key leaves out', () => {
+    const site = Instance.parse('https://canvas.example.edu');
+    const portal = PortalId.parse('canvas');
+    expect(Connection.shared(portal).instance).toBe(NO_INSTANCE);
+    expect(Connection.shared(portal, site)).toMatchObject({ instance: site });
+    const own = Connection.of({ portal, account: 'u-1' });
+    expect(own.instance).toBe(NO_INSTANCE);
+    expect(own.at(site)).toMatchObject({
+      portal,
+      account: 'u-1',
+      instance: site,
+      key: own.key,
+    });
   });
 
   it("refuses what a key or a job id can't take apart", () => {

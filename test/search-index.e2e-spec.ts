@@ -4,7 +4,7 @@ import { getQueueToken } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import type { Client } from '@opensearch-project/opensearch';
 import type { PortalIngest } from '@app/plugin-sdk';
-import { PluginName } from '@app/kernel';
+import { NO_INSTANCE, PluginName } from '@app/kernel';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
 import { OPENSEARCH } from '../src/platform/search/opensearch.module.js';
 import { TextIndex } from '../src/processing/application/ports.js';
@@ -130,7 +130,13 @@ describe('search index', { timeout: 120_000 }, () => {
   const idOf = async (table: 'item' | 'file', externalId: string) =>
     (
       await (prisma[table] as typeof prisma.file).findUniqueOrThrow({
-        where: { portal_externalId: { portal, externalId } },
+        where: {
+          portal_instance_externalId: {
+            instance: NO_INSTANCE,
+            portal,
+            externalId,
+          },
+        },
       })
     ).id;
   const post = (externalId: string, body: string) =>

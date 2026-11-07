@@ -8,7 +8,7 @@ import {
   Post,
   Put,
 } from '@nestjs/common';
-import { CommandBus } from '@nestjs/cqrs';
+import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import {
   ApiBearerAuth,
   ApiConflictResponse,
@@ -26,18 +26,24 @@ import {
   LinkPortalCourseCommand,
   UnlinkPortalCourseCommand,
 } from '../../application/commands.js';
+import { ConfiguredInstanceQuery } from '../../application/queries.js';
+import type { PortalRef } from '../../domain/portal-ref.js';
 import { courseLink, ExternalId, newCourse } from './requests.js';
 
 // What admins set up: courses, and which portal courses each is made of.
-// A portal course is named the way its portal names it, and answered the
-// same whether the hub has it or not.
+// A portal course is named the way its portal names it, of the site the
+// portal's own settings read (CANVAS_URL), and answered the same whether
+// the hub has it or not.
 @ApiTags('admin')
 @ApiBearerAuth()
 @ApiForbiddenResponse({ description: 'for admins only' })
 @Roles([ADMIN_ROLE])
 @Controller()
 export class CoursesAdminController {
-  constructor(private readonly commands: CommandBus) {}
+  constructor(
+    private readonly commands: CommandBus,
+    private readonly queries: QueryBus,
+  ) {}
 
   @Post('courses')
   @ApiCreatedResponse({ description: "the new course's id" })
@@ -59,7 +65,11 @@ export class CoursesAdminController {
     @Body({ schema: courseLink }) { course, year }: z.output<typeof courseLink>,
   ) {
     await this.commands.execute(
-      new LinkPortalCourseCommand(course, { portal, externalId }, year),
+      new LinkPortalCourseCommand(
+        course,
+        await this.ref(portal, externalId),
+        year,
+      ),
     );
   }
 
@@ -71,7 +81,14 @@ export class CoursesAdminController {
     @Param('externalId', { schema: ExternalId }) externalId: string,
   ) {
     await this.commands.execute(
-      new UnlinkPortalCourseCommand({ portal, externalId }),
+      new UnlinkPortalCourseCommand(await this.ref(portal, externalId)),
     );
+  }
+
+  private async ref(portal: PortalId, externalId: string): Promise<PortalRef> {
+    const instance = await this.queries.execute(
+      new ConfiguredInstanceQuery(portal),
+    );
+    return { portal, instance, externalId };
   }
 }

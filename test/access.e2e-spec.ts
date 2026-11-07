@@ -1,7 +1,7 @@
 import { Readable } from 'node:stream';
 import type { INestApplication } from '@nestjs/common';
 import { CommandBus } from '@nestjs/cqrs';
-import { PortalId } from '@app/kernel';
+import { NO_INSTANCE, PortalId } from '@app/kernel';
 import {
   AcademicYear,
   CourseName,
@@ -123,7 +123,13 @@ describe('REST API', { timeout: 20_000 }, () => {
       if (content) await ingest.content(externalId, Readable.from([content]));
       ids[externalId] = (
         await prisma.file.findUniqueOrThrow({
-          where: { portal_externalId: { portal: PORTAL, externalId } },
+          where: {
+            portal_instance_externalId: {
+              instance: NO_INSTANCE,
+              portal: PORTAL,
+              externalId,
+            },
+          },
         })
       ).id;
     }
@@ -152,7 +158,7 @@ describe('REST API', { timeout: 20_000 }, () => {
       await commands.execute(
         new LinkPortalCourseCommand(
           Slug.parse(slug),
-          { portal: PortalId.parse(PORTAL), externalId },
+          { portal: PortalId.parse(PORTAL), instance: NO_INSTANCE, externalId },
           AcademicYear.parse(2026),
         ),
       );
@@ -218,7 +224,13 @@ describe('REST API', { timeout: 20_000 }, () => {
     const [newest] = (await get('/api/courses/sys/items', student).expect(200))
       .body;
     const gone = await app.get(PrismaService).item.findUniqueOrThrow({
-      where: { portal_externalId: { portal: PORTAL, externalId: 'gone' } },
+      where: {
+        portal_instance_externalId: {
+          instance: NO_INSTANCE,
+          portal: PORTAL,
+          externalId: 'gone',
+        },
+      },
     });
 
     expect(

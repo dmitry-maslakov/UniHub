@@ -44,6 +44,8 @@ export interface PushSpec {
   portal: PortalId;
   // how users may link accounts of their own; shared needs no naming
   links: readonly AccountLink[];
+  // the portal is a site per school, its records kept apart by site
+  instances: boolean;
 }
 
 export interface PollSpec extends PushSpec {
@@ -58,17 +60,20 @@ export interface AggregatorSpec<T extends string = string> {
 export const pushSpec = (options: {
   portal: string;
   links?: readonly string[];
+  instances?: boolean;
 }): PushSpec => ({
   portal: valid(PortalId, 'connector portal', options.portal),
   links: [...new Set(options.links ?? [])].map((link) =>
     valid(AccountLink, 'connector link', link),
   ),
+  instances: options.instances === true,
 });
 
 export const pollSpec = (options: {
   portal: string;
   schedule: string;
   links?: readonly string[];
+  instances?: boolean;
 }): PollSpec => ({
   ...pushSpec(options),
   schedule: schedule(options.schedule),

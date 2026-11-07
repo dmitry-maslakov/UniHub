@@ -3,7 +3,7 @@ import type { INestApplication } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import type { PortalIngest } from '@app/plugin-sdk';
-import { PluginName } from '@app/kernel';
+import { NO_INSTANCE, PluginName } from '@app/kernel';
 import { FILE_CONTENT_CHANGED } from '../src/catalog/contracts.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
 import {
@@ -114,7 +114,13 @@ describe('processing', { timeout: 20_000 }, () => {
     await hub.file({ externalId: 'gone', name: 'gone.txt' });
     await hub.removeFile('gone');
     const { id } = await prisma.file.findUniqueOrThrow({
-      where: { portal_externalId: { portal, externalId: 'gone' } },
+      where: {
+        portal_instance_externalId: {
+          instance: NO_INSTANCE,
+          portal,
+          externalId: 'gone',
+        },
+      },
     });
 
     expect(await app.get(FileFacts).file(id)).toBeNull();

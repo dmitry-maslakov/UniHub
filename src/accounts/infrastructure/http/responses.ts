@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import type { LinkMode, PortalId } from '@app/kernel';
+import type { Instance, LinkMode, PortalId } from '@app/kernel';
 import type { AccountStatus } from '../../domain/portal-account.js';
 import type { CatalogEntry, CatalogPage } from '../../domain/catalog-page.js';
 import type { PortalView } from '../../application/portal-accounts.js';
@@ -24,6 +24,14 @@ export class PortalResponse implements PortalView {
     description: 'you have an account of it linked; never of a public one',
   })
   linked!: boolean;
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    example: 'https://canvas.example.edu',
+    description:
+      "the address of the school's site your account is of, on a portal that is a site per school; null when not linked, or for a portal of one site",
+  })
+  instance!: Instance | null;
   @ApiProperty({
     enum: ['linked', 'expired', 'revoked'],
     nullable: true,

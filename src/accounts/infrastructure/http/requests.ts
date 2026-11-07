@@ -1,6 +1,7 @@
 import { z } from 'zod';
-import { Secret, StoredText } from '@app/kernel';
+import { Instance, Secret, StoredText } from '@app/kernel';
 import { pageSchema } from '../../../access/contracts.js';
+import type { SealedCredential } from '../../domain/credential-vault.js';
 
 // What the routes take, checked where the request comes in
 // (ValidationModule): a bad one is a 400, never a call. zod's issues carry
@@ -8,6 +9,8 @@ import { pageSchema } from '../../../access/contracts.js';
 
 // A token as a portal hands it out: visible ASCII, as it goes in a header.
 // A Secret from here on; write-only in OpenAPI, as nothing reads it back.
+// With it, for a portal that is a site per school (Canvas), the address of
+// the school's: any page of it, made its origin.
 export const tokenRequest = z
   .object({
     token: z
@@ -19,8 +22,15 @@ export const tokenRequest = z
         writeOnly: true,
         description: 'a token of your own the portal gave you; never read back',
       }),
+    url: z.string().max(2048).pipe(Instance).optional().meta({
+      description:
+        "your school's address on a portal that is a site per school (Canvas), https://canvas.example.edu; none for any other",
+    }),
   })
-  .transform(({ token }) => new Secret(token));
+  .transform(({ token, url }): SealedCredential => ({
+    token: new Secret(token),
+    url: url ?? null,
+  }));
 
 // a course's id as its portal has it; text postgres can't keep would fail
 // the lookup with a 500

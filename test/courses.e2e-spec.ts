@@ -1,6 +1,6 @@
 import type { INestApplication } from '@nestjs/common';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
-import { PortalId } from '@app/kernel';
+import { NO_INSTANCE, PortalId } from '@app/kernel';
 import {
   AcademicYear,
   CourseName,
@@ -18,6 +18,7 @@ import { bootApp } from './app.js';
 // portal courses read back in their order, slugs unique
 const ref = (portal: string, externalId: string) => ({
   portal: PortalId.parse(portal),
+  instance: NO_INSTANCE,
   externalId,
 });
 

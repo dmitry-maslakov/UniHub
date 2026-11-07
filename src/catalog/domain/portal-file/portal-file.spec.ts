@@ -1,11 +1,16 @@
-import { MediaType, PortalId, type ContentHash } from '@app/kernel';
+import {
+  MediaType,
+  NO_INSTANCE,
+  PortalId,
+  type ContentHash,
+} from '@app/kernel';
 import { sha256 } from '../../../../test/sha256.js';
 import { FILE_CONTENT_CHANGED, FILE_REMOVED } from '../events.js';
 import type { Placement } from './placement.js';
 import { PortalFile, type FileProps } from './portal-file.js';
 
 const portal = PortalId.parse('canvas');
-const ref = { portal, externalId: 'f1' };
+const ref = { portal, instance: NO_INSTANCE, externalId: 'f1' };
 const hash = (content: string) => sha256(`%PDF ${content}`);
 const props: FileProps = {
   name: 'lecture-5.pdf',

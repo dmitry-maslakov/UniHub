@@ -1,9 +1,9 @@
-import { PortalId } from '@app/kernel';
+import { NO_INSTANCE, PortalId } from '@app/kernel';
 import { ITEM_CHANGED, ITEM_REMOVED } from '../events.js';
 import { Item, type ItemProps } from './item.js';
 
 const portal = PortalId.parse('canvas');
-const ref = { portal, externalId: 'post-1' };
+const ref = { portal, instance: NO_INSTANCE, externalId: 'post-1' };
 const props: ItemProps = {
   kind: 'announcement',
   title: 'Exam on Friday',

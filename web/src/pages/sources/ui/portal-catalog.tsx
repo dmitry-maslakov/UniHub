@@ -51,7 +51,7 @@ export function PortalCatalog({
   return (
     <Stack gap="sm">
       <Group justify="space-between" align="baseline" wrap="nowrap">
-        <Title order={3} fz="md" id={listId}>
+        <Title order={2} id={listId}>
           {portal.label}
         </Title>
         <Text size="sm" c="dimmed" style={{ flexShrink: 0 }}>

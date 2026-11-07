@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import {
   InjectTransactionHost,
+  Propagation,
   Transactional,
 } from '@nestjs-cls/transactional';
-import type { PortalId } from '@app/kernel';
+import { NO_INSTANCE, type Instance, type PortalId } from '@app/kernel';
 import type { PortalAccount as Row } from '../../generated/prisma/client.js';
 import type { PrismaTxHost } from '../../platform/database/prisma.service.js';
 import {
@@ -14,7 +15,10 @@ import {
 
 // the columns are the state's; their values were the domain's when written
 const toAccount = (row: Row) =>
-  PortalAccount.restore(row as PortalAccountState);
+  PortalAccount.restore({
+    ...row,
+    instance: row.instance as Instance,
+  } as PortalAccountState);
 
 // Credentials go with their accounts by the foreign key's cascade, in the
 // same statement.
@@ -85,6 +89,16 @@ export class PrismaPortalAccountRepository extends PortalAccountRepository {
       create: { accountId: id, sealed },
       update: { sealed },
     });
+  }
+
+  // in the transaction of whoever asks, beside the records' own
+  @Transactional(Propagation.Mandatory)
+  async adopt(portal: PortalId, instance: Instance) {
+    const { count } = await this.txHost.tx.portalAccount.updateMany({
+      where: { portal, instance: NO_INSTANCE },
+      data: { instance },
+    });
+    return count;
   }
 
   async remove(userId: string, portal: PortalId) {

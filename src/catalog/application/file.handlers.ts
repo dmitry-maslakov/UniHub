@@ -20,13 +20,13 @@ export class UpsertFileHandler implements ICommandHandler<UpsertFileCommand> {
 
   @Transactional()
   async execute({
-    data: { portal, externalId, course, item, ...props },
+    data: { portal, instance, externalId, course, item, ...props },
   }: UpsertFileCommand) {
+    const ref = { portal, instance, externalId };
     const placement = placeFile(
-      await this.references.courseNamed(portal, course),
-      await this.references.itemNamed(portal, item),
+      await this.references.courseNamed(ref, course),
+      await this.references.itemNamed(ref, item),
     );
-    const ref = { portal, externalId };
     const found = await this.files.getForUpdate(ref);
     const file = found ?? PortalFile.create(ref, props, placement);
     const changed = found ? found.sync(props, placement) : true;

@@ -13,10 +13,14 @@ import {
 import { gridOf, slotOf } from '../domain/grid.js';
 import { pluginsConfig } from '../plugins.config.js';
 import { AccountCredentialQuery, PortalReadersQuery } from './accounts.js';
+import { InstanceAdoption } from './instance-adoption.js';
+import { PluginCatalog } from './plugin-catalog.js';
 
 // Who a connector runs for, and what it gets for a run: a portal read as
 // shared, for the shared account; any other, for each user's own account
-// that reads now, on a grid of its own.
+// that reads now, on a grid of its own. A run reads the portal at a site:
+// the shared account at the one the portal's settings name, a user's at
+// the one it was linked with.
 @Injectable()
 export class ConnectionDirectory {
   constructor(
@@ -24,6 +28,8 @@ export class ConnectionDirectory {
     private readonly queries: QueryBus,
     @Inject(pluginsConfig.KEY)
     private readonly config: ConfigType<typeof pluginsConfig>,
+    private readonly plugins: PluginCatalog,
+    private readonly adoption: InstanceAdoption,
   ) {}
 
   async connections(portal: PortalId) {
@@ -41,28 +47,32 @@ export class ConnectionDirectory {
   // credential, and what it finds shows at its slot; and which seal of the
   // credential that is, to say which one the portal refused (none for the
   // shared account's, the owner's to replace). Null for an account that no
-  // longer reads.
+  // longer reads. Not before the rows from before sites were told apart
+  // have theirs (InstanceAdoption).
   async context(
     connection: Connection,
     signal: AbortSignal,
     start = new Date(),
   ): Promise<{ context: ConnectorContext; seal: string | null } | null> {
+    await this.adoption.done();
     const { portal, account } = connection;
     const base = { connection: { portal, account }, signal };
-    if (connection.shared)
+    if (connection.shared) {
+      const shared = connection.at(this.plugins.configuredInstance(portal));
       return {
         context: {
           ...base,
           account: { kind: 'shared' },
-          ingest: new SdkPortalIngest(this.ingest, connection, signal),
+          ingest: new SdkPortalIngest(this.ingest, shared, signal),
         },
         seal: null,
       };
+    }
     const found = await this.queries.execute(
       new AccountCredentialQuery(account),
     );
     if (!found) return null;
-    const { credential, seal } = found;
+    const { credential, seal, instance } = found;
     const slot = slotOf(start, this.gridOf(connection));
     const run: Run = {
       shown: (ended) => publication(slot, ended, this.config.publishing),
@@ -72,7 +82,12 @@ export class ConnectionDirectory {
       context: {
         ...base,
         account: { kind: 'user', credential: async () => credential },
-        ingest: new SdkPortalIngest(this.ingest, connection, signal, run),
+        ingest: new SdkPortalIngest(
+          this.ingest,
+          connection.at(instance),
+          signal,
+          run,
+        ),
       },
       seal,
     };

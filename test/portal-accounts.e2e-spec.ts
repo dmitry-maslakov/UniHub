@@ -6,6 +6,7 @@ import type { Response } from 'supertest';
 import {
   CredentialRejectedError,
   PollConnector,
+  TokensNotAllowedError,
   type Credential,
   type IdentifiesAccounts,
   type PollsPortal,
@@ -24,10 +25,10 @@ import { bootApp } from './app.js';
 import { accounts } from './accounts.js';
 
 // The token routes as the app wires them: the session's age, the named
-// limit, the schema, the 422 and the 503, identity's admin query and its
-// delete hook, and the token in no output and nowhere stored but sealed.
-// Who may link what, and an account kept or made anew, are checked on fakes
-// (PortalLinks, PortalAccounts).
+// limit, the schema, a portal's site, the 422s and the 503, the portals'
+// names, identity's admin query and its delete hook, and the token in no
+// output and nowhere stored but sealed. Who may link what, and an account
+// kept or made anew, are checked on fakes (PortalLinks, PortalAccounts).
 
 // what each token makes the portal answer, and a part of it no output may hold
 const mark = () => randomBytes(12).toString('hex');
@@ -37,6 +38,8 @@ const TOKENS = {
   other: `other~${mark()}`,
   refused: `refused~${mark()}`,
   away: `away~${mark()}`,
+  // of a site that takes no pasted tokens
+  unwelcome: `unwelcome~${mark()}`,
   // not one the schema takes
   bad: `bad token ${mark()}`,
 };
@@ -50,6 +53,7 @@ abstract class Linking implements PollsPortal, IdentifiesAccounts {
     const pasted = token.reveal();
     if (pasted.startsWith('refused~')) throw new CredentialRejectedError();
     if (pasted.startsWith('away~')) throw new Error('the portal is away');
+    if (pasted.startsWith('unwelcome~')) throw new TokensNotAllowedError();
     const id = pasted.startsWith('other~') ? '5151' : '4242';
     return { id, expiresAt: new Date(EXPIRES_AT) };
   }
@@ -63,7 +67,23 @@ class LinkedPortal extends Linking {}
 @Injectable()
 class StaffPortal extends Linking {}
 
-@Module({ providers: [LinkedPortal, StaffPortal] })
+// a portal that is a site per school, its settings naming none
+@PollConnector({
+  portal: 'school',
+  schedule: '0 0 1 1 *',
+  links: ['token'],
+  instances: true,
+})
+@Injectable()
+class SchoolPortal extends Linking {
+  configuredInstance() {
+    return null;
+  }
+}
+
+const SITE = 'https://lms.example.edu';
+
+@Module({ providers: [LinkedPortal, StaffPortal, SchoolPortal] })
 class LinkingPluginsModule {}
 
 describe('portal accounts', { timeout: 20_000 }, () => {
@@ -74,8 +94,8 @@ describe('portal accounts', { timeout: 20_000 }, () => {
     mails,
   );
   const tokenOf = (portal: string) => `/api/me/portals/${portal}/token`;
-  const put = (cookie: string, portal: string, token: unknown) =>
-    http().put(tokenOf(portal)).set('cookie', cookie).send({ token });
+  const put = (cookie: string, portal: string, token: unknown, url?: string) =>
+    http().put(tokenOf(portal)).set('cookie', cookie).send({ token, url });
   const list = async (cookie: string) =>
     (await http().get('/api/me/portals').set('cookie', cookie).expect(200))
       .body as object[];
@@ -94,7 +114,11 @@ describe('portal accounts', { timeout: 20_000 }, () => {
         output.push(String(chunk));
         return true;
       });
-    vi.stubEnv('PORTAL_LINKS', 'linked=token, staff=token/admins');
+    vi.stubEnv(
+      'PORTAL_LINKS',
+      'linked=token, staff=token/admins, school=token',
+    );
+    vi.stubEnv('PORTAL_LABELS', 'linked=Linked LMS');
     vi.stubEnv(
       'PORTAL_CREDENTIALS_SECRETS',
       `1:${randomBytes(32).toString('base64')}`,
@@ -116,13 +140,15 @@ describe('portal accounts', { timeout: 20_000 }, () => {
     expect(await list(ana)).toEqual([
       {
         portal: 'linked',
-        label: 'linked',
+        label: 'Linked LMS',
         mode: 'token',
         linked: true,
+        instance: null,
         status: 'linked',
         expiresAt: EXPIRES_AT,
         picked: null,
       },
+      expect.objectContaining({ portal: 'school', label: 'school' }),
     ]);
     const [account] = await prisma.portalAccount.findMany({
       where: { userId: await userId('ana@portals.test') },
@@ -132,9 +158,9 @@ describe('portal accounts', { timeout: 20_000 }, () => {
     expect(account.credential?.sealed).toMatch(/^1\./);
 
     keep(await http().delete(tokenOf('linked')).set('cookie', ana).expect(204));
-    expect(await list(ana)).toEqual([
+    expect(await list(ana)).toContainEqual(
       expect.objectContaining({ portal: 'linked', linked: false }),
-    ]);
+    );
     expect(await prisma.portalCredential.count()).toBe(0);
   });
 
@@ -159,7 +185,7 @@ describe('portal accounts', { timeout: 20_000 }, () => {
     const opened = app
       .get(CredentialVault)
       .open(credential!.sealed, row as PortalAccountState);
-    expect(opened.reveal()).toBe(TOKENS.other);
+    expect(opened.token.reveal()).toBe(TOKENS.other);
   });
 
   it('revokes the token a run had once the portal refuses it, not one linked again since', async () => {
@@ -184,11 +210,44 @@ describe('portal accounts', { timeout: 20_000 }, () => {
     ).toBe('revoked');
   });
 
+  it('links an account of a site per school with its address, and lists it with that site', async () => {
+    const hy = await signUp('hy@portals.test');
+
+    keep(await put(hy, 'school', TOKENS.good, `${SITE}/login`).expect(204));
+    expect(await list(hy)).toContainEqual(
+      expect.objectContaining({
+        portal: 'school',
+        linked: true,
+        instance: SITE,
+      }),
+    );
+    expect(
+      await app.get(PrismaService).portalAccount.findFirstOrThrow({
+        where: { userId: await userId('hy@portals.test') },
+      }),
+    ).toMatchObject({ portal: 'school', instance: SITE });
+  });
+
   it("answers 422 for a token the portal doesn't take, 503 while it's away, 400 for one that's none", async () => {
     const bo = await signUp('bo@portals.test');
 
     const refused = keep(await put(bo, 'linked', TOKENS.refused).expect(422));
-    expect(refused.body.message).toBe('the portal did not take the token');
+    expect(refused.body).toMatchObject({
+      code: 'TOKEN_REFUSED',
+      message: 'the portal did not take the token',
+    });
+    const unwelcome = keep(
+      await put(bo, 'school', TOKENS.unwelcome, SITE).expect(422),
+    );
+    expect(unwelcome.body.code).toBe('TOKENS_NOT_ALLOWED');
+    // a site's address on a portal of sites alone, and an https one
+    keep(await put(bo, 'school', TOKENS.good).expect(400));
+    keep(
+      await put(bo, 'school', TOKENS.good, 'http://lms.example.edu').expect(
+        400,
+      ),
+    );
+    keep(await put(bo, 'linked', TOKENS.good, SITE).expect(400));
     keep(await put(bo, 'linked', TOKENS.away).expect(503));
     keep(await put(bo, 'linked', TOKENS.bad).expect(400));
     keep(
@@ -229,7 +288,7 @@ describe('portal accounts', { timeout: 20_000 }, () => {
     keep(await put(ed, 'staff', TOKENS.good).expect(404));
     expect(
       (await list(ed)).map((p) => (p as { portal: string }).portal),
-    ).toEqual(['linked']);
+    ).toEqual(['linked', 'school']);
 
     await makeAdmin('ed@portals.test');
     keep(await put(ed, 'staff', TOKENS.good).expect(204));

@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { PortalId, SHARED_ACCOUNT } from '@app/kernel';
+import {
+  NO_INSTANCE,
+  PortalId,
+  SHARED_ACCOUNT,
+  type Instance,
+} from '@app/kernel';
 
 // a key joins portal and account with '__', and job ids can't have ':'
 const Account = z
@@ -7,23 +12,37 @@ const Account = z
   .regex(/^[A-Za-z0-9-]+$/, 'letters, digits and dashes only');
 
 // One account on one portal, the unit a connector syncs: records come in
-// as the portal's, state is kept per connection.
+// as the portal's, of the site the account reads (its instance, none for a
+// portal of one site), state is kept per connection. The site is the
+// hub's to know: ingest stamps it on every record (toRef), and plugins
+// never see it.
 export class Connection {
   private constructor(
     readonly portal: PortalId,
     readonly account: string,
+    readonly instance: Instance,
   ) {}
 
-  static shared(portal: PortalId) {
-    return new Connection(portal, SHARED_ACCOUNT);
+  static shared(portal: PortalId, instance = NO_INSTANCE) {
+    return new Connection(portal, SHARED_ACCOUNT, instance);
   }
 
-  // from job data or config, checked
+  // from job data or config, checked; its site is found for its run (at)
   static of({ portal, account }: { portal: string; account: string }) {
-    return new Connection(PortalId.parse(portal), Account.parse(account));
+    return new Connection(
+      PortalId.parse(portal),
+      Account.parse(account),
+      NO_INSTANCE,
+    );
   }
 
-  // for job ids and schedulers, one per connection
+  // the same account, reading the portal at this site
+  at(instance: Instance) {
+    return new Connection(this.portal, this.account, instance);
+  }
+
+  // for job ids and schedulers, one per connection: an account reads one
+  // site, so the site isn't in it
   get key() {
     return `${this.portal}__${this.account}`;
   }

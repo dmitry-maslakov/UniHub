@@ -1,12 +1,16 @@
-import { PortalId, Secret } from '@app/plugin-sdk';
+import { Instance, PortalId, Secret } from '@app/plugin-sdk';
 import {
+  catalogOf,
   directoryOf,
   pluginSettings,
+  poll,
 } from '../../../test/discovered-plugins.js';
 import { Connection, type IngestService } from '../../ingest/contracts.js';
 
 const lms = PortalId.parse('lms');
 const credential = { kind: 'token' as const, token: new Secret('ana~1') };
+const SCHOOL = Instance.parse('https://lms.example.edu');
+const OWN = Instance.parse('https://lms.example.org');
 
 describe('ConnectionDirectory', () => {
   it("runs a portal read as shared for the shared account, any other for its users' own accounts alone", async () => {
@@ -48,6 +52,46 @@ describe('ConnectionDirectory', () => {
     expect(ctx.account.kind).toBe('user');
     // which seal of its credential, to say which one the portal refused
     expect(found!.seal).toBe('seal-of-ana');
+  });
+
+  it("reads the shared account's records at the site the portal's settings name, a user's at their account's", async () => {
+    const courses = vi.fn(async () => ({ refused: [] }));
+    const directory = directoryOf(
+      { lms: ['ana'] },
+      { ana: { ...credential, url: OWN } },
+      { courses } as unknown as IngestService,
+      catalogOf({
+        polls: [
+          poll(
+            'lms',
+            {
+              poll: async () => {},
+              identify: async () => ({ id: '1', expiresAt: null }),
+              configuredInstance: () => SCHOOL,
+            } as never,
+            ['token'],
+            true,
+          ),
+        ],
+      }),
+    );
+    const signal = new AbortController().signal;
+    for (const connection of [
+      Connection.shared(lms),
+      Connection.of({ portal: lms, account: 'ana' }),
+    ])
+      await (await directory.context(
+        connection,
+        signal,
+      ))!.context.ingest.courses([]);
+
+    const sites = (courses.mock.calls as unknown as [Connection][]).map(
+      ([connection]) => [connection.account, connection.instance],
+    );
+    expect(sites).toEqual([
+      ['shared', SCHOOL],
+      ['ana', OWN],
+    ]);
   });
 
   it("gives no run to an account that no longer reads, and the shared account's its own", async () => {
