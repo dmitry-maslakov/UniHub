@@ -1,0 +1,31 @@
+.tabs {
+  display: flex;
+  gap: var(--mantine-spacing-xs);
+  margin-block-end: var(--mantine-spacing-xl);
+  border-bottom: 1px solid var(--mantine-color-default-border);
+}
+
+.tab {
+  margin-bottom: -1px;
+  padding: var(--mantine-spacing-xs) var(--mantine-spacing-sm);
+  border-bottom: 2px solid transparent;
+  color: var(--mantine-color-dimmed);
+  font-size: var(--mantine-font-size-sm);
+  font-weight: 500;
+  text-decoration: none;
+
+  &:hover {
+    color: var(--mantine-color-text);
+  }
+
+  &[aria-current='page'] {
+    color: var(--mantine-color-text);
+    border-bottom-color: var(--mantine-primary-color-filled);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mantine-primary-color-filled);
+    outline-offset: -2px;
+    border-radius: var(--mantine-radius-sm);
+  }
+}

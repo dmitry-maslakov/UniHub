@@ -32,6 +32,10 @@ import {
   mcpSettings,
   TrustedOrigins,
 } from './infrastructure/mcp-settings.js';
+import {
+  CountCourseReadersHandler,
+  ListCourseReadersHandler,
+} from './infrastructure/course-readers.read.js';
 import { PrismaCourseAccessRepository } from './infrastructure/prisma-course-access.repository.js';
 import { PrismaReaderRepository } from './infrastructure/prisma-reader.repository.js';
 import { SignInMethodsController } from './infrastructure/http/sign-in-methods.controller.js';
@@ -90,6 +94,8 @@ import { SignInMethodsController } from './infrastructure/http/sign-in-methods.c
     RevokeCourseAccessHandler,
     ReadScopeHandler,
     IsAdminHandler,
+    CountCourseReadersHandler,
+    ListCourseReadersHandler,
     AuthenticateAgent,
     ...mcpSettings,
     { provide: ApiKeys, useClass: BetterAuthApiKeys },

@@ -11,6 +11,7 @@ import { StorageModule } from '../storage/contracts.js';
 import { CourseGrants } from './application/course-grants.js';
 import { CourseMatching } from './application/course-matching.js';
 import { CourseReader } from './application/course-reader.js';
+import { HubCourses } from './application/hub-courses.js';
 import {
   OwnPortalCourseHandler,
   PickMatchesHandler,
@@ -18,6 +19,7 @@ import {
 import { CourseAccessController } from './infrastructure/http/course-access.controller.js';
 import { CoursesController } from './infrastructure/http/courses.controller.js';
 import { FilesController } from './infrastructure/http/files.controller.js';
+import { HubCoursesController } from './infrastructure/http/hub-courses.controller.js';
 import { ItemsController } from './infrastructure/http/items.controller.js';
 import { CourseTools } from './infrastructure/mcp/course.tools.js';
 import { McpHttpController } from './infrastructure/mcp/mcp-http.controller.js';
@@ -50,12 +52,14 @@ import { AccessSearchModule } from './search.module.js';
     ItemsController,
     FilesController,
     CourseAccessController,
+    HubCoursesController,
     McpHttpController,
     CourseTools,
   ],
   providers: [
     CourseReader,
     CourseGrants,
+    HubCourses,
     CourseMatching,
     OwnPortalCourseHandler,
     PickMatchesHandler,

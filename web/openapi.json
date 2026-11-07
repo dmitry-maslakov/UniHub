@@ -31,7 +31,14 @@
         },
         "responses": {
           "201": {
-            "description": "the new course's id"
+            "description": "the new course's id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CourseCreatedResponse"
+                }
+              }
+            }
           },
           "403": {
             "description": "for admins only"
@@ -740,6 +747,146 @@
         ]
       }
     },
+    "/api/admin/courses": {
+      "get": {
+        "operationId": "HubCoursesController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "every course an admin made, by name, with its links",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/HubCourseResponse"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "for admins only"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/courses/{courseId}/readers": {
+      "get": {
+        "operationId": "HubCoursesController_readers",
+        "parameters": [
+          {
+            "name": "courseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the users granted the course, by name",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CourseReaderResponse"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "for admins only"
+          },
+          "404": {
+            "description": "no such course"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/portal-courses": {
+      "get": {
+        "operationId": "HubCoursesController_linkable",
+        "parameters": [
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 0,
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "words in a portal course's name, in any case, with or without diacritics",
+            "schema": {
+              "description": "words in a portal course's name, in any case, with or without diacritics",
+              "type": "string",
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "a page of the courses of the shared and public portals whose names have the words, by name: those a course can link (never a portal read with users' own accounts)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkableResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "for admins only"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/search": {
       "get": {
         "operationId": "SearchController_search",
@@ -1132,6 +1279,18 @@
       }
     },
     "schemas": {
+      "CourseCreatedResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "the course's id, which the routes of grants name it by"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
       "SignInMethodsResponse": {
         "type": "object",
         "properties": {
@@ -1485,6 +1644,207 @@
           "pages",
           "page",
           "text"
+        ]
+      },
+      "HubLinkResponse": {
+        "type": "object",
+        "properties": {
+          "portal": {
+            "type": "string",
+            "example": "canvas"
+          },
+          "label": {
+            "type": "string",
+            "example": "Canvas",
+            "description": "the name the portal is shown by, its id unless the hub names it"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "shared",
+              "token",
+              "public"
+            ],
+            "description": "how the portal is read: shared, by the hub account; token, by users' own accounts; public, by whoever picked the course"
+          },
+          "instance": {
+            "type": "string",
+            "nullable": true,
+            "example": "https://canvas.example.edu",
+            "description": "the school's site the portal course is of, for a portal that is a site per school; null for a portal of one site"
+          },
+          "externalId": {
+            "type": "string",
+            "description": "the course's id on its portal"
+          },
+          "year": {
+            "type": "number",
+            "nullable": true,
+            "example": 2026
+          },
+          "unlinkable": {
+            "type": "boolean",
+            "description": "whether unlinking reaches this link: it is of the site the portal's settings read now"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true,
+            "description": "the portal course's name as the hub account sees it; null for a portal read with users' own accounts (what those hold is theirs), or when the hub account sees none"
+          }
+        },
+        "required": [
+          "portal",
+          "label",
+          "mode",
+          "instance",
+          "externalId",
+          "year",
+          "unlinkable",
+          "name"
+        ]
+      },
+      "HubCourseResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string",
+            "example": "os"
+          },
+          "name": {
+            "type": "string",
+            "example": "Operativni sistemi"
+          },
+          "readers": {
+            "type": "number",
+            "description": "how many users are granted the course"
+          },
+          "links": {
+            "description": "the portal courses linked to it, by year",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HubLinkResponse"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name",
+          "readers",
+          "links"
+        ]
+      },
+      "CourseReaderResponse": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "banned": {
+            "type": "boolean",
+            "description": "banned now, for good or until a time to come"
+          }
+        },
+        "required": [
+          "userId",
+          "name",
+          "email",
+          "banned"
+        ]
+      },
+      "CourseRefResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string",
+            "example": "os"
+          },
+          "name": {
+            "type": "string",
+            "example": "Operativni sistemi"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name"
+        ]
+      },
+      "LinkablePortalCourseResponse": {
+        "type": "object",
+        "properties": {
+          "portal": {
+            "type": "string",
+            "example": "canvas"
+          },
+          "label": {
+            "type": "string",
+            "example": "Canvas"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "shared",
+              "public"
+            ]
+          },
+          "externalId": {
+            "type": "string",
+            "description": "the course's id on its portal"
+          },
+          "name": {
+            "type": "string"
+          },
+          "course": {
+            "nullable": true,
+            "description": "the course it is linked to now, if any",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CourseRefResponse"
+              }
+            ]
+          }
+        },
+        "required": [
+          "portal",
+          "label",
+          "mode",
+          "externalId",
+          "name",
+          "course"
+        ]
+      },
+      "LinkableResponse": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "how many portal courses match, on every page"
+          },
+          "portalCourses": {
+            "description": "by name",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LinkablePortalCourseResponse"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "portalCourses"
         ]
       },
       "SnippetResponse": {
