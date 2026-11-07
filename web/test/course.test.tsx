@@ -377,7 +377,9 @@ describe('a course', () => {
     const tree = await screen.findByRole('navigation', {
       name: 'Files by folder',
     });
-    await userEvent.click(within(tree).getByRole('button', { name: /^lab\.zip/ }));
+    await userEvent.click(
+      within(tree).getByRole('button', { name: /^lab\.zip/ }),
+    );
     await userEvent.click(
       await within(tree).findByRole('checkbox', { name: 'Select main.c' }),
     );
@@ -386,10 +388,7 @@ describe('a course', () => {
     // a sync added a file: the list comes back as new data
     server.use(
       http.get(api('/courses/os/files'), () =>
-        HttpResponse.json({
-          files: [zip, file(2, true, '')],
-          capped: false,
-        }),
+        HttpResponse.json([zip, file(2, true, '')]),
       ),
     );
     await queryClient.invalidateQueries();
