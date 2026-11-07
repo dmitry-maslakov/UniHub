@@ -33,10 +33,20 @@ export function checkRoom(picked: readonly string[], portalCourseId: string) {
 export abstract class PickRepository {
   // the portal courses the user picked
   abstract ofUser(userId: string): Promise<string[]>;
+  // of them, those the user shows with a course of their own, each by the
+  // portal course of their own account it goes with
+  abstract intoOf(userId: string): Promise<Map<string, string>>;
   // the same, and no other pick of the user's is made till the transaction
   // ends: two at once can't both find room for one more
   abstract lockOf(userId: string): Promise<string[]>;
   abstract add(userId: string, portalCourseId: string): Promise<void>;
+  // the user's pick shown with that portal course of theirs, or on its own
+  // (null)
+  abstract showWith(
+    userId: string,
+    portalCourseId: string,
+    into: string | null,
+  ): Promise<void>;
   // the user's pick gone, and how many users pick it still; null if the
   // user didn't
   abstract remove(

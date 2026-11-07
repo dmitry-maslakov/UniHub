@@ -62,6 +62,8 @@ npm run dev            # or Vite on :5173, /api proxied to the hub
 npm run lint && npm run steiger && npm run typecheck && npm test
 ```
 
+Its home page is My courses: the courses the user reads, one list by name, each with the sources it comes from; a first visit with none shows the portals to link or pick from right there. A course's page names each source it's made of and how the user reads it, and a picked course of a public portal's catalog has a "Show with" choice (Matching, below). The account is at `/account`.
+
 For `npm run dev`, add `http://localhost:5173` to `TRUSTED_ORIGINS`: Better Auth refuses calls from an origin it doesn't trust. Without `SMTP_URL`, the confirmation and reset links are in the hub's log.
 
 The API's types (`web/src/shared/api/schema.d.ts`) are generated from `web/openapi.json`, which `test/openapi.e2e-spec.ts` checks against the hub's document. After changing a route or a schema: `npm run test:e2e -- -u test/openapi.e2e-spec.ts`, then `npm run api:generate` in `web/`; CI fails until both are committed.
@@ -84,7 +86,7 @@ Every HTTP route needs a signed-in user unless it says `@AllowAnonymous()`. Admi
 
 OpenAPI at `/api/docs`. A signed-in user reads the courses they were given:
 
-- `GET /api/courses`, then `/api/courses/{slug}/items` and `/files` (`offset`, `limit` up to 200, 50 by default). A course lists only its portal courses in the user's view, and a portal course of a portal read with users' own accounts, or one the user picked of a public portal, that no course links is a course of its own, `{portal}~{externalId}` (Portal accounts, Public portals, below)
+- `GET /api/courses`, then `/api/courses/{slug}/items` and `/files` (`offset`, `limit` up to 200, 50 by default). A course lists only its portal courses in the user's view, and a portal course of a portal read with users' own accounts, or one the user picked of a public portal, that no course links is a course of its own, `{portal}~{externalId}` (Portal accounts, Public portals, below), unless the user shows a pick with a course of theirs (Matching, below). Each course has `sources`, the portals it comes from, and each of its portal courses `externalId`, `url` and `via`: `account` read through the user's own account, `pick` a public portal's course they picked, `link` read through the hub's account in a course an admin made
 - `GET /api/items/{id}`: one post, as `/items` lists it (a search finds it by its id)
 - `GET /api/files/{id}`: the file and the texts made from it
 - `GET /api/files/{id}/text?page=2`: one page, slide or section of a text
@@ -134,7 +136,7 @@ Admins set the courses up (`@Roles([ADMIN_ROLE])`):
 
 ## MCP
 
-`/api/mcp` serves the same reads to AI clients over streamable HTTP, as the tools `list_courses`, `list_items`, `list_files`, `list_members` (of an archive), `read_file` (page by page, of the processor named or the first one, of the file or of a `member`), `read_item` (a post, as `GET /api/items/{id}`) and `search` (as `GET /api/search`, its results as JSON; over its limit, a tool error). 600 calls a minute per user, however they sign in. A request carries one JSON-RPC message as JSON: other bodies get 415, batches 400; one from a page of another site than the hub's own and `TRUSTED_ORIGINS` (its `Origin`) gets 403, and clients that send no `Origin` pass.
+`/api/mcp` serves the same reads to AI clients over streamable HTTP, as the tools `list_courses` (as `GET /api/courses`, picks shown with a course inside it), `list_items`, `list_files`, `list_members` (of an archive), `read_file` (page by page, of the processor named or the first one, of the file or of a `member`), `read_item` (a post, as `GET /api/items/{id}`) and `search` (as `GET /api/search`, its results as JSON; over its limit, a tool error). 600 calls a minute per user, however they sign in. A request carries one JSON-RPC message as JSON: other bodies get 415, batches 400; one from a page of another site than the hub's own and `TRUSTED_ORIGINS` (its `Origin`) gets 403, and clients that send no `Origin` pass.
 
 A client signs in one of two ways, a banned user's refused either way:
 
@@ -246,8 +248,8 @@ The Canvas connector takes `token`; what that means on a hosted or a self-hosted
 
 A portal set to `public` is a site anyone can read, its connector outside the hub (External connectors, below): it sends every course of the site's directory, as its one account, and those are the portal's catalog. Each user picks from it the courses they follow, and reads those, with no grant:
 
-- `GET /api/portals/{portal}/catalog?q=&offset=&limit=`: `{ total, courses: [{ externalId, name, url, picked, isNew }] }`, the catalog's courses by name (numbers by value), those whose name has `q` (up to 200 characters, matched in any case, with or without diacritics: `racunar` finds `Računarske mreže`, `dacki` finds `Đački`), `limit` up to 200 and 50 by default. `picked` says you picked it, `isNew` that the hub first saw it within 14 days. A portal that isn't public is a 404
-- `PUT /api/me/picks/{portal}/{externalId}`, with no body or `{}`: 204, picked, and picked again it's no new pick. A course the catalog doesn't have, or a portal that isn't public, is a 404; past 100 picks a 422 with `code: TOO_MANY_PICKS`. The 100 are the picks `GET /api/me/portals` counts: those in a public portal's catalog now
+- `GET /api/portals/{portal}/catalog?q=&offset=&limit=`: `{ total, courses: [{ externalId, name, url, picked, isNew, into, suggestedInto }] }`, the catalog's courses by name (numbers by value), those whose name has `q` (up to 200 characters, matched in any case, with or without diacritics: `racunar` finds `Računarske mreže`, `dacki` finds `Đački`), `limit` up to 200 and 50 by default. `picked` says you picked it, `isNew` that the hub first saw it within 14 days, and of a course you picked `into` and `suggestedInto` which of your courses it's shown with and which it may be (Matching, below), null for the others. A portal that isn't public is a 404
+- `PUT /api/me/picks/{portal}/{externalId}`, with no body or `{}`: 204, picked, and picked again it's no new pick. `{ "into": "canvas~297" }` shows it with that course of yours, `{ "into": null }` on its own again, and left out it stays as it was (Matching, below). A course the catalog doesn't have, or a portal that isn't public, is a 404; past 100 picks a 422 with `code: TOO_MANY_PICKS`, and an `into` that's no course you read through your own account a 422 with `code: NOT_YOUR_COURSE`. The 100 are the picks `GET /api/me/portals` counts: those in a public portal's catalog now
 - `DELETE` on the same path: 204, whether you had picked it or not, whatever the portal's mode is now
 - both take 30 a minute per user (`X-RateLimit-*-picks`), as each may have the connector sync another course
 - a course picked is read by the picker by every route, search and MCP, as a course of its own (`catalog~101`), or inside the course an admin linked it to: its posts, files and texts, through the portal's one account. A grant gives none of it, an admin reads only what they picked too, and a banned user nothing. A pick of a portal no longer public reads nothing
@@ -255,6 +257,16 @@ A portal set to `public` is a site anyone can read, its connector outside the hu
 - no MCP tool picks or lists the catalog
 
 A course picked is wanted: its connector learns it by `Wanted` (External connectors, below), and sends its posts and files from then on. Once no one picks it, it stays wanted 14 days more, so a pick meanwhile finds its sync where it left off; the hourly reconcile then drops it, and starts the grace of a course no pick keeps whose grace didn't start (two last picks gone at once). A course no longer wanted isn't removed: the connector keeps it as it was, its state too. Nothing of who picks what, or how many, leaves the hub, and the timing does tell one thing: a course someone else picked shows its posts at once.
+
+### Matching
+
+The same subject is often a course on two portals: the one a user reads through their own account, and the one they picked of a public site. Nothing on either says they're the same, so the hub doesn't guess by name: people decide, and the hub only moves cards. Where a course shows never changes what the user reads, only in which course they find it, the same by every route, search and MCP (`regroup`, `src/access`):
+
+1. an admin's link comes first: a picked course an admin linked to a course is in that course, for everyone who picked it
+2. then the user's own choice: a pick they show with a course of theirs (`into`) is inside that course, after its own portal courses, its slug no longer a course's. The choice is kept by the portal course of their own account it goes with, so it follows that one into a course an admin links it to, and while the user doesn't read it through their account (unlinked, expired) the pick is a course of its own again
+3. else the pick is a course of its own, as before
+
+A course to show a pick with is one the user reads through their own account; admins can't see what users' accounts hold, so there's no admin queue of users' pairs. The catalog suggests one for each course picked (`suggestedInto`): the course of the user's own that shares the most files with it by content, at least 2, counting only the files the user's own view opens of both, so it says nothing of what anyone else reads. The suggestion is the user's to take: nothing is moved until they choose.
 
 ### Running a hub with users' own accounts
 

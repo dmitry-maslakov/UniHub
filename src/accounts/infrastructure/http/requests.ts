@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { Secret, StoredText } from '@app/kernel';
 import { pageSchema } from '../../../access/contracts.js';
+import { CourseSlug } from '../../../catalog/contracts.js';
 
 // What the routes take, checked where the request comes in
 // (ValidationModule): a bad one is a 400, never a call. zod's issues carry
@@ -25,6 +26,19 @@ export const tokenRequest = z
 // a course's id as its portal has it; text postgres can't keep would fail
 // the lookup with a 500
 export const externalId = StoredText.min(1);
+
+// A pick, and the course to show it with: its slug, null for none; left
+// out, as it was. No body at all is a pick alone, as {} is.
+export const pickRequest = z
+  .object({
+    into: CourseSlug.nullable()
+      .optional()
+      .describe(
+        'the slug of your course to show it with, one you read through your own account; null to show it on its own; left out, it stays as it was',
+      ),
+  })
+  .optional()
+  .transform((body) => body?.into);
 
 // A page of a portal's catalog, and the words its courses' names are to
 // have: none, or blank, for every course

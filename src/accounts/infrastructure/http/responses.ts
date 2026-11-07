@@ -1,8 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
 import type { LinkMode, PortalId } from '@app/kernel';
 import type { AccountStatus } from '../../domain/portal-account.js';
-import type { CatalogEntry, CatalogPage } from '../../domain/catalog-page.js';
 import type { PortalView } from '../../application/portal-accounts.js';
+import type {
+  CatalogCourseView,
+  CatalogView,
+} from '../../application/portal-picks.js';
 
 // What the routes answer with, described for OpenAPI: never a token, nor
 // any hint of one.
@@ -45,7 +48,7 @@ export class PortalResponse implements PortalView {
   picked!: number | null;
 }
 
-export class CatalogCourseResponse implements CatalogEntry {
+export class CatalogCourseResponse implements CatalogCourseView {
   @ApiProperty({ description: "the course's id on its portal" })
   externalId!: string;
   @ApiProperty() name!: string;
@@ -59,9 +62,23 @@ export class CatalogCourseResponse implements CatalogEntry {
   picked!: boolean;
   @ApiProperty({ description: 'the hub first saw it within 14 days' })
   isNew!: boolean;
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description:
+      "the slug of your course you show it with, one you read through your own account; null when it's a course of its own, or not picked",
+  })
+  into!: string | null;
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description:
+      'the slug of a course of yours to show it with: the one you read through your own account that shares the most files with it, at least 2, of those you see; null when none does, or not picked',
+  })
+  suggestedInto!: string | null;
 }
 
-export class CatalogResponse implements CatalogPage {
+export class CatalogResponse implements CatalogView {
   @ApiProperty({ description: 'how many courses match, on every page' })
   total!: number;
   @ApiProperty({ type: [CatalogCourseResponse], description: 'by name' })

@@ -15,7 +15,7 @@ export function ConsentPage() {
         <PageTitle description="This page opens from an app that asks to connect, and the link it sent is missing or has expired. Go back to the app and connect again.">
           Nothing to approve
         </PageTitle>
-        <AnchorLink to="/">Back to your account</AnchorLink>
+        <AnchorLink to="/">Back to your courses</AnchorLink>
       </>
     );
   return <ConsentRequestView request={request} />;

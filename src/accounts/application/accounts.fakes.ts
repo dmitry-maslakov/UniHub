@@ -112,9 +112,11 @@ export class FakeVault extends CredentialVault {
   }
 }
 
-// each user's picks, in the order made
+// each user's picks, in the order made, and the portal course of their own
+// each shows with, if any
 export class InMemoryPicks extends PickRepository {
-  readonly rows: { userId: string; portalCourseId: string }[] = [];
+  readonly rows: { userId: string; portalCourseId: string; into?: string }[] =
+    [];
   // whose picks were locked, in order
   readonly locked: string[] = [];
 
@@ -125,6 +127,14 @@ export class InMemoryPicks extends PickRepository {
       .sort();
   }
 
+  async intoOf(userId: string) {
+    return new Map(
+      this.rows.flatMap(({ userId: theirs, portalCourseId, into }) =>
+        theirs === userId && into ? [[portalCourseId, into] as const] : [],
+      ),
+    );
+  }
+
   async lockOf(userId: string) {
     this.locked.push(userId);
     return this.ofUser(userId);
@@ -133,6 +143,15 @@ export class InMemoryPicks extends PickRepository {
   async add(userId: string, portalCourseId: string) {
     if (!(await this.ofUser(userId)).includes(portalCourseId))
       this.rows.push({ userId, portalCourseId });
+  }
+
+  async showWith(userId: string, portalCourseId: string, into: string | null) {
+    const row = this.rows.find(
+      (row) => row.userId === userId && row.portalCourseId === portalCourseId,
+    );
+    if (!row) throw new Error('no such pick');
+    if (into) row.into = into;
+    else delete row.into;
   }
 
   async remove(userId: string, portalCourseId: string) {
@@ -188,8 +207,11 @@ export class InMemoryWanted extends WantedCourseRepository {
   }
 }
 
-// catalog, with these courses of each portal
-export const catalogBus = (catalogs: Record<string, CatalogCourseDto[]>) =>
+// catalog, with these courses of each portal, and what else is asked
+export const catalogBus = (
+  catalogs: Record<string, CatalogCourseDto[]>,
+  more: NonNullable<ConstructorParameters<typeof FakeBus>[0]> = [],
+) =>
   new FakeBus([
     [
       ListPortalCatalogQuery,
@@ -199,6 +221,7 @@ export const catalogBus = (catalogs: Record<string, CatalogCourseDto[]>) =>
             externalId === undefined || course.externalId === externalId,
         ),
     ],
+    ...more,
   ]);
 
 // what @Transactional() runs on without a database, from when a module

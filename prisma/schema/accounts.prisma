@@ -30,8 +30,9 @@ model PortalCredential {
 // user reads it with no grant, and its connector is asked to sync it
 // (WantedCourse). userId is identity's and portalCourseId catalog's, not
 // foreign keys (PortalAccount): a user's delete takes their picks
-// (UserDeletedEvent). `into` is the user's own course to show it with;
-// none for now
+// (UserDeletedEvent). `into` is the portal course of the user's own account
+// it's shown with (README, Matching), catalog's id as portalCourseId is;
+// null on its own
 model Pick {
   userId         String
   portalCourseId String

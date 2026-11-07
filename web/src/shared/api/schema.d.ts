@@ -271,15 +271,35 @@ export interface components {
         PortalCourseResponse: {
             /** @example canvas */
             portal: string;
+            /**
+             * @description the course's id on its portal
+             * @example 297
+             */
+            externalId: string;
             name: string;
+            /** @description the course on its portal */
+            url: string | null;
             /** @example 2026 */
             year: number | null;
+            /**
+             * @description how you read it: account, through your own account of its portal; pick, a public portal's course you picked; link, through the hub's account, in a course an admin made
+             * @enum {string}
+             */
+            via: "account" | "pick" | "link";
         };
         CourseResponse: {
             /** @example os */
             slug: string;
             /** @example Operativni sistemi */
             name: string;
+            /**
+             * @description the portals its portal courses come from, each once
+             * @example [
+             *       "canvas"
+             *     ]
+             */
+            sources: string[];
+            /** @description by year, those that span years last; a pick you show with this course after them */
             portalCourses: components["schemas"]["PortalCourseResponse"][];
         };
         ItemResponse: {
@@ -481,6 +501,10 @@ export interface components {
             picked: boolean;
             /** @description the hub first saw it within 14 days */
             isNew: boolean;
+            /** @description the slug of your course you show it with, one you read through your own account; null when it's a course of its own, or not picked */
+            into: string | null;
+            /** @description the slug of a course of yours to show it with: the one you read through your own account that shares the most files with it, at least 2, of those you see; null when none does, or not picked */
+            suggestedInto: string | null;
         };
         CatalogResponse: {
             /** @description how many courses match, on every page */
@@ -1114,9 +1138,16 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** @description the slug of your course to show it with, one you read through your own account; null to show it on its own; left out, it stays as it was */
+                    into?: string | null;
+                };
+            };
+        };
         responses: {
-            /** @description picked, with no body or {}: you read it from now on */
+            /** @description picked, with no body or {}: you read it from now on, shown with the course `into` names if it does */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -1130,7 +1161,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description TOO_MANY_PICKS: you picked 100 already */
+            /** @description TOO_MANY_PICKS: you picked 100 already; NOT_YOUR_COURSE: `into` is no course you read through your own account */
             422: {
                 headers: {
                     [name: string]: unknown;

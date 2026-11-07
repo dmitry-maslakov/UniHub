@@ -8,6 +8,7 @@ import {
   TextInfo,
   TextPage,
 } from '../../../processing/contracts.js';
+import type { Via } from '../../application/grouping.js';
 import type {
   CourseView,
   FileDetailsView,
@@ -25,15 +26,39 @@ import type {
 
 export class PortalCourseResponse implements PortalCourseView {
   @ApiProperty({ type: String, example: 'canvas' }) portal!: PortalId;
+  @ApiProperty({ description: "the course's id on its portal", example: '297' })
+  externalId!: string;
   @ApiProperty() name!: string;
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'the course on its portal',
+  })
+  url!: string | null;
   @ApiProperty({ type: Number, nullable: true, example: 2026 })
   year!: number | null;
+  @ApiProperty({
+    enum: ['account', 'pick', 'link'],
+    description:
+      "how you read it: account, through your own account of its portal; pick, a public portal's course you picked; link, through the hub's account, in a course an admin made",
+  })
+  via!: Via;
 }
 
 export class CourseResponse implements CourseView {
   @ApiProperty({ example: 'os' }) slug!: string;
   @ApiProperty({ example: 'Operativni sistemi' }) name!: string;
-  @ApiProperty({ type: [PortalCourseResponse] })
+  @ApiProperty({
+    type: [String],
+    example: ['canvas'],
+    description: 'the portals its portal courses come from, each once',
+  })
+  sources!: PortalId[];
+  @ApiProperty({
+    type: [PortalCourseResponse],
+    description:
+      'by year, those that span years last; a pick you show with this course after them',
+  })
   portalCourses!: PortalCourseResponse[];
 }
 

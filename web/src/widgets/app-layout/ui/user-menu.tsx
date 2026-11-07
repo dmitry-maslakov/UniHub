@@ -28,7 +28,7 @@ export function UserMenu() {
         <Menu.Divider />
         <Menu.Item
           component={Link}
-          to="/"
+          to="/account"
           leftSection={<IconUser size={16} stroke={1.75} />}
         >
           Account

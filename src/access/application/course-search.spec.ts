@@ -55,17 +55,53 @@ const cut =
 
 // catalog's order: by folder and name; the slides are in os and net both
 const files: VisibleContentDto[] = [
-  { fileId: 'f1', courseId: 'os-id', hash: slides, name: 'l1.pdf', path: 'a' },
-  { fileId: 'f2', courseId: 'os-id', hash: notes, name: 'n.txt', path: 'b' },
-  { fileId: 'f3', courseId: 'net-id', hash: slides, name: 'l1.pdf', path: 'c' },
-  { fileId: 'f4', courseId: 'exam-id', hash: secret, name: 'x.pdf', path: '' },
+  {
+    fileId: 'f1',
+    courseId: 'os-id',
+    portalCourseId: 'os-pc',
+    hash: slides,
+    name: 'l1.pdf',
+    path: 'a',
+  },
+  {
+    fileId: 'f2',
+    courseId: 'os-id',
+    portalCourseId: 'os-pc',
+    hash: notes,
+    name: 'n.txt',
+    path: 'b',
+  },
+  {
+    fileId: 'f3',
+    courseId: 'net-id',
+    portalCourseId: 'net-pc',
+    hash: slides,
+    name: 'l1.pdf',
+    path: 'c',
+  },
+  {
+    fileId: 'f4',
+    courseId: 'exam-id',
+    portalCourseId: 'exam-pc',
+    hash: secret,
+    name: 'x.pdf',
+    path: '',
+  },
 ];
 // an archive in os holds code, and the notes again; one in exam the answers
 const archives: VisibleContentDto[] = [
-  { fileId: 'f5', courseId: 'os-id', hash: labs, name: 'labs.zip', path: 'b' },
+  {
+    fileId: 'f5',
+    courseId: 'os-id',
+    portalCourseId: 'os-pc',
+    hash: labs,
+    name: 'labs.zip',
+    path: 'b',
+  },
   {
     fileId: 'f6',
     courseId: 'exam-id',
+    portalCourseId: 'exam-pc',
     hash: sha256('x.zip'),
     name: 'x.zip',
     path: '',
@@ -141,7 +177,7 @@ function searching(
       () => ({
         portals: [],
         accounts: [],
-        picks: { portals: [], courses: [] },
+        picks: { portals: [], courses: [], into: new Map() },
       }),
     ],
     [
@@ -347,6 +383,7 @@ describe('CourseSearch', () => {
         {
           fileId: 'f7',
           courseId: 'net-id',
+          portalCourseId: 'net-pc',
           hash: copy,
           name: 'c.zip',
           path: '',

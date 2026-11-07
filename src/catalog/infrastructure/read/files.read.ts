@@ -167,8 +167,17 @@ export class ListVisibleContentHandler implements IQueryHandler<ListVisibleConte
     return rows.flatMap(({ id, name, path, portalCourse, ...row }) => {
       const courseId = courseOf({ portalCourse });
       const hash = contentOf(row);
-      return courseId && hash
-        ? [{ fileId: id, courseId, hash, name, path }]
+      return portalCourse && courseId && hash
+        ? [
+            {
+              fileId: id,
+              courseId,
+              portalCourseId: portalCourse.id,
+              hash,
+              name,
+              path,
+            },
+          ]
         : [];
     });
   }

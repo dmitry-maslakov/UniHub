@@ -22,6 +22,8 @@ const course = (externalId: string, name: string, isNew = false) => ({
   url: `https://courses.example.edu/${externalId}`,
   picked: false,
   isNew,
+  into: null,
+  suggestedInto: null,
 });
 const courses = [
   course('os', 'Operativni sistemi', true),
@@ -29,25 +31,59 @@ const courses = [
   { ...course('net', 'Računarske mreže'), url: 'data:text/html,<p>hi</p>' },
 ];
 
-// the hub's catalog of the portal, picks kept as the routes make them
-function hub() {
-  const picks = new Set<string>();
+// a course the user reads, through their own account or not
+const mine = (slug: string, name: string, via = 'account') => ({
+  slug,
+  name,
+  sources: ['lms'],
+  portalCourses: [
+    { portal: 'lms', externalId: slug, name, url: null, year: 2026, via },
+  ],
+});
+
+// The hub's catalog of the portal, picks kept as the routes make them, and
+// the course each is shown with; the user's courses, and the one os is
+// suggested to go with
+function hub({
+  own = [] as ReturnType<typeof mine>[],
+  suggested = null as string | null,
+  picked = [] as string[],
+} = {}) {
+  const picks = new Set<string>(picked);
+  const into = new Map<string, string | null>();
+  const sent: unknown[] = [];
   const asked: URLSearchParams[] = [];
+  const listed = { courses: 0 };
   server.use(
     http.get(api('/me/portals'), () =>
       HttpResponse.json([{ ...portal, picked: picks.size }]),
     ),
+    http.get(api('/courses'), () => {
+      listed.courses += 1;
+      return HttpResponse.json(own);
+    }),
     http.get(api('/portals/catalog/catalog'), ({ request }) => {
       const query = new URL(request.url).searchParams;
       asked.push(query);
       const q = query.get('q')?.toLowerCase();
       const found = courses
         .filter((c) => !q || c.name.toLowerCase().includes(q))
-        .map((c) => ({ ...c, picked: picks.has(c.externalId) }));
+        .map((c) => {
+          const on = picks.has(c.externalId);
+          return {
+            ...c,
+            picked: on,
+            into: (on && into.get(c.externalId)) || null,
+            suggestedInto: on && c.externalId === 'os' ? suggested : null,
+          };
+        });
       return HttpResponse.json({ total: found.length, courses: found });
     }),
-    http.put(api('/me/picks/catalog/:id'), ({ params }) => {
+    http.put(api('/me/picks/catalog/:id'), async ({ params, request }) => {
+      const body = (await request.text()) || null;
+      sent.push(body && JSON.parse(body));
       picks.add(String(params.id));
+      if (body) into.set(String(params.id), JSON.parse(body).into);
       return new HttpResponse(null, { status: 204 });
     }),
     http.delete(api('/me/picks/catalog/:id'), ({ params }) => {
@@ -55,7 +91,7 @@ function hub() {
       return new HttpResponse(null, { status: 204 });
     }),
   );
-  return { picks, asked };
+  return { picks, asked, sent, listed };
 }
 
 describe('a public portal’s catalog', () => {
@@ -139,5 +175,61 @@ describe('a public portal’s catalog', () => {
     await userEvent.click(box);
     expect(await screen.findByText(/up to 100 courses/)).toBeVisible();
     expect(box).not.toBeChecked();
+  });
+
+  it('shows a picked course with one of her own, the suggested one first and marked, and on its own again', async () => {
+    signedIn();
+    const { sent } = hub({
+      own: [
+        mine('lms~algebra', 'Algebra'),
+        mine('lms~os', 'Operating systems'),
+        mine('admins', 'From the hub', 'link'),
+      ],
+      suggested: 'lms~os',
+      picked: ['os'],
+    });
+    renderApp('/settings/portals');
+
+    const select = await screen.findByLabelText('Show with');
+    // on its own until she says otherwise; a course she reads only through
+    // the hub isn't one to show it with
+    expect(select).toHaveValue('');
+    expect(
+      within(select)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual(['On its own', 'Operating systems', 'Algebra']);
+    expect(
+      within(select).getByRole('group', { name: 'Suggested' }),
+    ).toContainElement(
+      within(select).getByRole('option', { name: 'Operating systems' }),
+    );
+    expect(
+      screen.getByText(/Operating systems has some of the same files/),
+    ).toBeVisible();
+    // only the picked course has one
+    expect(screen.getAllByLabelText('Show with')).toHaveLength(1);
+
+    await userEvent.selectOptions(select, 'lms~os');
+    await waitFor(() => expect(select).toHaveValue('lms~os'));
+    await userEvent.selectOptions(select, '');
+    await waitFor(() => expect(select).toHaveValue(''));
+    expect(sent).toEqual([{ into: 'lms~os' }, { into: null }]);
+  });
+
+  it('offers nothing to show a pick with to a user with no course of her own', async () => {
+    signedIn();
+    const { listed } = hub({
+      own: [mine('admins', 'From the hub', 'link')],
+      picked: ['os'],
+    });
+    renderApp('/settings/portals');
+
+    expect(
+      await screen.findByRole('checkbox', { name: 'Operativni sistemi' }),
+    ).toBeChecked();
+    await waitFor(() => expect(listed.courses).toBe(1));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByLabelText('Show with')).toBeNull();
   });
 });

@@ -14,8 +14,10 @@ export interface CatalogCourse {
   since: Date;
 }
 
-// a course as a user browses the catalog: picked by them, new to the hub
+// a course as a user browses the catalog: picked by them, new to the hub;
+// by its portal course's id too, which stays in the hub
 export interface CatalogEntry {
+  id: string;
   externalId: string;
   name: string;
   url: string | null;
@@ -76,6 +78,7 @@ export function browse(
     courses: found
       .slice(offset, offset + limit)
       .map(({ id, externalId, name, url, since }) => ({
+        id,
         externalId,
         name,
         url,

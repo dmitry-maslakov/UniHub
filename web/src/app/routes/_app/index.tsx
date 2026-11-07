@@ -1,8 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { AccountPage } from '@/pages/account';
+import { MyCoursesPage } from '@/pages/my-courses';
 import { pageHead } from '@/shared/lib';
 
 export const Route = createFileRoute('/_app/')({
-  head: pageHead('Account'),
-  component: AccountPage,
+  head: pageHead('My courses'),
+  component: MyCoursesPage,
 });

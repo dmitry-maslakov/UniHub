@@ -24,14 +24,20 @@ export const viewersOf = (
   },
 });
 
-// the user's viewers now: identity's scope and accounts' accounts, asked
-// for at once
-export async function viewersOfUser(queries: QueryBus, userId: string) {
+// The user's viewers now, and the picks they show with a course of their
+// own (grouping.ts): identity's scope and accounts' accounts and picks,
+// asked for at once
+export async function readingOf(queries: QueryBus, userId: string) {
   const [scope, viewing] = await Promise.all([
     queries.execute(new ReadScopeQuery(userId)),
     queries.execute(new ViewingAccountsQuery(userId)),
   ]);
-  return viewersOf(scope, viewing);
+  return { viewers: viewersOf(scope, viewing), into: viewing.picks.into };
+}
+
+// the viewers alone, for a read that names no course
+export async function viewersOfUser(queries: QueryBus, userId: string) {
+  return (await readingOf(queries, userId)).viewers;
 }
 
 // none granted, picked or of their own: nothing to read, nothing to ask
