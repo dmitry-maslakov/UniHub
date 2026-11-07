@@ -8,6 +8,7 @@ export { LEFT_OUT, type LeftOut } from './domain/unpacking.js';
 export type { RecordKind } from './domain/records.js';
 export {
   FindMemberQuery,
+  GetPostTextQuery,
   GetTextPageQuery,
   ListContainedQuery,
   ListMembersQuery,

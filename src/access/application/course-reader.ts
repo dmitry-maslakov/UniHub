@@ -8,13 +8,14 @@ import {
 } from '../../catalog/contracts.js';
 import {
   FindMemberQuery,
+  GetPostTextQuery,
   GetTextPageQuery,
   ListMembersQuery,
   ListTextsQuery,
 } from '../../processing/contracts.js';
 import { BlobStore } from '../../storage/contracts.js';
 import { NotReadableError } from './errors.js';
-import type { Page, TextAt } from './page.js';
+import type { FilesAt, Page, TextAt } from './page.js';
 import {
   readableCourse,
   readableCourses,
@@ -54,14 +55,26 @@ export class CourseReader {
     return itemView(await readableItem(this.queries, userId, itemId));
   }
 
-  async files(userId: string, slug: CourseSlug, { offset, limit }: Page) {
+  // a post's text, once its view opens it
+  async itemText(userId: string, itemId: string) {
+    const item = await readableItem(this.queries, userId, itemId);
+    if (item.raw === null) throw new NotReadableError('item');
+    return { text: await this.queries.execute(new GetPostTextQuery(item.raw)) };
+  }
+
+  // a page of a course's files, or those of the post named
+  async files(
+    userId: string,
+    slug: CourseSlug,
+    { offset, limit, item }: Page & Pick<FilesAt, 'item'>,
+  ) {
     const { viewers, portalCourseIds } = await readableCourse(
       this.queries,
       userId,
       slug,
     );
     const files = await this.queries.execute(
-      new ListCourseFilesQuery(viewers, portalCourseIds, offset, limit),
+      new ListCourseFilesQuery(viewers, portalCourseIds, offset, limit, item),
     );
     return files.map(fileView);
   }

@@ -11,9 +11,11 @@ export function PageTitle({
 }) {
   return (
     <Stack gap="xs" mb="xl">
-      <Title order={1}>{children}</Title>
+      <Title order={1} style={{ overflowWrap: 'anywhere' }}>
+        {children}
+      </Title>
       {description && (
-        <Text c="dimmed" maw="60ch">
+        <Text c="dimmed" maw="60ch" style={{ overflowWrap: 'anywhere' }}>
           {description}
         </Text>
       )}

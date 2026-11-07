@@ -27,6 +27,15 @@ export default {
       description: 'Možda je uklonjen ili nije tvoj.',
       back: 'Nazad na Moje predmete',
     },
+    tabs: {
+      files: 'Fajlovi',
+      filesCount: 'Fajlovi ({{count}})',
+      posts: 'Objave',
+    },
+    search: {
+      label: 'Pretraži ovaj predmet',
+      placeholder: 'Pretraži njegove fajlove i objave',
+    },
   },
   sources: {
     aria: 'Izvori',
@@ -38,7 +47,6 @@ export default {
     },
   },
   posts: {
-    title: 'Objave',
     aria: 'Objave',
     loading: 'Učitavaju se objave',
     empty: {
@@ -46,18 +54,20 @@ export default {
       body: 'Objave sa portala ovog predmeta pojavljuju se ovde kad ih UniHub pročita.',
     },
     more: 'Prikaži još objava',
-    openOn: 'Na portalu {{portal}}',
-    openOnAria: 'Otvori {{title}} na portalu {{portal}}',
   },
   files: {
-    title: 'Fajlovi',
+    aria: 'Fajlovi po folderima',
+    count_one: '{{count}} fajl',
+    count_few: '{{count}} fajla',
+    count_other: '{{count}} fajlova',
+    capped: 'Prikazano je prvih 2.000. Pretraga nalazi i ostale.',
+    folderCount_one: '{{count}} fajl',
+    folderCount_few: '{{count}} fajla',
+    folderCount_other: '{{count}} fajlova',
     loading: 'Učitavaju se fajlovi',
     empty: {
       title: 'Još nema fajlova',
       body: 'Fajlovi sa portala ovog predmeta pojavljuju se ovde kad ih UniHub pročita.',
     },
-    more: 'Prikaži još fajlova',
-    download: 'Preuzmi',
-    downloadAria: 'Preuzmi {{name}}',
   },
 } satisfies Messages<typeof en>;
