@@ -35,10 +35,7 @@ export function NewFiles({
   if (!fresh.length) return null;
   return (
     <Box mb="lg">
-      <Section
-        title={t('files.new.title')}
-        description={t('files.new.description')}
-      >
+      <Section title={t('files.new.title')}>
         <div>
           {fresh.slice(0, SHOWN).map((file) => (
             <FileRow

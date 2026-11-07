@@ -77,8 +77,6 @@ export default {
     },
     new: {
       title: 'New',
-      description:
-        'Files added or changed on the portal in the last 14 days, newest first.',
       action: 'Show all new ({{count}})',
     },
     newest: {
