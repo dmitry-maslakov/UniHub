@@ -55,12 +55,13 @@ export class FindMemberHandler implements IQueryHandler<FindMemberQuery> {
     // kept: one of a path, a second one listed without its content
     const member = await this.txHost.tx.member.findFirst({
       where: { hash, path, content: { not: null } },
-      select: { content: true, mime: true },
+      select: { content: true, mime: true, size: true },
     });
     return member
       ? {
           hash: member.content as ContentHash,
           mime: member.mime as MediaType | null,
+          size: member.size === null ? null : Number(member.size),
         }
       : null;
   }

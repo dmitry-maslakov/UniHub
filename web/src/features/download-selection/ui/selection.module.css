@@ -1,0 +1,19 @@
+/* the box's place beside a row, kept when the row has none, so rows line up */
+.slot {
+  display: flex;
+  align-items: center;
+  flex: none;
+  width: 1.25rem;
+  min-height: 2.75rem;
+}
+
+.body {
+  flex: 1;
+  min-width: 0;
+}
+
+/* the count stays on one line; on a narrow screen the buttons drop under it */
+.count {
+  flex: 1 1 auto;
+  white-space: nowrap;
+}

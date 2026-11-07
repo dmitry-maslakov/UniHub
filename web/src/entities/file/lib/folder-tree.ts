@@ -9,6 +9,9 @@ export interface FolderNode<F> {
   count: number;
 }
 
+// Past this many files a tree starts with its folders closed
+export const OPEN_UP_TO = 50;
+
 const byName = new Intl.Collator('und', { numeric: true });
 
 // Files into their folders by `path` ('' is the root; 'a/b' nests b in a).

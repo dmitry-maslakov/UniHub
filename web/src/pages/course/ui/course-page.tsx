@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getRouteApi } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { useCourse } from '@/entities/course';
+import { SelectionBar, useSelection } from '@/features/download-selection';
 import {
   AnchorLink,
   ListSkeleton,
@@ -28,6 +29,8 @@ export function CoursePage() {
   const search = route.useSearch();
   const navigate = route.useNavigate();
   const { query, course } = useCourse(slug);
+  // what is ticked in the files tree, kept while the tab is away
+  const selection = useSelection();
   // the same query the Files tab reads: one request
   const files = useQuery(courseFilesQuery(slug));
   const tab = search.tab ?? defaultTab(files.data?.files.length);
@@ -73,7 +76,10 @@ export function CoursePage() {
                   <Tabs.Tab value="posts">{t('course.tabs.posts')}</Tabs.Tab>
                 </Tabs.List>
                 <Tabs.Panel value="files" pt="lg">
-                  <FilesTree slug={slug} />
+                  <Stack gap="md">
+                    <FilesTree slug={slug} selection={selection} />
+                    <SelectionBar selection={selection} />
+                  </Stack>
                 </Tabs.Panel>
                 <Tabs.Panel value="posts" pt="lg">
                   <PostsList slug={slug} />

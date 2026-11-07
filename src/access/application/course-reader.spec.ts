@@ -150,7 +150,7 @@ function reader() {
       FindMemberQuery,
       ({ hash: container, path }: FindMemberQuery) =>
         container === hash && path === main.path
-          ? { hash: sha256(code), mime: cMime }
+          ? { hash: sha256(code), mime: cMime, size: code.length }
           : null,
     ],
     [
@@ -331,6 +331,40 @@ describe('CourseReader', () => {
     const { stream, name, mime } = await r.content('ana', 'f1', 'lab/main.c');
     expect({ name, mime }).toEqual({ name: 'main.c', mime: cMime });
     expect((await stream.toArray()).join('')).toBe(code);
+  });
+
+  it("names what content opens without opening it: the file's folder, or its archive's for a member", async () => {
+    const { reader: r } = reader();
+
+    expect(await r.entry('ana', 'f1')).toEqual({
+      name: 'f1.pdf',
+      path: '',
+      size: 3,
+      course: os.id,
+      archive: undefined,
+    });
+    expect(await r.entry('ana', 'f1', 'lab/main.c')).toEqual({
+      name: 'main.c',
+      path: '',
+      size: code.length,
+      course: os.id,
+      archive: 'f1.pdf',
+    });
+    // as content() refuses
+    await expect(r.entry('ana', 'f3')).rejects.toThrowError(
+      new NotReadableError('file'),
+    );
+    await expect(r.entry('ana', 'f2')).rejects.toThrowError(
+      new NotReadableError('file'),
+    );
+    await expect(r.entry('ana', 'f1', 'lab/gone.c')).rejects.toThrowError(
+      new NotReadableError('member'),
+    );
+  });
+
+  it("names the courses she reads by catalog's id", async () => {
+    const { reader: r } = reader();
+    expect(await r.courseNames('ana')).toEqual(new Map([[os.id, 'OS']]));
   });
 
   it('finds no member not kept, and looks up none in a file it may not read', async () => {

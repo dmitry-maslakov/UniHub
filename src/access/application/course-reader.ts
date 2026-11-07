@@ -123,6 +123,25 @@ export class CourseReader {
     return { name, mime, stream: await this.blobs.get(hash) };
   }
 
+  // What content() would open, without opening it: the name, the folder
+  // (the archive's, for a member), the size if known, and catalog's id of
+  // the course. For a member, `archive` is its archive file's name. Both
+  // check through readableContent, so they can't drift apart.
+  async entry(userId: string, fileId: string, member?: string) {
+    const { name, path, size, course, archive } = await this.readableContent(
+      userId,
+      fileId,
+      member,
+    );
+    return { name, path, size, course, archive };
+  }
+
+  // the names of the courses the user reads, by catalog's id
+  async courseNames(userId: string) {
+    const { courses } = await readableCourses(this.queries, userId);
+    return new Map(courses.map(({ id, name }) => [id, name]));
+  }
+
   // A file without content yet, or whose content the user's view doesn't
   // open yet, has nothing to read; a member is read only inside a file the
   // user may read, and only if it was kept.
@@ -133,12 +152,20 @@ export class CourseReader {
   ) {
     const file = await readableFile(this.queries, userId, fileId);
     if (!file.contentHash) throw new NotReadableError('file');
+    const at = { path: file.path, course: file.courseId };
     if (member === undefined)
-      return { hash: file.contentHash, name: file.name, mime: file.mime };
+      return {
+        ...at,
+        hash: file.contentHash,
+        name: file.name,
+        mime: file.mime,
+        size: file.size,
+        archive: undefined,
+      };
     const found = await this.queries.execute(
       new FindMemberQuery(file.contentHash, member),
     );
     if (!found) throw new NotReadableError('member');
-    return { ...found, name: basename(member) };
+    return { ...at, ...found, name: basename(member), archive: file.name };
   }
 }

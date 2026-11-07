@@ -256,3 +256,23 @@ export class SearchResponse implements SearchView {
   })
   results!: (FileResultResponse | PostResultResponse)[];
 }
+
+export class DownloadResponse {
+  @ApiProperty({
+    example: '/api/downloads/qWmZ0cPj3o8bX1x2l9aYtA',
+    description: 'GET it for the zip, within ten minutes',
+  })
+  url!: string;
+  @ApiProperty({
+    example: 'Operativni sistemi.zip',
+    description: "the course's name when all are of one, else UniHub",
+  })
+  name!: string;
+  @ApiProperty({ example: 3, description: 'how many files, once each' })
+  count!: number;
+  @ApiProperty({
+    example: 1048576,
+    description: 'their sizes in bytes together, as the portals give them',
+  })
+  size!: number;
+}

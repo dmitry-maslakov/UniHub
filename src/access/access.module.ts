@@ -11,17 +11,21 @@ import { StorageModule } from '../storage/contracts.js';
 import { CourseGrants } from './application/course-grants.js';
 import { CourseMatching } from './application/course-matching.js';
 import { CourseReader } from './application/course-reader.js';
+import { Downloads } from './application/downloads.js';
 import {
   OwnPortalCourseHandler,
   PickMatchesHandler,
 } from './application/matching.handlers.js';
+import { DownloadRequests } from './domain/download-requests.js';
 import { CourseAccessController } from './infrastructure/http/course-access.controller.js';
 import { CoursesController } from './infrastructure/http/courses.controller.js';
+import { DownloadsController } from './infrastructure/http/downloads.controller.js';
 import { FilesController } from './infrastructure/http/files.controller.js';
 import { ItemsController } from './infrastructure/http/items.controller.js';
 import { CourseTools } from './infrastructure/mcp/course.tools.js';
 import { McpHttpController } from './infrastructure/mcp/mcp-http.controller.js';
 import { McpRequestMiddleware } from './infrastructure/mcp/mcp-request.middleware.js';
+import { RedisDownloadRequests } from './infrastructure/redis-download-requests.js';
 import { throttlerOptions } from './infrastructure/throttle.js';
 import { AccessSearchModule } from './search.module.js';
 
@@ -49,12 +53,15 @@ import { AccessSearchModule } from './search.module.js';
     CoursesController,
     ItemsController,
     FilesController,
+    DownloadsController,
     CourseAccessController,
     McpHttpController,
     CourseTools,
   ],
   providers: [
     CourseReader,
+    Downloads,
+    { provide: DownloadRequests, useClass: RedisDownloadRequests },
     CourseGrants,
     CourseMatching,
     OwnPortalCourseHandler,

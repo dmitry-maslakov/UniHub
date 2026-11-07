@@ -180,6 +180,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/downloads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["DownloadsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/downloads/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["DownloadsController_zip"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/users/{userId}/courses/{courseId}": {
         parameters: {
             query?: never;
@@ -404,6 +436,28 @@ export interface components {
             /** @example 1 */
             page: number;
             text: string;
+        };
+        DownloadResponse: {
+            /**
+             * @description GET it for the zip, within ten minutes
+             * @example /api/downloads/qWmZ0cPj3o8bX1x2l9aYtA
+             */
+            url: string;
+            /**
+             * @description the course's name when all are of one, else UniHub
+             * @example Operativni sistemi.zip
+             */
+            name: string;
+            /**
+             * @description how many files, once each
+             * @example 3
+             */
+            count: number;
+            /**
+             * @description their sizes in bytes together, as the portals give them
+             * @example 1048576
+             */
+            size: number;
         };
         SnippetResponse: {
             /** @description up to 400 characters of the page as indexed: plain text, whatever HTML the file had included, so render it as text */
@@ -924,6 +978,81 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description the file as the portal had it, or a file inside it as its archive had it; a download, unless `disposition=inline` asks to show a PDF, picture or plain text in the browser */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    DownloadsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description the files to zip, and the files inside archives, each as GET /api/files/{id}/content names them */
+                    items: {
+                        /** @description a file inside it, by its path as list_members or the members route gives it; the file itself by default */
+                        member?: string;
+                        /**
+                         * Format: uuid
+                         * @description a file's id
+                         */
+                        file: string;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description the zip is ready to fetch from `url` for ten minutes, as often as needed */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DownloadResponse"];
+                };
+            };
+            /** @description a file is one you may not download now (or a member was not kept); none is named */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description DOWNLOAD_TOO_LARGE: the files come to more than 1 GiB */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    DownloadsController_zip: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the files of the request in one zip, streamed, stored without compression; each one is checked again as it is opened */
             200: {
                 headers: {
                     [name: string]: unknown;

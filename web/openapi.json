@@ -654,6 +654,110 @@
         ]
       }
     },
+    "/api/downloads": {
+      "post": {
+        "operationId": "DownloadsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "items": {
+                    "minItems": 1,
+                    "maxItems": 500,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "member": {
+                          "description": "a file inside it, by its path as list_members or the members route gives it; the file itself by default",
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 1024
+                        },
+                        "file": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                          "description": "a file's id"
+                        }
+                      },
+                      "required": [
+                        "file"
+                      ]
+                    },
+                    "description": "the files to zip, and the files inside archives, each as GET /api/files/{id}/content names them"
+                  }
+                },
+                "required": [
+                  "items"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "the zip is ready to fetch from `url` for ten minutes, as often as needed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "a file is one you may not download now (or a member was not kept); none is named"
+          },
+          "422": {
+            "description": "DOWNLOAD_TOO_LARGE: the files come to more than 1 GiB"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "downloads"
+        ]
+      }
+    },
+    "/api/downloads/{id}": {
+      "get": {
+        "operationId": "DownloadsController_zip",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the files of the request in one zip, streamed, stored without compression; each one is checked again as it is opened"
+          },
+          "404": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "downloads"
+        ]
+      }
+    },
     "/api/users/{userId}/courses/{courseId}": {
       "put": {
         "operationId": "CourseAccessController_grant",
@@ -1485,6 +1589,37 @@
           "pages",
           "page",
           "text"
+        ]
+      },
+      "DownloadResponse": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "example": "/api/downloads/qWmZ0cPj3o8bX1x2l9aYtA",
+            "description": "GET it for the zip, within ten minutes"
+          },
+          "name": {
+            "type": "string",
+            "example": "Operativni sistemi.zip",
+            "description": "the course's name when all are of one, else UniHub"
+          },
+          "count": {
+            "type": "number",
+            "example": 3,
+            "description": "how many files, once each"
+          },
+          "size": {
+            "type": "number",
+            "example": 1048576,
+            "description": "their sizes in bytes together, as the portals give them"
+          }
+        },
+        "required": [
+          "url",
+          "name",
+          "count",
+          "size"
         ]
       },
       "SnippetResponse": {

@@ -1,9 +1,13 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { leaveTo } from '@/shared/lib';
 import { renderApp } from './render';
 import { server, signedIn } from './server';
+
+// the page stays; the browser is sent to the zip
+vi.mock('@/shared/lib/leave', () => ({ leaveTo: vi.fn() }));
 
 const api = (path: string) => `http://localhost:3000/api${path}`;
 
@@ -31,6 +35,7 @@ const member = (over: object = {}) => ({
 });
 
 const asked: URLSearchParams[] = [];
+const memberOffsets: number[] = [];
 
 const setup = ({
   file = details(),
@@ -46,6 +51,7 @@ const setup = ({
 } = {}) => {
   signedIn();
   asked.length = 0;
+  memberOffsets.length = 0;
   server.use(
     http.get(api('/courses'), () =>
       HttpResponse.json([
@@ -59,10 +65,12 @@ const setup = ({
     ),
     http.get(api('/files/f1'), () => HttpResponse.json(file)),
     http.get(api('/files/f1/members'), ({ request }) => {
-      const offset = Number(
-        new URL(request.url).searchParams.get('offset') ?? 0,
+      const query = new URL(request.url).searchParams;
+      const offset = Number(query.get('offset') ?? 0);
+      memberOffsets.push(offset);
+      return HttpResponse.json(
+        members.slice(offset, offset + Number(query.get('limit') ?? 50)),
       );
-      return HttpResponse.json(members.slice(offset, offset + 50));
     }),
     http.get(api('/files/f1/text'), ({ request }) => {
       const query = new URL(request.url).searchParams;
@@ -233,25 +241,36 @@ describe('a file', () => {
     });
     const { router } = renderApp('/courses/os/files/f1');
 
-    const list = await screen.findByRole('list', {
+    const tree = await screen.findByRole('navigation', {
       name: 'Files in the archive',
     });
-    const [text, bin, huge] = within(list).getAllByRole('listitem');
-    expect(within(text).getByRole('link')).toHaveAttribute(
+    // the folder they sit in, open, and the file with a text a link
+    expect(within(tree).getByText('lab')).toBeVisible();
+    const text = within(tree).getByRole('link', { name: /main\.c/ });
+    expect(text).toHaveAttribute(
       'href',
       '/courses/os/files/f1?member=lab%2Fmain.c',
     );
+    expect(text).toHaveTextContent('900 B');
     // no text of its own: the archive's own page says so, with a download
     expect(screen.getByText('No text in this file')).toBeVisible();
-    expect(within(bin).getByText(/No text/)).toBeVisible();
-    expect(within(bin).getByRole('link', { name: 'Download' })).toHaveAttribute(
-      'href',
-      '/api/files/f1/content?member=lab%2Fdata.bin',
-    );
+    const bin = within(tree).getByText('data.bin').parentElement!;
+    expect(bin).toHaveTextContent('No text');
+    expect(
+      within(bin.parentElement!).getByRole('link', { name: 'Download' }),
+    ).toHaveAttribute('href', '/api/files/f1/content?member=lab%2Fdata.bin');
+    // left out: its reason, no link and no box
+    const huge = within(tree).getByText('huge.iso').parentElement!;
     expect(huge).toHaveTextContent('Left out: too large');
-    expect(within(huge).queryByRole('link')).toBeNull();
+    expect(within(huge.parentElement!).queryByRole('link')).toBeNull();
+    expect(
+      screen.queryByRole('checkbox', { name: 'Select huge.iso' }),
+    ).toBeNull();
+    expect(
+      screen.getByRole('checkbox', { name: 'Select data.bin' }),
+    ).toBeVisible();
 
-    await userEvent.click(within(text).getByRole('link'));
+    await userEvent.click(text);
 
     expect(
       await screen.findByRole('heading', { level: 1, name: 'main.c' }),
@@ -266,24 +285,94 @@ describe('a file', () => {
       '/api/files/f1/content?member=lab%2Fmain.c',
     );
     expect(
-      screen.queryByRole('list', { name: 'Files in the archive' }),
+      screen.queryByRole('navigation', { name: 'Files in the archive' }),
     ).toBeNull();
     expect(
       screen.getByRole('link', { name: 'Back to lab.zip' }),
     ).toHaveAttribute('href', '/courses/os/files/f1');
   });
 
-  it('pages through the members of a big archive', async () => {
-    const many = Array.from({ length: 51 }, (_, i) =>
-      member({ path: `src/f${i}.c` }),
+  it('reads every page of members, 200 at a time', async () => {
+    const many = Array.from({ length: 450 }, (_, i) =>
+      member({ path: `f${i}.c` }),
     );
     setup({ file: details({ texts: [] }), members: many });
     renderApp('/courses/os/files/f1');
 
-    expect(await screen.findByText('src/f49.c')).toBeVisible();
-    expect(screen.queryByText('src/f50.c')).toBeNull();
-    await userEvent.click(screen.getByRole('button', { name: 'Show more' }));
-    expect(await screen.findByText('src/f50.c')).toBeVisible();
+    expect(await screen.findByText('f449.c')).toBeVisible();
+    expect(memberOffsets).toEqual([0, 200, 400]);
+    expect(screen.queryByText(/Showing the first/)).toBeNull();
+  });
+
+  it('stops at 2,000 members, and says so', async () => {
+    const many = Array.from({ length: 2100 }, (_, i) =>
+      member({ path: `f${i}.c` }),
+    );
+    setup({ file: details({ texts: [] }), members: many });
+    renderApp('/courses/os/files/f1');
+
+    // two thousand rows take a while to draw
+    expect(
+      await screen.findByText(
+        /Showing the first 2,000/,
+        {},
+        { timeout: 10_000 },
+      ),
+    ).toBeVisible();
+    expect(memberOffsets).toHaveLength(10);
+  }, 20_000);
+
+  it('downloads two members of an archive', async () => {
+    const asked: unknown[] = [];
+    setup({
+      file: details({ name: 'lab.zip', mime: 'application/zip', texts: [] }),
+      members: [
+        member(),
+        member({ path: 'lab/data.bin', texts: [], mime: null, size: 100 }),
+        member({ path: 'README.md', size: 50 }),
+        member({ path: 'lab/huge.iso', texts: [], leftOut: 'TOO_LARGE' }),
+      ],
+    });
+    server.use(
+      http.post(api('/downloads'), async ({ request }) => {
+        asked.push(await request.json());
+        return HttpResponse.json(
+          { url: '/api/downloads/xyz', name: 'lab.zip', count: 2, size: 1000 },
+          { status: 201 },
+        );
+      }),
+    );
+    renderApp('/courses/os/files/f1');
+
+    const folder = await screen.findByRole('checkbox', {
+      name: 'Select everything in lab',
+    });
+    await userEvent.click(
+      screen.getByRole('checkbox', { name: 'Select main.c' }),
+    );
+    expect(folder).toBePartiallyChecked();
+    await userEvent.click(
+      screen.getByRole('checkbox', { name: 'Select data.bin' }),
+    );
+    // the folder's box is checked when all it can tick is
+    expect(folder).toBeChecked();
+    expect(screen.getByText('2 selected, 1.0 kB')).toBeVisible();
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Download as ZIP' }),
+    );
+
+    await waitFor(() =>
+      expect(leaveTo).toHaveBeenCalledWith('/api/downloads/xyz'),
+    );
+    expect(asked).toEqual([
+      {
+        items: [
+          { file: 'f1', member: 'lab/main.c' },
+          { file: 'f1', member: 'lab/data.bin' },
+        ],
+      },
+    ]);
   });
 
   it('says why a member was left out', async () => {

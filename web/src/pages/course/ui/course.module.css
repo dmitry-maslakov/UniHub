@@ -11,12 +11,3 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
-
-/* a folder or a file of the tree: at least a thumb tall, long names wrap */
-.node {
-  min-height: 2.75rem;
-}
-
-.nodeLabel {
-  overflow-wrap: anywhere;
-}
