@@ -1,14 +1,15 @@
-import { NativeSelect } from '@mantine/core';
+import { NativeSelect, Text } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type Schemas } from '@/shared/api';
 import { showWith } from '../api/picks';
-import { ownCourses } from '../lib/own-courses';
+import { linkedCourse, ownCourses } from '../lib/own-courses';
 import { showWithErrorText } from '../lib/pick-error';
 
 // What a picked course shows with: on its own, or inside one of the user's
 // courses they read through their own account, the one sharing files with
-// it first and marked. None of the user's own, nothing to choose.
+// it first and marked. None of the user's own, nothing to choose; one an
+// admin linked to a course stays there, and is named.
 export function ShowWith({
   portal,
   course,
@@ -31,6 +32,13 @@ export function ShowWith({
     onError: (error) =>
       notifications.show({ color: 'red', message: showWithErrorText(error) }),
   });
+  const linked = linkedCourse(courses.data ?? [], portal, course.externalId);
+  if (linked)
+    return (
+      <Text size="sm" c="dimmed">
+        Shown with {linked.name}, as an admin linked it.
+      </Text>
+    );
   const own = ownCourses(courses.data ?? []);
   if (!own.length) return null;
 

@@ -26,7 +26,9 @@ export interface PickMatch {
 // Each of these portal courses the user picked, as they see it now: the
 // course it's shown with is the one that holds the portal course of their
 // own it goes with, none while they don't read that one through their
-// account; the suggestion counts only what they see
+// account; the suggestion counts only what they see. One an admin linked
+// to a course stays there (README, Matching): neither, whatever it goes
+// with.
 export class PickMatchesQuery extends Query<Map<string, PickMatch>> {
   constructor(
     public readonly userId: string,

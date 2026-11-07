@@ -28,14 +28,21 @@ export function checkRoom(picked: readonly string[], portalCourseId: string) {
     throw new TooManyPicksError(MAX_PICKS);
 }
 
+// A user's picks, by the portal courses' ids, and of them those the user
+// shows with a course of their own, each by the portal course of their own
+// account it goes with
+export interface UserPicks {
+  courses: string[];
+  into: Map<string, string>;
+}
+
 // Users' picks of public portals' courses (README, Public portals), by the
 // portal courses' ids: what each user reads of those portals, with no grant
 export abstract class PickRepository {
   // the portal courses the user picked
   abstract ofUser(userId: string): Promise<string[]>;
-  // of them, those the user shows with a course of their own, each by the
-  // portal course of their own account it goes with
-  abstract intoOf(userId: string): Promise<Map<string, string>>;
+  // the same, with what each goes with, by one read
+  abstract ofUserWithInto(userId: string): Promise<UserPicks>;
   // the same, and no other pick of the user's is made till the transaction
   // ends: two at once can't both find room for one more
   abstract lockOf(userId: string): Promise<string[]>;

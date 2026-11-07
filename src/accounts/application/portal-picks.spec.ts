@@ -279,6 +279,7 @@ describe('PortalPicks', () => {
       bus,
     );
     const ofUser = vi.spyOn(rows, 'ofUser');
+    const ofUserWithInto = vi.spyOn(rows, 'ofUserWithInto');
     expect(await service.of('ana')).toEqual({
       portals: [],
       courses: [],
@@ -286,6 +287,7 @@ describe('PortalPicks', () => {
     });
     expect(await service.counts('ana')).toEqual(new Map());
     expect(ofUser).not.toHaveBeenCalled();
+    expect(ofUserWithInto).not.toHaveBeenCalled();
     expect(bus.sent).toEqual([]);
   });
 

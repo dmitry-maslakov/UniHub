@@ -69,7 +69,7 @@ const contents = [
   ...[h1, h2, h3].map((h) => content('pc-net', h)),
 ];
 
-function matching(listed = courses) {
+function matching(listed = courses, seen = contents) {
   const queries = new FakeBus([
     [ReadScopeQuery, () => ({ granted: ['net-id'], ownAccounts: true })],
     [
@@ -84,7 +84,7 @@ function matching(listed = courses) {
     [
       ListVisibleContentQuery,
       ({ portalCourseIds }: ListVisibleContentQuery) =>
-        contents.filter((c) => portalCourseIds?.includes(c.portalCourseId)),
+        seen.filter((c) => portalCourseIds?.includes(c.portalCourseId)),
     ],
   ]);
   return { queries, matching: new CourseMatching(queries.queries) };
@@ -106,6 +106,27 @@ describe('CourseMatching', () => {
       new Map([
         ['pc-os', { into: null, suggestedInto: 'moodle~m1' }],
         ['pc-db', { into: 'moodle~m1', suggestedInto: null }],
+      ]),
+    );
+  });
+
+  it('answers neither a course nor a suggestion for a pick an admin linked, whatever it goes with', async () => {
+    // an admin linked db to algo: there it stays, though she chose m1 and
+    // db shares two contents with it
+    const algo: CourseDto = {
+      id: 'algo-id',
+      slug: 'algo',
+      name: 'Algorithms',
+      portalCourses: ofItsOwn('pc-db', catalog).portalCourses,
+    };
+    const { matching: m } = matching(
+      [...courses.filter(({ id }) => id !== 'pc-db'), algo],
+      [...contents, ...[h1, h2].map((h) => content('pc-db', h))],
+    );
+    expect(await m.matches('ana', ['pc-os', 'pc-db'])).toEqual(
+      new Map([
+        ['pc-os', { into: null, suggestedInto: 'moodle~m1' }],
+        ['pc-db', { into: null, suggestedInto: null }],
       ]),
     );
   });

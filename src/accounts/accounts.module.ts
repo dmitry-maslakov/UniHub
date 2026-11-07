@@ -36,7 +36,9 @@ import { ReconcileWantedSchedule } from './infrastructure/reconcile-wanted.sched
 // to sync (WantedCoursesQuery, for ingest). Answers plugins which accounts
 // a portal's runs are for, with their credentials, and tells it as they're
 // linked and go. Asks identity whether a user is an admin, and drops a
-// deleted user's accounts when it says so.
+// deleted user's accounts when it says so. Asks access which course of the
+// user's own a pick goes with, and which it may (OwnPortalCourseQuery,
+// PickMatchesQuery).
 @Module({
   imports: [ConfigModule.forFeature(accountsConfig), PluginsModule],
   controllers: [

@@ -127,12 +127,15 @@ export class InMemoryPicks extends PickRepository {
       .sort();
   }
 
-  async intoOf(userId: string) {
-    return new Map(
-      this.rows.flatMap(({ userId: theirs, portalCourseId, into }) =>
-        theirs === userId && into ? [[portalCourseId, into] as const] : [],
+  async ofUserWithInto(userId: string) {
+    return {
+      courses: await this.ofUser(userId),
+      into: new Map(
+        this.rows.flatMap(({ userId: theirs, portalCourseId, into }) =>
+          theirs === userId && into ? [[portalCourseId, into] as const] : [],
+        ),
       ),
-    );
+    };
   }
 
   async lockOf(userId: string) {

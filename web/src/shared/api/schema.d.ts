@@ -501,9 +501,9 @@ export interface components {
             picked: boolean;
             /** @description the hub first saw it within 14 days */
             isNew: boolean;
-            /** @description the slug of your course you show it with, one you read through your own account; null when it's a course of its own, or not picked */
+            /** @description the slug of your course you show it with, one you read through your own account; null when it's a course of its own, in a course an admin linked it to, or not picked */
             into: string | null;
-            /** @description the slug of a course of yours to show it with: the one you read through your own account that shares the most files with it, at least 2, of those you see; null when none does, or not picked */
+            /** @description the slug of a course of yours to show it with: the one you read through your own account that shares the most files with it, at least 2, of those you see; null when none does, an admin linked it to a course, or not picked */
             suggestedInto: string | null;
         };
         CatalogResponse: {

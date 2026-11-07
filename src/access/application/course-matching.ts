@@ -4,7 +4,7 @@ import {
   ListVisibleContentQuery,
   type CourseSlug,
 } from '../../catalog/contracts.js';
-import { ownIn } from './grouping.js';
+import { ownIn, slugsOf } from './grouping.js';
 import type { PickMatch } from './queries.js';
 import { readableCourses } from './readable.js';
 import { suggestions } from './suggestions.js';
@@ -42,14 +42,22 @@ export class CourseMatching {
         )
       : [];
     const suggested = suggestions(contents, picks, own);
+    const shownIn = slugsOf(courses);
+    const ofItsOwn = new Set(courses.map(({ id }) => id));
     return new Map(
       picks.map((id) => {
         const goesWith = into.get(id);
+        const mine = goesWith === undefined ? undefined : own.get(goesWith);
+        const at = shownIn.get(id);
+        // where regroup put it: with the course of theirs it goes with, or
+        // on its own; anywhere else an admin linked it, and there it stays,
+        // whatever the user chose or might
+        const linked = at !== mine && !ofItsOwn.has(id);
         return [
           id,
           {
-            into: (goesWith !== undefined && own.get(goesWith)) || null,
-            suggestedInto: suggested.get(id) ?? null,
+            into: mine !== undefined && mine === at ? mine : null,
+            suggestedInto: linked ? null : (suggested.get(id) ?? null),
           },
         ];
       }),

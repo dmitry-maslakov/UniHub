@@ -25,16 +25,20 @@ export class PrismaPickRepository extends PickRepository {
     return rows.map(({ portalCourseId }) => portalCourseId);
   }
 
-  async intoOf(userId: string) {
+  async ofUserWithInto(userId: string) {
     const rows = await this.txHost.tx.pick.findMany({
-      where: { userId, into: { not: null } },
+      where: { userId },
       select: { portalCourseId: true, into: true },
+      orderBy: { portalCourseId: 'asc' },
     });
-    return new Map(
-      rows.flatMap(({ portalCourseId, into }) =>
-        into === null ? [] : [[portalCourseId, into] as const],
+    return {
+      courses: rows.map(({ portalCourseId }) => portalCourseId),
+      into: new Map(
+        rows.flatMap(({ portalCourseId, into }) =>
+          into === null ? [] : [[portalCourseId, into] as const],
+        ),
       ),
-    );
+    };
   }
 
   // Two picks of one user's at once would both count the same picks and

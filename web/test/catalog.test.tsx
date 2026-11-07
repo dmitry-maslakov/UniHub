@@ -32,7 +32,20 @@ const courses = [
 ];
 
 // a course the user reads, through their own account or not
-const mine = (slug: string, name: string, via = 'account') => ({
+interface Course {
+  slug: string;
+  name: string;
+  sources: string[];
+  portalCourses: {
+    portal: string;
+    externalId: string;
+    name: string;
+    url: string | null;
+    year: number | null;
+    via: string;
+  }[];
+}
+const mine = (slug: string, name: string, via = 'account'): Course => ({
   slug,
   name,
   sources: ['lms'],
@@ -45,7 +58,7 @@ const mine = (slug: string, name: string, via = 'account') => ({
 // the course each is shown with; the user's courses, and the one os is
 // suggested to go with
 function hub({
-  own = [] as ReturnType<typeof mine>[],
+  own = [] as Course[],
   suggested = null as string | null,
   picked = [] as string[],
 } = {}) {
@@ -53,15 +66,11 @@ function hub({
   const into = new Map<string, string | null>();
   const sent: unknown[] = [];
   const asked: URLSearchParams[] = [];
-  const listed = { courses: 0 };
   server.use(
     http.get(api('/me/portals'), () =>
       HttpResponse.json([{ ...portal, picked: picks.size }]),
     ),
-    http.get(api('/courses'), () => {
-      listed.courses += 1;
-      return HttpResponse.json(own);
-    }),
+    http.get(api('/courses'), () => HttpResponse.json(own)),
     http.get(api('/portals/catalog/catalog'), ({ request }) => {
       const query = new URL(request.url).searchParams;
       asked.push(query);
@@ -91,7 +100,7 @@ function hub({
       return new HttpResponse(null, { status: 204 });
     }),
   );
-  return { picks, asked, sent, listed };
+  return { picks, asked, sent };
 }
 
 describe('a public portal’s catalog', () => {
@@ -219,17 +228,49 @@ describe('a public portal’s catalog', () => {
 
   it('offers nothing to show a pick with to a user with no course of her own', async () => {
     signedIn();
-    const { listed } = hub({
-      own: [mine('admins', 'From the hub', 'link')],
+    hub({ own: [mine('admins', 'From the hub', 'link')], picked: ['os'] });
+    const { queryClient } = renderApp('/settings/portals');
+
+    expect(
+      await screen.findByRole('checkbox', { name: 'Operativni sistemi' }),
+    ).toBeChecked();
+    await waitFor(() =>
+      expect(
+        queryClient.getQueryCache().find({ queryKey: ['get', '/api/courses'] })
+          ?.state.status,
+      ).toBe('success'),
+    );
+    expect(screen.queryByLabelText('Show with')).toBeNull();
+  });
+
+  it('names the course an admin linked a pick to, with nothing to choose', async () => {
+    signedIn();
+    const algorithms = mine('algo', 'Algorithms', 'link');
+    hub({
+      own: [
+        mine('lms~algebra', 'Algebra'),
+        {
+          ...algorithms,
+          portalCourses: [
+            ...algorithms.portalCourses,
+            {
+              portal: 'catalog',
+              externalId: 'os',
+              name: 'Operativni sistemi',
+              url: null,
+              year: null,
+              via: 'pick',
+            },
+          ],
+        },
+      ],
       picked: ['os'],
     });
     renderApp('/settings/portals');
 
     expect(
-      await screen.findByRole('checkbox', { name: 'Operativni sistemi' }),
-    ).toBeChecked();
-    await waitFor(() => expect(listed.courses).toBe(1));
-    await new Promise((resolve) => setTimeout(resolve, 50));
+      await screen.findByText('Shown with Algorithms, as an admin linked it.'),
+    ).toBeVisible();
     expect(screen.queryByLabelText('Show with')).toBeNull();
   });
 });

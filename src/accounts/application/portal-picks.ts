@@ -16,7 +16,12 @@ import {
   type Browse,
   type CatalogEntry,
 } from '../domain/catalog-page.js';
-import { checkRoom, PickRepository, pickedIn } from '../domain/picks.js';
+import {
+  checkRoom,
+  PickRepository,
+  pickedIn,
+  type UserPicks,
+} from '../domain/picks.js';
 import { PortalLinks } from '../domain/portal-links.js';
 import {
   WantedCourse,
@@ -27,10 +32,8 @@ import { NotInCatalogError, NotYourCourseError } from './errors.js';
 // What a user reads of the public portals: the courses they picked, and
 // of those the ones they show with a course of their own, each by the
 // portal course of their own account it goes with
-export interface Picks {
+export interface Picks extends UserPicks {
   portals: PortalId[];
-  courses: string[];
-  into: ReadonlyMap<string, string>;
 }
 
 // a course of a public portal's catalog as its user browses it, and the
@@ -144,11 +147,7 @@ export class PortalPicks {
   async of(userId: string): Promise<Picks> {
     const portals = this.links.readByPicks();
     if (!portals.length) return { portals, courses: [], into: new Map() };
-    const [courses, into] = await Promise.all([
-      this.picks.ofUser(userId),
-      this.picks.intoOf(userId),
-    ]);
-    return { portals, courses, into };
+    return { portals, ...(await this.picks.ofUserWithInto(userId)) };
   }
 
   // how many courses of each public portal's catalog the user picked: the
