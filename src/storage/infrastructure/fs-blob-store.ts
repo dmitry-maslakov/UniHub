@@ -101,4 +101,8 @@ export class FsBlobStore extends BlobStore implements OnModuleInit {
     await stat(path);
     return createReadStream(path);
   }
+
+  async size(hash: ContentHash) {
+    return (await stat(this.pathOf(hash))).size;
+  }
 }

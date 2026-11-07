@@ -1,10 +1,14 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { i18n } from '@/shared/i18n';
+import { leaveTo } from '@/shared/lib';
 import { renderApp } from './render';
 import { server, signedIn } from './server';
+
+// the page stays; the browser is sent to the zip
+vi.mock('@/shared/lib/leave', () => ({ leaveTo: vi.fn() }));
 
 const api = (path: string) => `http://localhost:3000/api${path}`;
 
@@ -270,6 +274,189 @@ describe('a course', () => {
     expect(await screen.findByText('No files yet')).toBeVisible();
     await userEvent.click(screen.getByRole('tab', { name: 'Posts' }));
     expect(await screen.findByText('No posts yet')).toBeVisible();
+  });
+
+  describe('downloading several files', () => {
+    const asked: unknown[] = [];
+    const zipAnswer = () =>
+      HttpResponse.json(
+        {
+          url: '/api/downloads/abc',
+          name: 'Operating systems.zip',
+          count: 3,
+          size: 4_200_000,
+        },
+        { status: 201 },
+      );
+    const answerWith = (answer: () => Response = zipAnswer) =>
+      server.use(
+        http.post(api('/downloads'), async ({ request }) => {
+          asked.push(await request.json());
+          return answer();
+        }),
+      );
+    const files = [
+      file(1, true, 'Predavanja'),
+      file(2, true, 'Predavanja'),
+      file(3, true, ''),
+      file(4, false, ''),
+    ];
+
+    it('downloads a folder and a file as one zip', async () => {
+      setup(posts, files);
+      asked.length = 0;
+      answerWith();
+      renderApp('/courses/os');
+
+      const box = async (name: string) =>
+        screen.findByRole('checkbox', { name });
+      const folder = await box('Select everything in Predavanja');
+      // a file without content has no box, and no bar before a tick
+      expect(
+        screen.queryByRole('checkbox', { name: 'Select file-4.pdf' }),
+      ).toBeNull();
+      expect(
+        screen.queryByRole('button', { name: 'Download as ZIP' }),
+      ).toBeNull();
+
+      await userEvent.click(folder);
+      expect(folder).toBeChecked();
+      expect(await box('Select file-1.pdf')).toBeChecked();
+      expect(await box('Select file-2.pdf')).toBeChecked();
+      expect(screen.getByText('2 selected, 2.8 MB')).toBeVisible();
+
+      // a folder's box follows its files
+      await userEvent.click(await box('Select file-1.pdf'));
+      expect(folder).toBePartiallyChecked();
+      await userEvent.click(await box('Select file-1.pdf'));
+      expect(folder).toBeChecked();
+
+      await userEvent.click(await box('Select file-3.pdf'));
+      expect(screen.getByText('3 selected, 4.2 MB')).toBeVisible();
+      const all = screen.getByRole('checkbox', { name: 'Select all' });
+      expect(all).toBeChecked();
+
+      await userEvent.click(
+        screen.getByRole('button', { name: 'Download as ZIP' }),
+      );
+
+      await waitFor(() =>
+        expect(leaveTo).toHaveBeenCalledWith('/api/downloads/abc'),
+      );
+      expect(asked).toEqual([
+        // in the order they were ticked: f1 again after f2
+        { items: [{ file: 'f2' }, { file: 'f1' }, { file: 'f3' }] },
+      ]);
+      // the page stays, with what was ticked
+      expect(folder).toBeChecked();
+    });
+
+    it('selects all and clears', async () => {
+      setup(posts, files);
+      renderApp('/courses/os');
+
+      const all = await screen.findByRole('checkbox', { name: 'Select all' });
+      await userEvent.click(all);
+      expect(screen.getByText('3 selected, 4.2 MB')).toBeVisible();
+      expect(
+        screen.getByRole('checkbox', { name: 'Select file-3.pdf' }),
+      ).toBeChecked();
+
+      await userEvent.click(screen.getByRole('button', { name: 'Clear' }));
+      expect(all).not.toBeChecked();
+      expect(screen.queryByText(/selected/)).toBeNull();
+    });
+
+    it('keeps what is ticked when the tab is changed and back', async () => {
+      setup(posts, files);
+      renderApp('/courses/os');
+
+      await userEvent.click(
+        await screen.findByRole('checkbox', { name: 'Select file-3.pdf' }),
+      );
+      await userEvent.click(screen.getByRole('tab', { name: 'Posts' }));
+      expect(await screen.findByText('Post 1')).toBeVisible();
+      expect(screen.queryByText(/selected/)).toBeNull();
+      await userEvent.click(screen.getByRole('tab', { name: /^Files/ }));
+
+      expect(await screen.findByText('1 selected, 1.4 MB')).toBeVisible();
+    });
+
+    it('says when it is over a gigabyte', async () => {
+      setup(posts, files);
+      answerWith(() =>
+        HttpResponse.json(
+          { statusCode: 422, code: 'DOWNLOAD_TOO_LARGE', message: 'big' },
+          { status: 422 },
+        ),
+      );
+      renderApp('/courses/os');
+
+      await userEvent.click(
+        await screen.findByRole('checkbox', { name: 'Select file-3.pdf' }),
+      );
+      await userEvent.click(
+        screen.getByRole('button', { name: 'Download as ZIP' }),
+      );
+
+      expect(
+        await screen.findByText("That's over 1 GB. Pick fewer files."),
+      ).toBeVisible();
+      expect(leaveTo).not.toHaveBeenCalled();
+    });
+
+    it('asks the hub for no more than 500 files', async () => {
+      setup(posts, manyFiles(600));
+      asked.length = 0;
+      answerWith();
+      renderApp('/courses/os');
+
+      await userEvent.click(
+        await screen.findByRole('checkbox', { name: 'Select all' }),
+      );
+      await userEvent.click(
+        screen.getByRole('button', { name: 'Download as ZIP' }),
+      );
+
+      expect(
+        await screen.findByText("That's over 500 files. Pick fewer files."),
+      ).toBeVisible();
+      expect(asked).toEqual([]);
+    });
+
+    it('says when a file is no longer there', async () => {
+      setup(posts, files);
+      answerWith(() => HttpResponse.json({}, { status: 404 }));
+      renderApp('/courses/os');
+
+      await userEvent.click(
+        await screen.findByRole('checkbox', { name: 'Select file-3.pdf' }),
+      );
+      await userEvent.click(
+        screen.getByRole('button', { name: 'Download as ZIP' }),
+      );
+
+      expect(
+        await screen.findByText(
+          'Some of these files are no longer available. Reload the page.',
+        ),
+      ).toBeVisible();
+    });
+
+    it('says what went wrong with any other failure', async () => {
+      setup(posts, files);
+      answerWith(() => HttpResponse.json({}, { status: 429 }));
+      renderApp('/courses/os');
+
+      await userEvent.click(
+        await screen.findByRole('checkbox', { name: 'Select file-3.pdf' }),
+      );
+      await userEvent.click(
+        screen.getByRole('button', { name: 'Download as ZIP' }),
+      );
+
+      expect(await screen.findByText(/Too many requests/)).toBeVisible();
+    });
   });
 
   it('shows where the course comes from: each source, how she reads it, and a link to it', async () => {

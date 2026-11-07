@@ -5,6 +5,7 @@ import {
   ListCourseFilesQuery,
   ListCourseItemsQuery,
   type CourseSlug,
+  type Viewers,
 } from '../../catalog/contracts.js';
 import {
   FindMemberQuery,
@@ -17,11 +18,13 @@ import { BlobStore } from '../../storage/contracts.js';
 import { NotReadableError } from './errors.js';
 import type { FilesAt, Page, TextAt } from './page.js';
 import {
+  fileOf,
   readableCourse,
   readableCourses,
   readableFile,
   readableItem,
 } from './readable.js';
+import { viewersOfUser } from './viewers.js';
 import { courseView, fileView, itemView } from './views.js';
 
 // What a user reads, for every way in (REST, MCP): each course or file
@@ -105,7 +108,11 @@ export class CourseReader {
     fileId: string,
     { page, processor, member }: TextAt,
   ) {
-    const { hash } = await this.readableContent(userId, fileId, member);
+    const { hash } = await this.readableContent(
+      await viewersOfUser(this.queries, userId),
+      fileId,
+      member,
+    );
     const text = await this.queries.execute(
       new GetTextPageQuery(hash, page, processor),
     );
@@ -115,30 +122,96 @@ export class CourseReader {
 
   // the file's bytes, or a member's, with its name and media type
   async content(userId: string, fileId: string, member?: string) {
+    return this.contentOf(
+      await viewersOfUser(this.queries, userId),
+      fileId,
+      member,
+    );
+  }
+
+  // What content() would open, without opening it: the name, the folder
+  // (the archive's, for a member), the size of the bytes kept, and catalog's
+  // id of the course. For a member, `archive` is its archive file's name.
+  // Both check through readableContent, so they can't drift apart.
+  async entry(userId: string, fileId: string, member?: string) {
+    return this.entryOf(
+      await viewersOfUser(this.queries, userId),
+      fileId,
+      member,
+    );
+  }
+
+  // entry() and content() for many files, the user's viewers asked once
+  async readingFiles(userId: string) {
+    const viewers = await viewersOfUser(this.queries, userId);
+    return {
+      entry: (fileId: string, member?: string) =>
+        this.entryOf(viewers, fileId, member),
+      content: (fileId: string, member?: string) =>
+        this.contentOf(viewers, fileId, member),
+    };
+  }
+
+  // Each course the user reads as they see it (a pick shown with a course
+  // of theirs is in it), by catalog's id of the course and of each portal
+  // course in it, which a file's `course` may be.
+  async courseNames(userId: string) {
+    const { courses } = await readableCourses(this.queries, userId);
+    return new Map(
+      courses.flatMap(({ id, name, portalCourses }) =>
+        [...portalCourses.map((pc) => pc.id), id].map(
+          (key) => [key, { id, name }] as const,
+        ),
+      ),
+    );
+  }
+
+  private async contentOf(viewers: Viewers, fileId: string, member?: string) {
     const { hash, name, mime } = await this.readableContent(
-      userId,
+      viewers,
       fileId,
       member,
     );
     return { name, mime, stream: await this.blobs.get(hash) };
   }
 
+  private async entryOf(viewers: Viewers, fileId: string, member?: string) {
+    const { hash, name, path, size, course, archive } =
+      await this.readableContent(viewers, fileId, member);
+    return {
+      name,
+      path,
+      // what is stored: a portal's size may be rounded, stale or none
+      size: size ?? (await this.blobs.size(hash)),
+      course,
+      archive,
+    };
+  }
+
   // A file without content yet, or whose content the user's view doesn't
   // open yet, has nothing to read; a member is read only inside a file the
   // user may read, and only if it was kept.
   private async readableContent(
-    userId: string,
+    viewers: Viewers,
     fileId: string,
     member?: string,
   ) {
-    const file = await readableFile(this.queries, userId, fileId);
+    const file = await fileOf(this.queries, viewers, fileId);
     if (!file.contentHash) throw new NotReadableError('file');
+    const at = { path: file.path, course: file.courseId };
     if (member === undefined)
-      return { hash: file.contentHash, name: file.name, mime: file.mime };
+      return {
+        ...at,
+        hash: file.contentHash,
+        name: file.name,
+        mime: file.mime,
+        size: null,
+        archive: undefined,
+      };
     const found = await this.queries.execute(
       new FindMemberQuery(file.contentHash, member),
     );
     if (!found) throw new NotReadableError('member');
-    return { ...found, name: basename(member) };
+    return { ...at, ...found, name: basename(member), archive: file.name };
   }
 }

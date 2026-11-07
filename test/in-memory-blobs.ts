@@ -33,6 +33,12 @@ export class InMemoryBlobs extends BlobStore {
     return { hash, size: data.length };
   }
 
+  async size(hash: ContentHash) {
+    const data = this.stored.get(ContentHash.parse(hash));
+    if (!data) throw new Error(`no content ${hash}`);
+    return data.length;
+  }
+
   async get(hash: ContentHash) {
     const data = this.stored.get(ContentHash.parse(hash));
     if (!data) throw new Error(`no content ${hash}`);

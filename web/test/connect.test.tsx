@@ -38,7 +38,9 @@ describe('Connect AI', () => {
       }),
     ).toBeVisible();
     expect(screen.getByText('http://localhost:3000/api/mcp')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Copy MCP address' })).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Copy MCP address' }),
+    ).toBeVisible();
   });
 
   it('shows the Claude Code command for this hub', async () => {

@@ -4,6 +4,7 @@ import {
   GetCourseItemQuery,
   ListCoursesQuery,
   type CourseSlug,
+  type Viewers,
 } from '../../catalog/contracts.js';
 import { NotReadableError } from './errors.js';
 import { regroup } from './grouping.js';
@@ -61,7 +62,15 @@ export async function readableFile(
   userId: string,
   fileId: string,
 ) {
-  const viewers = await viewersOfUser(queries, userId);
+  return fileOf(queries, await viewersOfUser(queries, userId), fileId);
+}
+
+// the same for viewers asked for already, when many files are read at once
+export async function fileOf(
+  queries: QueryBus,
+  viewers: Viewers,
+  fileId: string,
+) {
   const file = await queries.execute(new GetCourseFileQuery(viewers, fileId));
   if (!file) throw new NotReadableError('file');
   return file;

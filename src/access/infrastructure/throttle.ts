@@ -26,6 +26,12 @@ const LIMITS = {
   // picking a public portal's course or unpicking it, per user (accounts):
   // each one may have its connector sync another course
   picks: 30,
+  // asking for a zip of several files, per user: each one checks every
+  // item (the zip is fetched under `zips`)
+  downloads: 10,
+  // fetching a zip asked for, per user: each fetch checks every item again
+  // and reads the files off the disk, but a browser may retry one
+  zips: 30,
   // a post's text, per user: HTML is read in a worker thread each
   text: 60,
 };

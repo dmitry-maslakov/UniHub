@@ -1,22 +1,21 @@
-import { Anchor, Button } from '@mantine/core';
+import { Stack, Text } from '@mantine/core';
+import { useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { contentUrl } from '@/entities/file';
-import { api } from '@/shared/api';
-import { useFormat } from '@/shared/i18n';
+import { OPEN_UP_TO, folderTree } from '@/entities/file';
 import {
-  Row,
-  RowAction,
-  RowLink,
-  RowList,
-  RowText,
-  Section,
-} from '@/shared/ui';
+  SelectAll,
+  SelectionBar,
+  useSelection,
+} from '@/features/download-selection';
+import { ListSkeleton, QueryState, Section } from '@/shared/ui';
+import { archiveMembersQuery } from '../api/archive-members';
+import { memberFolder } from '../lib/member-name';
+import { targetOf } from '../lib/target-of';
+import { MembersTree } from './members-tree';
 
-const PAGE = 50;
-
-// The files inside an archive, in the order it lists them: one with a text
-// opens to read it, the others can be downloaded or say why they weren't
-// kept. Nothing for a file that isn't a container.
+// The files inside an archive as the folders they sit in, with a box beside
+// each to download several at once. Nothing for an archive that holds none.
 export function MembersSection({
   fileId,
   slug,
@@ -24,73 +23,59 @@ export function MembersSection({
   fileId: string;
   slug: string;
 }) {
-  const { t } = useTranslation('file');
-  const { size } = useFormat();
-  const members = api.useInfiniteQuery(
-    'get',
-    '/api/files/{id}/members',
-    { params: { path: { id: fileId }, query: { limit: PAGE } } },
-    {
-      pageParamName: 'offset',
-      initialPageParam: 0,
-      getNextPageParam: (last, all) =>
-        last.length < PAGE ? undefined : all.length * PAGE,
-    },
+  const { t } = useTranslation(['file', 'courses']);
+  const members = useQuery(archiveMembersQuery(fileId));
+  const targets = useMemo(
+    () =>
+      (members.data?.members ?? []).flatMap(
+        (member) => targetOf(fileId, member) ?? [],
+      ),
+    [fileId, members.data],
   );
-  if (!members.data?.pages[0]?.length) return null;
+  const selection = useSelection(targets);
+  const tree = useMemo(
+    () =>
+      folderTree(
+        (members.data?.members ?? []).map((member) => ({
+          member,
+          path: memberFolder(member.path),
+        })),
+      ),
+    [members.data],
+  );
 
   return (
-    <Section title={t('members.title')} description={t('members.description')}>
-      <RowList label={t('members.aria')}>
-        {members.data.pages.flat().map((member) => {
-          const text = (
-            <RowText
-              title={member.path}
-              meta={[
-                size(member.size),
-                member.leftOut
-                  ? t(`members.leftOut.${member.leftOut}`)
-                  : !member.texts.length && t('members.noText'),
-              ]}
-            />
-          );
-          return member.texts.length ? (
-            <Row key={member.path}>
-              <RowLink
-                to="/courses/$slug/files/$fileId"
-                params={{ slug, fileId }}
-                search={{ member: member.path }}
-              >
-                {text}
-              </RowLink>
-            </Row>
-          ) : (
-            <Row key={member.path}>
-              {text}
-              {!member.leftOut && (
-                <RowAction>
-                  <Anchor
-                    size="sm"
-                    href={contentUrl(fileId, { member: member.path })}
-                  >
-                    {t('download')}
-                  </Anchor>
-                </RowAction>
-              )}
-            </Row>
-          );
-        })}
-      </RowList>
-      {members.hasNextPage && (
-        <Button
-          variant="default"
-          w="fit-content"
-          loading={members.isFetchingNextPage}
-          onClick={() => void members.fetchNextPage()}
+    <QueryState
+      query={members}
+      loading={<ListSkeleton rows={3} label={t('file:members.loading')} />}
+      isEmpty={(data) => !data.members.length}
+      empty={null}
+    >
+      {({ members: all, capped }) => (
+        <Section
+          title={t('file:members.title')}
+          description={t('file:members.description')}
         >
-          {t('members.more')}
-        </Button>
+          <Stack gap="sm">
+            <SelectAll targets={targets} selection={selection} />
+            <nav aria-label={t('file:members.aria')}>
+              <MembersTree
+                node={tree}
+                open={all.length <= OPEN_UP_TO}
+                slug={slug}
+                fileId={fileId}
+                selection={selection}
+              />
+            </nav>
+            {capped && (
+              <Text size="sm" c="dimmed">
+                {t('courses:files.capped')}
+              </Text>
+            )}
+            <SelectionBar selection={selection} />
+          </Stack>
+        </Section>
       )}
-    </Section>
+    </QueryState>
   );
 }

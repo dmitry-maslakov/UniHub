@@ -65,6 +65,8 @@ export class ListMembersQuery extends Query<MemberInfo[]> {
 export interface MemberContent {
   hash: ContentHash;
   mime: MediaType | null;
+  // as stored
+  size: number | null;
 }
 
 // the content of the member kept at `path` in the tree of some content,

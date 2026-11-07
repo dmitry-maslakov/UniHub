@@ -56,8 +56,8 @@ export default {
     title: 'U ovoj arhivi',
     description: 'Otvori neki da pročitaš njegov tekst.',
     aria: 'Fajlovi u arhivi',
+    loading: 'Učitavanje fajlova u arhivi',
     noText: 'Bez teksta',
-    more: 'Prikaži još',
     leftOut: {
       TOO_LARGE: 'Izostavljen: prevelik',
       OVER_BUDGET: 'Izostavljen: arhiva sadrži previše',

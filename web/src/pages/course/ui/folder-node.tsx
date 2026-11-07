@@ -1,67 +1,94 @@
-import { NavLink, type NavLinkProps } from '@mantine/core';
-import { IconFolder } from '@tabler/icons-react';
-import { createLink } from '@tanstack/react-router';
-import { forwardRef } from 'react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FileTypeIcon, fileType, type FolderNode } from '@/entities/file';
+import {
+  FileTypeIcon,
+  FolderBranch,
+  TreeLink,
+  fileType,
+  filesIn,
+  type FolderNode,
+} from '@/entities/file';
+import { SelectableRow, type Selection } from '@/features/download-selection';
 import type { Schemas } from '@/shared/api';
 import { useFormat } from '@/shared/i18n';
-import classes from './course.module.css';
+import { targetOf } from '../lib/target-of';
 
 type File = Schemas['FileResponse'];
 
-// Mantine's NavLink as a typed router link (the router's Custom Link guide)
-const FileLink = createLink(
-  forwardRef<HTMLAnchorElement, Omit<NavLinkProps, 'href'>>((props, ref) => (
-    <NavLink ref={ref} component="a" {...props} />
-  )),
-);
-
 // The folders of a course's files, each opening onto its own, then the
-// files that are directly in it; a course with many files starts closed
+// files that are directly in it, each with a box to tick it; a course with
+// many files starts closed
 export function FolderNodeView({
   node,
   slug,
   open,
+  selection,
 }: {
   node: FolderNode<File>;
   slug: string;
   open: boolean;
+  selection: Selection;
 }) {
-  const { t } = useTranslation(['courses', 'common']);
+  const { t } = useTranslation(['courses', 'files', 'common']);
   const { size } = useFormat();
+  // each folder's files once, not on every render
+  const targets = useMemo(
+    () => node.folders.map((f) => filesIn(f).flatMap((x) => targetOf(x) ?? [])),
+    [node],
+  );
   return (
     <>
-      {node.folders.map((folder) => (
-        <NavLink
-          component="button"
-          key={folder.path}
-          classNames={{ root: classes.node, label: classes.nodeLabel }}
-          label={folder.name}
-          description={t('courses:files.folderCount', { count: folder.count })}
-          leftSection={<IconFolder size={16} stroke={1.75} aria-hidden />}
-          childrenOffset={20}
-          defaultOpened={open}
-        >
-          <FolderNodeView node={folder} slug={slug} open={open} />
-        </NavLink>
-      ))}
-      {node.files.map((file) => (
-        <FileLink
-          key={file.id}
-          to="/courses/$slug/files/$fileId"
-          params={{ slug, fileId: file.id }}
-          classNames={{ root: classes.node, label: classes.nodeLabel }}
-          label={file.name}
-          description={[
-            size(file.size),
-            !file.hasContent && t('common:state.notAvailableYet'),
-          ]
-            .filter(Boolean)
-            .join(' · ')}
-          leftSection={<FileTypeIcon type={fileType(file.mime, file.name)} />}
-        />
-      ))}
+      {node.folders.map((folder, i) => {
+        return (
+          <SelectableRow
+            key={folder.path}
+            label={t('files:selection.selectFolder', { name: folder.name })}
+            targets={targets[i]!}
+            selection={selection}
+          >
+            <FolderBranch
+              name={folder.name}
+              description={t('courses:files.folderCount', {
+                count: folder.count,
+              })}
+              open={open}
+            >
+              <FolderNodeView
+                node={folder}
+                slug={slug}
+                open={open}
+                selection={selection}
+              />
+            </FolderBranch>
+          </SelectableRow>
+        );
+      })}
+      {node.files.map((file) => {
+        const target = targetOf(file);
+        return (
+          <SelectableRow
+            key={file.id}
+            label={t('files:selection.select', { name: file.name })}
+            targets={target ? [target] : []}
+            selection={selection}
+          >
+            <TreeLink
+              to="/courses/$slug/files/$fileId"
+              params={{ slug, fileId: file.id }}
+              label={file.name}
+              description={[
+                size(file.size),
+                !file.hasContent && t('common:state.notAvailableYet'),
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+              leftSection={
+                <FileTypeIcon type={fileType(file.mime, file.name)} />
+              }
+            />
+          </SelectableRow>
+        );
+      })}
     </>
   );
 }

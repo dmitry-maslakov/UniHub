@@ -7,6 +7,7 @@ import enConsent from './locales/en/consent';
 import enCourses from './locales/en/courses';
 import enDevice from './locales/en/device';
 import enFile from './locales/en/file';
+import enFiles from './locales/en/files';
 import enPost from './locales/en/post';
 import enPrivacy from './locales/en/privacy';
 import enSearch from './locales/en/search';
@@ -21,6 +22,7 @@ import srConsent from './locales/sr-Latn/consent';
 import srCourses from './locales/sr-Latn/courses';
 import srDevice from './locales/sr-Latn/device';
 import srFile from './locales/sr-Latn/file';
+import srFiles from './locales/sr-Latn/files';
 import srPost from './locales/sr-Latn/post';
 import srPrivacy from './locales/sr-Latn/privacy';
 import srSearch from './locales/sr-Latn/search';
@@ -39,6 +41,7 @@ export const resources = {
     courses: enCourses,
     post: enPost,
     file: enFile,
+    files: enFiles,
     search: enSearch,
     sources: enSources,
     connect: enConnect,
@@ -55,6 +58,7 @@ export const resources = {
     courses: srCourses,
     post: srPost,
     file: srFile,
+    files: srFiles,
     search: srSearch,
     sources: srSources,
     connect: srConnect,
