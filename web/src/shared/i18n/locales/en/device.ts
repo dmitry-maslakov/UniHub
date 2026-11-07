@@ -14,8 +14,12 @@ export default {
   asks: '{{app}} wants to sign in as <strong>{{email}}</strong>.',
   codeAria: 'Code {{spelled}}',
   warning:
-    "Approve only if this code is on a screen in front of you right now. Anyone who sent you a code can't see your courses unless you approve it.",
-  approve: 'Approve',
+    'Approve only if this code is on a screen in front of you right now. If someone sent you this code, deny it: approving would let them into your account.',
+  approve: {
+    title: 'Approve a sign-in',
+    description: 'A screen asks to sign in to UniHub with your account.',
+    action: 'Approve',
+  },
   deny: 'Deny',
   failed: "Couldn't send your answer. Try again.",
   freshSession:

@@ -3,10 +3,35 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { describe, expect, it } from 'vitest';
 import { renderApp } from './render';
-import { auth, server, signedIn } from './server';
+import { auth, refused, server, signedIn } from './server';
 
 describe('approving a screen', () => {
-  it('shows its code and who it signs in, then approves it', async () => {
+  it('titles the page by what it does', async () => {
+    signedIn();
+    server.use(
+      http.get(auth('/device'), () =>
+        HttpResponse.json({
+          user_code: 'ABCD2345',
+          status: 'pending',
+          client_id: 'unihub-web',
+        }),
+      ),
+    );
+    renderApp('/device');
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent(
+      'Sign in on another screen',
+    );
+
+    renderApp('/device?user_code=ABCD2345');
+    expect(
+      await screen.findByRole('heading', {
+        level: 1,
+        name: 'Approve a sign-in',
+      }),
+    ).toBeVisible();
+  });
+
+  it('warns before approving, then approves', async () => {
     signedIn();
     let status = 'pending';
     server.use(
@@ -31,8 +56,35 @@ describe('approving a screen', () => {
     expect(
       screen.getByText(/UniHub in a browser wants to sign in as/),
     ).toHaveTextContent('ana@uni.test');
+    expect(
+      screen.getByText(/If someone sent you this code, deny it/),
+    ).toBeVisible();
     await userEvent.click(screen.getByRole('button', { name: 'Approve' }));
     expect(await screen.findByText('Approved')).toBeVisible();
+  });
+
+  it('asks to sign in again when the session is too old to approve', async () => {
+    signedIn();
+    server.use(
+      http.get(auth('/device'), () =>
+        HttpResponse.json({
+          user_code: 'ABCD2345',
+          status: 'pending',
+          client_id: 'unihub-app',
+        }),
+      ),
+      http.post(auth('/device/approve'), () =>
+        refused(403, 'SESSION_NOT_FRESH'),
+      ),
+    );
+    renderApp('/device?user_code=ABCD2345');
+
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Approve' }),
+    );
+    expect(
+      await screen.findByRole('button', { name: 'Sign in again' }),
+    ).toBeVisible();
   });
 
   it('asks for the code when the screen gave none', async () => {

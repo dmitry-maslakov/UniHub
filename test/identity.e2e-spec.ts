@@ -144,6 +144,63 @@ describe('identity', { timeout: 20_000 }, () => {
     await post('/device/code', { client_id: 'someone-else' }).expect(400);
   });
 
+  // a screen asks for a code, a signed-in phone approves it, the screen polls
+  const approvedDevice = async (clientId: string, phone: string) => {
+    const code = await post('/device/code', { client_id: clientId }).expect(
+      200,
+    );
+    const { device_code, user_code } = code.body as Record<string, string>;
+    await http()
+      .get('/api/auth/device')
+      .query({ user_code })
+      .set('cookie', phone)
+      .expect(200);
+    await post('/device/approve', { userCode: user_code }, phone).expect(200);
+    return post('/device/token', {
+      grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+      device_code,
+      client_id: clientId,
+    }).expect(200);
+  };
+
+  it('signs the web app in on the screen that asked, by a cookie, once a phone approves', async () => {
+    const phone = await signUp('wa@uni.test');
+    const token = await approvedDevice('unihub-web', phone);
+    const cookie = (token.headers['set-cookie'] as unknown as string[]).join(
+      '; ',
+    );
+    expect(cookie).toContain('session_token=');
+    const session = await http()
+      .get('/api/auth/get-session')
+      .set('cookie', cookie)
+      .expect(200);
+    expect(session.body.user.email).toBe('wa@uni.test');
+  });
+
+  it("gives the hub's app a token and no cookie", async () => {
+    const phone = await signUp('na@uni.test');
+    const token = await approvedDevice('unihub-app', phone);
+    expect(token.headers['set-cookie']).toBeUndefined();
+    expect(token.body.access_token).toEqual(expect.any(String));
+  });
+
+  it('lets users delete their own account with their password, and drops their keys', async () => {
+    const cookie = await signUp('gone@uni.test');
+    const id = await userId('gone@uni.test');
+    await post('/api-key/create', { name: 'agent' }, cookie).expect(200);
+    const prisma = app.get(PrismaService);
+    expect(await prisma.apikey.count({ where: { referenceId: id } })).toBe(1);
+
+    const wrong = await post('/delete-user', { password: 'not it' }, cookie);
+    expect(wrong.status).toBe(400);
+    expect(wrong.body.code).toBe('INVALID_PASSWORD');
+    await post('/delete-user', { password: 'correct horse 1' }, cookie).expect(
+      200,
+    );
+    expect(await prisma.user.count({ where: { id } })).toBe(0);
+    expect(await prisma.apikey.count({ where: { referenceId: id } })).toBe(0);
+  });
+
   it('gives API keys to users just signed in, by cookie or token', async () => {
     const cookie = await signUp('di@uni.test');
     const { headers } = await post('/sign-in/email', {
