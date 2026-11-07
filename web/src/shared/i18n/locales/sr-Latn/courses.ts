@@ -80,8 +80,6 @@ export default {
     },
     new: {
       title: 'Novo',
-      description:
-        'Fajlovi dodati ili izmenjeni na portalu u poslednjih 14 dana, najnoviji prvi.',
       action: 'Prikaži sve nove ({{count}})',
     },
     newest: {
