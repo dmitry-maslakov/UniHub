@@ -68,7 +68,17 @@ describe('course admin routes', { timeout: 20_000 }, () => {
     expect(courses.body).toContainEqual({
       slug: 'admin-os',
       name: 'Operativni sistemi',
-      portalCourses: [{ portal: PORTAL, name: 'OS 2026/27', year: 2026 }],
+      sources: [PORTAL],
+      portalCourses: [
+        {
+          portal: PORTAL,
+          externalId: '1388',
+          name: 'OS 2026/27',
+          url: null,
+          year: 2026,
+          via: 'link',
+        },
+      ],
     });
 
     await admin.delete(link).expect(204);

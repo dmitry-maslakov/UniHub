@@ -1,5 +1,8 @@
 import { ApiError } from '@/shared/api';
 
+const codeOf = (error: ApiError) =>
+  (error.error as { code?: unknown } | null)?.code;
+
 // What a refused pick says, and what to do next
 export function pickErrorText(error: unknown, pick: boolean) {
   const status = error instanceof ApiError ? error.status : undefined;
@@ -15,4 +18,13 @@ export function pickErrorText(error: unknown, pick: boolean) {
         ? "Couldn't pick the course. Try again."
         : "Couldn't unpick the course. Try again.";
   }
+}
+
+// What a refused "show with" says, and what to do next
+export function showWithErrorText(error: unknown) {
+  if (error instanceof ApiError && codeOf(error) === 'NOT_YOUR_COURSE')
+    return "That course isn't one you read through your own account any more. Reload the page.";
+  if (error instanceof ApiError && [404, 429].includes(error.status))
+    return pickErrorText(error, true);
+  return "Couldn't move the course. Try again.";
 }

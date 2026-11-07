@@ -1,11 +1,15 @@
 import { PortalId } from '@app/kernel';
-import { ListPortalCatalogQuery } from '../../catalog/contracts.js';
+import {
+  OwnPortalCourseQuery,
+  PickMatchesQuery,
+} from '../../access/contracts.js';
+import { CourseSlug, ListPortalCatalogQuery } from '../../catalog/contracts.js';
 import { NotPickableError, TooManyPicksError } from '../domain/errors.js';
 import { MAX_PICKS } from '../domain/picks.js';
 import { PortalLinks } from '../domain/portal-links.js';
 import { GRACE_DAYS } from '../domain/wanted-course.js';
 import { catalogBus, picksOnFakes } from './accounts.fakes.js';
-import { NotInCatalogError } from './errors.js';
+import { NotInCatalogError, NotYourCourseError } from './errors.js';
 
 const portal = (id: string) => PortalId.parse(id);
 const [CATALOG, LMS] = ['catalog', 'lms'].map(portal);
@@ -26,6 +30,27 @@ const catalogs = {
   lms: [course('lms-1')],
 };
 
+// access, as it answers: ana reads a course of her own, lms~c1, through
+// her account, its portal course pc-c1; os is suggested to go with it
+const mine = CourseSlug.parse('lms~c1');
+const access: Parameters<typeof catalogBus>[1] = [
+  [
+    OwnPortalCourseQuery,
+    ({ userId, slug }: OwnPortalCourseQuery) =>
+      userId === 'ana' && slug === mine ? 'pc-c1' : null,
+  ],
+  [
+    PickMatchesQuery,
+    ({ portalCourseIds }: PickMatchesQuery) =>
+      new Map(
+        portalCourseIds.map((id) => [
+          id,
+          { into: null, suggestedInto: id === 'pc-os' ? mine : null },
+        ]),
+      ),
+  ],
+];
+
 async function picks(catalog = catalogs.catalog) {
   const links = new PortalLinks(
     new Map([
@@ -33,13 +58,13 @@ async function picks(catalog = catalogs.catalog) {
       [LMS, { mode: 'token', adminsOnly: false }],
     ]),
   );
-  const bus = catalogBus({ ...catalogs, catalog });
+  const bus = catalogBus({ ...catalogs, catalog }, access);
   return { ...(await picksOnFakes(links, bus)), bus };
 }
 
 describe('PortalPicks', () => {
   it("browses a public portal's catalog with the user's picks marked, and no other portal's", async () => {
-    const { service } = await picks();
+    const { service, bus } = await picks();
     await service.pick('ana', CATALOG, 'os');
 
     const page = await service.catalog(
@@ -59,10 +84,69 @@ describe('PortalPicks', () => {
         .filter((c) => c.picked)
         .map((c) => c.externalId),
     ).toEqual(['os']);
+    // what the picks on the page go with, as access answers: none asked
+    // for a page without one
+    expect(bus.sent.filter((q) => q instanceof PickMatchesQuery)).toEqual([
+      new PickMatchesQuery('ana', ['pc-os']),
+    ]);
     for (const other of [LMS, portal('elsewhere')])
       await expect(
         service.catalog('ana', other, { offset: 0, limit: 50 }),
       ).rejects.toThrow(new NotPickableError(other));
+  });
+
+  it('adds to each pick on the page the course it goes with, and to the others none', async () => {
+    const { service } = await picks();
+    await service.pick('ana', CATALOG, 'os');
+
+    const { courses } = await service.catalog(
+      'ana',
+      CATALOG,
+      { offset: 0, limit: 50 },
+      now,
+    );
+    expect(courses).toEqual([
+      {
+        externalId: 'net',
+        name: 'Mreže',
+        url: null,
+        picked: false,
+        isNew: false,
+        into: null,
+        suggestedInto: null,
+      },
+      expect.objectContaining({
+        externalId: 'os',
+        picked: true,
+        into: null,
+        suggestedInto: mine,
+      }),
+    ]);
+  });
+
+  it('shows a pick with a course the user reads through their own account, on its own again, and as it was when left out', async () => {
+    const { service, picks: rows, bus } = await picks();
+    await service.pick('ana', CATALOG, 'os', mine);
+    expect(rows.rows).toEqual([
+      { userId: 'ana', portalCourseId: 'pc-os', into: 'pc-c1' },
+    ]);
+    expect(bus.sent).toContainEqual(new OwnPortalCourseQuery('ana', mine));
+    expect((await service.of('ana')).into).toEqual(
+      new Map([['pc-os', 'pc-c1']]),
+    );
+
+    await service.pick('ana', CATALOG, 'os');
+    expect(rows.rows[0].into).toBe('pc-c1');
+    await service.pick('ana', CATALOG, 'os', null);
+    expect(rows.rows).toEqual([{ userId: 'ana', portalCourseId: 'pc-os' }]);
+  });
+
+  it("refuses to show a pick with a course that isn't the user's own, and picks nothing", async () => {
+    const { service, picks: rows } = await picks();
+    await expect(service.pick('bo', CATALOG, 'os', mine)).rejects.toThrow(
+      new NotYourCourseError(),
+    );
+    expect(rows.rows).toEqual([]);
   });
 
   it("picks a course of the catalog, wanted for good from then on, under the user's lock", async () => {
@@ -182,6 +266,7 @@ describe('PortalPicks', () => {
     expect(await service.of('ana')).toEqual({
       portals: [CATALOG],
       courses: ['pc-lms-1', 'pc-net'],
+      into: new Map(),
     });
     expect(await service.counts('ana')).toEqual(new Map([[CATALOG, 1]]));
     expect(await service.counts('bo')).toEqual(new Map([[CATALOG, 0]]));
@@ -194,9 +279,15 @@ describe('PortalPicks', () => {
       bus,
     );
     const ofUser = vi.spyOn(rows, 'ofUser');
-    expect(await service.of('ana')).toEqual({ portals: [], courses: [] });
+    const ofUserWithInto = vi.spyOn(rows, 'ofUserWithInto');
+    expect(await service.of('ana')).toEqual({
+      portals: [],
+      courses: [],
+      into: new Map(),
+    });
     expect(await service.counts('ana')).toEqual(new Map());
     expect(ofUser).not.toHaveBeenCalled();
+    expect(ofUserWithInto).not.toHaveBeenCalled();
     expect(bus.sent).toEqual([]);
   });
 

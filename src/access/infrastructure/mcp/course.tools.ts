@@ -28,7 +28,7 @@ export class CourseTools {
   @Tool({
     name: 'list_courses',
     description:
-      "The user's courses, each with the portal courses (Canvas, Teams...) it is made of.",
+      "The user's courses as they see them, each with the portal courses (Canvas, a course site...) it is made of and `sources`, their portals. `via` says how the user reads a portal course: `account`, their own account; `pick`, a public site's course they picked; `link`, a course an admin set up. A pick the user shows with a course of their own is inside that course.",
     parameters: z.object({}),
     annotations: readOnly,
   })

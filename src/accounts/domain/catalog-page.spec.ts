@@ -69,6 +69,7 @@ describe('browse', () => {
     );
     expect(page.courses).toEqual([
       {
+        id: 'pc-1',
         externalId: '1',
         name: 'Operativni sistemi',
         url: 'https://courses.example.edu/1',

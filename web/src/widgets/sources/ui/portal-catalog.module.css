@@ -15,3 +15,12 @@
     border-top: 1px solid var(--mantine-color-default-border);
   }
 }
+
+/* under the course's name, as its checkbox's label sits */
+.showWith {
+  padding-inline-start: calc(1.25rem + var(--mantine-spacing-sm));
+
+  &:empty {
+    display: none;
+  }
+}

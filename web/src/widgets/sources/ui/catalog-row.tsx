@@ -1,4 +1,4 @@
-import { Anchor, Badge, Checkbox, Group } from '@mantine/core';
+import { Anchor, Badge, Checkbox, Group, Stack } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { Schemas } from '@/shared/api';
@@ -6,9 +6,11 @@ import { webAddress } from '@/shared/lib';
 import { setPicked } from '../api/picks';
 import { pickErrorText } from '../lib/pick-error';
 import classes from './portal-catalog.module.css';
+import { ShowWith } from './show-with';
 
-// One course of the catalog: a checkbox to pick it, and whether it's new.
-// Checked as asked until the catalog, the count and the courses show it.
+// One course of the catalog: a checkbox to pick it, and whether it's new;
+// once picked, what it shows with. Checked as asked until the catalog, the
+// count and the courses show it.
 export function CatalogRow({
   portal,
   course,
@@ -40,27 +42,34 @@ export function CatalogRow({
 
   return (
     <li className={classes.row}>
-      <Group gap="xs" wrap="nowrap" align="flex-start" miw={0}>
-        <Checkbox
-          checked={picked}
-          disabled={toggle.isPending}
-          onChange={(event) => toggle.mutate(event.currentTarget.checked)}
-          label={course.name}
-          styles={{ label: { overflowWrap: 'anywhere' } }}
-        />
-        {course.isNew && (
-          <Badge
-            color="gray"
-            variant="light"
-            radius="sm"
-            size="sm"
-            tt="none"
-            style={{ flexShrink: 0 }}
-          >
-            New
-          </Badge>
+      <Stack gap="sm" miw={0} style={{ flex: 1 }}>
+        <Group gap="xs" wrap="nowrap" align="flex-start" miw={0}>
+          <Checkbox
+            checked={picked}
+            disabled={toggle.isPending}
+            onChange={(event) => toggle.mutate(event.currentTarget.checked)}
+            label={course.name}
+            styles={{ label: { overflowWrap: 'anywhere' } }}
+          />
+          {course.isNew && (
+            <Badge
+              variant="default"
+              radius="sm"
+              size="md"
+              fz="xs"
+              tt="none"
+              style={{ flexShrink: 0 }}
+            >
+              New
+            </Badge>
+          )}
+        </Group>
+        {course.picked && !toggle.isPending && (
+          <div className={classes.showWith}>
+            <ShowWith portal={portal} course={course} />
+          </div>
         )}
-      </Group>
+      </Stack>
       {address && (
         <Anchor
           href={address}

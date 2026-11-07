@@ -9,7 +9,12 @@ import { IdentityModule } from '../identity/contracts.js';
 import { whenSearchOn } from '../platform/search/opensearch.config.js';
 import { StorageModule } from '../storage/contracts.js';
 import { CourseGrants } from './application/course-grants.js';
+import { CourseMatching } from './application/course-matching.js';
 import { CourseReader } from './application/course-reader.js';
+import {
+  OwnPortalCourseHandler,
+  PickMatchesHandler,
+} from './application/matching.handlers.js';
 import { CourseAccessController } from './infrastructure/http/course-access.controller.js';
 import { CoursesController } from './infrastructure/http/courses.controller.js';
 import { FilesController } from './infrastructure/http/files.controller.js';
@@ -23,7 +28,9 @@ import { AccessSearchModule } from './search.module.js';
 // How users read the hub, the REST API and MCP, and how admins say who reads
 // which course. Over catalog, identity and accounts: every read goes
 // through CourseReader, every search through CourseSearch, both cut to the
-// user's viewers, every grant through CourseGrants.
+// user's viewers and their courses grouped as they see them, every grant
+// through CourseGrants. Answers accounts which course of a user's own a
+// pick goes with (CourseMatching).
 @Module({
   imports: [
     // the named limits routes take with @Limited()
@@ -46,7 +53,13 @@ import { AccessSearchModule } from './search.module.js';
     McpHttpController,
     CourseTools,
   ],
-  providers: [CourseReader, CourseGrants],
+  providers: [
+    CourseReader,
+    CourseGrants,
+    CourseMatching,
+    OwnPortalCourseHandler,
+    PickMatchesHandler,
+  ],
 })
 export class AccessModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

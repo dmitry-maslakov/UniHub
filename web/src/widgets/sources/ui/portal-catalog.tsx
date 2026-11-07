@@ -60,8 +60,8 @@ export function PortalCatalog({
       </Group>
       <Text size="sm" c="dimmed" maw="60ch">
         A public site anyone can read. Pick the courses you follow: they show up
-        under Courses, and their posts and files once the hub next reads the
-        site.
+        under My courses, and their posts and files once the hub next reads the
+        site. Show one with a course of your own to read the two in one place.
       </Text>
       <TextInput
         type="search"

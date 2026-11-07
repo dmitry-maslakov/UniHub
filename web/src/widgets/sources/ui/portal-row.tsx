@@ -6,7 +6,7 @@ import { useState } from 'react';
 import type { Schemas } from '@/shared/api';
 import { deleteToken } from '../api/portals';
 import { statusText } from '../lib/status';
-import classes from './portal-accounts.module.css';
+import classes from './sources.module.css';
 import { TokenForm } from './token-form';
 
 // One portal, by the name it's shown by: how it's read, where the user's

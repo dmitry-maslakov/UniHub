@@ -184,7 +184,17 @@ describe('REST API', { timeout: 20_000 }, () => {
       {
         slug: 'sys',
         name: 'Operativni sistemi',
-        portalCourses: [{ portal: PORTAL, name: 'OS 2026', year: 2026 }],
+        sources: [PORTAL],
+        portalCourses: [
+          {
+            portal: PORTAL,
+            externalId: 'c1',
+            name: 'OS 2026',
+            url: null,
+            year: 2026,
+            via: 'link',
+          },
+        ],
       },
     ]);
 

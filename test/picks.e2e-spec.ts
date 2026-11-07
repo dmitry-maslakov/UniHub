@@ -161,6 +161,8 @@ describe('public portals and picks', { timeout: 60_000 }, () => {
           url: null,
           picked: false,
           isNew: true,
+          into: null,
+          suggestedInto: null,
         },
       ],
     });
@@ -207,8 +209,16 @@ describe('public portals and picks', { timeout: 60_000 }, () => {
     expect(os).toEqual({
       slug: `${CATALOG}~os`,
       name: 'Operativni sistemi',
+      sources: [CATALOG],
       portalCourses: [
-        { portal: CATALOG, name: 'Operativni sistemi', year: null },
+        {
+          portal: CATALOG,
+          externalId: 'os',
+          name: 'Operativni sistemi',
+          url: 'https://courses.example.edu/os',
+          year: null,
+          via: 'pick',
+        },
       ],
     });
     const items = await body('ana', `/api/courses/${CATALOG}~os/items`);

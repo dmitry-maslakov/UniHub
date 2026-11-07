@@ -6,8 +6,6 @@ import type {
   PortalId,
 } from '@app/kernel';
 import type {
-  CourseDto,
-  CourseRef,
   FileDto,
   ViewedItemDto,
   VisibleContentDto,
@@ -20,19 +18,24 @@ import type {
   TextHit,
   TextInfo,
 } from '../../processing/contracts.js';
+import { slugsOf, type GroupedCourse, type Via } from './grouping.js';
 
 // What a user reads, through REST and MCP alike: catalog's records without
 // what only the hub needs (portal ids, removal, content hashes).
 
 export interface PortalCourseView {
   portal: PortalId;
+  externalId: string;
   name: string;
+  url: string | null;
   year: number | null;
+  via: Via;
 }
 
 export interface CourseView {
   slug: string;
   name: string;
+  sources: PortalId[];
   portalCourses: PortalCourseView[];
 }
 
@@ -115,15 +118,22 @@ export interface SearchView {
 export const courseView = ({
   slug,
   name,
+  sources,
   portalCourses,
-}: CourseDto): CourseView => ({
+}: GroupedCourse): CourseView => ({
   slug,
   name,
-  portalCourses: portalCourses.map(({ portal, name, year }) => ({
-    portal,
-    name,
-    year,
-  })),
+  sources,
+  portalCourses: portalCourses.map(
+    ({ portal, externalId, name, url, year, via }) => ({
+      portal,
+      externalId,
+      name,
+      url,
+      year,
+      via,
+    }),
+  ),
 });
 
 export const itemView = ({
@@ -193,12 +203,12 @@ export function placesOf(
 }
 
 // What a user may find: the contents' places (placesOf), the files and the
-// posts the courses they read show, and those courses
+// posts the courses they read show, and those courses, as they see them
 export interface Findable {
   places: ReadonlyMap<ContentHash, Place[]>;
   files: readonly VisibleContentDto[];
   posts: readonly VisibleItemDto[];
-  courses: readonly CourseRef[];
+  courses: readonly GroupedCourse[];
 }
 
 // What search found, in its order: of a content, the file or member whose
@@ -209,7 +219,7 @@ export function searchResults(
   hits: readonly TextHit[],
   { places, files, posts, courses }: Findable,
 ): SearchResultView[] {
-  const slugs = new Map(courses.map(({ id, slug }) => [id, slug]));
+  const slugs = slugsOf(courses);
   const holding = Map.groupBy<string, VisibleContentDto>(
     files,
     ({ hash }) => hash,

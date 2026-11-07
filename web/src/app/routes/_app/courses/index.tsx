@@ -1,8 +1,8 @@
-import { createFileRoute } from '@tanstack/react-router';
-import { CoursesPage } from '@/pages/courses';
-import { pageHead } from '@/shared/lib';
+import { createFileRoute, redirect } from '@tanstack/react-router';
 
+// the courses were listed here before they were the home page
 export const Route = createFileRoute('/_app/courses/')({
-  head: pageHead('Courses'),
-  component: CoursesPage,
+  beforeLoad: () => {
+    throw redirect({ to: '/', replace: true });
+  },
 });

@@ -41,7 +41,7 @@ export class ListCoursesHandler implements IQueryHandler<ListCoursesQuery> {
         versions: {
           where: { sights: { some: courseSeen(viewers, now) } },
           take: 1,
-          select: { name: true },
+          select: { name: true, url: true },
         },
       },
     } as const;
@@ -111,6 +111,7 @@ export class ListCoursesHandler implements IQueryHandler<ListCoursesQuery> {
       ...course,
       portal: portalOf(course),
       name: versions[0].name,
+      url: versions[0].url,
       year,
     });
     return [

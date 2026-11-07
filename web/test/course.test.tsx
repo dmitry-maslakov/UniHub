@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { describe, expect, it, vi } from 'vitest';
@@ -38,7 +38,12 @@ const setup = (items: unknown[] = posts, files: unknown[] = []) => {
   server.use(
     http.get(api('/courses'), () =>
       HttpResponse.json([
-        { slug: 'os', name: 'Operating systems', portalCourses: [] },
+        {
+          slug: 'os',
+          name: 'Operating systems',
+          sources: [],
+          portalCourses: [],
+        },
       ]),
     ),
     http.get(api('/courses/os/items'), ({ request }) => {
@@ -95,5 +100,65 @@ describe('course page', () => {
     await waitFor(() => expect(scroll).toHaveBeenCalled());
     expect(scroll.mock.contexts.at(-1)).toHaveProperty('id', 'item-i51');
     scroll.mockRestore();
+  });
+
+  it('shows where the course comes from: each source, how she reads it, and a link to it', async () => {
+    setup();
+    server.use(
+      http.get(api('/courses'), () =>
+        HttpResponse.json([
+          {
+            slug: 'os',
+            name: 'Operating systems',
+            sources: ['canvas', 'catalog'],
+            portalCourses: [
+              {
+                portal: 'canvas',
+                externalId: '297',
+                name: 'OS',
+                url: 'https://canvas.example.edu/courses/297',
+                year: 2026,
+                via: 'account',
+              },
+              {
+                portal: 'catalog',
+                externalId: 'os',
+                name: 'Operativni sistemi',
+                url: 'javascript:alert(1)',
+                year: null,
+                via: 'pick',
+              },
+            ],
+          },
+        ]),
+      ),
+      http.get(api('/me/portals'), () =>
+        HttpResponse.json([
+          {
+            portal: 'canvas',
+            label: 'Canvas',
+            mode: 'token',
+            linked: true,
+            status: 'linked',
+            expiresAt: null,
+            picked: null,
+          },
+        ]),
+      ),
+    );
+    renderApp('/courses/os');
+
+    const strip = await screen.findByRole('list', { name: 'Sources' });
+    const [canvas, picked] = within(strip).getAllByRole('listitem');
+    expect(await within(canvas).findByText('Canvas')).toBeVisible();
+    expect(
+      within(canvas).getByRole('link', { name: 'OS (2026)' }),
+    ).toHaveAttribute('href', 'https://canvas.example.edu/courses/297');
+    expect(within(canvas).getByText(/through your account/)).toBeVisible();
+    // a portal the hub doesn't list to her goes by its id, and an address
+    // that isn't a web one is no link
+    expect(within(picked).getByText('catalog')).toBeVisible();
+    expect(within(picked).queryByRole('link')).toBeNull();
+    expect(within(picked).getByText(/picked by you/)).toBeVisible();
   });
 });

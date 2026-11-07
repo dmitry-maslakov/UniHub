@@ -100,7 +100,7 @@ function reader() {
       () => ({
         portals: viewers.shared.except,
         accounts: viewers.accounts,
-        picks: viewers.picks,
+        picks: { ...viewers.picks, into: new Map() },
       }),
     ],
     [
@@ -111,7 +111,14 @@ function reader() {
           .map((c) => ({
             ...c,
             portalCourses: [
-              { id: 'pc', portal, externalId: 'c1', name: c.name, year: 2026 },
+              {
+                id: 'pc',
+                portal,
+                externalId: 'c1',
+                name: c.name,
+                url: 'https://canvas.example.edu/courses/c1',
+                year: 2026,
+              },
             ],
           })),
     ],
@@ -153,7 +160,17 @@ describe('CourseReader', () => {
       {
         slug: 'os',
         name: 'OS',
-        portalCourses: [{ portal, name: 'OS', year: 2026 }],
+        sources: [portal],
+        portalCourses: [
+          {
+            portal,
+            externalId: 'c1',
+            name: 'OS',
+            url: 'https://canvas.example.edu/courses/c1',
+            year: 2026,
+            via: 'link',
+          },
+        ],
       },
     ]);
     expect(queries.sent).toContainEqual(new ListCoursesQuery(viewers));
@@ -166,7 +183,11 @@ describe('CourseReader', () => {
     expect(await r.files('ana', CourseSlug.parse('os'), page)).toEqual([
       expect.objectContaining({ id: 'f1', hasContent: true }),
     ]);
-    // of its portal courses in the user's view, as the viewers see them
+    // the course of that slug alone, of its portal courses in the user's
+    // view, as the viewers see them
+    expect(queries.sent).toContainEqual(
+      new ListCoursesQuery(viewers, CourseSlug.parse('os')),
+    );
     expect(queries.sent).toContainEqual(
       new ListCourseFilesQuery(viewers, ['pc'], 10, 5),
     );
@@ -282,5 +303,68 @@ describe('CourseReader', () => {
     expect(
       queries.sent.filter((q) => q instanceof FindMemberQuery),
     ).toHaveLength(1);
+  });
+
+  // ana reads moodle~m1 through her account, and picked catalog~os, shown
+  // with it
+  it('shows a pick with the course of her own it goes with, and reads its posts there alone', async () => {
+    const [moodle, catalog] = ['moodle', 'catalog'].map((p) =>
+      PortalId.parse(p),
+    );
+    const picker: Viewers = {
+      accounts: ['ana-moodle'],
+      shared: { courses: [], except: [moodle, catalog] },
+      picks: { portals: [catalog], courses: ['pc-os'] },
+    };
+    const own = (id: string, portal: PortalId, externalId: string) => ({
+      id,
+      slug: `${portal}~${externalId}`,
+      name: externalId,
+      portalCourses: [
+        { id, portal, externalId, name: externalId, url: null, year: null },
+      ],
+    });
+    const queries = new FakeBus([
+      [ReadScopeQuery, () => ({ granted: [], ownAccounts: true })],
+      [
+        ViewingAccountsQuery,
+        () => ({
+          portals: [moodle],
+          accounts: picker.accounts,
+          picks: { ...picker.picks, into: new Map([['pc-os', 'pc-m1']]) },
+        }),
+      ],
+      [
+        ListCoursesQuery,
+        () => [own('pc-os', catalog, 'os'), own('pc-m1', moodle, 'm1')],
+      ],
+      [ListCourseItemsQuery, () => []],
+    ]);
+    const r = new CourseReader(queries.queries, new InMemoryBlobs());
+
+    expect(await r.courses('ana')).toEqual([
+      {
+        slug: 'moodle~m1',
+        name: 'm1',
+        sources: [catalog, moodle],
+        portalCourses: [
+          expect.objectContaining({ portal: moodle, via: 'account' }),
+          expect.objectContaining({ portal: catalog, via: 'pick' }),
+        ],
+      },
+    ]);
+    const page = { offset: 0, limit: 5 };
+    await r.items('ana', CourseSlug.parse('moodle~m1'), page);
+    // every course regrouped, the pick's posts read in its course
+    expect(queries.sent).toContainEqual(
+      new ListCourseItemsQuery(picker, ['pc-m1', 'pc-os'], 0, 5),
+    );
+    expect(queries.sent.filter((q) => q instanceof ListCoursesQuery)).toEqual([
+      new ListCoursesQuery(picker),
+      new ListCoursesQuery(picker),
+    ]);
+    await expect(
+      r.items('ana', CourseSlug.parse('catalog~os'), page),
+    ).rejects.toThrowError(new NotReadableError('course'));
   });
 });
