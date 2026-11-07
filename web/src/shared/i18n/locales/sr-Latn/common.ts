@@ -7,6 +7,7 @@ export default {
     showMore: 'Prikaži još',
     cancel: 'Otkaži',
     keep: 'Zadrži',
+    close: 'Zatvori',
     save: 'Sačuvaj',
     copy: 'Kopiraj',
     copied: 'Kopirano',

@@ -11,6 +11,12 @@ import { type Option, RemoteSelect } from './remote-select';
 type Linkable = Schemas['LinkablePortalCourseResponse'];
 type Choice = Option & Pick<Linkable, 'portal' | 'externalId'>;
 
+const validYear = (year: number | string) =>
+  typeof year === 'number' &&
+  Number.isInteger(year) &&
+  year >= 1901 &&
+  year <= 2999;
+
 // Links a shared or public portal's course, found by name, to the course,
 // for an academic year or for every one. A portal course linked to another
 // course moves.
@@ -20,6 +26,7 @@ export function LinkForm({ course }: { course: { slug: string; id: string } }) {
   const [q, setQ] = useState('');
   const [chosen, setChosen] = useState<Choice | null>(null);
   const [year, setYear] = useState<number | string>('');
+  const [badYear, setBadYear] = useState(false);
   // a new select once something is linked
   const [round, setRound] = useState(0);
   const found = useQuery(linkableQuery(q));
@@ -56,6 +63,7 @@ export function LinkForm({ course }: { course: { slug: string; id: string } }) {
       notifications.show({ message: t('course.notify.linked') });
       setChosen(null);
       setYear('');
+      setBadYear(false);
       setRound((n) => n + 1);
       await Promise.all([
         invalidateHubCourses(queryClient),
@@ -74,7 +82,9 @@ export function LinkForm({ course }: { course: { slug: string; id: string } }) {
         noValidate
         onSubmit={(event) => {
           event.preventDefault();
-          if (chosen) link.mutate(chosen);
+          if (!chosen) return;
+          if (year !== '' && !validYear(year)) return setBadYear(true);
+          link.mutate(chosen);
         }}
       >
         <Group align="flex-end" wrap="wrap" gap="sm">
@@ -93,14 +103,17 @@ export function LinkForm({ course }: { course: { slug: string; id: string } }) {
           <NumberInput
             label={t('course.links.form.year.label')}
             placeholder={t('course.links.form.year.placeholder')}
-            min={1901}
-            max={2999}
+            clampBehavior="none"
+            error={badYear ? t('course.links.form.year.invalid') : undefined}
             allowDecimal={false}
             allowNegative={false}
             hideControls
             w={140}
             value={year}
-            onChange={setYear}
+            onChange={(value) => {
+              setYear(value);
+              setBadYear(false);
+            }}
           />
           <Button
             variant="default"

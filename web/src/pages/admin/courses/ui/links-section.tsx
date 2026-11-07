@@ -51,7 +51,7 @@ export function LinksSection({ course }: { course: Course }) {
       children: <Text size="sm">{t('course.links.unlink.confirm.body')}</Text>,
       labels: {
         confirm: t('course.links.unlink.confirm.action'),
-        cancel: common('action.cancel'),
+        cancel: common('action.keep'),
       },
       confirmProps: { color: 'red' },
       onConfirm: () => unlink.mutate(link),
@@ -78,19 +78,21 @@ export function LinksSection({ course }: { course: Course }) {
                   link.mode === 'public' && t('course.links.picked'),
                 ]}
               />
-              <RowAction>
-                <Button
-                  variant="subtle"
-                  color="red"
-                  size="sm"
-                  aria-label={t('course.links.unlink.aria', {
-                    name: link.name ?? link.externalId,
-                  })}
-                  onClick={() => confirmUnlink(link)}
-                >
-                  {t('course.links.unlink.action')}
-                </Button>
-              </RowAction>
+              {link.unlinkable && (
+                <RowAction>
+                  <Button
+                    variant="subtle"
+                    color="red"
+                    size="sm"
+                    aria-label={t('course.links.unlink.aria', {
+                      name: link.name ?? link.externalId,
+                    })}
+                    onClick={() => confirmUnlink(link)}
+                  >
+                    {t('course.links.unlink.action')}
+                  </Button>
+                </RowAction>
+              )}
             </Row>
           ))}
         </RowList>

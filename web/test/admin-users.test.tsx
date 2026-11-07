@@ -91,11 +91,16 @@ describe('admin, users', () => {
         banExpires: '2026-12-01T10:00:00.000Z',
       }),
       person(1, { name: 'Dado', emailVerified: false }),
+      person(5, {
+        name: 'Eni',
+        banned: true,
+        banExpires: '2026-01-01T10:00:00.000Z',
+      }),
     ]);
     renderApp('/admin/users');
 
     const list = await screen.findByRole('list', { name: 'Users' });
-    expect(screen.getByText('4 users')).toBeVisible();
+    expect(screen.getByText('5 users')).toBeVisible();
     const rows = within(list).getAllByRole('listitem');
     ['Ana Student', 'Boris', 'Cana', 'Dado'].forEach((name, i) =>
       expect(rows[i]).toHaveTextContent(new RegExp(`^${name}`)),
@@ -107,6 +112,9 @@ describe('admin, users', () => {
       within(rows[2]!).getByText(/Banned until Dec 1, 2026/),
     ).toBeVisible();
     expect(within(rows[3]!).getByText(/Email not confirmed/)).toBeVisible();
+    expect(rows[4]).toHaveTextContent(/^Eni/);
+    expect(within(rows[4]!).queryByText('Banned')).toBeNull();
+    expect(within(rows[4]!).queryByText(/Banned until/)).toBeNull();
     expect(asked[0]!.get('sortBy')).toBe('createdAt');
     expect(asked[0]!.get('sortDirection')).toBe('desc');
     expect(asked[0]!.get('limit')).toBe('50');
@@ -128,6 +136,30 @@ describe('admin, users', () => {
     await userEvent.type(box, 'Ana');
     await waitFor(() => expect(asked.at(-1)!.get('searchField')).toBe('name'));
     expect(router.state.location.search).toEqual({ q: 'Ana' });
+  });
+
+  it('clears the box when the address loses the search', async () => {
+    signedInAsAdmin();
+    users([me]);
+    renderApp('/admin/users?q=ana');
+    const box = await screen.findByRole('searchbox', { name: 'Search users' });
+    expect(box).toHaveValue('ana');
+
+    await userEvent.click(screen.getByRole('link', { name: 'Users' }));
+
+    await waitFor(() => expect(box).toHaveValue(''));
+  });
+
+  it('offers the first page when the page is past the last', async () => {
+    signedInAsAdmin();
+    users([], 3);
+    const { router } = renderApp('/admin/users?page=2');
+
+    expect(await screen.findByText('No users on this page')).toBeVisible();
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Back to the first page' }),
+    );
+    await waitFor(() => expect(router.state.location.search).toEqual({}));
   });
 
   it('says no user matches', async () => {

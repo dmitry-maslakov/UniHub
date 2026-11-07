@@ -17,6 +17,10 @@ export default {
     empty: {
       title: 'No user matches “{{q}}”',
       body: 'Try the email, or the name as the user wrote it.',
+      page: {
+        title: 'No users on this page',
+        action: 'Back to the first page',
+      },
     },
     badge: {
       admin: 'Admin',
@@ -141,6 +145,7 @@ export default {
         year: {
           label: 'Academic year',
           placeholder: '2026 for 2026/27',
+          invalid: 'Enter a year from 1901 to 2999, like 2026 for 2026/27.',
         },
         action: 'Link',
         moves: 'A portal course linked to another course moves here.',

@@ -1,4 +1,11 @@
-import { Loader, Pagination, Stack, Text, TextInput } from '@mantine/core';
+import {
+  Button,
+  Loader,
+  Pagination,
+  Stack,
+  Text,
+  TextInput,
+} from '@mantine/core';
 import { useDebouncedCallback } from '@mantine/hooks';
 import { IconSearch } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
@@ -20,6 +27,13 @@ export function UsersPage() {
   const { q, page } = route.useSearch();
   const navigate = route.useNavigate();
   const [typed, setTyped] = useState(q ?? '');
+  // the box follows the address when something else changes it, not while
+  // the words are still being typed
+  const [seen, setSeen] = useState(q);
+  if (q !== seen) {
+    setSeen(q);
+    if (typed.trim() !== (q ?? '')) setTyped(q ?? '');
+  }
   // the address follows the words once they stop changing; new words start
   // at the first page
   const search = useDebouncedCallback(
@@ -50,9 +64,24 @@ export function UsersPage() {
           loading={<ListSkeleton rows={6} label={common('state.loading')} />}
           isEmpty={(data) => !data.users.length}
           empty={
-            <EmptyState title={t('users.empty.title', { q })}>
-              {t('users.empty.body')}
-            </EmptyState>
+            q ? (
+              <EmptyState title={t('users.empty.title', { q })}>
+                {t('users.empty.body')}
+              </EmptyState>
+            ) : (
+              <EmptyState title={t('users.empty.page.title')}>
+                <Button
+                  variant="default"
+                  onClick={() =>
+                    void navigate({
+                      search: (s) => ({ ...s, page: undefined }),
+                    })
+                  }
+                >
+                  {t('users.empty.page.action')}
+                </Button>
+              </EmptyState>
+            )
           }
         >
           {(data) => (

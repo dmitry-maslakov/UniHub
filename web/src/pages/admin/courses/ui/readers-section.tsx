@@ -50,7 +50,7 @@ export function ReadersSection({ course }: { course: { id: string } }) {
       ),
       labels: {
         confirm: t('course.readers.remove.confirm.action'),
-        cancel: common('action.cancel'),
+        cancel: common('action.keep'),
       },
       confirmProps: { color: 'red' },
       onConfirm: () => revoke.mutate(reader),

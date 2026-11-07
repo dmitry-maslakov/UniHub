@@ -295,6 +295,11 @@ export class HubLinkResponse implements HubLinkView {
   @ApiProperty({ type: Number, nullable: true, example: 2026 })
   year!: number | null;
   @ApiProperty({
+    description:
+      "whether unlinking reaches this link: it is of the site the portal's settings read now",
+  })
+  unlinkable!: boolean;
+  @ApiProperty({
     type: String,
     nullable: true,
     description:

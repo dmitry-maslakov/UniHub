@@ -1605,6 +1605,10 @@
             "nullable": true,
             "example": 2026
           },
+          "unlinkable": {
+            "type": "boolean",
+            "description": "whether unlinking reaches this link: it is of the site the portal's settings read now"
+          },
           "name": {
             "type": "string",
             "nullable": true,
@@ -1618,6 +1622,7 @@
           "instance",
           "externalId",
           "year",
+          "unlinkable",
           "name"
         ]
       },

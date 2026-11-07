@@ -4,6 +4,7 @@ export default {
     showMore: 'Show more',
     cancel: 'Cancel',
     keep: 'Keep it',
+    close: 'Close',
     save: 'Save',
     copy: 'Copy',
     copied: 'Copied',

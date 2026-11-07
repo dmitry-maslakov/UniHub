@@ -194,6 +194,7 @@ describe('course admin routes', { timeout: 20_000 }, () => {
             instance: null,
             externalId: 'open-1',
             year: 2026,
+            unlinkable: true,
             name: 'Kriptografija admina',
           },
           {
@@ -203,6 +204,7 @@ describe('course admin routes', { timeout: 20_000 }, () => {
             instance: null,
             externalId: 'own-1',
             year: null,
+            unlinkable: true,
             name: null,
           },
         ],

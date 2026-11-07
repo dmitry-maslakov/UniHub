@@ -13,6 +13,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { isAdmin } from '@/entities/session';
 import { authClient } from '@/shared/api';
+import { isBanned } from '../lib/is-banned';
 import { BanModal } from './ban-modal';
 
 type Notify = 'madeAdmin' | 'removedAdmin' | 'banned' | 'unbanned';
@@ -27,6 +28,7 @@ export function UserActions({
     name: string;
     role?: string | null;
     banned?: boolean | null;
+    banExpires?: Date | string | null;
   };
 }) {
   const { t } = useTranslation('admin');
@@ -53,7 +55,7 @@ export function UserActions({
       children: <Text size="sm">{t(`users.${key}.confirm.body`)}</Text>,
       labels: {
         confirm: t(`users.${key}.confirm.action`),
-        cancel: common('action.cancel'),
+        cancel: common(role === 'user' ? 'action.keep' : 'action.cancel'),
       },
       confirmProps: role === 'user' ? { color: 'red' } : undefined,
       onConfirm: () =>
@@ -93,7 +95,7 @@ export function UserActions({
               {t('users.actions.makeAdmin')}
             </Menu.Item>
           )}
-          {user.banned ? (
+          {isBanned(user) ? (
             <Menu.Item
               leftSection={<IconCircleCheck size={16} stroke={1.75} />}
               onClick={() =>

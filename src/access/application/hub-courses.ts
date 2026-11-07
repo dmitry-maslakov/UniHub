@@ -8,6 +8,7 @@ import {
 } from '../../identity/contracts.js';
 import { nameHas, PortalLinksQuery } from '../../accounts/contracts.js';
 import {
+  ConfiguredInstanceQuery,
   FindCourseQuery,
   ListHubCoursesQuery,
   ListSharedPortalCoursesQuery,
@@ -24,6 +25,9 @@ export interface HubLinkView {
   instance: string | null;
   externalId: string;
   year: number | null;
+  // whether an unlink reaches this link: it names the portal course of the
+  // site the portal's settings read now
+  unlinkable: boolean;
   // none for a portal read with users' own accounts: what they hold is
   // theirs
   name: string | null;
@@ -69,11 +73,20 @@ export class HubCourses {
     const portals = [
       ...new Set(courses.flatMap(({ links }) => links.map((l) => l.portal))),
     ];
-    const [modes, readers] = await Promise.all([
+    const [modes, readers, sites] = await Promise.all([
       this.queries.execute(new PortalLinksQuery(portals)),
       this.queries.execute(
         new CountCourseReadersQuery(courses.map(({ id }) => id)),
       ),
+      Promise.all(
+        portals.map(
+          async (p) =>
+            [
+              p,
+              await this.queries.execute(new ConfiguredInstanceQuery(p)),
+            ] as const,
+        ),
+      ).then((all) => new Map(all)),
     ]);
     return courses
       .map(({ links, ...course }) => ({
@@ -86,6 +99,7 @@ export class HubCourses {
             label,
             mode,
             instance: instance || null,
+            unlinkable: instance === sites.get(link.portal),
             name: mode === 'token' ? null : name,
           };
         }),

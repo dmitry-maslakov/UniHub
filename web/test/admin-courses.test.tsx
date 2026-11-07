@@ -14,6 +14,7 @@ const link = (over: object = {}) => ({
   instance: null,
   externalId: '1388',
   year: 2026,
+  unlinkable: true,
   name: 'OS 2026/27',
   ...over,
 });
@@ -32,6 +33,7 @@ const os = {
       instance: 'https://canvas.example.edu',
       externalId: '297',
       year: null,
+      unlinkable: false,
       name: null,
     }),
     link({
@@ -358,6 +360,61 @@ describe('admin, courses', () => {
 
       await screen.findByText('Linked.');
       expect(bodies).toEqual([{ course: 'os', year: null }]);
+    });
+
+    it('offers an unlink only where it reaches the link', async () => {
+      open();
+      const list = await screen.findByRole('list', {
+        name: 'Linked portal courses',
+      });
+      const rows = within(list).getAllByRole('listitem');
+      expect(within(rows[0]!).getByRole('button')).toBeVisible();
+      expect(within(rows[1]!).queryByRole('button')).toBeNull();
+    });
+
+    it('does not link a year it cannot read as one', async () => {
+      open();
+      const bodies: unknown[] = [];
+      server.use(
+        http.get(api('/admin/portal-courses'), () =>
+          HttpResponse.json({
+            total: 1,
+            portalCourses: [
+              {
+                portal: 'courses',
+                label: 'Course site',
+                mode: 'shared',
+                externalId: '77',
+                name: 'Računarske mreže',
+                course: null,
+              },
+            ],
+          }),
+        ),
+        http.put(
+          api('/portal-courses/courses/77/course'),
+          async ({ request }) => {
+            bodies.push(await request.json());
+            return new HttpResponse(null, { status: 204 });
+          },
+        ),
+      );
+
+      await userEvent.click(
+        await screen.findByRole('combobox', { name: 'Portal course' }),
+      );
+      await userEvent.click(
+        await screen.findByRole('option', {
+          name: 'Računarske mreže · Course site',
+        }),
+      );
+      await userEvent.type(screen.getByLabelText('Academic year'), '26');
+      await userEvent.click(screen.getByRole('button', { name: 'Link' }));
+
+      expect(
+        await screen.findByText(/Enter a year from 1901 to 2999/),
+      ).toBeVisible();
+      expect(bodies).toEqual([]);
     });
 
     it('unlinks after a confirm', async () => {

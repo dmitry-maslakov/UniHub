@@ -20,6 +20,10 @@ export default {
     empty: {
       title: 'Nijedan korisnik ne odgovara upitu „{{q}}”',
       body: 'Probaj imejl ili ime kako ga je korisnik napisao.',
+      page: {
+        title: 'Nema korisnika na ovoj strani',
+        action: 'Nazad na prvu stranu',
+      },
     },
     badge: {
       admin: 'Administrator',
@@ -144,6 +148,7 @@ export default {
         year: {
           label: 'Školska godina',
           placeholder: '2026 za 2026/27',
+          invalid: 'Unesi godinu od 1901 do 2999, na primer 2026 za 2026/27.',
         },
         action: 'Poveži',
         moves:

@@ -3,6 +3,7 @@ import { FakeBus } from '../../../test/fake-bus.js';
 import { PortalLinksQuery } from '../../accounts/contracts.js';
 import {
   FindCourseQuery,
+  ConfiguredInstanceQuery,
   ListHubCoursesQuery,
   ListSharedPortalCoursesQuery,
   UnknownCourseError,
@@ -19,6 +20,7 @@ const [canvas, open, wiki] = ['canvas', 'open', 'wiki'].map((portal) =>
   PortalId.parse(portal),
 );
 const SITE = 'https://canvas.example.edu' as Instance;
+const OTHER_SITE = 'https://courses.example.edu' as Instance;
 
 // canvas is read with users' own accounts, open is public, wiki (named by
 // nothing) is shared
@@ -79,6 +81,11 @@ function hub(
           portals.flatMap((p) => (modes.has(p) ? [[p, modes.get(p)]] : [])),
         ),
     ],
+    [
+      ConfiguredInstanceQuery,
+      ({ portal }: ConfiguredInstanceQuery) =>
+        portal === canvas ? OTHER_SITE : NO_INSTANCE,
+    ],
     [CountCourseReadersQuery, () => new Map([['os-id', 2]])],
     [
       FindCourseQuery,
@@ -102,6 +109,18 @@ describe('HubCourses', () => {
       [canvas, null],
       [wiki, 'OS'],
     ]);
+  });
+
+  it('offers an unlink only for a link of the site the settings read', async () => {
+    const { links } = (await hub().hub.list()).find(
+      ({ slug }) => slug === 'os',
+    )!;
+    expect(links.map(({ portal, unlinkable }) => [portal, unlinkable])).toEqual(
+      [
+        [canvas, false],
+        [wiki, true],
+      ],
+    );
   });
 
   it("counts each course's readers, by name", async () => {

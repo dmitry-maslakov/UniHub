@@ -30,12 +30,18 @@ export function BanModal({
   const { t: common } = useTranslation('common');
   const [duration, setDuration] = useState<string>('forever');
   const [reason, setReason] = useState('');
+  const close = () => {
+    setDuration('forever');
+    setReason('');
+    onClose();
+  };
   const seconds =
     BAN_DURATIONS.find(({ key }) => key === duration)?.seconds ?? null;
   return (
     <Modal
       opened={opened}
-      onClose={onClose}
+      onClose={close}
+      closeButtonProps={{ 'aria-label': common('action.close') }}
       title={t('users.ban.title', { name })}
     >
       <form
@@ -65,7 +71,7 @@ export function BanModal({
             onChange={(event) => setReason(event.currentTarget.value)}
           />
           <Group justify="flex-end" gap="sm">
-            <Button variant="default" onClick={onClose}>
+            <Button variant="default" onClick={close}>
               {common('action.cancel')}
             </Button>
             <Button type="submit" color="red" loading={pending}>

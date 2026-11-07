@@ -459,6 +459,8 @@ export interface components {
             externalId: string;
             /** @example 2026 */
             year: number | null;
+            /** @description whether unlinking reaches this link: it is of the site the portal's settings read now */
+            unlinkable: boolean;
             /** @description the portal course's name as the hub account sees it; null for a portal read with users' own accounts (what those hold is theirs), or when the hub account sees none */
             name: string | null;
         };
