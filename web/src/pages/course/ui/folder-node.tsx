@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   FileTypeIcon,
@@ -7,11 +8,7 @@ import {
   filesIn,
   type FolderNode,
 } from '@/entities/file';
-import {
-  SelectableRow,
-  boxState,
-  type Selection,
-} from '@/features/download-selection';
+import { SelectableRow, type Selection } from '@/features/download-selection';
 import type { Schemas } from '@/shared/api';
 import { useFormat } from '@/shared/i18n';
 import { targetOf } from '../lib/target-of';
@@ -34,16 +31,20 @@ export function FolderNodeView({
 }) {
   const { t } = useTranslation(['courses', 'files', 'common']);
   const { size } = useFormat();
+  // each folder's files once, not on every render
+  const targets = useMemo(
+    () => node.folders.map((f) => filesIn(f).flatMap((x) => targetOf(x) ?? [])),
+    [node],
+  );
   return (
     <>
-      {node.folders.map((folder) => {
-        const targets = filesIn(folder).flatMap((f) => targetOf(f) ?? []);
+      {node.folders.map((folder, i) => {
         return (
           <SelectableRow
             key={folder.path}
             label={t('files:selection.selectFolder', { name: folder.name })}
-            state={boxState(targets, selection.has)}
-            onChange={(on) => selection.setMany(targets, on)}
+            targets={targets[i]!}
+            selection={selection}
           >
             <FolderBranch
               name={folder.name}
@@ -68,8 +69,8 @@ export function FolderNodeView({
           <SelectableRow
             key={file.id}
             label={t('files:selection.select', { name: file.name })}
-            state={target && boxState([target], selection.has)}
-            onChange={() => target && selection.toggle(target)}
+            targets={target ? [target] : []}
+            selection={selection}
           >
             <TreeLink
               to="/courses/$slug/files/$fileId"

@@ -339,7 +339,7 @@ describe('CourseReader', () => {
     expect(await r.entry('ana', 'f1')).toEqual({
       name: 'f1.pdf',
       path: '',
-      size: 3,
+      size: content.length,
       course: os.id,
       archive: undefined,
     });
@@ -362,9 +362,43 @@ describe('CourseReader', () => {
     );
   });
 
+  it('asks for her viewers once when it reads several files', async () => {
+    const { reader: r, queries } = reader();
+
+    const reading = await r.readingFiles('ana');
+    await reading.entry('f1');
+    await reading.content('f1');
+    await reading.entry('f1', 'lab/main.c');
+
+    expect(
+      queries.sent.filter((q) => q instanceof ReadScopeQuery),
+    ).toHaveLength(1);
+    await expect(reading.entry('f2')).rejects.toThrowError(
+      new NotReadableError('file'),
+    );
+  });
+
+  it('sizes a file by what is stored, whatever its portal reported', async () => {
+    const { reader: r } = reader();
+    const blank = { ...files[0]!, size: null };
+    files.splice(0, 1, blank);
+    try {
+      expect(await r.entry('ana', 'f1')).toMatchObject({
+        size: content.length,
+      });
+    } finally {
+      files.splice(0, 1, file('f1', os.id));
+    }
+  });
+
   it("names the courses she reads by catalog's id", async () => {
     const { reader: r } = reader();
-    expect(await r.courseNames('ana')).toEqual(new Map([[os.id, 'OS']]));
+    expect(await r.courseNames('ana')).toEqual(
+      new Map([
+        ['pc', { id: os.id, name: 'OS' }],
+        [os.id, { id: os.id, name: 'OS' }],
+      ]),
+    );
   });
 
   it('finds no member not kept, and looks up none in a file it may not read', async () => {
@@ -442,5 +476,13 @@ describe('CourseReader', () => {
     await expect(
       r.items('ana', CourseSlug.parse('catalog~os'), page),
     ).rejects.toThrowError(new NotReadableError('course'));
+    // the pick's own id is of the course it is shown in
+    expect(await r.courseNames('ana')).toEqual(
+      new Map(
+        ['pc-m1', 'pc-os'].map(
+          (id) => [id, { id: 'pc-m1', name: 'm1' }] as const,
+        ),
+      ),
+    );
   });
 });

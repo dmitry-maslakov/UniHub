@@ -10,6 +10,20 @@ describe('zipEntryNames', () => {
     ).toEqual(['Labs/Week 1/sheet.pdf', 'syllabus.pdf']);
   });
 
+  it('keeps names a Windows unzip accepts', () => {
+    expect(
+      zipEntryNames([
+        { path: 'Week 1.', name: 'Predavanje 1: Uvod?.pdf' },
+        { path: '', name: 'what "is" <this>|*.txt ' },
+        { path: '', name: '...' },
+      ]),
+    ).toEqual([
+      'Week 1/Predavanje 1_ Uvod_.pdf',
+      'what _is_ _this___.txt',
+      'file',
+    ]);
+  });
+
   it("puts a member under its archive's name", () => {
     expect(
       zipEntryNames([

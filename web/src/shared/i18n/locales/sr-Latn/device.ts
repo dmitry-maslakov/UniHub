@@ -16,8 +16,12 @@ export default {
   asks: '{{app}} traži prijavu kao <strong>{{email}}</strong>.',
   codeAria: 'Kod {{spelled}}',
   warning:
-    'Odobri samo ako je ovaj kod upravo na ekranu ispred tebe. Neko ko ti je poslao kod ne vidi tvoje predmete ako ga ne odobriš.',
-  approve: 'Odobri',
+    'Odobri samo ako je ovaj kod upravo na ekranu ispred tebe. Ako ti je neko poslao ovaj kod, odbij: odobravanje bi toj osobi dalo pristup tvom nalogu.',
+  approve: {
+    title: 'Odobri prijavu',
+    description: 'Jedan ekran traži prijavu na UniHub tvojim nalogom.',
+    action: 'Odobri',
+  },
   deny: 'Odbij',
   failed: 'Slanje odgovora nije uspelo. Pokušaj ponovo.',
   freshSession:

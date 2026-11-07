@@ -64,7 +64,7 @@ export class DownloadsController {
   }
 
   @Get(':id')
-  @Limited('api')
+  @Limited('zips')
   @ApiProduces('application/zip')
   @ApiOkResponse({
     description:

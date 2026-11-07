@@ -10,6 +10,7 @@ import {
 } from './application/plugin-ports.handlers.js';
 import { PortalAccounts } from './application/portal-accounts.js';
 import { PortalPicks } from './application/portal-picks.js';
+import { PortalLinksHandler } from './application/portal-links.handler.js';
 import { UserDeletedHandler } from './application/user-deleted.handler.js';
 import { ViewingAccountsHandler } from './application/viewing-accounts.handler.js';
 import { WantedCoursesHandler } from './application/wanted-courses.handler.js';
@@ -65,6 +66,7 @@ import { ReconcileWantedSchedule } from './infrastructure/reconcile-wanted.sched
     PortalPicks,
     UserDeletedHandler,
     ViewingAccountsHandler,
+    PortalLinksHandler,
     WantedCoursesHandler,
     PortalReadersHandler,
     AccountCredentialHandler,

@@ -53,6 +53,7 @@ export default {
     title: 'Inside this archive',
     description: 'Open one to read its text.',
     aria: 'Files in the archive',
+    loading: 'Loading the files in the archive',
     noText: 'No text',
     leftOut: {
       TOO_LARGE: 'Left out: too large',

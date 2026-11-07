@@ -7,6 +7,7 @@ export default {
     clear: 'Clear',
     download: 'Download as ZIP',
     tooLarge: "That's over 1 GB. Pick fewer files.",
+    gone: 'Some of these files are no longer available. Reload the page.',
     tooMany: "That's over 500 files. Pick fewer files.",
   },
 };

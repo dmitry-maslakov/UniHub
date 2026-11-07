@@ -10,8 +10,14 @@ export type ZipItem = { path: string } & (
 // A zip's entry names are paths a client unpacks under a folder of its
 // own, and yazl refuses an absolute one or one that climbs out. Whatever a
 // portal or an archive called something, only its plain segments are kept.
+// Characters Windows refuses in a name become "_", and a name doesn't end
+// in a dot or a space there: Explorer's Extract All fails on them.
 const segments = (path: string) =>
-  path.split(/[\\/]/).filter((s) => s !== '' && s !== '.' && s !== '..');
+  path
+    .split(/[\\/]/)
+    .filter((s) => s !== '' && s !== '.' && s !== '..')
+    .map((s) => s.replace(/[<>:"|?*\p{Cc}]/gu, '_').replace(/[. ]+$/, ''))
+    .filter((s) => s !== '');
 
 const stem = (name: string) => {
   const parts = segments(name);

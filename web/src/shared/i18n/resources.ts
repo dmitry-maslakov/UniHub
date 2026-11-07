@@ -1,4 +1,5 @@
 import enAccount from './locales/en/account';
+import enAdmin from './locales/en/admin';
 import enAuth from './locales/en/auth';
 import enCommon from './locales/en/common';
 import enConnect from './locales/en/connect';
@@ -13,6 +14,7 @@ import enSearch from './locales/en/search';
 import enShell from './locales/en/shell';
 import enSources from './locales/en/sources';
 import srAccount from './locales/sr-Latn/account';
+import srAdmin from './locales/sr-Latn/admin';
 import srAuth from './locales/sr-Latn/auth';
 import srCommon from './locales/sr-Latn/common';
 import srConnect from './locales/sr-Latn/connect';
@@ -44,6 +46,7 @@ export const resources = {
     sources: enSources,
     connect: enConnect,
     account: enAccount,
+    admin: enAdmin,
     privacy: enPrivacy,
   },
   'sr-Latn': {
@@ -60,6 +63,7 @@ export const resources = {
     sources: srSources,
     connect: srConnect,
     account: srAccount,
+    admin: srAdmin,
     privacy: srPrivacy,
   },
 };

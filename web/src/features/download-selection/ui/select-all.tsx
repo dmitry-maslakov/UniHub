@@ -1,6 +1,6 @@
 import { Checkbox } from '@mantine/core';
 import { useTranslation } from 'react-i18next';
-import { boxState, type Selection, type Target } from '../model/selection';
+import { useBox, type Selection, type Target } from '../model/selection';
 
 // One box for everything that can be ticked on the page
 export function SelectAll({
@@ -11,7 +11,7 @@ export function SelectAll({
   selection: Selection;
 }) {
   const { t } = useTranslation('files');
-  const state = boxState(targets, selection.has);
+  const state = useBox(selection, targets);
   if (!state) return null;
   return (
     <Checkbox

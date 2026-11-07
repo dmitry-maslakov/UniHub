@@ -1,5 +1,6 @@
 import { Group, Text } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { OPEN_UP_TO, folderTree } from '@/entities/file';
 import { SelectAll, type Selection } from '@/features/download-selection';
@@ -18,6 +19,7 @@ export function FilesTree({
 }) {
   const { t } = useTranslation('courses');
   const files = useQuery(courseFilesQuery(slug));
+  const tree = useMemo(() => folderTree(files.data?.files ?? []), [files.data]);
   return (
     <QueryState
       query={files}
@@ -43,7 +45,7 @@ export function FilesTree({
           </Group>
           <nav aria-label={t('files.aria')}>
             <FolderNodeView
-              node={folderTree(all)}
+              node={tree}
               slug={slug}
               open={all.length <= OPEN_UP_TO}
               selection={selection}

@@ -23,21 +23,23 @@ class FakeRequests extends DownloadRequests {
 // src/main.c; b1 is of `net`; nope is nobody's
 const catalog = (): Record<
   string,
-  { name: string; path: string; size: number | null; course: string }
+  { name: string; path: string; size: number; course: string }
 > => ({
   a1: { name: 'a.pdf', path: 'Labs', size: 10, course: 'os-id' },
   a2: { name: 'a.pdf', path: 'Labs', size: 20, course: 'os-id' },
   b1: { name: 'b.pdf', path: '', size: 5, course: 'net-id' },
   z: { name: 'lab1.zip', path: 'Labs', size: 100, course: 'os-id' },
   big: { name: 'big.iso', path: '', size: MAX_BYTES, course: 'os-id' },
-  loose: { name: 'loose.txt', path: '', size: null, course: 'os-id' },
+  // shown with the course os, though its own is another
+  guest: { name: 'g.txt', path: '', size: 1, course: 'pc-guest' },
 });
 
 function downloads() {
   const files = catalog();
   const reads: string[] = [];
-  const reader = {
-    entry: async (_: string, fileId: string, member?: string) => {
+  const asked: string[] = [];
+  const reading = {
+    entry: async (fileId: string, member?: string) => {
       const file = files[fileId];
       if (!file || (member !== undefined && member !== 'src/main.c'))
         throw new NotReadableError(file ? 'member' : 'file');
@@ -45,21 +47,30 @@ function downloads() {
         ? { ...file, archive: undefined }
         : { ...file, name: 'main.c', size: 9, archive: file.name };
     },
-    courseNames: async () =>
-      new Map([
-        ['os-id', 'Operativni sistemi'],
-        ['net-id', 'Mreže'],
-      ]),
-    content: async (_: string, fileId: string, member?: string) => {
+    content: async (fileId: string, member?: string) => {
       reads.push(`${fileId}${member ? `:${member}` : ''}`);
       return { stream: Readable.from(['bytes']) };
     },
+  };
+  const os = { id: 'os-id', name: 'Operativni sistemi' };
+  const reader = {
+    readingFiles: async (userId: string) => {
+      asked.push(userId);
+      return reading;
+    },
+    courseNames: async () =>
+      new Map([
+        ['os-id', os],
+        ['pc-guest', os],
+        ['net-id', { id: 'net-id', name: 'Mreže' }],
+      ]),
   } as unknown as CourseReader;
   const requests = new FakeRequests();
   return {
     downloads: new Downloads(reader, requests),
     requests,
     reads,
+    asked,
     files,
   };
 }
@@ -86,14 +97,17 @@ describe('Downloads', () => {
     });
   });
 
-  it('names a request of several courses for the hub, and one without sizes counts none', async () => {
+  it('names a request of several courses for the hub, and a pick shown in a course for that course', async () => {
     const { downloads: d } = downloads();
 
     expect(
       await d.request('ana', [{ file: 'a1' }, { file: 'b1' }]),
     ).toMatchObject({ name: 'UniHub.zip', size: 15 });
-    expect(await d.request('ana', [{ file: 'loose' }])).toMatchObject({
-      size: 0,
+    expect(
+      await d.request('ana', [{ file: 'a1' }, { file: 'guest' }]),
+    ).toMatchObject({ name: 'Operativni sistemi.zip' });
+    expect(await d.request('ana', [{ file: 'guest' }])).toMatchObject({
+      name: 'Operativni sistemi.zip',
     });
   });
 
@@ -122,25 +136,28 @@ describe('Downloads', () => {
   });
 
   it('opens a request as its owner reads it, with a name for each entry and none read yet', async () => {
-    const { downloads: d, reads } = downloads();
+    const { downloads: d, reads, asked } = downloads();
     await d.request('ana', [
       { file: 'a1' },
       { file: 'a2' },
       { file: 'z', member: 'src/main.c' },
     ]);
+    asked.length = 0;
 
     const { name, entries } = await d.open('ana', 'r1');
 
     expect(name).toBe('Operativni sistemi.zip');
-    expect(entries.map(({ name, size }) => ({ name, size }))).toEqual([
-      { name: 'Labs/a.pdf', size: 10 },
-      { name: 'Labs/a (2).pdf', size: 20 },
-      { name: 'Labs/lab1/src/main.c', size: 9 },
+    expect(entries.map(({ name }) => name)).toEqual([
+      'Labs/a.pdf',
+      'Labs/a (2).pdf',
+      'Labs/lab1/src/main.c',
     ]);
     expect(reads).toEqual([]);
     const stream = await entries[2]!.open();
     expect((await stream.toArray()).join('')).toBe('bytes');
     expect(reads).toEqual(['z:src/main.c']);
+    // her viewers are asked once, not for each entry
+    expect(asked).toEqual(['ana']);
   });
 
   it("opens none of another user's, an unknown or an expired id", async () => {

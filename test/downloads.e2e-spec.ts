@@ -17,6 +17,7 @@ import type { Mail } from '../src/identity/domain/mailer.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
 import { accounts } from './accounts.js';
 import { bootApp } from './app.js';
+import { BlobStore } from '../src/storage/contracts.js';
 import { portalIngest } from './ingest.js';
 
 // Several files as one zip through the API: the wiring (Redis, the routes,
@@ -26,6 +27,8 @@ import { portalIngest } from './ingest.js';
 const PORTAL = 'downloads-test';
 const slides = Buffer.from('%PDF slides about caches');
 const notes = Buffer.from('notes at the top');
+// a portal rounds sizes: this one reports a thousand bytes too many
+const rounded = Buffer.from('rounded off by the portal');
 const main = 'int main(void) { return 0; }\n';
 
 async function zipOf(files: Record<string, string>) {
@@ -80,6 +83,7 @@ describe('downloads', { timeout: 30_000 }, () => {
       ['slides', 'c1', 'lectures', 'slides.pdf', slides],
       ['notes', 'c1', '', 'notes.txt', notes],
       ['labs', 'c1', 'Labs', 'labs.zip', await zipOf({ 'lab/a.c': main })],
+      ['rounded', 'c1', '', 'rounded.txt', rounded],
       ['exam', 'c2', '', 'exam.pdf', Buffer.from('%PDF answers')],
     ];
     for (const [externalId, course, path, name, content] of files) {
@@ -88,7 +92,7 @@ describe('downloads', { timeout: 30_000 }, () => {
         course,
         path,
         name,
-        size: content.length,
+        size: content.length + (externalId === 'rounded' ? 1000 : 0),
       });
       await ingest.content(externalId, Readable.from([content]));
       ids[externalId] = (
@@ -170,6 +174,36 @@ describe('downloads', { timeout: 30_000 }, () => {
           ['Labs/labs/lab/a.c', main],
         ]),
       );
+    }
+  });
+
+  it("zips a file whole though the portal's size for it is off", async () => {
+    const { body } = await post(student, [
+      { file: ids.rounded },
+      { file: ids.notes },
+    ]).expect(201);
+    // what is stored counts, not the portal's size
+    expect(body.size).toBe(rounded.length + notes.length);
+
+    const zip = await fetchZip(body.url, student).expect(200);
+
+    expect(await unzipped(zip.body)).toEqual(
+      new Map([
+        ['rounded.txt', rounded.toString()],
+        ['notes.txt', notes.toString()],
+      ]),
+    );
+  });
+
+  it('refuses over a gibibyte with a 422 DOWNLOAD_TOO_LARGE, and keeps nothing', async () => {
+    const size = vi
+      .spyOn(app.get(BlobStore), 'size')
+      .mockResolvedValue(1024 ** 3 + 1);
+    try {
+      const refused = await post(student, [{ file: ids.notes }]).expect(422);
+      expect(refused.body).toMatchObject({ code: 'DOWNLOAD_TOO_LARGE' });
+    } finally {
+      size.mockRestore();
     }
   });
 

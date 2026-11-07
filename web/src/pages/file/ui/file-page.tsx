@@ -1,6 +1,7 @@
 import { Stack } from '@mantine/core';
 import { getRouteApi } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
+import { fileType } from '@/entities/file';
 import { api } from '@/shared/api';
 import {
   AnchorLink,
@@ -65,7 +66,9 @@ export function FilePage() {
           <Stack gap="xxl">
             <FileActions file={found} slug={slug} member={member} />
             <TextSection file={found} member={member} />
-            {!member && <MembersSection fileId={fileId} slug={slug} />}
+            {!member && fileType(found.mime, found.name) === 'archive' && (
+              <MembersSection fileId={fileId} slug={slug} />
+            )}
           </Stack>
         </>
       )}

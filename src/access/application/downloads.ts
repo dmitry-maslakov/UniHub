@@ -50,8 +50,11 @@ export class Downloads {
   // NotReadableError naming nothing. Over MAX_BYTES in all is refused too.
   async request(userId: string, items: DownloadItems) {
     const unique = [...new Map(items.map((i) => [keyOf(i), i])).values()];
-    const entries = await this.entries(userId, unique);
-    const size = entries.reduce((sum, { entry }) => sum + (entry.size ?? 0), 0);
+    const entries = await this.entries(
+      await this.reader.readingFiles(userId),
+      unique,
+    );
+    const size = entries.reduce((sum, { entry }) => sum + entry.size, 0);
     if (size > MAX_BYTES) throw new DownloadTooLargeError(MAX_BYTES);
     const id = await this.requests.put({ userId, items: unique });
     return {
@@ -69,7 +72,10 @@ export class Downloads {
   async open(userId: string, id: string) {
     const request = await this.requests.get(id);
     if (request?.userId !== userId) throw new NotReadableError('download');
-    const entries = await this.entries(userId, request.items);
+    // the viewers are asked once; an entry is checked again as it is opened,
+    // against them
+    const reading = await this.reader.readingFiles(userId);
+    const entries = await this.entries(reading, request.items);
     const names = zipEntryNames(
       entries.map(({ item, entry }): ZipItem =>
         item.member === undefined
@@ -83,21 +89,23 @@ export class Downloads {
     );
     return {
       name: await this.nameOf(userId, entries),
-      entries: entries.map(({ item, entry }, i) => ({
+      entries: entries.map(({ item }, i) => ({
         name: names[i]!,
-        size: entry.size,
         open: async () =>
-          (await this.reader.content(userId, item.file, item.member)).stream,
+          (await reading.content(item.file, item.member)).stream,
       })),
     };
   }
 
-  private async entries(userId: string, items: DownloadRequest['items']) {
+  private async entries(
+    reading: Awaited<ReturnType<CourseReader['readingFiles']>>,
+    items: DownloadRequest['items'],
+  ) {
     const entries = [];
     for (const item of items)
       entries.push({
         item,
-        entry: await this.reader.entry(userId, item.file, item.member),
+        entry: await reading.entry(item.file, item.member),
       });
     return entries;
   }
@@ -107,12 +115,15 @@ export class Downloads {
     userId: string,
     entries: { entry: { course: string } }[],
   ) {
-    const courses = new Set(entries.map(({ entry }) => entry.course));
-    const [only] = courses;
-    const name =
-      courses.size === 1
-        ? ((await this.reader.courseNames(userId)).get(only!) ?? NAME)
-        : NAME;
+    const names = await this.reader.courseNames(userId);
+    // a pick shown with a course of the user's is of that course
+    const courses = new Map(
+      entries.map(({ entry }) => {
+        const course = names.get(entry.course);
+        return [course?.id ?? entry.course, course?.name] as const;
+      }),
+    );
+    const name = (courses.size === 1 && [...courses.values()][0]) || NAME;
     // a file name has no folders
     return `${name.replace(/[\\/]/g, '_')}.zip`;
   }

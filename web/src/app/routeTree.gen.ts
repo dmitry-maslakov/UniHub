@@ -14,6 +14,7 @@ import { Route as AuthRouteImport } from './routes/_auth'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppAccountRouteImport } from './routes/_app/account'
+import { Route as AppAdminRouteImport } from './routes/_app/admin'
 import { Route as AppConnectRouteImport } from './routes/_app/connect'
 import { Route as AppConsentRouteImport } from './routes/_app/consent'
 import { Route as AppDeviceRouteImport } from './routes/_app/device'
@@ -23,9 +24,14 @@ import { Route as AuthCheckEmailRouteImport } from './routes/_auth/check-email'
 import { Route as AuthResetPasswordRouteImport } from './routes/_auth/reset-password'
 import { Route as AuthSignInRouteImport } from './routes/_auth/sign-in'
 import { Route as AuthSignUpRouteImport } from './routes/_auth/sign-up'
+import { Route as AppAdminIndexRouteImport } from './routes/_app/admin/index'
+import { Route as AppAdminUsersRouteImport } from './routes/_app/admin/users'
 import { Route as AppCoursesIndexRouteImport } from './routes/_app/courses/index'
 import { Route as AppSettingsApiKeysRouteImport } from './routes/_app/settings/api-keys'
 import { Route as AppSettingsPortalsRouteImport } from './routes/_app/settings/portals'
+import { Route as AuthSignInPhoneRouteImport } from './routes/_auth/sign-in_.phone'
+import { Route as AppAdminCoursesIndexRouteImport } from './routes/_app/admin/courses/index'
+import { Route as AppAdminCoursesCourseIdRouteImport } from './routes/_app/admin/courses/$courseId'
 import { Route as AppCoursesSlugIndexRouteImport } from './routes/_app/courses/$slug/index'
 import { Route as AppCoursesSlugFilesFileIdRouteImport } from './routes/_app/courses/$slug/files/$fileId'
 import { Route as AppCoursesSlugPostsItemIdRouteImport } from './routes/_app/courses/$slug/posts/$itemId'
@@ -51,6 +57,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
 const AppAccountRoute = AppAccountRouteImport.update({
   id: '/account',
   path: '/account',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminRoute = AppAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => AppRoute,
 } as any)
 const AppConnectRoute = AppConnectRouteImport.update({
@@ -98,6 +109,16 @@ const AuthSignUpRoute = AuthSignUpRouteImport.update({
   path: '/sign-up',
   getParentRoute: () => AuthRoute,
 } as any)
+const AppAdminIndexRoute = AppAdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppAdminRoute,
+} as any)
+const AppAdminUsersRoute = AppAdminUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AppAdminRoute,
+} as any)
 const AppCoursesIndexRoute = AppCoursesIndexRouteImport.update({
   id: '/courses/',
   path: '/courses/',
@@ -112,6 +133,21 @@ const AppSettingsPortalsRoute = AppSettingsPortalsRouteImport.update({
   id: '/settings/portals',
   path: '/settings/portals',
   getParentRoute: () => AppRoute,
+} as any)
+const AuthSignInPhoneRoute = AuthSignInPhoneRouteImport.update({
+  id: '/sign-in_/phone',
+  path: '/sign-in/phone',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AppAdminCoursesIndexRoute = AppAdminCoursesIndexRouteImport.update({
+  id: '/courses/',
+  path: '/courses/',
+  getParentRoute: () => AppAdminRoute,
+} as any)
+const AppAdminCoursesCourseIdRoute = AppAdminCoursesCourseIdRouteImport.update({
+  id: '/courses/$courseId',
+  path: '/courses/$courseId',
+  getParentRoute: () => AppAdminRoute,
 } as any)
 const AppCoursesSlugIndexRoute = AppCoursesSlugIndexRouteImport.update({
   id: '/courses/$slug/',
@@ -135,6 +171,7 @@ export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/privacy': typeof PrivacyRoute
   '/account': typeof AppAccountRoute
+  '/admin': typeof AppAdminRouteWithChildren
   '/connect': typeof AppConnectRoute
   '/consent': typeof AppConsentRoute
   '/device': typeof AppDeviceRoute
@@ -144,9 +181,14 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof AuthResetPasswordRoute
   '/sign-in': typeof AuthSignInRoute
   '/sign-up': typeof AuthSignUpRoute
+  '/admin/users': typeof AppAdminUsersRoute
   '/settings/api-keys': typeof AppSettingsApiKeysRoute
   '/settings/portals': typeof AppSettingsPortalsRoute
+  '/sign-in/phone': typeof AuthSignInPhoneRoute
+  '/admin/': typeof AppAdminIndexRoute
   '/courses/': typeof AppCoursesIndexRoute
+  '/admin/courses/$courseId': typeof AppAdminCoursesCourseIdRoute
+  '/admin/courses/': typeof AppAdminCoursesIndexRoute
   '/courses/$slug/': typeof AppCoursesSlugIndexRoute
   '/courses/$slug/files/$fileId': typeof AppCoursesSlugFilesFileIdRoute
   '/courses/$slug/posts/$itemId': typeof AppCoursesSlugPostsItemIdRoute
@@ -164,9 +206,14 @@ export interface FileRoutesByTo {
   '/reset-password': typeof AuthResetPasswordRoute
   '/sign-in': typeof AuthSignInRoute
   '/sign-up': typeof AuthSignUpRoute
+  '/admin/users': typeof AppAdminUsersRoute
   '/settings/api-keys': typeof AppSettingsApiKeysRoute
   '/settings/portals': typeof AppSettingsPortalsRoute
+  '/sign-in/phone': typeof AuthSignInPhoneRoute
+  '/admin': typeof AppAdminIndexRoute
   '/courses': typeof AppCoursesIndexRoute
+  '/admin/courses/$courseId': typeof AppAdminCoursesCourseIdRoute
+  '/admin/courses': typeof AppAdminCoursesIndexRoute
   '/courses/$slug': typeof AppCoursesSlugIndexRoute
   '/courses/$slug/files/$fileId': typeof AppCoursesSlugFilesFileIdRoute
   '/courses/$slug/posts/$itemId': typeof AppCoursesSlugPostsItemIdRoute
@@ -177,6 +224,7 @@ export interface FileRoutesById {
   '/_auth': typeof AuthRouteWithChildren
   '/privacy': typeof PrivacyRoute
   '/_app/account': typeof AppAccountRoute
+  '/_app/admin': typeof AppAdminRouteWithChildren
   '/_app/connect': typeof AppConnectRoute
   '/_app/consent': typeof AppConsentRoute
   '/_app/device': typeof AppDeviceRoute
@@ -187,9 +235,14 @@ export interface FileRoutesById {
   '/_auth/sign-in': typeof AuthSignInRoute
   '/_auth/sign-up': typeof AuthSignUpRoute
   '/_app/': typeof AppIndexRoute
+  '/_app/admin/users': typeof AppAdminUsersRoute
   '/_app/settings/api-keys': typeof AppSettingsApiKeysRoute
   '/_app/settings/portals': typeof AppSettingsPortalsRoute
+  '/_auth/sign-in_/phone': typeof AuthSignInPhoneRoute
+  '/_app/admin/': typeof AppAdminIndexRoute
   '/_app/courses/': typeof AppCoursesIndexRoute
+  '/_app/admin/courses/$courseId': typeof AppAdminCoursesCourseIdRoute
+  '/_app/admin/courses/': typeof AppAdminCoursesIndexRoute
   '/_app/courses/$slug/': typeof AppCoursesSlugIndexRoute
   '/_app/courses/$slug/files/$fileId': typeof AppCoursesSlugFilesFileIdRoute
   '/_app/courses/$slug/posts/$itemId': typeof AppCoursesSlugPostsItemIdRoute
@@ -200,6 +253,7 @@ export interface FileRouteTypes {
     | '/'
     | '/privacy'
     | '/account'
+    | '/admin'
     | '/connect'
     | '/consent'
     | '/device'
@@ -209,9 +263,14 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/sign-in'
     | '/sign-up'
+    | '/admin/users'
     | '/settings/api-keys'
     | '/settings/portals'
+    | '/sign-in/phone'
+    | '/admin/'
     | '/courses/'
+    | '/admin/courses/$courseId'
+    | '/admin/courses/'
     | '/courses/$slug/'
     | '/courses/$slug/files/$fileId'
     | '/courses/$slug/posts/$itemId'
@@ -229,9 +288,14 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/sign-in'
     | '/sign-up'
+    | '/admin/users'
     | '/settings/api-keys'
     | '/settings/portals'
+    | '/sign-in/phone'
+    | '/admin'
     | '/courses'
+    | '/admin/courses/$courseId'
+    | '/admin/courses'
     | '/courses/$slug'
     | '/courses/$slug/files/$fileId'
     | '/courses/$slug/posts/$itemId'
@@ -241,6 +305,7 @@ export interface FileRouteTypes {
     | '/_auth'
     | '/privacy'
     | '/_app/account'
+    | '/_app/admin'
     | '/_app/connect'
     | '/_app/consent'
     | '/_app/device'
@@ -251,9 +316,14 @@ export interface FileRouteTypes {
     | '/_auth/sign-in'
     | '/_auth/sign-up'
     | '/_app/'
+    | '/_app/admin/users'
     | '/_app/settings/api-keys'
     | '/_app/settings/portals'
+    | '/_auth/sign-in_/phone'
+    | '/_app/admin/'
     | '/_app/courses/'
+    | '/_app/admin/courses/$courseId'
+    | '/_app/admin/courses/'
     | '/_app/courses/$slug/'
     | '/_app/courses/$slug/files/$fileId'
     | '/_app/courses/$slug/posts/$itemId'
@@ -300,6 +370,13 @@ declare module '@tanstack/react-router' {
       path: '/account'
       fullPath: '/account'
       preLoaderRoute: typeof AppAccountRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/admin': {
+      id: '/_app/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AppAdminRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/connect': {
@@ -365,6 +442,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthSignUpRouteImport
       parentRoute: typeof AuthRoute
     }
+    '/_app/admin/': {
+      id: '/_app/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AppAdminIndexRouteImport
+      parentRoute: typeof AppAdminRoute
+    }
+    '/_app/admin/users': {
+      id: '/_app/admin/users'
+      path: '/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof AppAdminUsersRouteImport
+      parentRoute: typeof AppAdminRoute
+    }
     '/_app/courses/': {
       id: '/_app/courses/'
       path: '/courses'
@@ -385,6 +476,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/settings/portals'
       preLoaderRoute: typeof AppSettingsPortalsRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/_auth/sign-in_/phone': {
+      id: '/_auth/sign-in_/phone'
+      path: '/sign-in/phone'
+      fullPath: '/sign-in/phone'
+      preLoaderRoute: typeof AuthSignInPhoneRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_app/admin/courses/': {
+      id: '/_app/admin/courses/'
+      path: '/courses'
+      fullPath: '/admin/courses/'
+      preLoaderRoute: typeof AppAdminCoursesIndexRouteImport
+      parentRoute: typeof AppAdminRoute
+    }
+    '/_app/admin/courses/$courseId': {
+      id: '/_app/admin/courses/$courseId'
+      path: '/courses/$courseId'
+      fullPath: '/admin/courses/$courseId'
+      preLoaderRoute: typeof AppAdminCoursesCourseIdRouteImport
+      parentRoute: typeof AppAdminRoute
     }
     '/_app/courses/$slug/': {
       id: '/_app/courses/$slug/'
@@ -410,8 +522,27 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AppAdminRouteChildren {
+  AppAdminUsersRoute: typeof AppAdminUsersRoute
+  AppAdminIndexRoute: typeof AppAdminIndexRoute
+  AppAdminCoursesCourseIdRoute: typeof AppAdminCoursesCourseIdRoute
+  AppAdminCoursesIndexRoute: typeof AppAdminCoursesIndexRoute
+}
+
+const AppAdminRouteChildren: AppAdminRouteChildren = {
+  AppAdminUsersRoute: AppAdminUsersRoute,
+  AppAdminIndexRoute: AppAdminIndexRoute,
+  AppAdminCoursesCourseIdRoute: AppAdminCoursesCourseIdRoute,
+  AppAdminCoursesIndexRoute: AppAdminCoursesIndexRoute,
+}
+
+const AppAdminRouteWithChildren = AppAdminRoute._addFileChildren(
+  AppAdminRouteChildren,
+)
+
 interface AppRouteChildren {
   AppAccountRoute: typeof AppAccountRoute
+  AppAdminRoute: typeof AppAdminRouteWithChildren
   AppConnectRoute: typeof AppConnectRoute
   AppConsentRoute: typeof AppConsentRoute
   AppDeviceRoute: typeof AppDeviceRoute
@@ -428,6 +559,7 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppAccountRoute: AppAccountRoute,
+  AppAdminRoute: AppAdminRouteWithChildren,
   AppConnectRoute: AppConnectRoute,
   AppConsentRoute: AppConsentRoute,
   AppDeviceRoute: AppDeviceRoute,
@@ -449,6 +581,7 @@ interface AuthRouteChildren {
   AuthResetPasswordRoute: typeof AuthResetPasswordRoute
   AuthSignInRoute: typeof AuthSignInRoute
   AuthSignUpRoute: typeof AuthSignUpRoute
+  AuthSignInPhoneRoute: typeof AuthSignInPhoneRoute
 }
 
 const AuthRouteChildren: AuthRouteChildren = {
@@ -456,6 +589,7 @@ const AuthRouteChildren: AuthRouteChildren = {
   AuthResetPasswordRoute: AuthResetPasswordRoute,
   AuthSignInRoute: AuthSignInRoute,
   AuthSignUpRoute: AuthSignUpRoute,
+  AuthSignInPhoneRoute: AuthSignInPhoneRoute,
 }
 
 const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)

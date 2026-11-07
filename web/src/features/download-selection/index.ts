@@ -1,6 +1,6 @@
 export {
-  boxState,
   useSelection,
+  useTicked,
   type Selection,
   type Target,
 } from './model/selection';

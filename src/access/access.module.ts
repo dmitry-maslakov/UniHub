@@ -12,6 +12,7 @@ import { CourseGrants } from './application/course-grants.js';
 import { CourseMatching } from './application/course-matching.js';
 import { CourseReader } from './application/course-reader.js';
 import { Downloads } from './application/downloads.js';
+import { HubCourses } from './application/hub-courses.js';
 import {
   OwnPortalCourseHandler,
   PickMatchesHandler,
@@ -21,6 +22,7 @@ import { CourseAccessController } from './infrastructure/http/course-access.cont
 import { CoursesController } from './infrastructure/http/courses.controller.js';
 import { DownloadsController } from './infrastructure/http/downloads.controller.js';
 import { FilesController } from './infrastructure/http/files.controller.js';
+import { HubCoursesController } from './infrastructure/http/hub-courses.controller.js';
 import { ItemsController } from './infrastructure/http/items.controller.js';
 import { CourseTools } from './infrastructure/mcp/course.tools.js';
 import { McpHttpController } from './infrastructure/mcp/mcp-http.controller.js';
@@ -55,6 +57,7 @@ import { AccessSearchModule } from './search.module.js';
     FilesController,
     DownloadsController,
     CourseAccessController,
+    HubCoursesController,
     McpHttpController,
     CourseTools,
   ],
@@ -63,6 +66,7 @@ import { AccessSearchModule } from './search.module.js';
     Downloads,
     { provide: DownloadRequests, useClass: RedisDownloadRequests },
     CourseGrants,
+    HubCourses,
     CourseMatching,
     OwnPortalCourseHandler,
     PickMatchesHandler,

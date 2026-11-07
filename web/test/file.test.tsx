@@ -296,7 +296,10 @@ describe('a file', () => {
     const many = Array.from({ length: 450 }, (_, i) =>
       member({ path: `f${i}.c` }),
     );
-    setup({ file: details({ texts: [] }), members: many });
+    setup({
+      file: details({ mime: 'application/zip', texts: [] }),
+      members: many,
+    });
     renderApp('/courses/os/files/f1');
 
     expect(await screen.findByText('f449.c')).toBeVisible();
@@ -308,7 +311,10 @@ describe('a file', () => {
     const many = Array.from({ length: 2100 }, (_, i) =>
       member({ path: `f${i}.c` }),
     );
-    setup({ file: details({ texts: [] }), members: many });
+    setup({
+      file: details({ mime: 'application/zip', texts: [] }),
+      members: many,
+    });
     renderApp('/courses/os/files/f1');
 
     // two thousand rows take a while to draw
@@ -321,6 +327,34 @@ describe('a file', () => {
     ).toBeVisible();
     expect(memberOffsets).toHaveLength(10);
   }, 20_000);
+
+  it('says while the members load, and when they fail', async () => {
+    setup({
+      file: details({ name: 'lab.zip', mime: 'application/zip', texts: [] }),
+    });
+    server.use(
+      http.get(api('/files/f1/members'), () =>
+        HttpResponse.json({}, { status: 500 }),
+      ),
+    );
+    renderApp('/courses/os/files/f1');
+
+    expect(
+      await screen.findByText('Loading the files in the archive'),
+    ).toBeInTheDocument();
+    // after the retries
+    expect(
+      await screen.findByText("Couldn't load this", {}, { timeout: 8000 }),
+    ).toBeVisible();
+  }, 20_000);
+
+  it('asks for no members of a file that is no archive', async () => {
+    setup({ file: details() });
+    renderApp('/courses/os/files/f1');
+
+    await screen.findByText(/text of part 1/);
+    expect(memberOffsets).toEqual([]);
+  });
 
   it('downloads two members of an archive', async () => {
     const asked: unknown[] = [];
@@ -377,7 +411,7 @@ describe('a file', () => {
 
   it('says why a member was left out', async () => {
     setup({
-      file: details({ texts: [] }),
+      file: details({ mime: 'application/zip', texts: [] }),
       members: [
         member({ path: 'a', texts: [], leftOut: 'OVER_BUDGET' }),
         member({ path: 'b', texts: [], leftOut: 'DUPLICATE_PATH' }),

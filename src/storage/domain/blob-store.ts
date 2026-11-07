@@ -22,4 +22,6 @@ export abstract class BlobStore {
     maxBytes?: number,
   ): Promise<{ hash: ContentHash; size: number }>;
   abstract get(hash: ContentHash): Promise<Readable>;
+  // the bytes kept, which get() would read
+  abstract size(hash: ContentHash): Promise<number>;
 }

@@ -29,6 +29,7 @@ import {
 import { ConfiguredInstanceQuery } from '../../application/queries.js';
 import type { PortalRef } from '../../domain/portal-ref.js';
 import { courseLink, ExternalId, newCourse } from './requests.js';
+import { CourseCreatedResponse } from './responses.js';
 
 // What admins set up: courses, and which portal courses each is made of.
 // A portal course is named the way its portal names it, of the site the
@@ -46,9 +47,14 @@ export class CoursesAdminController {
   ) {}
 
   @Post('courses')
-  @ApiCreatedResponse({ description: "the new course's id" })
+  @ApiCreatedResponse({
+    type: CourseCreatedResponse,
+    description: "the new course's id",
+  })
   @ApiConflictResponse({ description: 'another course has the slug' })
-  create(@Body({ schema: newCourse }) body: z.output<typeof newCourse>) {
+  create(
+    @Body({ schema: newCourse }) body: z.output<typeof newCourse>,
+  ): Promise<CourseCreatedResponse> {
     return this.commands.execute(new CreateCourseCommand(body.slug, body.name));
   }
 

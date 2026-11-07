@@ -4,7 +4,7 @@ export type NavLabelKey =
   'nav.myCourses' | 'nav.search' | 'nav.sources' | 'nav.connect' | 'nav.admin';
 
 export interface NavItem {
-  to: '/' | '/search' | '/sources' | '/connect';
+  to: '/' | '/search' | '/sources' | '/connect' | '/admin';
   label: NavLabelKey;
   adminOnly?: true;
 }
@@ -14,4 +14,5 @@ export const navItems: NavItem[] = [
   { to: '/search', label: 'nav.search' },
   { to: '/sources', label: 'nav.sources' },
   { to: '/connect', label: 'nav.connect' },
+  { to: '/admin', label: 'nav.admin', adminOnly: true },
 ];

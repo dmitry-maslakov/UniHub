@@ -2,7 +2,7 @@ import { Button, Stack, TextInput } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useNavigate } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { normalizeCode } from '../lib/user-code';
+import { normalizeCode } from '@/entities/device';
 
 // The code typed in, for a screen whose QR code can't be scanned
 export function CodeForm({ initial = '' }: { initial?: string }) {
@@ -25,9 +25,13 @@ export function CodeForm({ initial = '' }: { initial?: string }) {
     >
       <Stack gap="md" align="stretch">
         <TextInput
+          size="lg"
           label={t('form.label')}
           placeholder="ABCD-EFGH"
           autoComplete="off"
+          // the page's one field, and the reason someone is here
+          // oxlint-disable-next-line jsx-a11y/no-autofocus
+          autoFocus
           autoCapitalize="characters"
           spellCheck={false}
           styles={{
@@ -39,7 +43,9 @@ export function CodeForm({ initial = '' }: { initial?: string }) {
           key={form.key('code')}
           {...form.getInputProps('code')}
         />
-        <Button type="submit">{t('form.action')}</Button>
+        <Button type="submit" fullWidth>
+          {t('form.action')}
+        </Button>
       </Stack>
     </form>
   );

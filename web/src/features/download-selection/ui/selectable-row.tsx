@@ -1,21 +1,22 @@
 import { Checkbox, Group } from '@mantine/core';
 import type { ReactNode } from 'react';
-import type { BoxState } from '../model/selection';
+import { useBox, type Selection, type Target } from '../model/selection';
 import classes from './selection.module.css';
 
-// A row of a tree with its box beside it, never inside its link. A row with
-// nothing to tick (`state` null) keeps the place of a box.
+// A row of a tree with its box beside it, never inside its link, over the
+// `targets` it ticks. A row with none keeps the place of a box.
 export function SelectableRow({
   label,
-  state,
-  onChange,
+  targets,
+  selection,
   children,
 }: {
   label: string;
-  state: BoxState | null;
-  onChange: (on: boolean) => void;
+  targets: readonly Target[];
+  selection: Selection;
   children: ReactNode;
 }) {
+  const state = useBox(selection, targets);
   return (
     <Group wrap="nowrap" gap="xs" align="flex-start">
       <div className={classes.slot}>
@@ -25,7 +26,9 @@ export function SelectableRow({
             aria-label={label}
             checked={state.checked}
             indeterminate={state.indeterminate}
-            onChange={(event) => onChange(event.currentTarget.checked)}
+            onChange={(event) =>
+              selection.setMany(targets, event.currentTarget.checked)
+            }
           />
         )}
       </div>

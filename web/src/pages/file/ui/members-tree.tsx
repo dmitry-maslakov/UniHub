@@ -1,4 +1,5 @@
 import { Anchor, Group, Text } from '@mantine/core';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   FileTypeIcon,
@@ -9,11 +10,7 @@ import {
   filesIn,
   type FolderNode,
 } from '@/entities/file';
-import {
-  SelectableRow,
-  boxState,
-  type Selection,
-} from '@/features/download-selection';
+import { SelectableRow, type Selection } from '@/features/download-selection';
 import type { Schemas } from '@/shared/api';
 import { useFormat } from '@/shared/i18n';
 import { memberName } from '../lib/member-name';
@@ -45,18 +42,23 @@ export function MembersTree({
 }) {
   const { t } = useTranslation(['file', 'files', 'courses']);
   const { size } = useFormat();
+  // each folder's members once, not on every render
+  const targets = useMemo(
+    () =>
+      node.folders.map((f) =>
+        filesIn(f).flatMap(({ member }) => targetOf(fileId, member) ?? []),
+      ),
+    [node, fileId],
+  );
   return (
     <>
-      {node.folders.map((folder) => {
-        const targets = filesIn(folder).flatMap(
-          ({ member }) => targetOf(fileId, member) ?? [],
-        );
+      {node.folders.map((folder, i) => {
         return (
           <SelectableRow
             key={folder.path}
             label={t('files:selection.selectFolder', { name: folder.name })}
-            state={boxState(targets, selection.has)}
-            onChange={(on) => selection.setMany(targets, on)}
+            targets={targets[i]!}
+            selection={selection}
           >
             <FolderBranch
               name={folder.name}
@@ -92,8 +94,8 @@ export function MembersTree({
           <SelectableRow
             key={member.path}
             label={t('files:selection.select', { name })}
-            state={target && boxState([target], selection.has)}
-            onChange={() => target && selection.toggle(target)}
+            targets={target ? [target] : []}
+            selection={selection}
           >
             {member.texts.length ? (
               <TreeLink

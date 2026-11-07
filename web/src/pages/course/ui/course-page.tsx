@@ -1,6 +1,7 @@
 import { Stack, Tabs } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { getRouteApi } from '@tanstack/react-router';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useCourse } from '@/entities/course';
 import { SelectionBar, useSelection } from '@/features/download-selection';
@@ -13,6 +14,7 @@ import {
 } from '@/shared/ui';
 import { courseFilesQuery } from '../api/course-files';
 import { defaultTab } from '../lib/default-tab';
+import { targetOf } from '../lib/target-of';
 import { CourseSearch } from './course-search';
 import { FilesTree } from './files-tree';
 import { PostsList } from './posts-list';
@@ -29,10 +31,14 @@ export function CoursePage() {
   const search = route.useSearch();
   const navigate = route.useNavigate();
   const { query, course } = useCourse(slug);
-  // what is ticked in the files tree, kept while the tab is away
-  const selection = useSelection();
   // the same query the Files tab reads: one request
   const files = useQuery(courseFilesQuery(slug));
+  const targets = useMemo(
+    () => (files.data?.files ?? []).flatMap((file) => targetOf(file) ?? []),
+    [files.data],
+  );
+  // what is ticked in the files tree, kept while the tab is away
+  const selection = useSelection(targets);
   const tab = search.tab ?? defaultTab(files.data?.files.length);
 
   return (

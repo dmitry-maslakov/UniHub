@@ -424,6 +424,25 @@ describe('a course', () => {
       expect(asked).toEqual([]);
     });
 
+    it('says when a file is no longer there', async () => {
+      setup(posts, files);
+      answerWith(() => HttpResponse.json({}, { status: 404 }));
+      renderApp('/courses/os');
+
+      await userEvent.click(
+        await screen.findByRole('checkbox', { name: 'Select file-3.pdf' }),
+      );
+      await userEvent.click(
+        screen.getByRole('button', { name: 'Download as ZIP' }),
+      );
+
+      expect(
+        await screen.findByText(
+          'Some of these files are no longer available. Reload the page.',
+        ),
+      ).toBeVisible();
+    });
+
     it('says what went wrong with any other failure', async () => {
       setup(posts, files);
       answerWith(() => HttpResponse.json({}, { status: 429 }));

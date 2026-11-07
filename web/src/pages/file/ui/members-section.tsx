@@ -8,15 +8,14 @@ import {
   SelectionBar,
   useSelection,
 } from '@/features/download-selection';
-import { Section } from '@/shared/ui';
+import { ListSkeleton, QueryState, Section } from '@/shared/ui';
 import { archiveMembersQuery } from '../api/archive-members';
 import { memberFolder } from '../lib/member-name';
 import { targetOf } from '../lib/target-of';
 import { MembersTree } from './members-tree';
 
 // The files inside an archive as the folders they sit in, with a box beside
-// each to download several at once. Nothing for a file that isn't a
-// container.
+// each to download several at once. Nothing for an archive that holds none.
 export function MembersSection({
   fileId,
   slug,
@@ -26,7 +25,14 @@ export function MembersSection({
 }) {
   const { t } = useTranslation(['file', 'courses']);
   const members = useQuery(archiveMembersQuery(fileId));
-  const selection = useSelection();
+  const targets = useMemo(
+    () =>
+      (members.data?.members ?? []).flatMap(
+        (member) => targetOf(fileId, member) ?? [],
+      ),
+    [fileId, members.data],
+  );
+  const selection = useSelection(targets);
   const tree = useMemo(
     () =>
       folderTree(
@@ -37,36 +43,39 @@ export function MembersSection({
       ),
     [members.data],
   );
-  if (!members.data?.members.length) return null;
 
   return (
-    <Section
-      title={t('file:members.title')}
-      description={t('file:members.description')}
+    <QueryState
+      query={members}
+      loading={<ListSkeleton rows={3} label={t('file:members.loading')} />}
+      isEmpty={(data) => !data.members.length}
+      empty={null}
     >
-      <Stack gap="sm">
-        <SelectAll
-          targets={members.data.members.flatMap(
-            (member) => targetOf(fileId, member) ?? [],
-          )}
-          selection={selection}
-        />
-        <nav aria-label={t('file:members.aria')}>
-          <MembersTree
-            node={tree}
-            open={members.data.members.length <= OPEN_UP_TO}
-            slug={slug}
-            fileId={fileId}
-            selection={selection}
-          />
-        </nav>
-        {members.data.capped && (
-          <Text size="sm" c="dimmed">
-            {t('courses:files.capped')}
-          </Text>
-        )}
-        <SelectionBar selection={selection} />
-      </Stack>
-    </Section>
+      {({ members: all, capped }) => (
+        <Section
+          title={t('file:members.title')}
+          description={t('file:members.description')}
+        >
+          <Stack gap="sm">
+            <SelectAll targets={targets} selection={selection} />
+            <nav aria-label={t('file:members.aria')}>
+              <MembersTree
+                node={tree}
+                open={all.length <= OPEN_UP_TO}
+                slug={slug}
+                fileId={fileId}
+                selection={selection}
+              />
+            </nav>
+            {capped && (
+              <Text size="sm" c="dimmed">
+                {t('courses:files.capped')}
+              </Text>
+            )}
+            <SelectionBar selection={selection} />
+          </Stack>
+        </Section>
+      )}
+    </QueryState>
   );
 }

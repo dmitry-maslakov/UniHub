@@ -5,11 +5,13 @@ import {
   FindCourseQuery,
   GetPortalCourseQuery,
   ListCoursesQuery,
+  ListHubCoursesQuery,
   type CourseDto,
+  type HubCourseDto,
 } from '../../application/queries.js';
 import { SHARED_ACCOUNT } from '@app/kernel';
 import { portalCourseSlug, slugOfPortalCourse } from '../../domain/values.js';
-import { courseValues, portalOf, seenByShared } from '../rows.js';
+import { courseValues, instanceOf, portalOf, seenByShared } from '../rows.js';
 import { courseSeen, shows } from './viewers.js';
 
 // a portal course as the shared account sees it: its version
@@ -135,6 +137,48 @@ export class ListCoursesHandler implements IQueryHandler<ListCoursesQuery> {
         .filter((course) => slug === undefined || course.slug === slug)
         .sort(byPortalCourse),
     ];
+  }
+}
+
+@QueryHandler(ListHubCoursesQuery)
+export class ListHubCoursesHandler implements IQueryHandler<ListHubCoursesQuery> {
+  constructor(@InjectTransactionHost() private readonly txHost: PrismaTxHost) {}
+
+  // every course with its links in one go; a link's name is its portal
+  // course's version the shared account shows, none once it shows none
+  async execute(): Promise<HubCourseDto[]> {
+    const courses = await this.txHost.tx.course.findMany({
+      orderBy: { slug: 'asc' },
+      select: {
+        id: true,
+        slug: true,
+        name: true,
+        links: {
+          orderBy: [{ year: 'asc' }, { portalCourseId: 'asc' }],
+          select: {
+            year: true,
+            portalCourse: {
+              select: {
+                portal: true,
+                instance: true,
+                externalId: true,
+                versions: { ...sharedVersion, select: { name: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+    return courses.map(({ links, ...course }) => ({
+      ...course,
+      links: links.map(({ year, portalCourse }) => ({
+        portal: portalOf(portalCourse),
+        instance: instanceOf(portalCourse),
+        externalId: portalCourse.externalId,
+        year,
+        name: portalCourse.versions[0]?.name ?? null,
+      })),
+    }));
   }
 }
 

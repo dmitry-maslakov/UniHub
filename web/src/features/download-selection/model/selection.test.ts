@@ -1,6 +1,14 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { boxState, keyOf, useSelection, type Target } from './selection';
+import {
+  boxState,
+  keyOf,
+  useBox,
+  useSelection,
+  useTicked,
+  type Selection,
+  type Target,
+} from './selection';
 
 const file = (id: string, size: number | null = 10): Target => ({
   file: id,
@@ -43,40 +51,86 @@ describe('boxState', () => {
 });
 
 describe('useSelection', () => {
-  it('toggles a file and a member apart, in the order ticked', () => {
-    const { result } = renderHook(() => useSelection());
-    act(() => result.current.toggle(file('f1')));
-    act(() => result.current.toggle(member('f1', 'lab/a.c')));
+  const all = [file('a', 10), file('b', null), file('c', 5)];
+  const members = [
+    file('f1'),
+    member('f1', 'lab/a.c'),
+    member('f1', 'lab/b.c'),
+  ];
+  const ticked = (selection: Selection) =>
+    renderHook(() => useTicked(selection)).result.current;
 
-    expect(result.current.has(file('f1'))).toBe(true);
-    expect(result.current.has(member('f1', 'lab/a.c'))).toBe(true);
-    expect(result.current.has(member('f1', 'lab/b.c'))).toBe(false);
-    expect(result.current.items).toEqual([
+  it('toggles a file and a member apart, in the order ticked', () => {
+    const { result } = renderHook(() => useSelection(members));
+    const selection = result.current;
+    act(() => selection.toggle(members[0]!));
+    act(() => selection.toggle(members[1]!));
+
+    expect(selection.has(members[0]!)).toBe(true);
+    expect(selection.has(members[1]!)).toBe(true);
+    expect(selection.has(members[2]!)).toBe(false);
+    expect(ticked(selection).items).toEqual([
       { file: 'f1' },
       { file: 'f1', member: 'lab/a.c' },
     ]);
 
-    act(() => result.current.toggle(file('f1')));
-    expect(result.current.items).toEqual([{ file: 'f1', member: 'lab/a.c' }]);
+    act(() => selection.toggle(members[0]!));
+    expect(ticked(selection).items).toEqual([
+      { file: 'f1', member: 'lab/a.c' },
+    ]);
   });
 
   it('ticks and clears a folder at once, or everything', () => {
-    const { result } = renderHook(() => useSelection());
-    const all = [file('a', 10), file('b', null), file('c', 5)];
+    const { result } = renderHook(() => useSelection(all));
+    const selection = result.current;
 
-    act(() => result.current.setMany(all, true));
-    expect(result.current.items).toHaveLength(3);
+    act(() => selection.setMany(all, true));
+    expect(ticked(selection).items).toHaveLength(3);
     // a size not known counts for none
-    expect(result.current.size).toBe(15);
+    expect(ticked(selection).size).toBe(15);
     // ticking again changes nothing
-    act(() => result.current.setMany(all.slice(0, 1), true));
-    expect(result.current.items).toHaveLength(3);
+    act(() => selection.setMany(all.slice(0, 1), true));
+    expect(ticked(selection).items).toHaveLength(3);
 
-    act(() => result.current.setMany([all[0]!, all[2]!], false));
-    expect(result.current.items).toEqual([{ file: 'b' }]);
+    act(() => selection.setMany([all[0]!, all[2]!], false));
+    expect(ticked(selection).items).toEqual([{ file: 'b' }]);
 
-    act(() => result.current.clear());
-    expect(result.current.items).toEqual([]);
-    expect(result.current.size).toBe(0);
+    act(() => selection.clear());
+    expect(ticked(selection)).toEqual({ items: [], size: 0 });
+  });
+
+  it('drops what the page no longer shows', () => {
+    const { result, rerender } = renderHook(
+      ({ targets }) => useSelection(targets),
+      { initialProps: { targets: all } },
+    );
+    const selection = result.current;
+    act(() => selection.setMany(all, true));
+
+    rerender({ targets: all.slice(1) });
+
+    expect(ticked(selection).items).toEqual([{ file: 'b' }, { file: 'c' }]);
+  });
+});
+
+describe('useBox', () => {
+  it('re-renders only for its own targets', () => {
+    const [a, b] = [file('a'), file('b')];
+    const { result: selected } = renderHook(() => useSelection([a, b]));
+    const selection = selected.current;
+    let renders = 0;
+    const { result } = renderHook(() => {
+      renders++;
+      return useBox(selection, [a]);
+    });
+    expect(result.current).toEqual({ checked: false, indeterminate: false });
+    const before = renders;
+
+    act(() => selection.toggle(b));
+    expect(renders).toBe(before);
+
+    act(() => selection.toggle(a));
+    expect(result.current).toEqual({ checked: true, indeterminate: false });
+    expect(renders).toBe(before + 1);
   });
 });

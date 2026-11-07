@@ -1,11 +1,11 @@
 import { Button, Group, Paper, Text } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useTranslation } from 'react-i18next';
-import { errorCode, errorKind } from '@/shared/api';
+import { errorCode, errorKind, isNotFound } from '@/shared/api';
 import { useFormat } from '@/shared/i18n';
 import { leaveTo } from '@/shared/lib';
 import { useCreateDownload } from '../api/create-download';
-import { MAX_ITEMS, type Selection } from '../model/selection';
+import { MAX_ITEMS, useTicked, type Selection } from '../model/selection';
 import classes from './selection.module.css';
 
 // What is ticked, and the way to download it as one zip: shown while
@@ -15,7 +15,7 @@ export function SelectionBar({ selection }: { selection: Selection }) {
   const { t } = useTranslation(['files', 'common']);
   const { size } = useFormat();
   const create = useCreateDownload();
-  const { items } = selection;
+  const { items, size: bytes } = useTicked(selection);
   if (!items.length) return null;
 
   const refuse = (message: string) =>
@@ -30,7 +30,9 @@ export function SelectionBar({ selection }: { selection: Selection }) {
           refuse(
             errorCode(error) === 'DOWNLOAD_TOO_LARGE'
               ? t('selection.tooLarge')
-              : t(`common:error.${errorKind(error)}`),
+              : isNotFound(error)
+                ? t('selection.gone')
+                : t(`common:error.${errorKind(error)}`),
           ),
       },
     );
@@ -42,7 +44,7 @@ export function SelectionBar({ selection }: { selection: Selection }) {
         <Text size="sm" className={classes.count}>
           {t('selection.count', {
             count: items.length,
-            size: size(selection.size),
+            size: size(bytes),
           })}
         </Text>
         <Group gap="xs" wrap="nowrap">
