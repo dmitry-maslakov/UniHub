@@ -167,7 +167,7 @@ describe('search', () => {
 
     const list = await screen.findByRole('list', { name: 'Results' });
     expect(courses).toEqual(['os']);
-    expect(screen.getByText('In Operating systems')).toBeVisible();
+    expect(await screen.findByText('In Operating systems')).toBeVisible();
     // the file's page leads back to the same scoped search
     expect(within(list).getByRole('link')).toHaveAttribute(
       'href',

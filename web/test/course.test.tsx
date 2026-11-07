@@ -253,7 +253,10 @@ describe('a course', () => {
     ).toBeVisible();
     await userEvent.click(within(tree).getByText('folder 0'));
     expect(
-      within(tree).getByRole('link', { name: /file-1\.pdf/, hidden: true }),
+      await within(tree).findByRole('link', {
+        name: /file-1\.pdf/,
+        hidden: true,
+      }),
     ).not.toBeVisible();
     expect(JSON.parse(localStorage.getItem('unihub.course.os.open')!)).toEqual([
       'folder 1',
@@ -272,7 +275,10 @@ describe('a course', () => {
       name: 'Files by folder',
     });
     expect(
-      within(again).getByRole('link', { name: /file-1\.pdf/, hidden: true }),
+      await within(again).findByRole('link', {
+        name: /file-1\.pdf/,
+        hidden: true,
+      }),
     ).not.toBeVisible();
     expect(
       within(again).getByRole('link', { name: /file-2\.pdf/ }),
@@ -294,7 +300,10 @@ describe('a course', () => {
       });
       await userEvent.click(within(tree).getByText('Predavanja'));
       expect(
-        within(tree).getByRole('link', { name: /file-1\.pdf/, hidden: true }),
+        await within(tree).findByRole('link', {
+          name: /file-1\.pdf/,
+          hidden: true,
+        }),
       ).not.toBeVisible();
     } finally {
       vi.restoreAllMocks();
