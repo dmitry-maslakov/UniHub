@@ -42,6 +42,7 @@ const courses = ['os', 'net', 'exam', 'empty'].map((slug) => ({
 const viewersReading = (reads: string[]): Viewers => ({
   accounts: [],
   shared: { courses: reads, except: [] },
+  picks: { portals: [], courses: [] },
 });
 // catalog's cut, as the fakes make it: the courses the viewers read, and
 // of those the portal courses asked for
@@ -135,7 +136,14 @@ function searching(
   const visible = [...files, ...withArchives];
   const queries = new FakeBus([
     [ReadScopeQuery, () => ({ granted: reads, ownAccounts: true })],
-    [ViewingAccountsQuery, () => ({ portals: [], accounts: [] })],
+    [
+      ViewingAccountsQuery,
+      () => ({
+        portals: [],
+        accounts: [],
+        picks: { portals: [], courses: [] },
+      }),
+    ],
     [
       ListCoursesQuery,
       ({ viewers }: ListCoursesQuery) =>

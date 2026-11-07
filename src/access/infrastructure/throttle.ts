@@ -23,6 +23,9 @@ const LIMITS = {
   // setting a portal token, per user (accounts): each one asks the portal
   // whose it is, so the hub mustn't become a way to try tokens out
   link: 10,
+  // picking a public portal's course or unpicking it, per user (accounts):
+  // each one may have its connector sync another course
+  picks: 30,
 };
 type Limit = keyof typeof LIMITS;
 

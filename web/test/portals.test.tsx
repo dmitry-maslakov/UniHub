@@ -11,17 +11,21 @@ const TOKEN = 'canvas-secret-token-4711';
 const portals = [
   {
     portal: 'campus',
+    label: 'Campus site',
     mode: 'shared',
     linked: false,
     status: null,
     expiresAt: null,
+    picked: null,
   },
   {
     portal: 'canvas',
+    label: 'Canvas',
     mode: 'token',
     linked: false,
     status: null,
     expiresAt: null,
+    picked: null,
   },
 ];
 
@@ -47,6 +51,12 @@ describe('portal accounts', () => {
     renderApp('/settings/portals');
 
     const list = await screen.findByRole('list', { name: 'Portals' });
+    // each by the name it's shown by, not its id
+    expect(
+      within(list).getByRole('heading', { name: 'Campus site' }),
+    ).toBeVisible();
+    expect(within(list).getByRole('heading', { name: 'Canvas' })).toBeVisible();
+    expect(within(list).queryByText('canvas')).toBeNull();
     expect(within(list).getByText(/Nothing to link/)).toBeVisible();
     expect(within(list).getByText(/token expired/)).toBeVisible();
     expect(screen.getByRole('button', { name: 'Replace token' })).toBeVisible();
@@ -67,7 +77,7 @@ describe('portal accounts', () => {
 
     await linkWith();
 
-    expect(await screen.findByText(/canvas is linked/)).toBeVisible();
+    expect(await screen.findByText(/Canvas is linked/)).toBeVisible();
     expect(sent).toEqual({ token: TOKEN });
     expect(screen.getByLabelText('Token')).toHaveValue('');
     expect(document.body).not.toHaveTextContent(TOKEN);
@@ -163,13 +173,17 @@ describe('portal accounts', () => {
     renderApp('/settings/portals');
 
     await userEvent.click(
-      await screen.findByRole('button', { name: 'Unlink canvas' }),
+      await screen.findByRole('button', { name: 'Unlink Canvas' }),
     );
+    expect(
+      await screen.findByRole('dialog', { name: 'Unlink Canvas?' }),
+    ).toHaveTextContent('stops reading Canvas as you');
     expect(unlinked).toBe(false);
     await userEvent.click(
       await screen.findByRole('button', { name: 'Unlink' }),
     );
 
     expect(await screen.findByText('Not linked.')).toBeVisible();
+    expect(await screen.findByText('Canvas is unlinked.')).toBeVisible();
   });
 });

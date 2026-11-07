@@ -1,4 +1,9 @@
-import { InvalidError, UnavailableError, type PortalId } from '@app/kernel';
+import {
+  InvalidError,
+  NotFoundError,
+  UnavailableError,
+  type PortalId,
+} from '@app/kernel';
 
 // The portal didn't take the token a user pasted. Names nothing: neither
 // the token, nor why, nor whose it might have been.
@@ -23,5 +28,18 @@ export class PortalUnavailableError extends UnavailableError {
     readonly failure: string,
   ) {
     super(`portal "${portal}" could not be asked whose the token is`);
+  }
+}
+
+// No course of that id in the portal's catalog: the portal never sent it,
+// or doesn't show it any more
+export class NotInCatalogError extends NotFoundError {
+  readonly reason = 'NOT_IN_CATALOG';
+
+  constructor(
+    readonly portal: PortalId,
+    readonly externalId: string,
+  ) {
+    super(`no course of that id in the catalog of portal "${portal}"`);
   }
 }

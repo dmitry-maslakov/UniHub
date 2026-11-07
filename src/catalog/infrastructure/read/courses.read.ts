@@ -30,7 +30,7 @@ export class ListCoursesHandler implements IQueryHandler<ListCoursesQuery> {
   async execute({ viewers, slug }: ListCoursesQuery): Promise<CourseDto[]> {
     const { tx } = this.txHost;
     const now = new Date();
-    const { accounts, shared } = viewers;
+    const { accounts, shared, picks } = viewers;
     const own = slug === undefined ? undefined : slugOfPortalCourse(slug);
     // a portal course with each its name as the viewers see it
     const portalCourse = {
@@ -57,6 +57,13 @@ export class ListCoursesHandler implements IQueryHandler<ListCoursesQuery> {
       },
     };
     const ownPart = { portalCourse: seenBy({ in: [...accounts] }) };
+    // or through the shared account in a public portal, picked
+    const pickedCourse = {
+      id: { in: [...picks.courses] },
+      portal: { in: [...picks.portals] },
+      ...seenBy(SHARED_ACCOUNT),
+    };
+    const pickedPart = { portalCourse: pickedCourse };
     const [courses, unlinked] = await Promise.all([
       own
         ? []
@@ -68,6 +75,7 @@ export class ListCoursesHandler implements IQueryHandler<ListCoursesQuery> {
                 OR: [
                   { id: { in: [...shared.courses] } },
                   { links: { some: ownPart } },
+                  { links: { some: pickedPart } },
                 ],
               }),
             },
@@ -77,7 +85,7 @@ export class ListCoursesHandler implements IQueryHandler<ListCoursesQuery> {
               slug: true,
               name: true,
               links: {
-                where: { OR: [sharedPart, ownPart] },
+                where: { OR: [sharedPart, ownPart, pickedPart] },
                 // postgres puts nulls last: the portal courses that span
                 // years
                 orderBy: [{ year: 'asc' }, { portalCourseId: 'asc' }],
@@ -85,12 +93,12 @@ export class ListCoursesHandler implements IQueryHandler<ListCoursesQuery> {
               },
             },
           }),
-      accounts.length && own !== null
+      (accounts.length || picks.courses.length) && own !== null
         ? tx.portalCourse.findMany({
             where: {
               link: null,
               ...own,
-              ...seenBy({ in: [...accounts] }),
+              OR: [seenBy({ in: [...accounts] }), pickedCourse],
             },
             ...portalCourse,
           })

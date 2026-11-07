@@ -1,11 +1,12 @@
 import { createSecretKey, type KeyObject } from 'node:crypto';
 import { z } from 'zod';
-import { LinkMode, PortalId } from '@app/kernel';
+import { LinkMode, PortalId, StoredText } from '@app/kernel';
 import { list, settings } from '../platform/config/settings.js';
 import type { PortalLink } from './domain/portal-links.js';
 
-// "canvas=token/admins, moodle=token": each portal's link mode, /admins
-// when only admins may link an account; a portal not named is shared
+// "canvas=token/admins, moodle=token, catalog=public": each portal's link
+// mode, /admins when only admins may link an account; a portal not named
+// is shared
 const ENTRY = /^([^=]+)=([^/]+)(\/admins)?$/;
 
 const links = list.transform((entries, ctx) => {
@@ -18,18 +19,47 @@ const links = list.transform((entries, ctx) => {
       !portal.success ||
       !mode.success ||
       byPortal.has(portal.data) ||
-      (admins && mode.data === 'shared')
+      (admins && mode.data !== 'token')
     ) {
       ctx.addIssue({
         code: 'custom',
         message:
-          'portal=mode or portal=mode/admins, each portal once; the modes are shared and token (/admins for token only)',
+          'portal=mode or portal=mode/admins, each portal once; the modes are shared, token and public (/admins for token only)',
       });
       return z.NEVER;
     }
     byPortal.set(portal.data, { mode: mode.data, adminsOnly: !!admins });
   }
   return byPortal as ReadonlyMap<PortalId, PortalLink>;
+});
+
+// a portal's name as people read it: a word or a few, never blank
+const LABEL = StoredText.trim().min(1).max(64);
+
+// "canvas=Canvas, catalog=Course catalog": the name each portal is shown by;
+// one not named goes by its id
+const labels = list.transform((entries, ctx) => {
+  const byPortal = new Map<PortalId, string>();
+  for (const entry of entries) {
+    const at = entry.indexOf('=');
+    const portal = PortalId.safeParse(entry.slice(0, at).trim());
+    const label = LABEL.safeParse(entry.slice(at + 1));
+    if (
+      at < 0 ||
+      !portal.success ||
+      !label.success ||
+      byPortal.has(portal.data)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message:
+          'portal=name pairs, each portal once, each name 1 to 64 characters',
+      });
+      return z.NEVER;
+    }
+    byPortal.set(portal.data, label.data);
+  }
+  return byPortal as ReadonlyMap<PortalId, string>;
 });
 
 export interface VaultKey {
@@ -71,6 +101,8 @@ export const accountsSettings = z
   .object({
     // how each portal's accounts are linked (README, Portal accounts)
     PORTAL_LINKS: links,
+    // the name each portal is shown by, its id unless named
+    PORTAL_LABELS: labels,
     // Keys of their own, apart from BETTER_AUTH_SECRET: the newest seals,
     // any listed opens. A version taken off leaves what it sealed unreadable,
     // old backups' copies too.
@@ -78,7 +110,7 @@ export const accountsSettings = z
   })
   .superRefine((env, ctx) => {
     const tokens = [...env.PORTAL_LINKS.values()].some(
-      (link) => link.mode !== 'shared',
+      (link) => link.mode === 'token',
     );
     if (tokens && env.PORTAL_CREDENTIALS_SECRETS.length === 0)
       ctx.addIssue({
@@ -89,6 +121,7 @@ export const accountsSettings = z
   })
   .transform((env) => ({
     links: env.PORTAL_LINKS,
+    labels: env.PORTAL_LABELS,
     keys: env.PORTAL_CREDENTIALS_SECRETS,
   }));
 

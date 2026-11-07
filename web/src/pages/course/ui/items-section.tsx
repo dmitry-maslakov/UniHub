@@ -1,6 +1,7 @@
 import { Anchor, Button, Loader, Stack, Text, Title } from '@mantine/core';
 import { api } from '@/shared/api';
-import { day, webAddress } from '../lib/format';
+import { webAddress } from '@/shared/lib';
+import { day } from '../lib/format';
 import { useDeepLink } from '../lib/use-deep-link';
 import classes from './course.module.css';
 

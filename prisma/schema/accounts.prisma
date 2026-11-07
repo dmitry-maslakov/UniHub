@@ -25,3 +25,29 @@ model PortalCredential {
   sealed    String
   updatedAt DateTime      @updatedAt
 }
+
+// A user's pick of a public portal's course (README, Public portals): the
+// user reads it with no grant, and its connector is asked to sync it
+// (WantedCourse). userId is identity's and portalCourseId catalog's, not
+// foreign keys (PortalAccount): a user's delete takes their picks
+// (UserDeletedEvent). `into` is the user's own course to show it with;
+// none for now
+model Pick {
+  userId         String
+  portalCourseId String
+  into           String?
+  createdAt      DateTime @default(now())
+
+  @@id([userId, portalCourseId])
+  // who picks a course
+  @@index([portalCourseId])
+}
+
+// A public portal's course its connector is asked to sync (Wanted): while
+// someone picks it (until is null), then for a grace once no one does,
+// past which the hourly reconcile drops it. portalCourseId is catalog's,
+// not a foreign key (Pick)
+model WantedCourse {
+  portalCourseId String    @id
+  until          DateTime?
+}

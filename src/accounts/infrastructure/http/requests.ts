@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { Secret } from '@app/kernel';
+import { Secret, StoredText } from '@app/kernel';
+import { pageSchema } from '../../../access/contracts.js';
 
 // What the routes take, checked where the request comes in
 // (ValidationModule): a bad one is a 400, never a call. zod's issues carry
@@ -20,3 +21,18 @@ export const tokenRequest = z
       }),
   })
   .transform(({ token }) => new Secret(token));
+
+// a course's id as its portal has it; text postgres can't keep would fail
+// the lookup with a 500
+export const externalId = StoredText.min(1);
+
+// A page of a portal's catalog, and the words its courses' names are to
+// have: none, or blank, for every course
+export const catalogRequest = pageSchema.extend({
+  q: StoredText.trim()
+    .max(200)
+    .optional()
+    .describe(
+      "words in a course's name, in any case, with or without diacritics",
+    ),
+});

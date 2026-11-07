@@ -33,6 +33,14 @@ const granted = ({ shared: { courses } }: Viewers) => ({
   link: courses ? { is: { courseId: { in: [...courses] } } } : { isNot: null },
 });
 
+// the shared account's too in a public portal, in the portal courses the
+// user picked
+const picked = ({ picks }: Viewers, sight: Sight) => ({
+  sights: { some: { account: SHARED_ACCOUNT, ...sight } },
+  record: { portal: { in: [...picks.portals] } },
+  portalCourseId: { in: [...picks.courses] },
+});
+
 // the user's own accounts', whole, in a portal course linked or not that
 // their accounts are shown too
 const own = (viewers: Viewers, sight: Sight, now: Date) => {
@@ -46,17 +54,20 @@ const own = (viewers: Viewers, sight: Sight, now: Date) => {
 };
 
 // The posts the viewers see: through the shared account, in a portal read
-// as shared and a portal course linked to a course granted; or through
-// their own accounts, in a portal course they see
+// as shared and a portal course linked to a course granted, or in a public
+// portal and a portal course they picked; or through their own accounts,
+// in a portal course they see
 export const itemSeen = (
   viewers: Viewers,
   now: Date,
   sight: Sight = shows(now),
 ): Prisma.ItemVersionWhereInput => {
   const { record, ...sharedSight } = shared(viewers, sight);
+  const { record: pickedRecord, ...pickedSight } = picked(viewers, sight);
   return {
     OR: [
       { ...sharedSight, item: record, portalCourse: granted(viewers) },
+      { ...pickedSight, item: pickedRecord },
       own(viewers, sight, now),
     ],
   };
@@ -70,11 +81,13 @@ export const fileSeen = (
   sight: Sight = shows(now),
 ): Prisma.FileVersionWhereInput => {
   const { record, ...sharedSight } = shared(viewers, sight);
+  const { record: pickedRecord, ...pickedSight } = picked(viewers, sight);
   return {
     AND: [
       {
         OR: [
           { ...sharedSight, file: record, portalCourse: granted(viewers) },
+          { ...pickedSight, file: pickedRecord },
           own(viewers, sight, now),
         ],
       },
@@ -89,13 +102,14 @@ export const fileSeen = (
 };
 
 // The sights of a version through which the viewers' view opens it: the
-// shared account's in a portal read as shared, else the user's own
-// accounts'. None, and a file's content, or a post's body, is the viewers'
-// to see only once there is one.
+// shared account's in a portal read as shared, or in a public one and a
+// portal course they picked, else the user's own accounts'. None, and a
+// file's content, or a post's body, is the viewers' to see only once
+// there is one.
 const openingOf = (
-  viewers: Viewers,
+  { shared, picks, accounts }: Viewers,
   now: Date,
-  record: (portal: { notIn: string[] }) => object,
+  record: (portal: Prisma.StringFilter) => object,
 ) => ({
   ...opens(now),
   AND: [
@@ -103,9 +117,16 @@ const openingOf = (
       OR: [
         {
           account: SHARED_ACCOUNT,
-          version: record({ notIn: [...viewers.shared.except] }),
+          version: record({ notIn: [...shared.except] }),
         },
-        { account: { in: [...viewers.accounts] } },
+        {
+          account: SHARED_ACCOUNT,
+          version: {
+            portalCourseId: { in: [...picks.courses] },
+            ...record({ in: [...picks.portals] }),
+          },
+        },
+        { account: { in: [...accounts] } },
       ],
     },
   ],
@@ -126,7 +147,7 @@ export const itemOpening = (
 // a portal course's sights through which the viewers see it, as posts are
 // seen
 export const courseSeen = (
-  viewers: Viewers,
+  { shared, picks, accounts }: Viewers,
   now: Date,
 ): Prisma.CourseSightWhereInput => ({
   ...shows(now),
@@ -135,11 +156,16 @@ export const courseSeen = (
       OR: [
         {
           account: SHARED_ACCOUNT,
+          version: { portalCourse: { portal: { notIn: [...shared.except] } } },
+        },
+        {
+          account: SHARED_ACCOUNT,
           version: {
-            portalCourse: { portal: { notIn: [...viewers.shared.except] } },
+            portalCourseId: { in: [...picks.courses] },
+            portalCourse: { portal: { in: [...picks.portals] } },
           },
         },
-        { account: { in: [...viewers.accounts] } },
+        { account: { in: [...accounts] } },
       ],
     },
   ],

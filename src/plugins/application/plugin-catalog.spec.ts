@@ -106,6 +106,15 @@ describe('PluginCatalog', () => {
     expect(links.linker(portal('elsewhere'), 'token')).toBeNull();
   });
 
+  it('tells a portal served over gRPC from one served here or by nothing', () => {
+    const served = catalogOf({ polls: [poll('moodle')] }, ['catalog']);
+    const portal = (id: string) => PortalId.parse(id);
+
+    expect(served.external(portal('catalog'))).toBe(true);
+    expect(served.external(portal('moodle'))).toBe(false);
+    expect(served.external(portal('elsewhere'))).toBe(false);
+  });
+
   it('stops the app on plugins that break the rules', () => {
     expect(() => catalogOf({ polls: [poll('moodle')] }, ['moodle'])).toThrow(
       PortalHasTwoWritersError,

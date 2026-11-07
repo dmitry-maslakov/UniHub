@@ -13,10 +13,13 @@ import { tokenErrorText } from '../lib/token-error';
 // `onUnavailable` for a portal that links no account of this user's.
 export function TokenForm({
   portal,
+  label,
   linked,
   onUnavailable,
 }: {
   portal: string;
+  // the name the portal is shown by
+  label: string;
   linked: boolean;
   onUnavailable: () => void;
 }) {
@@ -33,7 +36,7 @@ export function TokenForm({
     },
     onSuccess: async () => {
       notifications.show({
-        message: `${portal} is linked. Its courses appear after the next read.`,
+        message: `${label} is linked. Its courses appear after the next read.`,
       });
       await queryClient.invalidateQueries({
         queryKey: ['get', '/api/me/portals'],

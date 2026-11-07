@@ -49,14 +49,18 @@ export type PluginName = z.output<typeof PluginName>;
 
 // How a portal's accounts are linked (README, Portal accounts): `shared`,
 // the one account its plugin's settings give, read by whoever an admin lets
-// read its courses; `token`, each user's own, by a token they paste
-export const LinkMode = z.enum(['shared', 'token']);
+// read its courses; `token`, each user's own, by a token they paste;
+// `public`, the one account of a site anyone may read, each user reading
+// the courses they pick from its catalog
+export const LinkMode = z.enum(['shared', 'token', 'public']);
 export type LinkMode = z.output<typeof LinkMode>;
 
-// the account a shared portal is read by, the one its plugin's settings
-// give: what catalog keeps as everyone's view of it, and readers read
+// the account a shared or public portal is read by, the one its plugin's
+// settings give: what catalog keeps as everyone's view of it, and readers
+// read
 export const SHARED_ACCOUNT = 'shared';
 
-// a mode a user links an account of their own by: any but shared
-export const AccountLink = LinkMode.exclude(['shared']);
+// a mode a user links an account of their own by: neither shared nor
+// public, which read the portal's one account
+export const AccountLink = LinkMode.exclude(['shared', 'public']);
 export type AccountLink = z.output<typeof AccountLink>;

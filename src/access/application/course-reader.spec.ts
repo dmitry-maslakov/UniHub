@@ -83,6 +83,7 @@ const main = {
 const viewers: Viewers = {
   accounts: ['ana-moodle'],
   shared: { courses: [os.id], except: [PortalId.parse('moodle')] },
+  picks: { portals: [], courses: [] },
 };
 // catalog's cut, as the fake makes it: the courses granted
 const seen =
@@ -96,7 +97,11 @@ function reader() {
     [ReadScopeQuery, () => ({ granted: [os.id], ownAccounts: true })],
     [
       ViewingAccountsQuery,
-      () => ({ portals: viewers.shared.except, accounts: viewers.accounts }),
+      () => ({
+        portals: viewers.shared.except,
+        accounts: viewers.accounts,
+        picks: viewers.picks,
+      }),
     ],
     [
       ListCoursesQuery,

@@ -1,4 +1,5 @@
 import { Controller, UseFilters, UseGuards } from '@nestjs/common';
+import { QueryBus } from '@nestjs/cqrs';
 import {
   Ctx,
   GrpcMethod,
@@ -6,6 +7,7 @@ import {
   Payload,
 } from '@nestjs/microservices';
 import type { sendUnaryData, ServerReadableStream } from '@grpc/grpc-js';
+import { WantedCoursesQuery } from '../../../accounts/contracts.js';
 import { IngestService } from '../../application/ingest.service.js';
 import type { Connection } from '../../domain/connection.js';
 import { ConnectorConnection, ConnectorGuard } from './connector.guard.js';
@@ -17,6 +19,7 @@ import type { FileRecord__Output } from './generated/unihub/ingest/v1/FileRecord
 import type { ItemRecord__Output } from './generated/unihub/ingest/v1/ItemRecord.js';
 import type { Ref__Output } from './generated/unihub/ingest/v1/Ref.js';
 import type { State__Output } from './generated/unihub/ingest/v1/State.js';
+import type { WantedCourses } from './generated/unihub/ingest/v1/WantedCourses.js';
 import { IngestErrorsFilter } from './ingest-errors.filter.js';
 import {
   courseOf,
@@ -26,12 +29,16 @@ import {
   toStateMessage,
 } from './proto.mapper.js';
 
-// IngestService for connectors running as separate services
+// IngestService for connectors running as separate services, and which
+// courses of a public portal they're asked for (accounts' picks)
 @Controller()
 @UseGuards(ConnectorGuard)
 @UseFilters(IngestErrorsFilter)
 export class IngestGrpcController {
-  constructor(private readonly ingest: IngestService) {}
+  constructor(
+    private readonly ingest: IngestService,
+    private readonly queries: QueryBus,
+  ) {}
 
   @GrpcMethod('Ingest', 'Course')
   course(
@@ -96,5 +103,14 @@ export class IngestGrpcController {
   ) {
     await this.ingest.saveState(connection, stateOf(state));
     return {};
+  }
+
+  @GrpcMethod('Ingest', 'Wanted')
+  async wanted(
+    @ConnectorConnection() { portal }: Connection,
+  ): Promise<WantedCourses> {
+    return {
+      externalIds: await this.queries.execute(new WantedCoursesQuery(portal)),
+    };
   }
 }

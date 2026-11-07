@@ -864,6 +864,164 @@
           "portals"
         ]
       }
+    },
+    "/api/portals/{portal}/catalog": {
+      "get": {
+        "operationId": "PortalCatalogController_catalog",
+        "parameters": [
+          {
+            "name": "portal",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9-]+$"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 0,
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "words in a course's name, in any case, with or without diacritics",
+            "schema": {
+              "description": "words in a course's name, in any case, with or without diacritics",
+              "type": "string",
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "a page of its courses whose names have the words, by name",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "the portal is no public one"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "portals"
+        ]
+      }
+    },
+    "/api/me/picks/{portal}/{externalId}": {
+      "put": {
+        "operationId": "PicksController_pick",
+        "parameters": [
+          {
+            "name": "portal",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9-]+$"
+            }
+          },
+          {
+            "name": "externalId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "picked, with no body or {}: you read it from now on"
+          },
+          "404": {
+            "description": "the portal is no public one, or has no such course"
+          },
+          "422": {
+            "description": "TOO_MANY_PICKS: you picked 100 already"
+          },
+          "429": {
+            "description": "30 a minute"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "portals"
+        ]
+      },
+      "delete": {
+        "operationId": "PicksController_unpick",
+        "parameters": [
+          {
+            "name": "portal",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9-]+$"
+            }
+          },
+          {
+            "name": "externalId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "not picked by you now, whether it was or wasn't"
+          },
+          "429": {
+            "description": "30 a minute"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "portals"
+        ]
+      }
     }
   },
   "info": {
@@ -1407,17 +1565,23 @@
             "type": "string",
             "example": "canvas"
           },
+          "label": {
+            "type": "string",
+            "example": "Canvas",
+            "description": "the name it is shown by, its id unless the hub names it"
+          },
           "mode": {
             "type": "string",
             "enum": [
               "shared",
-              "token"
+              "token",
+              "public"
             ],
-            "description": "how its accounts are linked: shared, the one the hub reads with; token, your own"
+            "description": "how it is read: shared, by the one account the hub reads with; token, by your own; public, the courses you pick of its catalog"
           },
           "linked": {
             "type": "boolean",
-            "description": "you have an account of it linked"
+            "description": "you have an account of it linked; never of a public one"
           },
           "status": {
             "type": "string",
@@ -1434,14 +1598,73 @@
             "type": "string",
             "nullable": true,
             "description": "when the token stops working, if the portal says"
+          },
+          "picked": {
+            "type": "number",
+            "nullable": true,
+            "description": "how many courses of a public portal's catalog you picked; null for any other portal"
           }
         },
         "required": [
           "portal",
+          "label",
           "mode",
           "linked",
           "status",
-          "expiresAt"
+          "expiresAt",
+          "picked"
+        ]
+      },
+      "CatalogCourseResponse": {
+        "type": "object",
+        "properties": {
+          "externalId": {
+            "type": "string",
+            "description": "the course's id on its portal"
+          },
+          "name": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "nullable": true,
+            "description": "the course on its portal"
+          },
+          "picked": {
+            "type": "boolean",
+            "description": "you picked it: you read it here"
+          },
+          "isNew": {
+            "type": "boolean",
+            "description": "the hub first saw it within 14 days"
+          }
+        },
+        "required": [
+          "externalId",
+          "name",
+          "url",
+          "picked",
+          "isNew"
+        ]
+      },
+      "CatalogResponse": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "how many courses match, on every page"
+          },
+          "courses": {
+            "description": "by name",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CatalogCourseResponse"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "courses"
         ]
       }
     }
