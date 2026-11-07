@@ -13,9 +13,13 @@ const route = getRouteApi('/_app/courses/$slug/files/$fileId');
 export function TextSection({
   file,
   member,
+  hasMembers = false,
 }: {
   file: Schemas['FileDetailsResponse'];
   member?: string;
+  // an archive with files inside (or still loading them) is read through
+  // them, not told it has no text
+  hasMembers?: boolean;
 }) {
   const { t } = useTranslation('file');
   const { processor } = route.useSearch();
@@ -28,7 +32,7 @@ export function TextSection({
       </EmptyState>
     );
   if (member === undefined && !file.texts.length)
-    return (
+    return hasMembers ? null : (
       <EmptyState title={t('noText.title')}>{t('noText.body')}</EmptyState>
     );
 

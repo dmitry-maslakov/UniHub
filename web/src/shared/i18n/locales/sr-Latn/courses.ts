@@ -69,5 +69,19 @@ export default {
       title: 'Još nema fajlova',
       body: 'Fajlovi sa portala ovog predmeta pojavljuju se ovde kad ih UniHub pročita.',
     },
+    view: {
+      label: 'Prikaz fajlova',
+      folders: 'Po folderima',
+      newest: 'Najnovije',
+    },
+    new: {
+      title: 'Novo',
+      description:
+        'Fajlovi dodati ili izmenjeni na portalu u poslednjih 14 dana, najnoviji prvi.',
+      action: 'Prikaži sve nove ({{count}})',
+    },
+    newest: {
+      aria: 'Fajlovi, najnoviji prvi',
+    },
   },
 } satisfies Messages<typeof en>;

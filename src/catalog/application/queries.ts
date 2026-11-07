@@ -106,6 +106,10 @@ export interface FileDto {
   url: string | null;
   size: number | null;
   mime: MediaType | null;
+  // when the portal last changed the file, as it dates it (Canvas: its
+  // content's modified_at); with `size` the stamp of its bytes. Null when
+  // the portal gave none
+  sourceUpdatedAt: Date | null;
   contentHash: ContentHash | null;
   removed: boolean;
 }

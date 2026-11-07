@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Language } from './instance';
 
@@ -18,6 +17,10 @@ export function formatters(lang: Language | string) {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
+  });
+  const dayMonth = new Intl.DateTimeFormat(lang, {
+    day: 'numeric',
+    month: 'short',
   });
   const dayAndTime = new Intl.DateTimeFormat(lang, {
     day: 'numeric',
@@ -41,6 +44,12 @@ export function formatters(lang: Language | string) {
       const d = toDate(value);
       return d && day.format(d);
     },
+    // a day of this year without the year, of another with it
+    shortDate: (value: Value, now: Date = new Date()) => {
+      const d = toDate(value);
+      if (!d) return undefined;
+      return (d.getFullYear() === now.getFullYear() ? dayMonth : day).format(d);
+    },
     dateTime: (value: Value) => {
       const d = toDate(value);
       return d && dayAndTime.format(d);
@@ -63,8 +72,16 @@ export function formatters(lang: Language | string) {
   };
 }
 
+// one set per language for the whole app: a row asks for it, it isn't built per row
+const cache = new Map<string, ReturnType<typeof formatters>>();
+
 export function useFormat() {
   const { i18n } = useTranslation();
   const lang = i18n.resolvedLanguage ?? 'en';
-  return useMemo(() => formatters(lang), [lang]);
+  let found = cache.get(lang);
+  if (!found) {
+    found = formatters(lang);
+    cache.set(lang, found);
+  }
+  return found;
 }

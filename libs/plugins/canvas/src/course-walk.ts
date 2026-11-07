@@ -190,7 +190,9 @@ export class CourseWalk {
       this.api.list<CanvasFile>(`${this.path}/files`),
     );
     if (files)
-      this.listings.files.files = files.map((file) => this.files.add(file));
+      this.listings.files.files = files
+        .filter((file) => this.files.sent(file))
+        .map((file) => this.files.add(file));
   }
 
   private item(record: ItemRecord) {

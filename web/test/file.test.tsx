@@ -20,6 +20,7 @@ const details = (over: object = {}) => ({
   url: null,
   size: 1_400_000,
   mime: 'application/pdf',
+  changedAt: '2026-11-03T12:00:00.000Z',
   hasContent: true,
   texts: [{ processor: 'office-text', version: 1, pages: 12 }],
   ...over,
@@ -102,7 +103,7 @@ describe('a file', () => {
     ).toBeVisible();
   });
 
-  it('shows what the file is: its course, folder, size and type', async () => {
+  it('shows what the file is: its course, folder, size, date and type', async () => {
     setup();
     renderApp('/courses/os/files/f1');
 
@@ -114,7 +115,7 @@ describe('a file', () => {
     });
     expect(course).toHaveAttribute('href', '/courses/os');
     expect(course.parentElement).toHaveTextContent(
-      'Operating systems · Predavanja · 1.4 MB · PDF',
+      'Operating systems · Predavanja · 1.4 MB · Nov 3, 2026 · PDF',
     );
   });
 
@@ -252,17 +253,20 @@ describe('a file', () => {
       '/courses/os/files/f1?member=lab%2Fmain.c',
     );
     expect(text).toHaveTextContent('900 B');
-    // no text of its own: the archive's own page says so, with a download
-    expect(screen.getByText('No text in this file')).toBeVisible();
-    const bin = within(tree).getByText('data.bin').parentElement!;
+    // no text of its own, but what is inside is shown, not "no text"
+    expect(screen.queryByText('No text in this file')).toBeNull();
+    const bin =
+      within(tree).getByText('data.bin').parentElement!.parentElement!;
     expect(bin).toHaveTextContent('No text');
-    expect(
-      within(bin.parentElement!).getByRole('link', { name: 'Download' }),
-    ).toHaveAttribute('href', '/api/files/f1/content?member=lab%2Fdata.bin');
+    expect(within(bin).getByRole('link', { name: 'Download' })).toHaveAttribute(
+      'href',
+      '/api/files/f1/content?member=lab%2Fdata.bin',
+    );
     // left out: its reason, no link and no box
-    const huge = within(tree).getByText('huge.iso').parentElement!;
+    const huge =
+      within(tree).getByText('huge.iso').parentElement!.parentElement!;
     expect(huge).toHaveTextContent('Left out: too large');
-    expect(within(huge.parentElement!).queryByRole('link')).toBeNull();
+    expect(within(huge).queryByRole('link')).toBeNull();
     expect(
       screen.queryByRole('checkbox', { name: 'Select huge.iso' }),
     ).toBeNull();
@@ -290,6 +294,28 @@ describe('a file', () => {
     expect(
       screen.getByRole('link', { name: 'Back to lab.zip' }),
     ).toHaveAttribute('href', '/courses/os/files/f1');
+  });
+
+  it("an archive's page shows what's inside, not 'no text'", async () => {
+    setup({
+      file: details({ name: 'lab.zip', mime: 'application/zip', texts: [] }),
+      members: [member()],
+    });
+    renderApp('/courses/os/files/f1');
+
+    expect(
+      await screen.findByRole('navigation', { name: 'Files in the archive' }),
+    ).toBeVisible();
+    expect(screen.queryByText('No text in this file')).toBeNull();
+  });
+
+  it('says an archive with nothing inside has no text', async () => {
+    setup({
+      file: details({ name: 'lab.zip', mime: 'application/zip', texts: [] }),
+    });
+    renderApp('/courses/os/files/f1');
+
+    expect(await screen.findByText('No text in this file')).toBeVisible();
   });
 
   it('reads every page of members, 200 at a time', async () => {

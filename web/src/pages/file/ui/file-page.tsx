@@ -1,4 +1,5 @@
 import { Stack } from '@mantine/core';
+import { useQuery } from '@tanstack/react-query';
 import { getRouteApi } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { fileType } from '@/entities/file';
@@ -10,7 +11,7 @@ import {
   QueryState,
   TextSkeleton,
 } from '@/shared/ui';
-import { memberName } from '../lib/member-name';
+import { archiveMembersQuery, memberName } from '@/widgets/archive-members';
 import { FileActions } from './file-actions';
 import { FileMeta } from './file-meta';
 import { MembersSection } from './members-section';
@@ -28,6 +29,19 @@ export function FilePage() {
   const file = api.useQuery('get', '/api/files/{id}', {
     params: { path: { id: fileId } },
   });
+
+  const archive =
+    file.data !== undefined &&
+    !member &&
+    fileType(file.data.mime, file.data.name) === 'archive';
+  // an archive that holds any is read through them first
+  const members = useQuery({
+    ...archiveMembersQuery(fileId),
+    enabled: archive,
+  });
+  // so far as it is loading, it may
+  const hasMembers =
+    archive && (members.isPending || !!members.data?.members.length);
 
   return (
     <QueryState
@@ -65,10 +79,8 @@ export function FilePage() {
           )}
           <Stack gap="xxl">
             <FileActions file={found} slug={slug} member={member} />
-            <TextSection file={found} member={member} />
-            {!member && fileType(found.mime, found.name) === 'archive' && (
-              <MembersSection fileId={fileId} slug={slug} />
-            )}
+            {archive && <MembersSection fileId={fileId} slug={slug} />}
+            <TextSection file={found} member={member} hasMembers={hasMembers} />
           </Stack>
         </>
       )}

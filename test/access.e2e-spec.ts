@@ -89,6 +89,7 @@ describe('REST API', { timeout: 20_000 }, () => {
           name: 'Predavanje 1 — procesi.pdf',
           path: 'lectures',
           mime: 'application/pdf',
+          updatedAt: new Date('2026-10-28T09:30:00Z'),
         },
         slides,
       ],
@@ -234,6 +235,10 @@ describe('REST API', { timeout: 20_000 }, () => {
     );
     expect(byName['homework.docx'].itemId).toBe(items.body[0].id);
     expect(byName['notes.pdf'].hasContent).toBe(false);
+    expect(byName['Predavanje 1 — procesi.pdf'].changedAt).toBe(
+      '2026-10-28T09:30:00.000Z',
+    );
+    expect(byName['notes.pdf'].changedAt).toBeNull();
   });
 
   // as search answers it
@@ -312,6 +317,7 @@ describe('REST API', { timeout: 20_000 }, () => {
 
   it('reads a file as text page by page', async () => {
     const file = await get(`/api/files/${ids.slides}`, student).expect(200);
+    expect(file.body.changedAt).toBe('2026-10-28T09:30:00.000Z');
     // each processor's last version, of those on
     expect(file.body.texts).toEqual([
       { processor: 'office-text', version: 2, pages: 3 },

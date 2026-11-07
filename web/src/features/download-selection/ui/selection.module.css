@@ -4,7 +4,13 @@
   align-items: center;
   flex: none;
   width: 1.25rem;
-  min-height: 2.75rem;
+  min-height: 2.25rem;
+}
+
+@media (max-width: 48em) {
+  .slot {
+    min-height: 2.75rem;
+  }
 }
 
 .body {

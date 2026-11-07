@@ -67,7 +67,7 @@ export class CourseTools {
   @Tool({
     name: 'list_files',
     description:
-      'Files of a course by folder and name. `itemId` is the post a file came with.',
+      'Files of a course by folder and name. `itemId` is the post a file came with; `changedAt` is when its portal last changed it, null when the portal gives no date.',
     parameters: inCourse,
     annotations: readOnly,
   })

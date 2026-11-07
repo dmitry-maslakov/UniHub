@@ -5,16 +5,3 @@
   overflow-wrap: anywhere;
   max-width: 75ch;
 }
-
-/* a member that is no link: a row as tall as the tree's, with its download
-   at the end */
-.leaf {
-  min-height: 2.75rem;
-  padding-inline: var(--mantine-spacing-sm);
-}
-
-.leafText {
-  flex: 1;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}

@@ -1,4 +1,8 @@
 export default {
+  downloadName: 'Preuzmi {{name}}',
+  archive: {
+    empty: 'Ništa unutra nije moglo da se pročita.',
+  },
   selection: {
     select: 'Izaberi {{name}}',
     selectFolder: 'Izaberi sve u {{name}}',

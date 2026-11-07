@@ -11,3 +11,22 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+/* an archive's row: the tree's node, and its download beside it */
+.branch {
+  flex: 1;
+  min-width: 0;
+}
+
+.rowAction {
+  flex-shrink: 0;
+  width: 2.25rem;
+  height: 2.25rem;
+}
+
+@media (max-width: 48em) {
+  .rowAction {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+}

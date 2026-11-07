@@ -1,7 +1,7 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { i18n } from '@/shared/i18n';
 import { leaveTo } from '@/shared/lib';
 import { renderApp } from './render';
@@ -31,6 +31,7 @@ const file = (n: number, hasContent = true, path = 'lectures') => ({
   url: null,
   size: 1_400_000,
   mime: 'application/pdf',
+  changedAt: null as string | null,
   hasContent,
 });
 
@@ -188,10 +189,13 @@ describe('a course', () => {
     expect(screen.getByText('3 files')).toBeVisible();
     const folder = within(tree).getByText('Predavanja');
     expect(within(tree).getByText('2 files')).toBeVisible();
-    // a small course starts open: the subfolder and its file are there
-    expect(within(tree).getByText('2026')).toBeVisible();
+    // the top level starts open, the folders in it closed
+    const sub = within(tree).getByText('2026');
+    expect(sub).toBeVisible();
+    expect(within(tree).getByRole('link', { name: /plan\.pdf/ })).toBeVisible();
+    await userEvent.click(sub);
     expect(
-      within(tree).getByRole('link', { name: /file-1\.pdf/ }),
+      await within(tree).findByRole('link', { name: /file-1\.pdf/ }),
     ).toHaveAttribute('href', '/courses/os/files/f1');
     expect(
       within(tree).getByRole('link', { name: /ispit\.pdf/ }),
@@ -205,15 +209,18 @@ describe('a course', () => {
     expect(within(tree).queryByText('2026')).not.toBeVisible();
   });
 
-  it('starts the folders closed past fifty files', async () => {
-    setup(posts, manyFiles(51));
+  it('starts the folders closed past eight', async () => {
+    setup(
+      posts,
+      Array.from({ length: 9 }, (_, i) => file(i + 1, true, `folder ${i}`)),
+    );
     renderApp('/courses/os');
 
     const tree = await screen.findByRole('navigation', {
       name: 'Files by folder',
     });
     expect(within(tree).getByText('folder 0')).toBeVisible();
-    expect(within(tree).getAllByText('17 files')).toHaveLength(3);
+    expect(within(tree).getAllByText('1 file')).toHaveLength(9);
     expect(
       within(tree).queryByRole('link', { name: /file-1\.pdf/ }),
     ).toBeNull();
@@ -229,6 +236,225 @@ describe('a course', () => {
     expect(
       await within(tree).findByRole('link', { name: /file-2\.pdf/ }),
     ).toBeVisible();
+  });
+
+  it('opens the top level when there are eight folders, and remembers what the user opens and closes', async () => {
+    setup(
+      posts,
+      Array.from({ length: 8 }, (_, i) => file(i + 1, true, `folder ${i}`)),
+    );
+    renderApp('/courses/os');
+
+    const tree = await screen.findByRole('navigation', {
+      name: 'Files by folder',
+    });
+    expect(
+      within(tree).getByRole('link', { name: /file-1\.pdf/ }),
+    ).toBeVisible();
+    await userEvent.click(within(tree).getByText('folder 0'));
+    expect(
+      within(tree).getByRole('link', { name: /file-1\.pdf/, hidden: true }),
+    ).not.toBeVisible();
+    expect(JSON.parse(localStorage.getItem('unihub.course.os.open')!)).toEqual([
+      'folder 1',
+      'folder 2',
+      'folder 3',
+      'folder 4',
+      'folder 5',
+      'folder 6',
+      'folder 7',
+    ]);
+
+    // the course opened again keeps it, and another course starts afresh
+    cleanup();
+    renderApp('/courses/os');
+    const again = await screen.findByRole('navigation', {
+      name: 'Files by folder',
+    });
+    expect(
+      within(again).getByRole('link', { name: /file-1\.pdf/, hidden: true }),
+    ).not.toBeVisible();
+    expect(
+      within(again).getByRole('link', { name: /file-2\.pdf/ }),
+    ).toBeVisible();
+  });
+
+  it('works when the browser keeps nothing', async () => {
+    const blocked = () => {
+      throw new Error('blocked');
+    };
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(blocked);
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(blocked);
+    try {
+      setup(posts, [file(1, true, 'Predavanja')]);
+      renderApp('/courses/os');
+
+      const tree = await screen.findByRole('navigation', {
+        name: 'Files by folder',
+      });
+      await userEvent.click(within(tree).getByText('Predavanja'));
+      expect(
+        within(tree).getByRole('link', { name: /file-1\.pdf/, hidden: true }),
+      ).not.toBeVisible();
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('opens an archive in the tree and reads a member', async () => {
+    setup(posts, [
+      { ...file(1, true, ''), name: 'lab.zip', mime: 'application/zip' },
+    ]);
+    const asked: string[] = [];
+    server.use(
+      http.get(api('/files/f1/members'), ({ request }) => {
+        asked.push(request.url);
+        return HttpResponse.json([
+          {
+            path: 'src/main.c',
+            size: 900,
+            mime: 'text/x-c',
+            leftOut: null,
+            texts: [{ processor: 'plain-text', version: 1, pages: 1 }],
+          },
+        ]);
+      }),
+    );
+    const { router } = renderApp('/courses/os');
+
+    const tree = await screen.findByRole('navigation', {
+      name: 'Files by folder',
+    });
+    // a row that opens, not a link; members are not asked for until then
+    const row = within(tree).getByRole('button', { name: /^lab\.zip/ });
+    expect(within(tree).queryByRole('link', { name: /^lab\.zip/ })).toBeNull();
+    expect(asked).toEqual([]);
+    expect(
+      within(tree).getByRole('link', { name: 'Download lab.zip' }),
+    ).toHaveAttribute('href', '/api/files/f1/content');
+    expect(
+      within(tree).getByRole('checkbox', { name: 'Select lab.zip' }),
+    ).toBeVisible();
+
+    await userEvent.click(row);
+    const member = await within(tree).findByRole('link', { name: /main\.c/ });
+    expect(asked).toHaveLength(1);
+    expect(member).toHaveAttribute(
+      'href',
+      '/courses/os/files/f1?member=src%2Fmain.c',
+    );
+    expect(within(tree).getByText('src')).toBeVisible();
+
+    await userEvent.click(member);
+    await waitFor(() =>
+      expect(router.state.location.search).toEqual({ member: 'src/main.c' }),
+    );
+    expect(router.state.location.pathname).toBe('/courses/os/files/f1');
+  });
+
+  it('keeps a member ticked in the tree when the file list is read again', async () => {
+    const zip = {
+      ...file(1, true, ''),
+      name: 'lab.zip',
+      mime: 'application/zip',
+    };
+    setup(posts, [zip]);
+    server.use(
+      http.get(api('/files/f1/members'), () =>
+        HttpResponse.json([
+          {
+            path: 'src/main.c',
+            size: 900,
+            mime: 'text/x-c',
+            leftOut: null,
+            texts: [],
+          },
+        ]),
+      ),
+    );
+    const { queryClient } = renderApp('/courses/os');
+
+    const tree = await screen.findByRole('navigation', {
+      name: 'Files by folder',
+    });
+    await userEvent.click(
+      within(tree).getByRole('button', { name: /^lab\.zip/ }),
+    );
+    await userEvent.click(
+      await within(tree).findByRole('checkbox', { name: 'Select main.c' }),
+    );
+    expect(screen.getByText('1 selected, 900 B')).toBeVisible();
+
+    // a sync added a file: the list comes back as new data
+    server.use(
+      http.get(api('/courses/os/files'), () =>
+        HttpResponse.json([zip, file(2, true, '')]),
+      ),
+    );
+    await queryClient.invalidateQueries();
+    expect(await within(tree).findByText('file-2.pdf')).toBeVisible();
+    expect(screen.getByText('1 selected, 900 B')).toBeVisible();
+  });
+
+  it('says when nothing inside an archive could be read, and when it fails', async () => {
+    setup(posts, [
+      { ...file(1, true, ''), name: 'lab.zip', mime: 'application/zip' },
+    ]);
+    let fail = true;
+    server.use(
+      http.get(api('/files/f1/members'), () =>
+        fail ? HttpResponse.json({}, { status: 403 }) : HttpResponse.json([]),
+      ),
+    );
+    renderApp('/courses/os');
+
+    const tree = await screen.findByRole('navigation', {
+      name: 'Files by folder',
+    });
+    await userEvent.click(
+      within(tree).getByRole('button', { name: /^lab\.zip/ }),
+    );
+    const retry = await within(tree).findByRole('button', {
+      name: 'Try again',
+    });
+    fail = false;
+    await userEvent.click(retry);
+    expect(
+      await within(tree).findByText('Nothing inside could be read.'),
+    ).toBeVisible();
+  });
+
+  it('keeps an archive open as it was left, asking for its members at once', async () => {
+    setup(posts, [
+      { ...file(1, true, ''), name: 'lab.zip', mime: 'application/zip' },
+    ]);
+    localStorage.setItem('unihub.course.os.open', '["f1"]');
+    let asked = 0;
+    server.use(
+      http.get(api('/files/f1/members'), () => {
+        asked += 1;
+        return HttpResponse.json([]);
+      }),
+    );
+    renderApp('/courses/os');
+
+    expect(
+      await screen.findByText('Nothing inside could be read.'),
+    ).toBeVisible();
+    expect(asked).toBe(1);
+  });
+
+  it('keeps an archive without content a plain row', async () => {
+    setup(posts, [
+      { ...file(1, false, ''), name: 'lab.zip', mime: 'application/zip' },
+    ]);
+    renderApp('/courses/os');
+
+    const tree = await screen.findByRole('navigation', {
+      name: 'Files by folder',
+    });
+    expect(within(tree).getByRole('link', { name: /^lab\.zip/ })).toBeVisible();
+    expect(within(tree).queryByRole('button')).toBeNull();
   });
 
   it('reads every page of files, up to 2,000', async () => {
@@ -251,7 +477,7 @@ describe('a course', () => {
     expect(fileOffsets).toHaveLength(10);
     // a count that may be short isn't put on the tab
     expect(screen.getByRole('tab', { name: 'Files' })).toBeVisible();
-  });
+  }, 20_000);
 
   it('says a locked post and a file without content are not available yet', async () => {
     setup([post(1, null)], [file(1, false), file(2)]);
@@ -569,5 +795,138 @@ describe('the count of files in Serbian', () => {
       '5 fajlova',
       '21 fajl',
     ]);
+  });
+});
+
+describe("what's new in a course", () => {
+  const NOW = new Date('2026-11-07T12:00:00Z');
+  const daysAgo = (n: number) =>
+    new Date(NOW.getTime() - n * 86_400_000).toISOString();
+  const dated = (n: number, changedAt: string | null, path = 'lectures') => ({
+    ...file(n, true, path),
+    changedAt,
+  });
+
+  // Date alone, so MSW, userEvent and Mantine keep real timers
+  beforeEach(() => vi.useFakeTimers({ toFake: ['Date'], now: NOW }));
+  afterEach(() => vi.useRealTimers());
+
+  it('shows what its portal changed in the last 14 days above the folders, each with its folder and date', async () => {
+    setup(posts, [
+      dated(1, daysAgo(2), 'Predavanja/2026'),
+      dated(2, daysAgo(60), 'Vežbe'),
+      dated(3, null, ''),
+    ]);
+    renderApp('/courses/os');
+
+    const fresh = await screen.findByRole('region', { name: 'New' });
+    const links = within(fresh).getAllByRole('link');
+    expect(links).toHaveLength(1);
+    expect(links[0]).toHaveAttribute('href', '/courses/os/files/f1');
+    expect(links[0]).toHaveTextContent('Predavanja/2026');
+    expect(links[0]).toHaveTextContent('1.4 MB · Nov 5');
+    expect(
+      screen.getByRole('navigation', { name: 'Files by folder' }),
+    ).toBeVisible();
+  });
+
+  it('shows no New block when nothing changed in the last 14 days', async () => {
+    setup(posts, [dated(1, daysAgo(15)), dated(2, null)]);
+    renderApp('/courses/os');
+
+    await screen.findByRole('navigation', { name: 'Files by folder' });
+    expect(screen.queryByRole('region', { name: 'New' })).toBeNull();
+  });
+
+  it('shows ten new files, and all of them newest first on request', async () => {
+    setup(
+      posts,
+      Array.from({ length: 12 }, (_, i) => dated(i + 1, daysAgo(i + 1))),
+    );
+    const { router } = renderApp('/courses/os');
+
+    const fresh = await screen.findByRole('region', { name: 'New' });
+    const links = within(fresh).getAllByRole('link');
+    expect(links).toHaveLength(10);
+    expect(links[0]).toHaveTextContent('file-1.pdf');
+
+    await userEvent.click(
+      within(fresh).getByRole('button', { name: 'Show all new (12)' }),
+    );
+    const list = await screen.findByRole('navigation', {
+      name: 'Files, newest first',
+    });
+    expect(within(list).getAllByRole('link')).toHaveLength(12);
+    expect(router.state.location.search).toEqual({ view: 'newest' });
+    expect(screen.getByRole('radio', { name: 'Newest first' })).toBeChecked();
+    expect(screen.queryByRole('region', { name: 'New' })).toBeNull();
+  });
+
+  it('lists every file newest first, the undated last, kept in the address', async () => {
+    setup(posts, [
+      dated(1, daysAgo(40), 'Vežbe'),
+      dated(2, null, 'Predavanja'),
+      dated(3, daysAgo(3), 'Predavanja'),
+      dated(4, null, ''),
+    ]);
+    const { router } = renderApp('/courses/os?view=newest');
+
+    const list = await screen.findByRole('navigation', {
+      name: 'Files, newest first',
+    });
+    expect(
+      within(list)
+        .getAllByRole('link')
+        .map((link) => link.getAttribute('href')),
+    ).toEqual([
+      '/courses/os/files/f3',
+      '/courses/os/files/f1',
+      '/courses/os/files/f4',
+      '/courses/os/files/f2',
+    ]);
+
+    await userEvent.click(screen.getByRole('radio', { name: 'By folder' }));
+    expect(
+      await screen.findByRole('navigation', { name: 'Files by folder' }),
+    ).toBeVisible();
+    expect(router.state.location.search).toEqual({});
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Newest first' }));
+    expect(router.state.location.search).toEqual({ view: 'newest' });
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Posts' }));
+    expect(router.state.location.search).toEqual({
+      view: 'newest',
+      tab: 'posts',
+    });
+  });
+
+  it('offers no newest-first list for a course whose files have no dates', async () => {
+    setup(posts, [file(1), file(2)]);
+    renderApp('/courses/os?view=newest');
+
+    expect(
+      await screen.findByRole('navigation', { name: 'Files by folder' }),
+    ).toBeVisible();
+    expect(screen.queryByRole('radiogroup', { name: 'Show files' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'New' })).toBeNull();
+  });
+
+  it("shows a file's size and date on one line", async () => {
+    setup(posts, [dated(1, daysAgo(2)), dated(2, '2025-11-05T12:00:00.000Z')]);
+    renderApp('/courses/os?tab=files&view=newest');
+    await userEvent.click(
+      await screen.findByRole('radio', { name: 'By folder' }),
+    );
+
+    const tree = await screen.findByRole('navigation', {
+      name: 'Files by folder',
+    });
+    expect(
+      within(tree).getByRole('link', { name: /file-1\.pdf/ }),
+    ).toHaveTextContent('1.4 MB · Nov 5');
+    expect(
+      within(tree).getByRole('link', { name: /file-2\.pdf/ }),
+    ).toHaveTextContent('1.4 MB · Nov 5, 2025');
   });
 });

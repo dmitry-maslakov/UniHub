@@ -1567,6 +1567,12 @@
             "nullable": true,
             "example": "application/pdf"
           },
+          "changedAt": {
+            "format": "date-time",
+            "type": "string",
+            "nullable": true,
+            "description": "when the file last changed on its portal, as the portal dates it (Canvas: when its content was last replaced), never when the hub read it; null when the portal gives no date"
+          },
           "hasContent": {
             "type": "boolean",
             "description": "the hub has the bytes"
@@ -1581,6 +1587,7 @@
           "url",
           "size",
           "mime",
+          "changedAt",
           "hasContent"
         ]
       },
@@ -1653,6 +1660,12 @@
             "nullable": true,
             "example": "application/pdf"
           },
+          "changedAt": {
+            "format": "date-time",
+            "type": "string",
+            "nullable": true,
+            "description": "when the file last changed on its portal, as the portal dates it (Canvas: when its content was last replaced), never when the hub read it; null when the portal gives no date"
+          },
           "hasContent": {
             "type": "boolean",
             "description": "the hub has the bytes"
@@ -1673,6 +1686,7 @@
           "url",
           "size",
           "mime",
+          "changedAt",
           "hasContent",
           "texts"
         ]

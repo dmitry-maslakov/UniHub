@@ -1,4 +1,8 @@
 export default {
+  downloadName: 'Download {{name}}',
+  archive: {
+    empty: 'Nothing inside could be read.',
+  },
   selection: {
     select: 'Select {{name}}',
     selectFolder: 'Select everything in {{name}}',

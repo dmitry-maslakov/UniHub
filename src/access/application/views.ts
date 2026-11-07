@@ -61,6 +61,9 @@ export interface FileView {
   url: string | null;
   size: number | null;
   mime: MediaType | null;
+  // when its portal last changed it, as the portal dates it; null when it
+  // gives no date. Never when the hub read it
+  changedAt: Date | null;
   hasContent: boolean;
 }
 
@@ -163,6 +166,7 @@ export const fileView = ({
   url,
   size,
   mime,
+  sourceUpdatedAt,
   contentHash,
 }: FileDto): FileView => ({
   id,
@@ -173,6 +177,7 @@ export const fileView = ({
   url,
   size,
   mime,
+  changedAt: sourceUpdatedAt,
   hasContent: contentHash !== null,
 });
 

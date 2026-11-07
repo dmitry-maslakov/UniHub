@@ -1,8 +1,31 @@
-/* a folder or a file of the tree: at least a thumb tall, long names wrap */
+/* a folder or a file of the tree: one line, at least 36 px tall (a thumb on
+   a phone), long names wrap */
 .node {
-  min-height: 2.75rem;
+  min-height: 2.25rem;
+}
+
+@media (max-width: 48em) {
+  .node {
+    min-height: 2.75rem;
+  }
 }
 
 .label {
   overflow-wrap: anywhere;
+}
+
+/* the chevron turns when its row opens (Mantine sets aria-expanded) */
+.chevron {
+  transition: transform 150ms ease;
+  flex-shrink: 0;
+}
+
+.node[aria-expanded='true'] .chevron {
+  transform: rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chevron {
+    transition: none;
+  }
 }

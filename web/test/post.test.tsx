@@ -26,6 +26,7 @@ const attachment = (over: object = {}) => ({
   url: null,
   size: 52_000,
   mime: 'application/pdf',
+  changedAt: null,
   hasContent: true,
   ...over,
 });
