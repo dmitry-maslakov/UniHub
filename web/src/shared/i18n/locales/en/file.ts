@@ -12,8 +12,10 @@ export default {
   },
   open: 'Open the original',
   download: 'Download',
+  loading: 'Loading the file',
   text: {
     title: 'Text',
+    loading: 'Loading the text',
     which: 'Which text to read',
   },
   position: {

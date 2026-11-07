@@ -34,11 +34,12 @@ export function FolderNodeView({
     <>
       {node.folders.map((folder) => (
         <NavLink
+          component="button"
           key={folder.path}
           classNames={{ root: classes.node, label: classes.nodeLabel }}
           label={folder.name}
           description={t('courses:files.folderCount', { count: folder.count })}
-          leftSection={<IconFolder size={16} stroke={1.75} />}
+          leftSection={<IconFolder size={16} stroke={1.75} aria-hidden />}
           childrenOffset={20}
           defaultOpened={open}
         >

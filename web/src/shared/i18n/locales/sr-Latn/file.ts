@@ -15,8 +15,10 @@ export default {
   },
   open: 'Otvori original',
   download: 'Preuzmi',
+  loading: 'Učitava se fajl',
   text: {
     title: 'Tekst',
+    loading: 'Učitava se tekst',
     which: 'Koji tekst da se prikaže',
   },
   position: {

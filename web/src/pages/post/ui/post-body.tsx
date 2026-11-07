@@ -8,9 +8,14 @@ import classes from './post.module.css';
 // as HTML, whatever the portal sent.
 export function PostBody({ itemId }: { itemId: string }) {
   const { t } = useTranslation('post');
-  const text = api.useQuery('get', '/api/items/{id}/text', {
-    params: { path: { id: itemId } },
-  });
+  const text = api.useQuery(
+    'get',
+    '/api/items/{id}/text',
+    {
+      params: { path: { id: itemId } },
+    },
+    { staleTime: Infinity },
+  );
   return (
     <QueryState
       query={text}

@@ -30,7 +30,7 @@ export function TextReader({
   return (
     <QueryState
       query={text}
-      loading={<TextSkeleton lines={12} label={t('text.title')} />}
+      loading={<TextSkeleton lines={12} label={t('text.loading')} />}
       notFound={
         <EmptyState title={t('noPage.title')}>
           <Trans

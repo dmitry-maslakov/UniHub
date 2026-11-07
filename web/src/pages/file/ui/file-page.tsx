@@ -31,7 +31,7 @@ export function FilePage() {
   return (
     <QueryState
       query={file}
-      loading={<TextSkeleton lines={3} label={t('text.title')} />}
+      loading={<TextSkeleton lines={3} label={t('loading')} />}
       notFound={
         <NotFoundState
           title={t('notFound.title')}

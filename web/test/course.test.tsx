@@ -213,7 +213,15 @@ describe('a course', () => {
     expect(
       within(tree).queryByRole('link', { name: /file-1\.pdf/ }),
     ).toBeNull();
-    await userEvent.click(within(tree).getByText('folder 1'));
+    // a folder is a button the keyboard reaches
+    const folder = within(tree).getByRole('button', {
+      name: /folder 1/,
+      expanded: false,
+    });
+    for (let i = 0; i < 20 && document.activeElement !== folder; i++)
+      await userEvent.tab();
+    expect(folder).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
     expect(
       await within(tree).findByRole('link', { name: /file-2\.pdf/ }),
     ).toBeVisible();
@@ -335,10 +343,17 @@ describe('a course', () => {
       name: 'Search in this course',
     });
     expect(field).toHaveAttribute('placeholder', 'Search its files and posts');
-    // nothing to search for
+    // nothing, or one character, to search for
     await userEvent.type(field, '   {Enter}');
     expect(router.state.location.pathname).toBe('/courses/os');
+    await userEvent.clear(field);
+    await userEvent.type(field, 'a{Enter}');
+    expect(
+      await screen.findByText('Type at least 2 characters to search'),
+    ).toBeVisible();
+    expect(router.state.location.pathname).toBe('/courses/os');
 
+    await userEvent.clear(field);
     await userEvent.type(field, ' stack {Enter}');
     await waitFor(() => expect(router.state.location.pathname).toBe('/search'));
     expect(router.state.location.search).toEqual({ q: 'stack', course: 'os' });

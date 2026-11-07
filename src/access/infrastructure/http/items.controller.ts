@@ -14,11 +14,11 @@ import { ItemResponse, PostTextResponse } from './responses.js';
 @ApiBearerAuth()
 @ApiNotFoundResponse()
 @Controller('items')
-@Limited('api')
 export class ItemsController {
   constructor(private readonly reader: CourseReader) {}
 
   @Get(':id')
+  @Limited('api')
   @ApiOkResponse({
     type: ItemResponse,
     description: 'a post of one of your courses, as search finds it',
@@ -31,6 +31,7 @@ export class ItemsController {
   }
 
   @Get(':id/text')
+  @Limited('text')
   @ApiOkResponse({
     type: PostTextResponse,
     description:
