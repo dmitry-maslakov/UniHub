@@ -2,17 +2,19 @@ import { Stack, Text } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { OPEN_UP_TO, folderTree } from '@/entities/file';
+import { OPEN_UP_TO } from '@/entities/file';
 import {
   SelectAll,
   SelectionBar,
   useSelection,
 } from '@/features/download-selection';
 import { ListSkeleton, QueryState, Section } from '@/shared/ui';
-import { archiveMembersQuery } from '../api/archive-members';
-import { memberFolder } from '../lib/member-name';
-import { targetOf } from '../lib/target-of';
-import { MembersTree } from './members-tree';
+import {
+  MembersTree,
+  archiveMembersQuery,
+  memberTarget,
+  placeMembers,
+} from '@/widgets/archive-members';
 
 // The files inside an archive as the folders they sit in, with a box beside
 // each to download several at once. Nothing for an archive that holds none.
@@ -28,19 +30,13 @@ export function MembersSection({
   const targets = useMemo(
     () =>
       (members.data?.members ?? []).flatMap(
-        (member) => targetOf(fileId, member) ?? [],
+        (member) => memberTarget(fileId, member) ?? [],
       ),
     [fileId, members.data],
   );
   const selection = useSelection(targets);
   const tree = useMemo(
-    () =>
-      folderTree(
-        (members.data?.members ?? []).map((member) => ({
-          member,
-          path: memberFolder(member.path),
-        })),
-      ),
+    () => placeMembers(members.data?.members ?? []),
     [members.data],
   );
 

@@ -19,6 +19,10 @@ export function formatters(lang: Language | string) {
     month: 'short',
     year: 'numeric',
   });
+  const dayMonth = new Intl.DateTimeFormat(lang, {
+    day: 'numeric',
+    month: 'short',
+  });
   const dayAndTime = new Intl.DateTimeFormat(lang, {
     day: 'numeric',
     month: 'short',
@@ -40,6 +44,12 @@ export function formatters(lang: Language | string) {
     date: (value: Value) => {
       const d = toDate(value);
       return d && day.format(d);
+    },
+    // a day of this year without the year, of another with it
+    shortDate: (value: Value, now: Date = new Date()) => {
+      const d = toDate(value);
+      if (!d) return undefined;
+      return (d.getFullYear() === now.getFullYear() ? dayMonth : day).format(d);
     },
     dateTime: (value: Value) => {
       const d = toDate(value);

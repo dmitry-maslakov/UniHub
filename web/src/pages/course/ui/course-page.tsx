@@ -15,6 +15,7 @@ import {
 import { courseFilesQuery } from '../api/course-files';
 import { defaultTab } from '../lib/default-tab';
 import { targetOf } from '../lib/target-of';
+import type { FilesView } from '../model/search';
 import { CourseSearch } from './course-search';
 import { FilesTree } from './files-tree';
 import { PostsList } from './posts-list';
@@ -40,6 +41,7 @@ export function CoursePage() {
   // what is ticked in the files tree, kept while the tab is away
   const selection = useSelection(targets);
   const tab = search.tab ?? defaultTab(files.data?.files.length);
+  const view: FilesView = search.view ?? 'folders';
 
   return (
     <QueryState
@@ -65,7 +67,10 @@ export function CoursePage() {
                 value={tab}
                 onChange={(value) =>
                   void navigate({
-                    search: { tab: value === 'posts' ? 'posts' : 'files' },
+                    search: (prev) => ({
+                      ...prev,
+                      tab: value === 'posts' ? 'posts' : 'files',
+                    }),
                     replace: true,
                   })
                 }
@@ -83,7 +88,20 @@ export function CoursePage() {
                 </Tabs.List>
                 <Tabs.Panel value="files" pt="lg">
                   <Stack gap="md">
-                    <FilesTree slug={slug} selection={selection} />
+                    <FilesTree
+                      slug={slug}
+                      selection={selection}
+                      view={view}
+                      onViewChange={(next) =>
+                        void navigate({
+                          search: (prev) => ({
+                            ...prev,
+                            view: next === 'newest' ? 'newest' : undefined,
+                          }),
+                          replace: true,
+                        })
+                      }
+                    />
                     <SelectionBar selection={selection} />
                   </Stack>
                 </Tabs.Panel>

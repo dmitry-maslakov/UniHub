@@ -431,6 +431,11 @@ export interface components {
             size: number | null;
             /** @example application/pdf */
             mime: string | null;
+            /**
+             * Format: date-time
+             * @description when the file last changed on its portal, as the portal dates it (Canvas: when its content was last replaced), never when the hub read it; null when the portal gives no date
+             */
+            changedAt: string | null;
             /** @description the hub has the bytes */
             hasContent: boolean;
         };
@@ -459,6 +464,11 @@ export interface components {
             size: number | null;
             /** @example application/pdf */
             mime: string | null;
+            /**
+             * Format: date-time
+             * @description when the file last changed on its portal, as the portal dates it (Canvas: when its content was last replaced), never when the hub read it; null when the portal gives no date
+             */
+            changedAt: string | null;
             /** @description the hub has the bytes */
             hasContent: boolean;
             texts: components["schemas"]["TextInfoResponse"][];

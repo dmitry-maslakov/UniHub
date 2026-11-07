@@ -44,6 +44,7 @@ const select = (now = new Date()) =>
     url: true,
     size: true,
     mime: true,
+    sourceUpdatedAt: true,
     contentHash: true,
     file: recordRef,
     sights: liveSights(now),

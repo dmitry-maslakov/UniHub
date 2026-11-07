@@ -15,8 +15,9 @@ export class CourseFiles {
     number,
     { file: CanvasFile; item?: string }
   >();
-  // folder id → path, of the folders this account may list
-  private readonly paths = new Map<number, string>();
+  // folder id → path, of the folders this account may list; null for the
+  // ones whose files aren't sent
+  private readonly paths = new Map<number, string | null>();
 
   // its id; an attachment stays one when it's listed or linked as well
   add(file: CanvasFile, item?: string) {
@@ -35,13 +36,19 @@ export class CourseFiles {
     this.paths.set(folder.id, folderPath(folder.full_name));
   }
 
+  // false for a file of a folder that isn't sent (the course card's picture)
+  sent(file: CanvasFile) {
+    return this.paths.get(file.folder_id) !== null;
+  }
+
   records(base: string, course: string): FoundFile[] {
-    return [...this.found.values()].map(({ file, item }) => ({
-      record: fileRecord(base, course, file, {
-        item,
-        path: this.paths.get(file.folder_id),
-      }),
-      download: file.url,
-    }));
+    return [...this.found.values()].flatMap(({ file, item }) => {
+      const path = this.paths.get(file.folder_id);
+      if (path === null) return [];
+      return {
+        record: fileRecord(base, course, file, { item, path }),
+        download: file.url,
+      };
+    });
   }
 }

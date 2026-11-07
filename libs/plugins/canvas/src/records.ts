@@ -82,9 +82,20 @@ export const assignmentRecord = (
   raw: raw(assignment),
 });
 
-// 'course files/Lectures/2026' is 'Lectures/2026', the root ''
-export const folderPath = (fullName: string) =>
-  fullName.split('/').slice(1).join('/');
+// Canvas's own top-level folders: the course card's picture, and where
+// files uploaded without a folder land
+const CARD_IMAGE = 'course_image';
+const UNFILED = 'unfiled';
+
+// 'course files/Lectures/2026' is 'Lectures/2026', the root ''. Canvas's
+// 'unfiled' is the root too, and the course card's picture ('course_image')
+// has no path: null, the file is not sent.
+export const folderPath = (fullName: string): string | null => {
+  const [, ...path] = fullName.split('/');
+  if (path[0] === CARD_IMAGE) return null;
+  if (path[0] === UNFILED) path.shift();
+  return path.join('/');
+};
 
 export const fileRecord = (
   base: string,

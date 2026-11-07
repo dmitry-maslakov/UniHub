@@ -116,6 +116,13 @@ export class FileResponse implements FileView {
   @ApiProperty({ type: Number, nullable: true }) size!: number | null;
   @ApiProperty({ type: String, nullable: true, example: 'application/pdf' })
   mime!: MediaType | null;
+  @ApiProperty({
+    type: Date,
+    nullable: true,
+    description:
+      'when the file last changed on its portal, as the portal dates it (Canvas: when its content was last replaced), never when the hub read it; null when the portal gives no date',
+  })
+  changedAt!: Date | null;
   @ApiProperty({ description: 'the hub has the bytes' }) hasContent!: boolean;
 }
 

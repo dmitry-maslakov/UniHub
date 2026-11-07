@@ -145,7 +145,7 @@ describe('CanvasConnector', () => {
 
     expect(ingest.files.get('3002')).toMatchObject({
       item: 'topic:701',
-      path: 'unfiled',
+      path: '',
     });
     expect(ingest.files.get('3001')).toMatchObject({
       path: 'Lectures',
@@ -163,6 +163,32 @@ describe('CanvasConnector', () => {
     expect(canvas.asked.filter((path) => path.startsWith('download'))).toEqual(
       [],
     );
+  });
+
+  it("sends no file of the course card's picture folder, and forgets one sent before", async () => {
+    const folders = canvas.answers[`${COURSE}/folders`] as object[];
+    const files = canvas.answers[`${COURSE}/files`] as { id: number }[];
+    const picture = {
+      ...files.find((f) => f.id === 3002)!,
+      id: 3004,
+      display_name: 'card.png',
+      folder_id: 4,
+    };
+    canvas.answers[`${COURSE}/folders`] = [
+      ...folders,
+      {
+        id: 4,
+        name: 'course_image',
+        full_name: 'course files/course_image',
+        parent_folder_id: 1,
+      },
+    ];
+    canvas.answers[`${COURSE}/files`] = [...files, picture];
+    const ingest = new RecordingIngest();
+    await run(ingest);
+
+    expect(ingest.files.has('3004')).toBe(false);
+    expect(ingest.files.has('3001')).toBe(true);
   });
 
   it('reads the pages and files modules link to when their tabs are hidden', async () => {

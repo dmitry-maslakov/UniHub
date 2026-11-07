@@ -44,6 +44,7 @@ const file = (id: string, courseId: string, content = true): CourseFileDto => ({
   url: null,
   size: 3,
   mime: MediaType.parse('application/pdf'),
+  sourceUpdatedAt: new Date('2026-11-03T09:00:00Z'),
   contentHash: content ? hash : null,
   removed: false,
 });
@@ -191,7 +192,11 @@ describe('CourseReader', () => {
     const page = { offset: 10, limit: 5 };
 
     expect(await r.files('ana', CourseSlug.parse('os'), page)).toEqual([
-      expect.objectContaining({ id: 'f1', hasContent: true }),
+      expect.objectContaining({
+        id: 'f1',
+        hasContent: true,
+        changedAt: new Date('2026-11-03T09:00:00Z'),
+      }),
     ]);
     // the course of that slug alone, of its portal courses in the user's
     // view, as the viewers see them

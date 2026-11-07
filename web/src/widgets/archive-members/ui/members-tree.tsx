@@ -2,6 +2,7 @@ import { Anchor, Group, Text } from '@mantine/core';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  Facts,
   FileTypeIcon,
   contentUrl,
   FolderBranch,
@@ -11,18 +12,11 @@ import {
   type FolderNode,
 } from '@/entities/file';
 import { SelectableRow, type Selection } from '@/features/download-selection';
-import type { Schemas } from '@/shared/api';
 import { useFormat } from '@/shared/i18n';
 import { memberName } from '../lib/member-name';
+import type { Placed } from '../lib/place-members';
 import { targetOf } from '../lib/target-of';
-import classes from './file.module.css';
-
-export type Member = Schemas['MemberResponse'];
-// a member in its folder of the archive's tree
-export interface Placed {
-  member: Member;
-  path: string;
-}
+import classes from './members-tree.module.css';
 
 // The folders of an archive's members, then the files in each. A member
 // with a text opens to read it; the others can be downloaded or say why
@@ -62,9 +56,7 @@ export function MembersTree({
           >
             <FolderBranch
               name={folder.name}
-              description={t('courses:files.folderCount', {
-                count: folder.count,
-              })}
+              facts={t('courses:files.folderCount', { count: folder.count })}
               open={open}
             >
               <MembersTree
@@ -103,7 +95,7 @@ export function MembersTree({
                 params={{ slug, fileId }}
                 search={{ member: member.path }}
                 label={name}
-                description={meta}
+                rightSection={<Facts>{meta}</Facts>}
                 leftSection={icon}
               />
             ) : (
@@ -111,10 +103,8 @@ export function MembersTree({
                 {icon}
                 <div className={classes.leafText}>
                   <Text size="sm">{name}</Text>
-                  <Text size="xs" c="dimmed">
-                    {meta}
-                  </Text>
                 </div>
+                <Facts>{meta}</Facts>
                 {!member.leftOut && (
                   <Anchor
                     size="sm"

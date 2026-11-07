@@ -10,7 +10,11 @@ export const TreeLink = createLink(
     <NavLink
       ref={ref}
       component="a"
-      classNames={{ root: classes.node, label: classes.label }}
+      classNames={{
+        root: classes.node,
+        label: classes.label,
+        description: classes.label,
+      }}
       {...props}
     />
   )),

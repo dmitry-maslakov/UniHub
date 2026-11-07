@@ -96,7 +96,7 @@ describe('Canvas as records', () => {
   });
 
   it("files a file under its folder's path, linked to its page in the course", () => {
-    const path = folderPath('course files/Lectures/2026');
+    const path = folderPath('course files/Lectures/2026')!;
     expect(fileRecord(BASE, '101', file, { item: 'topic:7', path })).toEqual({
       externalId: '3001',
       course: '101',
@@ -109,6 +109,20 @@ describe('Canvas as records', () => {
       updatedAt: new Date('2026-09-30T12:00:00Z'),
     });
     expect(folderPath('course files')).toBe('');
+  });
+
+  it("leaves out the course card's picture", () => {
+    expect(folderPath('course files/course_image')).toBeNull();
+    expect(folderPath('course files/Lectures/course_image')).toBe(
+      'Lectures/course_image',
+    );
+  });
+
+  it('puts unfiled files at the root', () => {
+    expect(folderPath('course files/unfiled')).toBe('');
+    expect(folderPath('course files/Lectures/unfiled')).toBe(
+      'Lectures/unfiled',
+    );
   });
 
   it('dates a file by its update when Canvas has no modified_at', () => {

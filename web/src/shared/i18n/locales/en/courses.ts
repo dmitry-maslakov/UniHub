@@ -66,5 +66,19 @@ export default {
       title: 'No files yet',
       body: "Files from this course's portals show up here once UniHub reads them.",
     },
+    view: {
+      label: 'Show files',
+      folders: 'By folder',
+      newest: 'Newest first',
+    },
+    new: {
+      title: 'New',
+      description:
+        'Files added or changed on the portal in the last 14 days, newest first.',
+      action: 'Show all new ({{count}})',
+    },
+    newest: {
+      aria: 'Files, newest first',
+    },
   },
 };
