@@ -1,6 +1,7 @@
 -- users' picks of public portals' courses, and the courses their
 -- connectors are asked to sync: picked, or in their grace since the last
--- pick went
+-- pick went. No foreign keys: the users are identity's, the portal courses
+-- catalog's (accounts.prisma)
 -- CreateTable
 CREATE TABLE "Pick" (
     "userId" TEXT NOT NULL,
@@ -21,12 +22,3 @@ CREATE TABLE "WantedCourse" (
 
 -- CreateIndex
 CREATE INDEX "Pick_portalCourseId_idx" ON "Pick"("portalCourseId");
-
--- AddForeignKey
-ALTER TABLE "Pick" ADD CONSTRAINT "Pick_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Pick" ADD CONSTRAINT "Pick_portalCourseId_fkey" FOREIGN KEY ("portalCourseId") REFERENCES "PortalCourse"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "WantedCourse" ADD CONSTRAINT "WantedCourse_portalCourseId_fkey" FOREIGN KEY ("portalCourseId") REFERENCES "PortalCourse"("id") ON DELETE CASCADE ON UPDATE CASCADE;

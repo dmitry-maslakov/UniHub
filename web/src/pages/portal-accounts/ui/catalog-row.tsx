@@ -2,6 +2,7 @@ import { Anchor, Badge, Checkbox, Group } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { Schemas } from '@/shared/api';
+import { webAddress } from '@/shared/lib';
 import { setPicked } from '../api/picks';
 import { pickErrorText } from '../lib/pick-error';
 import classes from './portal-catalog.module.css';
@@ -34,6 +35,8 @@ export function CatalogRow({
       notifications.show({ color: 'red', message: pickErrorText(error, pick) }),
   });
   const picked = toggle.isPending ? toggle.variables : course.picked;
+  // what the site's connector sent: a link only if it's a web address
+  const address = webAddress(course.url);
 
   return (
     <li className={classes.row}>
@@ -58,9 +61,9 @@ export function CatalogRow({
           </Badge>
         )}
       </Group>
-      {course.url && (
+      {address && (
         <Anchor
-          href={course.url}
+          href={address}
           target="_blank"
           rel="noreferrer"
           size="sm"

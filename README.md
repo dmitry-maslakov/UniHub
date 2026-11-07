@@ -247,14 +247,14 @@ The Canvas connector takes `token`; what that means on a hosted or a self-hosted
 A portal set to `public` is a site anyone can read, its connector outside the hub (External connectors, below): it sends every course of the site's directory, as its one account, and those are the portal's catalog. Each user picks from it the courses they follow, and reads those, with no grant:
 
 - `GET /api/portals/{portal}/catalog?q=&offset=&limit=`: `{ total, courses: [{ externalId, name, url, picked, isNew }] }`, the catalog's courses by name (numbers by value), those whose name has `q` (up to 200 characters, matched in any case, with or without diacritics: `racunar` finds `Računarske mreže`, `dacki` finds `Đački`), `limit` up to 200 and 50 by default. `picked` says you picked it, `isNew` that the hub first saw it within 14 days. A portal that isn't public is a 404
-- `PUT /api/me/picks/{portal}/{externalId}`, with no body or `{}`: 204, picked, and picked again it's no new pick. A course the catalog doesn't have, or a portal that isn't public, is a 404; past 100 picks a 422 with `code: TOO_MANY_PICKS`
+- `PUT /api/me/picks/{portal}/{externalId}`, with no body or `{}`: 204, picked, and picked again it's no new pick. A course the catalog doesn't have, or a portal that isn't public, is a 404; past 100 picks a 422 with `code: TOO_MANY_PICKS`. The 100 are the picks `GET /api/me/portals` counts: those in a public portal's catalog now
 - `DELETE` on the same path: 204, whether you had picked it or not, whatever the portal's mode is now
 - both take 30 a minute per user (`X-RateLimit-*-picks`), as each may have the connector sync another course
 - a course picked is read by the picker by every route, search and MCP, as a course of its own (`catalog~101`), or inside the course an admin linked it to: its posts, files and texts, through the portal's one account. A grant gives none of it, an admin reads only what they picked too, and a banned user nothing. A pick of a portal no longer public reads nothing
-- picks go with their user and with their portal course
+- a deleted user's picks go with them (identity's event), and each course they leave with no pick starts its grace (below)
 - no MCP tool picks or lists the catalog
 
-A course picked is wanted: its connector learns it by `Wanted` (External connectors, below), and sends its posts and files from then on. Once no one picks it, it stays wanted 14 days more, so a pick meanwhile finds its sync where it left off; the hourly reconcile then drops it, and starts that grace for a course whose last picker was deleted. A course no longer wanted isn't removed: the connector keeps it as it was, its state too. Nothing of who picks what, or how many, leaves the hub, and the timing does tell one thing: a course someone else picked shows its posts at once.
+A course picked is wanted: its connector learns it by `Wanted` (External connectors, below), and sends its posts and files from then on. Once no one picks it, it stays wanted 14 days more, so a pick meanwhile finds its sync where it left off; the hourly reconcile then drops it, and starts the grace of a course no pick keeps whose grace didn't start (two last picks gone at once). A course no longer wanted isn't removed: the connector keeps it as it was, its state too. Nothing of who picks what, or how many, leaves the hub, and the timing does tell one thing: a course someone else picked shows its posts at once.
 
 ### Running a hub with users' own accounts
 

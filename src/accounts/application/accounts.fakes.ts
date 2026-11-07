@@ -145,6 +145,17 @@ export class InMemoryPicks extends PickRepository {
       .length;
   }
 
+  async removeAllOf(userId: string) {
+    const theirs = await this.ofUser(userId);
+    this.rows.splice(
+      0,
+      this.rows.length,
+      ...this.rows.filter((row) => row.userId !== userId),
+    );
+    const picked = await this.picked();
+    return theirs.filter((id) => !picked.includes(id));
+  }
+
   async picked() {
     return [...new Set(this.rows.map(({ portalCourseId }) => portalCourseId))];
   }
@@ -190,22 +201,22 @@ export const catalogBus = (catalogs: Record<string, CatalogCourseDto[]>) =>
     ],
   ]);
 
+// what @Transactional() runs on without a database, from when a module
+// that imports it is compiled
+export const noTransactions = () =>
+  ClsModule.forRoot({
+    plugins: [
+      new ClsPluginTransactional({
+        adapter: new NoOpTransactionalAdapter({ tx: {}, disableWarning: true }),
+      }),
+    ],
+  });
+
 // PortalPicks on these fakes; @Transactional() runs, without a database
 export async function picksOnFakes(links: PortalLinks, queries: FakeBus) {
   const fakes = { picks: new InMemoryPicks(), wanted: new InMemoryWanted() };
   const module = await Test.createTestingModule({
-    imports: [
-      ClsModule.forRoot({
-        plugins: [
-          new ClsPluginTransactional({
-            adapter: new NoOpTransactionalAdapter({
-              tx: {},
-              disableWarning: true,
-            }),
-          }),
-        ],
-      }),
-    ],
+    imports: [noTransactions()],
     providers: [
       PortalPicks,
       { provide: PortalLinks, useValue: links },

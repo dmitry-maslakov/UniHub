@@ -1,6 +1,5 @@
 // users and their sign-in data, made by Better Auth: npm run auth:generate
-// adds what new plugins need and keeps the rest. CourseAccess is ours, and
-// picks are accounts'
+// adds what new plugins need and keeps the rest. CourseAccess is ours
 
 model User {
   id            String         @id
@@ -17,7 +16,6 @@ model User {
   sessions      Session[]
   accounts      Account[]
   courseAccess  CourseAccess[]
-  picks         Pick[]
 
   oauthclients       OauthClient[]
   oauthrefreshtokens OauthRefreshToken[]

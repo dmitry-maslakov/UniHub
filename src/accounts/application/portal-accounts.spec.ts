@@ -1,5 +1,6 @@
 import { inspect } from 'node:util';
 import { Logger } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
 import {
   CredentialRejectedError,
   type Credential,
@@ -18,6 +19,7 @@ import {
   InMemoryAccounts,
   InMemoryPicks,
   InMemoryWanted,
+  noTransactions,
 } from './accounts.fakes.js';
 import { PortalUnavailableError, TokenRefusedError } from './errors.js';
 import { PortalAccounts } from './portal-accounts.js';
@@ -111,6 +113,11 @@ function accounts({
 }
 
 describe('PortalAccounts', () => {
+  // for PortalPicks' @Transactional()
+  beforeAll(async () => {
+    await Test.createTestingModule({ imports: [noTransactions()] }).compile();
+  });
+
   it('links a token as whoever the portal says it is, sealed for the account', async () => {
     const until = new Date('2026-12-30T08:00:00Z');
     const { store, vault, asked, setToken } = accounts({
@@ -418,15 +425,20 @@ describe('PortalAccounts', () => {
     expect(told).toEqual([new AccountsChangedCommand(MOODLE, { gone: [id] })]);
   });
 
-  it("removes a deleted user's accounts, nobody else's, and plugins forget each", async () => {
-    const { service, store, setToken, told } = accounts();
+  it("removes a deleted user's accounts and picks, nobody else's, and plugins forget each account", async () => {
+    const { service, store, picks, setToken, told } = accounts();
     await setToken('ana', MOODLE);
     await setToken('bo', CANVAS);
+    picks.rows.push(
+      { userId: 'ana', portalCourseId: 'pc-os' },
+      { userId: 'bo', portalCourseId: 'pc-net' },
+    );
     const { id } = store.rows.get('ana:moodle')!.account;
     told.length = 0;
     await service.removeAllOf('ana');
 
     expect([...store.rows.keys()]).toEqual(['bo:canvas']);
+    expect(picks.rows).toEqual([{ userId: 'bo', portalCourseId: 'pc-net' }]);
     expect(told).toEqual([new AccountsChangedCommand(MOODLE, { gone: [id] })]);
   });
 

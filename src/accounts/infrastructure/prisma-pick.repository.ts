@@ -10,8 +10,6 @@ import { PickRepository } from '../domain/picks.js';
 // the advisory locks' class of a user's picks, apart from catalog's (1 to 3)
 const PICKS_LOCK = 100;
 
-// A user's picks go with the user and with the portal course, by the keys'
-// cascades.
 @Injectable()
 export class PrismaPickRepository extends PickRepository {
   constructor(@InjectTransactionHost() private readonly txHost: PrismaTxHost) {
@@ -53,6 +51,22 @@ export class PrismaPickRepository extends PickRepository {
       where: { userId, portalCourseId },
     });
     return count ? tx.pick.count({ where: { portalCourseId } }) : null;
+  }
+
+  // the user's picks found first, as Prisma's deleteMany answers a count
+  // alone, and then of them those no one picks now
+  @Transactional()
+  async removeAllOf(userId: string) {
+    const { tx } = this.txHost;
+    const ids = await this.ofUser(userId);
+    await tx.pick.deleteMany({ where: { userId } });
+    const still = await tx.pick.findMany({
+      where: { portalCourseId: { in: ids } },
+      distinct: ['portalCourseId'],
+      select: { portalCourseId: true },
+    });
+    const picked = new Set(still.map(({ portalCourseId }) => portalCourseId));
+    return ids.filter((id) => !picked.has(id));
   }
 
   async picked() {

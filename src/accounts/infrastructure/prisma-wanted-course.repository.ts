@@ -6,7 +6,6 @@ import {
   WantedCourseRepository,
 } from '../domain/wanted-course.js';
 
-// A wanted course goes with its portal course, by the key's cascade.
 @Injectable()
 export class PrismaWantedCourseRepository extends WantedCourseRepository {
   constructor(@InjectTransactionHost() private readonly txHost: PrismaTxHost) {

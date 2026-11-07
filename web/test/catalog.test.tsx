@@ -25,7 +25,8 @@ const course = (externalId: string, name: string, isNew = false) => ({
 });
 const courses = [
   course('os', 'Operativni sistemi', true),
-  course('net', 'Računarske mreže'),
+  // what its connector sent, which the hub took as it came
+  { ...course('net', 'Računarske mreže'), url: 'data:text/html,<p>hi</p>' },
 ];
 
 // the hub's catalog of the portal, picks kept as the routes make them
@@ -81,6 +82,21 @@ describe('a public portal’s catalog', () => {
     );
     expect(await screen.findByText('None picked')).toBeVisible();
     expect(picks.size).toBe(0);
+  });
+
+  it('links a course to its site only by a web address', async () => {
+    signedIn();
+    hub();
+    renderApp('/settings/portals');
+
+    expect(
+      await screen.findByRole('link', {
+        name: 'Open Operativni sistemi on its site',
+      }),
+    ).toHaveAttribute('href', 'https://courses.example.edu/os');
+    expect(
+      screen.queryByRole('link', { name: 'Open Računarske mreže on its site' }),
+    ).toBeNull();
   });
 
   it('asks the hub for the courses whose names have the words', async () => {

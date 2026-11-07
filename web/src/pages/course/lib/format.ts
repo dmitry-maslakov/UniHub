@@ -15,7 +15,3 @@ export function fileSize(bytes: number | null) {
   }
   return `${unit ? size.toFixed(1) : size} ${units[unit]}`;
 }
-
-// A post's address on its portal, only if it's a web one
-export const webAddress = (url: string | null) =>
-  url && /^https?:\/\//i.test(url) ? url : undefined;

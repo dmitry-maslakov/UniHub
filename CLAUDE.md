@@ -45,7 +45,7 @@ Put off:
 - MCP tools answer JSON as text, not `structuredContent` with an `outputSchema`
 - device sign-in: shorter device sessions (the approval screen is the web app's `/device`)
 - helmet's `Cross-Origin-Resource-Policy: same-origin` stops another origin embedding file content (`<img>`, `<iframe>`); `same-site` if the web portal lives on a sibling subdomain
-- grants of a deleted course: when catalog can delete courses (an event for identity)
+- grants and picks of a deleted course: when catalog can delete courses (an event for identity and accounts). Picks and wanted courses name catalog's portal courses with no foreign key, as accounts name identity's users: modules keep their own tables
 - a read alias for the search index, moved to a new one (another generation or model) once the reconcile has filled it: until then searches answer from the new one, partly filled (README, Search index)
 - a floor for the meaning part of a search (knn's `min_score`, a radial search): it needs a value measured per model; until then, with an embedder, a search answers up to `limit` files even when none has the words (README, Search)
 - OpenSearch's security plugin, with TLS certificates and users of its own (`OPENSEARCH_USERNAME`, `OPENSEARCH_PASSWORD`): needed once anything past the one compose network reaches it, a second host; until then it's off and its port isn't published (README, Deploying search)
@@ -71,7 +71,7 @@ Put off:
 - `CONNECTOR_CONCURRENCY` is per worker process and for every portal at once, not per portal
 - OAuth as a link mode, for a school that issues a developer key: built on branch `feat/135-oauth-mode` and kept there (openid-client with PKCE, the consent's state single-use in Redis, renewal, revoke on unlink); `shared`, `token` and `public` until then
 - the `connector` mode: a user's own connector, with #33's keys bound to the user's account, accounts over gRPC
-- a deleted user's accounts go by an event Better Auth's delete hook sends once the delete has committed, on the in-process bus: a crash in between leaves them, unreachable (no session is the user's); a sweep against identity's users, once something reads with accounts
+- a deleted user's accounts and picks go by an event Better Auth's delete hook sends once the delete has committed, on the in-process bus: a crash in between leaves them, unreachable (no session is the user's), and their courses wanted; a sweep against identity's users, once something reads with accounts
 - a banned user's picks keep their courses wanted, so the connector syncs them (up to 100 a user): bans are Better Auth's, and nothing tells accounts of one to start a grace; a ban reads none of it meanwhile
 - a public portal's catalog is matched and paged in memory, the whole of it read per request (Intl's collator ignores case and diacritics, đ as d too, which postgres' `unaccent` would need an extension for and `lower` a locale for): a directory of hundreds of courses; a portal of many thousands would want it in the database
 - a malformed JSON body's 400 quotes a few characters of it (V8's `JSON.parse` message, which Nest answers with): a token sent so shows a part of itself to its own sender, and isn't logged

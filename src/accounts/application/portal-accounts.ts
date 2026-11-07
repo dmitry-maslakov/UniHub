@@ -202,8 +202,9 @@ export class PortalAccounts implements OnApplicationBootstrap {
     if (gone) await this.changed(portal, { gone: [gone] });
   }
 
-  // a deleted user's, all of them
+  // a deleted user's, all of them, and their picks
   async removeAllOf(userId: string) {
+    await this.picks.removeAllOf(userId);
     for (const { id, portal } of await this.accounts.removeAllOf(userId))
       await this.changed(portal, { gone: [id] });
   }

@@ -9,14 +9,15 @@ import { statusText } from '../lib/status';
 import classes from './portal-accounts.module.css';
 import { TokenForm } from './token-form';
 
-// One portal: how it's read, where the user's account stands, and what to do
+// One portal, by the name it's shown by: how it's read, where the user's
+// account stands, and what to do
 export function PortalRow({ portal }: { portal: Schemas['PortalResponse'] }) {
   const queryClient = useQueryClient();
   const [unavailable, setUnavailable] = useState(false);
   const unlink = useMutation({
     mutationFn: () => deleteToken(portal.portal),
     onSuccess: async () => {
-      notifications.show({ message: `${portal.portal} is unlinked.` });
+      notifications.show({ message: `${portal.label} is unlinked.` });
       await queryClient.invalidateQueries({
         queryKey: ['get', '/api/me/portals'],
       });
@@ -30,10 +31,10 @@ export function PortalRow({ portal }: { portal: Schemas['PortalResponse'] }) {
 
   const confirmUnlink = () =>
     modals.openConfirmModal({
-      title: `Unlink ${portal.portal}?`,
+      title: `Unlink ${portal.label}?`,
       children: (
         <Text size="sm">
-          The hub forgets your token and stops reading {portal.portal} as you.
+          The hub forgets your token and stops reading {portal.label} as you.
           Courses only your account saw stop showing up. You can link it again
           later.
         </Text>
@@ -50,7 +51,7 @@ export function PortalRow({ portal }: { portal: Schemas['PortalResponse'] }) {
         <Group justify="space-between" align="flex-start" wrap="nowrap">
           <Stack gap={2} miw={0}>
             <Title order={3} fz="md">
-              {portal.portal}
+              {portal.label}
             </Title>
             <Text size="sm" c="dimmed">
               {unavailable
@@ -65,7 +66,7 @@ export function PortalRow({ portal }: { portal: Schemas['PortalResponse'] }) {
               size="sm"
               loading={unlink.isPending}
               onClick={confirmUnlink}
-              aria-label={`Unlink ${portal.portal}`}
+              aria-label={`Unlink ${portal.label}`}
             >
               Unlink
             </Button>
@@ -74,6 +75,7 @@ export function PortalRow({ portal }: { portal: Schemas['PortalResponse'] }) {
         {portal.mode === 'token' && !unavailable && (
           <TokenForm
             portal={portal.portal}
+            label={portal.label}
             linked={linked}
             onUnavailable={() => setUnavailable(true)}
           />

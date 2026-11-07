@@ -4,7 +4,7 @@ import { Transactional } from '@nestjs-cls/transactional';
 import type { PortalId } from '@app/kernel';
 import { ListPortalCatalogQuery } from '../../catalog/contracts.js';
 import { browse, type Browse } from '../domain/catalog-page.js';
-import { checkRoom, PickRepository } from '../domain/picks.js';
+import { checkRoom, PickRepository, pickedIn } from '../domain/picks.js';
 import { PortalLinks } from '../domain/portal-links.js';
 import {
   WantedCourse,
@@ -49,13 +49,17 @@ export class PortalPicks {
   }
 
   // The course picked, and wanted for good. Picked again, it's no new
-  // pick; one past MAX_PICKS is refused.
+  // pick; one past MAX_PICKS of those the user sees picked is refused.
   @Transactional()
   async pick(userId: string, portal: PortalId, externalId: string) {
     this.links.checkPicking(portal);
-    const [course] = await this.catalogOf(portal, externalId);
+    const picked = await this.picks.lockOf(userId);
+    const catalogs = await this.catalogs();
+    const course = catalogs
+      .get(portal)
+      ?.find((course) => course.externalId === externalId);
     if (!course) throw new NotInCatalogError(portal, externalId);
-    checkRoom(await this.picks.lockOf(userId), course.id);
+    checkRoom([...pickedIn(catalogs, picked).values()].flat(), course.id);
     await this.picks.add(userId, course.id);
     await this.wanted.save(new WantedCourse(course.id));
   }
@@ -87,21 +91,28 @@ export class PortalPicks {
     };
   }
 
-  // how many courses of each public portal's catalog the user picked
+  // how many courses of each public portal's catalog the user picked: the
+  // picks the user sees, and the ones MAX_PICKS counts
   async counts(userId: string): Promise<Map<PortalId, number>> {
-    const portals = this.links.readByPicks();
-    if (!portals.length) return new Map();
-    const [picked, ...catalogs] = await Promise.all([
+    if (!this.links.readByPicks().length) return new Map();
+    const [picked, catalogs] = await Promise.all([
       this.picks.ofUser(userId),
-      ...portals.map((portal) => this.catalogOf(portal)),
+      this.catalogs(),
     ]);
-    const mine = new Set(picked);
     return new Map(
-      portals.map((portal, i) => [
+      [...pickedIn(catalogs, picked)].map(([portal, ids]) => [
         portal,
-        catalogs[i].filter(({ id }) => mine.has(id)).length,
+        ids.length,
       ]),
     );
+  }
+
+  // A deleted user's picks, all of them, and the grace of each course no
+  // one picks now: the reconcile catches it too, should this fail
+  @Transactional()
+  async removeAllOf(userId: string, now = new Date()) {
+    for (const id of await this.picks.removeAllOf(userId))
+      await this.wanted.save(new WantedCourse(id).picked(false, now));
   }
 
   // The portal's courses its connector is asked to sync: picked now, or in
@@ -122,9 +133,10 @@ export class PortalPicks {
   }
 
   // Each course wanted as its picks are now: one no one picks starts its
-  // grace (its last picker deleted, or two picks gone at once), one picked
-  // again leaves it, one past it goes, and one picked is wanted. Each
-  // change only if the row is still as found, so a pick meanwhile wins.
+  // grace (two last picks gone at once, or a deleted user's whose removal
+  // failed), one picked again leaves it, one past it goes, and one picked
+  // is wanted. Each change only if the row is still as found, so a pick
+  // meanwhile wins.
   async reconcile(now = new Date()) {
     const [rows, picked] = await Promise.all([
       this.wanted.all(),
@@ -142,5 +154,12 @@ export class PortalPicks {
 
   private catalogOf(portal: PortalId, externalId?: string) {
     return this.queries.execute(new ListPortalCatalogQuery(portal, externalId));
+  }
+
+  // each public portal's catalog
+  private async catalogs() {
+    const portals = this.links.readByPicks();
+    const catalogs = await Promise.all(portals.map((p) => this.catalogOf(p)));
+    return new Map(portals.map((portal, i) => [portal, catalogs[i]]));
   }
 }

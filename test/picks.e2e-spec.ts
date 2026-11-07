@@ -3,6 +3,7 @@ import * as grpc from '@grpc/grpc-js';
 import * as loader from '@grpc/proto-loader';
 import type { Client as OpenSearch } from '@opensearch-project/opensearch';
 import { PortalPicks } from '../src/accounts/application/portal-picks.js';
+import { WantedCourseRepository } from '../src/accounts/domain/wanted-course.js';
 import type { Mail } from '../src/identity/domain/mailer.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
 import { OPENSEARCH } from '../src/platform/search/opensearch.module.js';
@@ -19,7 +20,8 @@ import { portalIngest } from './ingest.js';
 // the limit of picks, when a course stops being wanted and whose views a
 // user reads are checked on fakes (catalog-page.spec.ts, picks.spec.ts,
 // wanted-course.spec.ts, portal-picks.spec.ts, viewers.spec.ts); here,
-// what the queries find, the routes, the limits and the cascades.
+// what the queries find, the routes, the limits, the locks, and a deleted
+// user's picks going by identity's event.
 
 const CATALOG = 'catalog';
 const TOKEN = 'catalog-test-token-0001';
@@ -72,8 +74,8 @@ describe('public portals and picks', { timeout: 60_000 }, () => {
     (await get(who, path).expect(200)).body;
   const pick = (who: string, course: string, portal = CATALOG) =>
     http().put(`/api/me/picks/${portal}/${course}`).set('cookie', as[who]);
-  const unpick = (who: string, course: string) =>
-    http().delete(`/api/me/picks/${CATALOG}/${course}`).set('cookie', as[who]);
+  const unpick = (who: string, course: string, portal = CATALOG) =>
+    http().delete(`/api/me/picks/${portal}/${course}`).set('cookie', as[who]);
   // the slugs of the catalog's courses a user reads
   const slugs = async (who: string) =>
     ((await body(who, '/api/courses')) as { slug: string }[])
@@ -136,7 +138,7 @@ describe('public portals and picks', { timeout: 60_000 }, () => {
       name: 'Shared',
     });
 
-    for (const who of ['ana', 'bo', 'ed', 'cy'])
+    for (const who of ['ana', 'bo', 'ed', 'cy', 'di'])
       as[who] = await signUp(`${who}@picks.test`);
     await makeAdmin('ed@picks.test');
   });
@@ -186,6 +188,8 @@ describe('public portals and picks', { timeout: 60_000 }, () => {
     await pick('ana', 'shared-c1', SHARED).expect(404);
     await get('ana', `/api/portals/${SHARED}/catalog`).expect(404);
     await get('ana', `/api/portals/${CATALOG}/catalog?limit=201`).expect(400);
+    await pick('ana', 'os', 'NotAPortal').expect(400);
+    await unpick('ana', 'os', 'NotAPortal').expect(400);
 
     await unpick('ana', 'os').expect(204);
     await unpick('ana', 'os').expect(204);
@@ -314,30 +318,73 @@ describe('public portals and picks', { timeout: 60_000 }, () => {
     await app.get(PortalPicks).reconcile(new Date(Date.now() + 15 * DAY));
     expect(await wanted()).toEqual(['os']);
 
-    // ana deleted, her picks with her: os's grace starts at the reconcile
-    await prisma.user.delete({ where: { id: await userId('ana@picks.test') } });
-    expect(await prisma.pick.count()).toBe(0);
-    await app.get(PortalPicks).reconcile();
-    const [os] = await prisma.wantedCourse.findMany();
-    expect(os.until!.getTime()).toBeGreaterThan(Date.now() + 13 * DAY);
+    // ana deleted by an admin, her picks with her, and os's grace starts
+    await post(
+      '/admin/remove-user',
+      { userId: await userId('ana@picks.test') },
+      as.ed,
+    ).expect(200);
+    await vi.waitFor(async () => {
+      expect(await prisma.pick.count()).toBe(0);
+      const [os] = await prisma.wantedCourse.findMany();
+      expect(os.until!.getTime()).toBeGreaterThan(Date.now() + 13 * DAY);
+    });
     expect(await wanted()).toEqual(['os']);
   });
 
-  it('refuses a pick past 100 with its code, and more than 30 a minute', async () => {
-    const cy = await userId('cy@picks.test');
-    const many = Array.from({ length: 100 }, (_, i) => `many-${i}`);
-    await prisma.portalCourse.createMany({
-      data: many.map((externalId) => ({ portal: CATALOG, externalId })),
+  it('lets a pick made while the reconcile looks win over it', async () => {
+    const os = await prisma.portalCourse.findFirstOrThrow({
+      where: { portal: CATALOG, externalId: 'os' },
     });
+    await prisma.wantedCourse.update({
+      where: { portalCourseId: os.id },
+      data: { until: new Date(Date.now() - DAY) },
+    });
+    const repository = app.get(WantedCourseRepository);
+    const all = repository.all.bind(repository);
+    vi.spyOn(repository, 'all').mockImplementationOnce(async () => {
+      const found = await all();
+      await pick('bo', 'os').expect(204);
+      return found;
+    });
+
+    await app.get(PortalPicks).reconcile();
+    expect(
+      await prisma.wantedCourse.findUnique({
+        where: { portalCourseId: os.id },
+      }),
+    ).toEqual({ portalCourseId: os.id, until: null });
+    await unpick('bo', 'os').expect(204);
+  });
+
+  it('refuses a pick past 100 with its code, of two at once too, and more than 30 a minute', async () => {
+    // a hundred more courses in the catalog, picked by cy, and all but one
+    // by di
+    const site = portalIngest(app, CATALOG);
+    const many = Array.from({ length: 100 }, (_, i) => `many-${i}`);
+    for (const externalId of many)
+      await site.course({ externalId, name: `Kurs ${externalId}` });
     const ids = await prisma.portalCourse.findMany({
-      where: { externalId: { in: many } },
+      where: { portal: CATALOG, externalId: { in: many } },
       select: { id: true },
     });
+    const [cy, di] = await Promise.all(
+      ['cy', 'di'].map((who) => userId(`${who}@picks.test`)),
+    );
     await prisma.pick.createMany({
-      data: ids.map(({ id }) => ({ userId: cy, portalCourseId: id })),
+      data: [
+        ...ids.map(({ id }) => ({ userId: cy, portalCourseId: id })),
+        ...ids.slice(1).map(({ id }) => ({ userId: di, portalCourseId: id })),
+      ],
     });
     const refused = await pick('cy', 'os').expect(422);
     expect(refused.body).toMatchObject({ code: 'TOO_MANY_PICKS' });
+    // di's two at once: the user's lock lets one find room, not both
+    const both = await Promise.all([pick('di', 'os'), pick('di', 'net')]);
+    expect(both.map(({ status }) => status).sort((a, b) => a - b)).toEqual([
+      204, 422,
+    ]);
+    expect(await prisma.pick.count({ where: { userId: di } })).toBe(100);
     await prisma.pick.deleteMany({ where: { userId: cy } });
 
     // the refused pick counted too: 28 more, and the 30th

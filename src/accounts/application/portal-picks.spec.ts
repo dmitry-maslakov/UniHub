@@ -26,14 +26,14 @@ const catalogs = {
   lms: [course('lms-1')],
 };
 
-async function picks() {
+async function picks(catalog = catalogs.catalog) {
   const links = new PortalLinks(
     new Map([
       [CATALOG, { mode: 'public', adminsOnly: false }],
       [LMS, { mode: 'token', adminsOnly: false }],
     ]),
   );
-  const bus = catalogBus(catalogs);
+  const bus = catalogBus({ ...catalogs, catalog });
   return { ...(await picksOnFakes(links, bus)), bus };
 }
 
@@ -73,7 +73,7 @@ describe('PortalPicks', () => {
     expect(rows.rows).toEqual([{ userId: 'ana', portalCourseId: 'pc-os' }]);
     expect(rows.locked).toEqual(['ana', 'ana']);
     expect([...wanted.rows]).toEqual([['pc-os', null]]);
-    expect(bus.sent).toContainEqual(new ListPortalCatalogQuery(CATALOG, 'os'));
+    expect(bus.sent).toContainEqual(new ListPortalCatalogQuery(CATALOG));
   });
 
   it('refuses a course the catalog has not, and a portal that is not public', async () => {
@@ -87,18 +87,51 @@ describe('PortalPicks', () => {
     expect(rows.rows).toEqual([]);
   });
 
-  it(`refuses a pick past ${MAX_PICKS}, but not one picked already`, async () => {
-    const { service, picks: rows } = await picks();
-    for (let i = 0; i < MAX_PICKS - 1; i++)
-      rows.rows.push({ userId: 'ana', portalCourseId: `other-${i}` });
+  it(`refuses a pick past ${MAX_PICKS} of those it counts, but not one picked already`, async () => {
+    const more = Array.from({ length: MAX_PICKS - 1 }, (_, i) =>
+      course(`more-${i}`),
+    );
+    const { service, picks: rows } = await picks([
+      ...catalogs.catalog,
+      ...more,
+    ]);
+    for (const { id } of more)
+      rows.rows.push({ userId: 'ana', portalCourseId: id });
     await service.pick('ana', CATALOG, 'os');
 
     await expect(service.pick('ana', CATALOG, 'net')).rejects.toThrow(
       new TooManyPicksError(MAX_PICKS),
     );
     await expect(service.pick('ana', CATALOG, 'os')).resolves.toBeUndefined();
+    expect(await service.counts('ana')).toEqual(
+      new Map([[CATALOG, MAX_PICKS]]),
+    );
     // someone else's are theirs
     await service.pick('bo', CATALOG, 'net');
+  });
+
+  it('leaves out of the limit, as out of the count, a pick of a portal no longer public or of a course gone from its catalog', async () => {
+    const more = Array.from({ length: MAX_PICKS - 1 }, (_, i) =>
+      course(`more-${i}`),
+    );
+    const { service, picks: rows } = await picks([
+      ...catalogs.catalog,
+      ...more,
+    ]);
+    for (const { id } of more)
+      rows.rows.push({ userId: 'ana', portalCourseId: id });
+    rows.rows.push(
+      { userId: 'ana', portalCourseId: 'pc-lms-1' },
+      { userId: 'ana', portalCourseId: 'pc-gone' },
+    );
+
+    await service.pick('ana', CATALOG, 'os');
+    expect(await service.counts('ana')).toEqual(
+      new Map([[CATALOG, MAX_PICKS]]),
+    );
+    await expect(service.pick('ana', CATALOG, 'net')).rejects.toThrow(
+      new TooManyPicksError(MAX_PICKS),
+    );
   });
 
   it(`keeps a course wanted ${GRACE_DAYS} days past its last pick, not past one of several`, async () => {
@@ -110,6 +143,20 @@ describe('PortalPicks', () => {
     expect(wanted.rows.get('pc-os')).toBeNull();
     await service.unpick('bo', CATALOG, 'os', now);
     expect(wanted.rows.get('pc-os')).toEqual(at(GRACE_DAYS));
+  });
+
+  it("removes a deleted user's picks, nobody else's, and starts the grace of each course no one picks now", async () => {
+    const { service, picks: rows, wanted } = await picks();
+    await service.pick('ana', CATALOG, 'os');
+    await service.pick('ana', CATALOG, 'net');
+    await service.pick('bo', CATALOG, 'net');
+
+    await service.removeAllOf('ana', now);
+    expect(rows.rows).toEqual([{ userId: 'bo', portalCourseId: 'pc-net' }]);
+    expect(Object.fromEntries(wanted.rows)).toEqual({
+      'pc-os': at(GRACE_DAYS),
+      'pc-net': null,
+    });
   });
 
   it("changes nothing for a pick the user hasn't, or a course the catalog hasn't", async () => {
