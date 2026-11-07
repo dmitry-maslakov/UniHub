@@ -78,6 +78,7 @@
     "nestjs-cls": "^7.0.2",
     "nodemailer": "^10.3.1",
     "officeparser": "^8.5.0",
+    "p-limit": "^7.3.3",
     "p-retry": "^9.0.0",
     "protobufjs": "^7.6.6",
     "reflect-metadata": "^0.2.2",

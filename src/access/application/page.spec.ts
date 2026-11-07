@@ -1,4 +1,10 @@
-import { memberSchema, pageSchema, textPageSchema } from './page.js';
+import {
+  contentSchema,
+  courseFilesSchema,
+  memberSchema,
+  pageSchema,
+  textPageSchema,
+} from './page.js';
 
 describe('pageSchema', () => {
   it('reads a query string, with defaults', () => {
@@ -55,5 +61,31 @@ describe('memberSchema', () => {
     expect(memberSchema.parse({ member: 'Ve\u017ebe/c\u030cas.c' })).toEqual({
       member: 'Ve\u017ebe/\u010das.c',
     });
+  });
+});
+
+describe('courseFilesSchema', () => {
+  it("pages a course's files, or takes the post to list the files of", () => {
+    const post = '0198c5a8-2a0b-7a3e-8c53-5a1d1a2b3c4d';
+    expect(courseFilesSchema.parse({})).toEqual({ offset: 0, limit: 50 });
+    expect(courseFilesSchema.parse({ item: post, limit: '200' })).toEqual({
+      offset: 0,
+      limit: 200,
+      item: post,
+    });
+    for (const item of ['not-an-id', ['a', 'b']])
+      expect(courseFilesSchema.safeParse({ item }).success).toBe(false);
+  });
+});
+
+describe('contentSchema', () => {
+  it('is a download unless the browser is asked to show the file', () => {
+    expect(contentSchema.parse({})).toEqual({ disposition: 'attachment' });
+    expect(
+      contentSchema.parse({ member: 'lab/main.c', disposition: 'inline' }),
+    ).toEqual({ member: 'lab/main.c', disposition: 'inline' });
+    expect(contentSchema.safeParse({ disposition: 'other' }).success).toBe(
+      false,
+    );
   });
 });

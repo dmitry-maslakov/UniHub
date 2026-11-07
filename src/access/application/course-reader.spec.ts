@@ -18,6 +18,7 @@ import {
 import { ReadScopeQuery } from '../../identity/contracts.js';
 import {
   FindMemberQuery,
+  GetPostTextQuery,
   GetTextPageQuery,
   ListMembersQuery,
   ListTextsQuery,
@@ -61,7 +62,12 @@ const item = (id: string, courseId: string): CourseItemDto => ({
   removed: false,
   updatedAt: new Date('2026-10-01T09:00:00Z'),
 });
-const items = [item('i1', os.id), item('i2', net.id)];
+// i3 is not open to her view yet
+const items = [
+  item('i1', os.id),
+  item('i2', net.id),
+  { ...item('i3', os.id), raw: null },
+];
 const text = {
   processor: PluginName.parse('office-text'),
   version: 2,
@@ -133,6 +139,10 @@ function reader() {
       GetCourseItemQuery,
       ({ viewers, itemId }: GetCourseItemQuery) =>
         items.filter(seen(viewers)).find((i) => i.id === itemId) ?? null,
+    ],
+    [
+      GetPostTextQuery,
+      ({ raw }: GetPostTextQuery) => `read ${JSON.stringify(raw)}`,
     ],
     [ListTextsQuery, () => [text]],
     [ListMembersQuery, () => [main]],
@@ -240,6 +250,38 @@ describe('CourseReader', () => {
       await expect(r.item('ana', id)).rejects.toThrowError(
         new NotReadableError('item'),
       );
+  });
+
+  it("reads a post's text once its view opens it, and not before", async () => {
+    const { reader: r, queries } = reader();
+
+    expect(await r.itemText('ana', 'i1')).toEqual({
+      text: 'read {"message":"on Monday"}',
+    });
+    expect(queries.sent).toContainEqual(
+      new GetPostTextQuery({ message: 'on Monday' }),
+    );
+    // locked, someone else's, none: one answer, and nothing read
+    for (const id of ['i3', 'i2', 'nope'])
+      await expect(r.itemText('ana', id)).rejects.toThrowError(
+        new NotReadableError('item'),
+      );
+    expect(
+      queries.sent.filter((q) => q instanceof GetPostTextQuery),
+    ).toHaveLength(1);
+  });
+
+  it('lists the files of one post', async () => {
+    const { reader: r, queries } = reader();
+
+    await r.files('ana', CourseSlug.parse('os'), {
+      offset: 0,
+      limit: 200,
+      item: 'i1',
+    });
+    expect(queries.sent).toContainEqual(
+      new ListCourseFilesQuery(viewers, ['pc'], 0, 200, 'i1'),
+    );
   });
 
   it('reads text and content only of a file that has some', async () => {

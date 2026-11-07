@@ -100,6 +100,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/items/{id}/text": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ItemsController_text"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/files/{id}": {
         parameters: {
             query?: never;
@@ -333,6 +349,10 @@ export interface components {
             mime: string | null;
             /** @description the hub has the bytes */
             hasContent: boolean;
+        };
+        PostTextResponse: {
+            /** @description the post's text as the hub reads it, plain text: render it as text */
+            text: string;
         };
         TextInfoResponse: {
             /** @example office-text */
@@ -711,6 +731,8 @@ export interface operations {
             query?: {
                 offset?: number;
                 limit?: number;
+                /** @description only the files attached to this post, by its id */
+                item?: string;
             };
             header?: never;
             path: {
@@ -720,7 +742,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description by folder and name */
+            /** @description by folder and name; with `item`, only the files attached to that post */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -755,6 +777,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ItemResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ItemsController_text: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the post's text as the hub reads it: every string the portal sent but links and dates, HTML read as plain text */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostTextResponse"];
                 };
             };
             404: {
@@ -862,6 +912,8 @@ export interface operations {
             query?: {
                 /** @description a file inside it, by its path as list_members or the members route gives it; the file itself by default */
                 member?: string;
+                /** @description inline asks the browser to show a PDF, picture or plain text itself; anything else is sent as a download whatever is asked */
+                disposition?: "attachment" | "inline";
             };
             header?: never;
             path: {
@@ -871,7 +923,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description the file as the portal had it, or a file inside it as its archive had it */
+            /** @description the file as the portal had it, or a file inside it as its archive had it; a download, unless `disposition=inline` asks to show a PDF, picture or plain text in the browser */
             200: {
                 headers: {
                     [name: string]: unknown;

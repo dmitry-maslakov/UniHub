@@ -79,6 +79,14 @@ export class ItemResponse implements ItemView {
   raw!: Json | null;
 }
 
+export class PostTextResponse {
+  @ApiProperty({
+    description:
+      "the post's text as the hub reads it, plain text: render it as text",
+  })
+  text!: string;
+}
+
 export class FileResponse implements FileView {
   @ApiProperty() id!: string;
   @ApiProperty({ type: String, example: 'canvas' }) portal!: PortalId;

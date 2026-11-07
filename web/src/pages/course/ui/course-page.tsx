@@ -1,4 +1,5 @@
-import { Stack } from '@mantine/core';
+import { Stack, Tabs } from '@mantine/core';
+import { useQuery } from '@tanstack/react-query';
 import { getRouteApi } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { useCourse } from '@/entities/course';
@@ -9,19 +10,27 @@ import {
   PageTitle,
   QueryState,
 } from '@/shared/ui';
-import { FilesSection } from './files-section';
-import { ItemsSection } from './items-section';
+import { courseFilesQuery } from '../api/course-files';
+import { defaultTab } from '../lib/default-tab';
+import { CourseSearch } from './course-search';
+import { FilesTree } from './files-tree';
+import { PostsList } from './posts-list';
 import { SourcesStrip } from './sources-strip';
 
-const route = getRouteApi('/_app/courses/$slug');
+const route = getRouteApi('/_app/courses/$slug/');
 
-// A course's posts and files, under where they come from. Its name and
-// sources come from the list, which also says whether the user may read it
-// at all.
+// A course: where it comes from, a search of it, and its files and posts
+// in tabs. Its name and sources come from the list, which also says
+// whether the user may read it at all.
 export function CoursePage() {
   const { t } = useTranslation('courses');
   const { slug } = route.useParams();
+  const search = route.useSearch();
+  const navigate = route.useNavigate();
   const { query, course } = useCourse(slug);
+  // the same query the Files tab reads: one request
+  const files = useQuery(courseFilesQuery(slug));
+  const tab = search.tab ?? defaultTab(files.data?.files.length);
 
   return (
     <QueryState
@@ -40,10 +49,36 @@ export function CoursePage() {
         course && (
           <>
             <PageTitle>{course.name}</PageTitle>
-            <Stack gap="xxl">
+            <Stack gap="lg">
               <SourcesStrip portalCourses={course.portalCourses} />
-              <ItemsSection slug={slug} />
-              <FilesSection slug={slug} />
+              <CourseSearch slug={slug} />
+              <Tabs
+                value={tab}
+                onChange={(value) =>
+                  void navigate({
+                    search: { tab: value === 'posts' ? 'posts' : 'files' },
+                    replace: true,
+                  })
+                }
+                keepMounted={false}
+              >
+                <Tabs.List>
+                  <Tabs.Tab value="files">
+                    {files.data && !files.data.capped
+                      ? t('course.tabs.filesCount', {
+                          count: files.data.files.length,
+                        })
+                      : t('course.tabs.files')}
+                  </Tabs.Tab>
+                  <Tabs.Tab value="posts">{t('course.tabs.posts')}</Tabs.Tab>
+                </Tabs.List>
+                <Tabs.Panel value="files" pt="lg">
+                  <FilesTree slug={slug} />
+                </Tabs.Panel>
+                <Tabs.Panel value="posts" pt="lg">
+                  <PostsList slug={slug} />
+                </Tabs.Panel>
+              </Tabs>
             </Stack>
           </>
         )

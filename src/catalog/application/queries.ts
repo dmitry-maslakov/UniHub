@@ -193,6 +193,8 @@ export class ListCourseFilesQuery extends Query<FileDto[]> {
     public readonly portalCourseIds: readonly string[],
     public readonly offset: number,
     public readonly limit: number,
+    // only the files of this post, by the id its view shows
+    public readonly itemId?: string,
   ) {
     super();
   }

@@ -8,7 +8,12 @@ import {
 import { CourseSlug } from '../../../catalog/contracts.js';
 import { CurrentUserId } from '../../../identity/contracts.js';
 import { CourseReader } from '../../application/course-reader.js';
-import { pageSchema, type Page } from '../../application/page.js';
+import {
+  courseFilesSchema,
+  pageSchema,
+  type FilesAt,
+  type Page,
+} from '../../application/page.js';
 import { Limited } from '../throttle.js';
 import { CourseResponse, FileResponse, ItemResponse } from './responses.js';
 
@@ -40,12 +45,16 @@ export class CoursesController {
   }
 
   @Get(':slug/files')
-  @ApiOkResponse({ type: [FileResponse], description: 'by folder and name' })
+  @ApiOkResponse({
+    type: [FileResponse],
+    description:
+      'by folder and name; with `item`, only the files attached to that post',
+  })
   @ApiNotFoundResponse()
   files(
     @CurrentUserId() userId: string,
     @Param('slug', { schema: CourseSlug }) slug: CourseSlug,
-    @Query({ schema: pageSchema }) page: Page,
+    @Query({ schema: courseFilesSchema }) page: FilesAt,
   ): Promise<FileResponse[]> {
     return this.reader.files(userId, slug, page);
   }

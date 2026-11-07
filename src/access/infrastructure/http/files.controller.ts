@@ -18,13 +18,14 @@ import { create as contentDisposition } from 'content-disposition';
 import { CurrentUserId } from '../../../identity/contracts.js';
 import { CourseReader } from '../../application/course-reader.js';
 import {
-  memberSchema,
+  contentSchema,
   pageSchema,
   textPageSchema,
-  type MemberAt,
+  type ContentAt,
   type Page,
   type TextAt,
 } from '../../application/page.js';
+import { opensInline } from '../../application/inline.js';
 import { Limited } from '../throttle.js';
 import {
   FileDetailsResponse,
@@ -81,7 +82,7 @@ export class FilesController {
   @ApiProduces('application/octet-stream')
   @ApiOkResponse({
     description:
-      'the file as the portal had it, or a file inside it as its archive had it',
+      'the file as the portal had it, or a file inside it as its archive had it; a download, unless `disposition=inline` asks to show a PDF, picture or plain text in the browser',
   })
   // the type is the portal's word, or the archive's; a browser must not
   // guess another
@@ -89,13 +90,20 @@ export class FilesController {
   async content(
     @CurrentUserId() userId: string,
     @Param('id', ParseUUIDPipe) id: string,
-    @Query({ schema: memberSchema }) { member }: MemberAt,
+    @Query({ schema: contentSchema }) { member, disposition }: ContentAt,
   ) {
     const file = await this.reader.content(userId, id, member);
     return new StreamableFile(file.stream, {
       // a media type's essence is type/subtype, which a header carries
       type: file.mime ?? 'application/octet-stream',
-      disposition: contentDisposition(file.name),
+      // inline only when asked and only for what a browser shows without
+      // running anything of the file's (HTML, SVG and Office files never)
+      disposition: contentDisposition(file.name, {
+        type:
+          disposition === 'inline' && opensInline(file.mime)
+            ? 'inline'
+            : 'attachment',
+      }),
     });
   }
 }
