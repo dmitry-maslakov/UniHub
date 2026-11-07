@@ -37,7 +37,7 @@ export default {
   },
   keeping: {
     title: 'Keeping and deleting your data',
-    body: "When your account is deleted, your sessions, API keys, linked portal accounts and tokens, and your connected apps' consents and tokens are deleted with it, and so is what your linked portal accounts brought in that no other account can see. Course content that other accounts can also see stays while they do. To have your account deleted, write to <mail>{{contact}}</mail>.",
+    body: "When your account is deleted, your sessions, API keys, linked portal accounts and tokens, and your connected apps' consents and tokens are deleted with it, and so is what your linked portal accounts brought in that no other account can see. Course content that other accounts can also see stays while they do. You can delete your account yourself under Account, or write to <mail>{{contact}}</mail>.",
   },
   security: {
     title: 'Security',

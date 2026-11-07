@@ -76,9 +76,10 @@ The API's types (`web/src/shared/api/schema.d.ts`) are generated from `web/opena
 
 - email and password, the email confirmed by a link in a mail (without `SMTP_URL` mails only go to the log)
 - Google, when `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set
-- sign-in by QR code: a new screen asks for a code (device authorization), a phone signed in within the last day approves it
+- sign-in by QR code: a new screen asks for a code (device authorization), a phone signed in within the last day approves it. The web app's own sign-in offers it as "Sign in with your phone" (`/sign-in/phone`): its device token also sets the session cookie (client `unihub-web`; the app's `unihub-app` gets the token alone)
 - session tokens as `Authorization: Bearer`, and API keys for MCP clients: only a session signed in within the last day makes one, they expire after 90 days, and a new password (a reset, a change, or one an admin sets) deletes them
-- an OAuth 2.1 authorization server for MCP clients (MCP, below): its issuer is `/api/auth`, its discovery documents at `/.well-known/oauth-authorization-server/api/auth` and `/.well-known/oauth-protected-resource/api/mcp`. A user signs in on the web app's `/sign-in` and lets an app in on its `/consent`, which takes a session signed in within the last day; a new password deletes the apps' refresh tokens and consents too, so each has to be let in again
+- an OAuth 2.1 authorization server for MCP clients (MCP, below): its issuer is `/api/auth`, its discovery documents at `/.well-known/oauth-authorization-server/api/auth` and `/.well-known/oauth-protected-resource/api/mcp`. A user signs in on the web app's `/sign-in` and lets an app in on its `/consent`, which takes a session signed in within the last day; a new password deletes the apps' refresh tokens and consents too, so each has to be let in again, and so does revoking an app's consent (`/oauth2/delete-consent`, from the web app's Connect AI page): its refresh tokens go with it, while an access token already issued lives out its hour
+- users delete their own account (`/delete-user`, on the web app's Account page) with their password, or with a session signed in within the last day when they have none; their API keys, apps' tokens and consents, linked portal accounts and picks go with it
 
 The first admin: `npm run auth:create-admin -- --email you@example.com --password '…'`. After adding a Better Auth plugin, `npm run auth:generate` updates `prisma/schema/identity.prisma`.
 

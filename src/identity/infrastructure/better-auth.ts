@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { betterAuth } from 'better-auth';
 import {
+  APIError,
   createAuthMiddleware,
   freshSessionMiddleware,
   isAPIError,
@@ -11,13 +12,18 @@ import { createCimdClientDiscovery } from '@better-auth/cimd';
 import { mcp } from '@better-auth/mcp';
 import type { ClientMetadataResourceFetch } from '@better-auth/oauth-provider';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
+import { setSessionCookie } from 'better-auth/cookies';
 import type { PrismaClient } from '../../generated/prisma/client.js';
 import { FRESH_AGE_SECONDS } from '../domain/fresh-session.js';
 import type { Mail, Mailer } from '../domain/mailer.js';
 import { ADMIN_ROLE } from '../domain/reader.js';
 
+// the web app's own sign-in by QR: the screen that asked gets its session
+// as a cookie, as any sign-in in a browser does; other clients keep the token
+export const WEB_DEVICE_CLIENT = 'unihub-web';
+
 // our own apps that may sign in by QR code (device authorization)
-export const DEVICE_CLIENTS = ['unihub-web', 'unihub-app'];
+export const DEVICE_CLIENTS = [WEB_DEVICE_CLIENT, 'unihub-app'];
 
 // what a session does that outlasts it: makes an API key, approves a
 // screen's sign-in by QR, which gives that screen a session of its own, or
@@ -91,6 +97,25 @@ export function createAuth({
       prisma.oauthConsent.deleteMany({ where: { userId } }),
     ]);
 
+  // An app the user let in, cut off: what it holds goes with the consent,
+  // before the consent (which names the app) is deleted. Better Auth 1.7's
+  // delete-consent leaves the app's refresh tokens working.
+  const dropAppCredentials = async (userId: string, consentId: string) => {
+    const consent = await prisma.oauthConsent.findFirst({
+      where: { id: consentId, userId },
+      select: { clientId: true },
+    });
+    if (!consent) return;
+    await prisma.$transaction([
+      prisma.oauthRefreshToken.deleteMany({
+        where: { userId, clientId: consent.clientId },
+      }),
+      prisma.oauthAccessToken.deleteMany({
+        where: { userId, clientId: consent.clientId },
+      }),
+    ]);
+  };
+
   const auth = betterAuth({
     secret,
     baseURL,
@@ -143,10 +168,21 @@ export function createAuth({
     // Better Auth's default, set here as the hub's routes check the same
     // (FreshSession)
     session: { freshAge: FRESH_AGE_SECONDS },
+    // users delete their own account: with their password, or a session
+    // signed in within freshAge when they have none (Google)
+    user: { deleteUser: { enabled: true } },
     // run once the delete has committed (Better Auth queues them after its
-    // transaction), so nothing goes for a user still there
+    // transaction), so nothing goes for a user still there. API keys name
+    // their user without a relation, so they go here.
     databaseHooks: {
-      user: { delete: { after: async (user) => onUserDeleted(user.id) } },
+      user: {
+        delete: {
+          after: async (user) => {
+            onUserDeleted(user.id);
+            await dropAgentCredentials(user.id);
+          },
+        },
+      },
     },
     hooks: {
       // A key outlives the session that made it, a screen approved by QR
@@ -159,16 +195,65 @@ export function createAuth({
       // auth.api, which runs bearer() first, and left where the middleware
       // and the endpoint look for it.
       before: createAuthMiddleware(async (ctx) => {
-        if (!ctx.headers || !FRESH_SESSION_PATHS.includes(ctx.path)) return;
-        ctx.context.session = await auth.api.getSession({
-          headers: ctx.headers,
-          query: { disableRefresh: true },
-        });
-        await freshSessionMiddleware(ctx);
+        if (!ctx.headers) return;
+        if (FRESH_SESSION_PATHS.includes(ctx.path)) {
+          ctx.context.session = await auth.api.getSession({
+            headers: ctx.headers,
+            query: { disableRefresh: true },
+          });
+          await freshSessionMiddleware(ctx);
+        }
+        // a user with a password gives it to delete the account, whatever
+        // the age of the session (Better Auth asks for it only to skip
+        // freshness)
+        if (ctx.path === '/delete-user') {
+          const session = await auth.api.getSession({
+            headers: ctx.headers,
+            query: { disableRefresh: true },
+          });
+          const password = (ctx.body as { password?: unknown } | undefined)
+            ?.password;
+          if (
+            session &&
+            !password &&
+            (await prisma.account.count({
+              where: { userId: session.user.id, providerId: 'credential' },
+            })) > 0
+          )
+            throw new APIError('BAD_REQUEST', {
+              code: 'PASSWORD_REQUIRED',
+              message: 'Enter your password to delete your account',
+            });
+        }
+        // expired device codes only pile up otherwise (Better Auth removes
+        // one only when it is polled)
+        if (ctx.path === '/device/code')
+          await prisma.deviceCode.deleteMany({
+            where: { expiresAt: { lt: new Date() } },
+          });
+        // an app revoked loses its refresh tokens with its consent
+        if (ctx.path === '/oauth2/delete-consent') {
+          const session = await auth.api.getSession({
+            headers: ctx.headers,
+            query: { disableRefresh: true },
+          });
+          const id = (ctx.body as { id?: unknown } | undefined)?.id;
+          if (session && typeof id === 'string')
+            await dropAppCredentials(session.user.id, id);
+        }
       }),
       // the other ways to a new password: the user's own change, an admin's
       after: createAuthMiddleware(async (ctx) => {
         if (isAPIError(ctx.context.returned)) return;
+        // device authorization hands out a token and no cookie; the web
+        // app's own screen needs one
+        if (
+          ctx.path === '/device/token' &&
+          ctx.context.newSession &&
+          (ctx.body as { client_id?: unknown } | undefined)?.client_id ===
+            WEB_DEVICE_CLIENT
+        )
+          await setSessionCookie(ctx, ctx.context.newSession);
         const userId =
           ctx.path === '/change-password'
             ? ctx.context.session?.user.id

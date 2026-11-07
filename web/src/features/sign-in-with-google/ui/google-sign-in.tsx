@@ -1,16 +1,14 @@
-import { Button, Divider, Stack } from '@mantine/core';
+import { Button } from '@mantine/core';
 import { IconBrandGoogle } from '@tabler/icons-react';
 import { useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { authClient } from '@/shared/api';
-import { useSignInMethods } from '../api/use-sign-in-methods';
 
-// "Continue with Google", when the hub has Google set up. Better Auth
-// answers with Google's address and its client goes there: the whole page
-// leaves, and Google sends the user back to `next`.
+// "Continue with Google". Better Auth answers with Google's address and its
+// client goes there: the whole page leaves, and Google sends the user back
+// to `next`. Whether the hub has Google set up is `useSignInMethods`.
 export function GoogleSignIn({ next }: { next: string }) {
   const { t } = useTranslation('auth');
-  const { data } = useSignInMethods();
   const google = useMutation({
     mutationFn: () =>
       authClient.signIn.social({
@@ -19,18 +17,15 @@ export function GoogleSignIn({ next }: { next: string }) {
         errorCallbackURL: '/sign-in',
       }),
   });
-  if (!data?.google) return null;
   return (
-    <Stack gap="lg">
-      <Button
-        variant="default"
-        leftSection={<IconBrandGoogle size={18} stroke={1.75} />}
-        loading={google.isPending || google.isSuccess}
-        onClick={() => google.mutate()}
-      >
-        {t('google.action')}
-      </Button>
-      <Divider label={t('signIn.orEmail')} labelPosition="center" />
-    </Stack>
+    <Button
+      variant="default"
+      fullWidth
+      leftSection={<IconBrandGoogle size={18} stroke={1.75} />}
+      loading={google.isPending || google.isSuccess}
+      onClick={() => google.mutate()}
+    >
+      {t('google.action')}
+    </Button>
   );
 }

@@ -9,6 +9,7 @@ export default {
     googleFailed:
       'Prijava preko Google-a nije završena. Pokušaj ponovo ili koristi imejl.',
     orEmail: 'ili imejlom',
+    withPhone: 'Prijavi se telefonom',
     email: {
       label: 'Imejl',
       invalid: 'Unesi imejl svog naloga',
@@ -30,6 +31,19 @@ export default {
   },
   google: {
     action: 'Nastavi preko Google-a',
+  },
+  phone: {
+    title: 'Prijavi se telefonom',
+    description:
+      'Skeniraj kod telefonom na kom je UniHub već otvoren i tamo odobri ovaj ekran. Lozinka se ovde ne kuca.',
+    qrTitle: 'QR kod za odobravanje ove prijave na telefonu',
+    orType: 'Nemaš kameru? Na telefonu otvori {{address}} i unesi ovaj kod:',
+    waiting: 'Čeka se odobrenje sa telefona. Kod važi {{minutes}} minuta.',
+    approved: 'Odobreno. Prijava je u toku…',
+    denied: 'Prijava je odbijena na telefonu.',
+    expired: 'Ovaj kod je istekao.',
+    newCode: 'Novi kod',
+    withEmail: 'Prijavi se imejlom',
   },
   signUp: {
     title: 'Napravi nalog',

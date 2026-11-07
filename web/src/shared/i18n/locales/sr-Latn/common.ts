@@ -10,6 +10,8 @@ export default {
     save: 'Sačuvaj',
     copy: 'Kopiraj',
     copied: 'Kopirano',
+    copyNamed: 'Kopiraj {{label}}',
+    copiedNamed: 'Kopirano: {{label}}',
     done: 'Gotovo',
     continue: 'Nastavi',
   },

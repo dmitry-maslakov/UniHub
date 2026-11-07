@@ -1,0 +1,6 @@
+/* size, weight and padding are the Text's own props (Mantine's styles win
+   over a class here); what has no prop is here */
+.code {
+  letter-spacing: 0.12em;
+  font-variant-numeric: tabular-nums;
+}

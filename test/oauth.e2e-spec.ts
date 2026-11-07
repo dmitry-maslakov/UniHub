@@ -266,6 +266,37 @@ describe('OAuth for MCP clients', { timeout: 20_000 }, () => {
     expect((await connect('ana@oauth.test')).asked).toBe(true);
   });
 
+  it("ends an app's refresh tokens when the user revokes its consent", async () => {
+    const { refresh_token, cookie } = await connect('ana@oauth.test');
+    const prisma = app.get(PrismaService);
+    const consent = await prisma.oauthConsent.findFirstOrThrow({
+      where: { user: { email: 'ana@oauth.test' } },
+    });
+    const held = () =>
+      prisma.oauthRefreshToken.count({
+        where: { user: { email: 'ana@oauth.test' } },
+      });
+    const before = await held();
+    // another user's consent is not theirs to revoke
+    await signUp('bo@oauth.test', password);
+    await post(
+      '/oauth2/delete-consent',
+      { id: consent.id },
+      await signIn('bo@oauth.test', password),
+    );
+    expect(await held()).toBe(before);
+
+    await post('/oauth2/delete-consent', { id: consent.id }, cookie).expect(
+      200,
+    );
+    const refused = await tokenRequest({
+      grant_type: 'refresh_token',
+      refresh_token,
+    }).expect(400);
+    expect(refused.body.error).toBe('invalid_grant');
+    expect(await held()).toBe(0);
+  });
+
   it('makes no client through the API, nor by dynamic registration', async () => {
     const cookie = await signIn('ana@oauth.test', password);
     const client = { redirect_uris: [REDIRECT_URI], client_name: 'Mine' };

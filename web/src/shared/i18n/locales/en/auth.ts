@@ -6,6 +6,7 @@ export default {
     googleFailed:
       "Signing in with Google didn't finish. Try again, or use your email.",
     orEmail: 'or with your email',
+    withPhone: 'Sign in with your phone',
     email: {
       label: 'Email',
       invalid: 'Enter the email of your account',
@@ -27,6 +28,19 @@ export default {
   },
   google: {
     action: 'Continue with Google',
+  },
+  phone: {
+    title: 'Sign in with your phone',
+    description:
+      'Scan the code with a phone that already has UniHub open, and approve this screen there. No password typed here.',
+    qrTitle: 'QR code to approve this sign-in on your phone',
+    orType: 'No camera? On your phone, open {{address}} and enter this code:',
+    waiting: 'Waiting for your phone. The code works for {{minutes}} minutes.',
+    approved: 'Approved. Signing in…',
+    denied: 'The sign-in was denied on the phone.',
+    expired: 'This code has expired.',
+    newCode: 'Get a new code',
+    withEmail: 'Sign in with email instead',
   },
   signUp: {
     title: 'Create your account',

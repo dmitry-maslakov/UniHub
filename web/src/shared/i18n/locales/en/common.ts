@@ -7,6 +7,8 @@ export default {
     save: 'Save',
     copy: 'Copy',
     copied: 'Copied',
+    copyNamed: 'Copy {{label}}',
+    copiedNamed: 'Copied {{label}}',
     done: 'Done',
     continue: 'Continue',
   },

@@ -1,7 +1,7 @@
-import { Stack, Text } from '@mantine/core';
+import { Divider, Stack, Text } from '@mantine/core';
 import { getRouteApi } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { GoogleSignIn } from '@/features/sign-in-with-google';
+import { GoogleSignIn, useSignInMethods } from '@/features/sign-in-with-google';
 import { safeNext } from '@/shared/lib';
 import { AnchorLink, PageTitle } from '@/shared/ui';
 import { SignUpForm } from './sign-up-form';
@@ -12,13 +12,19 @@ export function SignUpPage() {
   const { t } = useTranslation('auth');
   const search = route.useSearch();
   const next = safeNext(search.next);
+  const { data } = useSignInMethods();
   return (
     <>
       <PageTitle description={t('signUp.description')}>
         {t('signUp.title')}
       </PageTitle>
       <Stack gap="lg">
-        <GoogleSignIn next={next} />
+        {data?.google && (
+          <>
+            <GoogleSignIn next={next} />
+            <Divider label={t('signIn.orEmail')} labelPosition="center" />
+          </>
+        )}
         <SignUpForm next={next} />
       </Stack>
       <Text ta="center" size="sm" c="dimmed" mt="xl">

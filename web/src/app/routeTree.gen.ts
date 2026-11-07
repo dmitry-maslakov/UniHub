@@ -26,6 +26,7 @@ import { Route as AuthSignUpRouteImport } from './routes/_auth/sign-up'
 import { Route as AppCoursesIndexRouteImport } from './routes/_app/courses/index'
 import { Route as AppSettingsApiKeysRouteImport } from './routes/_app/settings/api-keys'
 import { Route as AppSettingsPortalsRouteImport } from './routes/_app/settings/portals'
+import { Route as AuthSignInPhoneRouteImport } from './routes/_auth/sign-in_.phone'
 import { Route as AppCoursesSlugIndexRouteImport } from './routes/_app/courses/$slug/index'
 import { Route as AppCoursesSlugFilesFileIdRouteImport } from './routes/_app/courses/$slug/files/$fileId'
 import { Route as AppCoursesSlugPostsItemIdRouteImport } from './routes/_app/courses/$slug/posts/$itemId'
@@ -113,6 +114,11 @@ const AppSettingsPortalsRoute = AppSettingsPortalsRouteImport.update({
   path: '/settings/portals',
   getParentRoute: () => AppRoute,
 } as any)
+const AuthSignInPhoneRoute = AuthSignInPhoneRouteImport.update({
+  id: '/sign-in_/phone',
+  path: '/sign-in/phone',
+  getParentRoute: () => AuthRoute,
+} as any)
 const AppCoursesSlugIndexRoute = AppCoursesSlugIndexRouteImport.update({
   id: '/courses/$slug/',
   path: '/courses/$slug/',
@@ -146,6 +152,7 @@ export interface FileRoutesByFullPath {
   '/sign-up': typeof AuthSignUpRoute
   '/settings/api-keys': typeof AppSettingsApiKeysRoute
   '/settings/portals': typeof AppSettingsPortalsRoute
+  '/sign-in/phone': typeof AuthSignInPhoneRoute
   '/courses/': typeof AppCoursesIndexRoute
   '/courses/$slug/': typeof AppCoursesSlugIndexRoute
   '/courses/$slug/files/$fileId': typeof AppCoursesSlugFilesFileIdRoute
@@ -166,6 +173,7 @@ export interface FileRoutesByTo {
   '/sign-up': typeof AuthSignUpRoute
   '/settings/api-keys': typeof AppSettingsApiKeysRoute
   '/settings/portals': typeof AppSettingsPortalsRoute
+  '/sign-in/phone': typeof AuthSignInPhoneRoute
   '/courses': typeof AppCoursesIndexRoute
   '/courses/$slug': typeof AppCoursesSlugIndexRoute
   '/courses/$slug/files/$fileId': typeof AppCoursesSlugFilesFileIdRoute
@@ -189,6 +197,7 @@ export interface FileRoutesById {
   '/_app/': typeof AppIndexRoute
   '/_app/settings/api-keys': typeof AppSettingsApiKeysRoute
   '/_app/settings/portals': typeof AppSettingsPortalsRoute
+  '/_auth/sign-in_/phone': typeof AuthSignInPhoneRoute
   '/_app/courses/': typeof AppCoursesIndexRoute
   '/_app/courses/$slug/': typeof AppCoursesSlugIndexRoute
   '/_app/courses/$slug/files/$fileId': typeof AppCoursesSlugFilesFileIdRoute
@@ -211,6 +220,7 @@ export interface FileRouteTypes {
     | '/sign-up'
     | '/settings/api-keys'
     | '/settings/portals'
+    | '/sign-in/phone'
     | '/courses/'
     | '/courses/$slug/'
     | '/courses/$slug/files/$fileId'
@@ -231,6 +241,7 @@ export interface FileRouteTypes {
     | '/sign-up'
     | '/settings/api-keys'
     | '/settings/portals'
+    | '/sign-in/phone'
     | '/courses'
     | '/courses/$slug'
     | '/courses/$slug/files/$fileId'
@@ -253,6 +264,7 @@ export interface FileRouteTypes {
     | '/_app/'
     | '/_app/settings/api-keys'
     | '/_app/settings/portals'
+    | '/_auth/sign-in_/phone'
     | '/_app/courses/'
     | '/_app/courses/$slug/'
     | '/_app/courses/$slug/files/$fileId'
@@ -386,6 +398,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsPortalsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_auth/sign-in_/phone': {
+      id: '/_auth/sign-in_/phone'
+      path: '/sign-in/phone'
+      fullPath: '/sign-in/phone'
+      preLoaderRoute: typeof AuthSignInPhoneRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_app/courses/$slug/': {
       id: '/_app/courses/$slug/'
       path: '/courses/$slug'
@@ -449,6 +468,7 @@ interface AuthRouteChildren {
   AuthResetPasswordRoute: typeof AuthResetPasswordRoute
   AuthSignInRoute: typeof AuthSignInRoute
   AuthSignUpRoute: typeof AuthSignUpRoute
+  AuthSignInPhoneRoute: typeof AuthSignInPhoneRoute
 }
 
 const AuthRouteChildren: AuthRouteChildren = {
@@ -456,6 +476,7 @@ const AuthRouteChildren: AuthRouteChildren = {
   AuthResetPasswordRoute: AuthResetPasswordRoute,
   AuthSignInRoute: AuthSignInRoute,
   AuthSignUpRoute: AuthSignUpRoute,
+  AuthSignInPhoneRoute: AuthSignInPhoneRoute,
 }
 
 const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
