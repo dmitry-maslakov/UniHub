@@ -20,6 +20,28 @@ export interface CourseRef {
   name: string;
 }
 
+// A course an admin made, with every portal course linked to it and the
+// name the shared account sees it by (null while it sees none)
+export interface HubCourseDto extends CourseRef {
+  links: {
+    portal: PortalId;
+    instance: Instance;
+    externalId: string;
+    year: number | null;
+    name: string | null;
+  }[];
+}
+
+// a portal course the shared account shows now, and the course it is
+// linked to
+export interface SharedPortalCourseDto {
+  id: string;
+  portal: PortalId;
+  externalId: string;
+  name: string;
+  course: CourseRef | null;
+}
+
 export interface CourseDto extends CourseRef {
   // by year, the ones that span years last
   portalCourses: {
@@ -154,6 +176,15 @@ export class ListCoursesQuery extends Query<CourseDto[]> {
     super();
   }
 }
+
+// Every course an admin made, with all it links (by slug)
+export class ListHubCoursesQuery extends Query<HubCourseDto[]> {}
+
+// Every portal course whose version the shared account shows now, in any
+// portal, with the course an admin linked it to
+export class ListSharedPortalCoursesQuery extends Query<
+  SharedPortalCourseDto[]
+> {}
 
 // The site of a portal whose portal courses an admin links: the one its
 // connector's settings read (CANVAS_URL), none for a portal of one site.

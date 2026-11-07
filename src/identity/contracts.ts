@@ -4,7 +4,13 @@ export {
   GrantCourseAccessCommand,
   RevokeCourseAccessCommand,
 } from './application/commands.js';
-export { IsAdminQuery, ReadScopeQuery } from './application/queries.js';
+export {
+  CountCourseReadersQuery,
+  IsAdminQuery,
+  ListCourseReadersQuery,
+  ReadScopeQuery,
+  type CourseReaderDto,
+} from './application/queries.js';
 export { UserDeletedEvent } from './domain/events.js';
 export type { ReadScope } from './domain/read-scope.js';
 export { UnknownUserError } from './domain/errors.js';

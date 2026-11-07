@@ -1,5 +1,5 @@
-import { redirect } from '@tanstack/react-router';
-import { sessionQuery } from '@/entities/session';
+import { notFound, redirect } from '@tanstack/react-router';
+import { isAdmin, sessionQuery } from '@/entities/session';
 import { safeNext } from '@/shared/lib';
 import type { RouterContext } from './context';
 
@@ -18,6 +18,13 @@ export async function requireSession({ context, location }: GuardArgs) {
   const session = await currentSession(context);
   if (!session)
     throw redirect({ to: '/sign-in', search: { next: location.href } });
+}
+
+// Admins only; anyone else finds nothing here. The hub's server decides what
+// an admin may do: this only keeps the pages from those it would refuse.
+export async function requireAdmin({ context }: { context: RouterContext }) {
+  const session = await currentSession(context);
+  if (!session || !isAdmin(session.user)) throw notFound();
 }
 
 // Sign-in and sign-up, already signed in: on to where they'd lead. Not for

@@ -180,6 +180,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/courses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["HubCoursesController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/courses/{courseId}/readers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["HubCoursesController_readers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/portal-courses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["HubCoursesController_linkable"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/search": {
         parameters: {
             query?: never;
@@ -264,6 +312,10 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        CourseCreatedResponse: {
+            /** @description the course's id, which the routes of grants name it by */
+            id: string;
+        };
         SignInMethodsResponse: {
             /** @description Google sign-in is set up */
             google: boolean;
@@ -384,6 +436,75 @@ export interface components {
             /** @example 1 */
             page: number;
             text: string;
+        };
+        HubLinkResponse: {
+            /** @example canvas */
+            portal: string;
+            /**
+             * @description the name the portal is shown by, its id unless the hub names it
+             * @example Canvas
+             */
+            label: string;
+            /**
+             * @description how the portal is read: shared, by the hub account; token, by users' own accounts; public, by whoever picked the course
+             * @enum {string}
+             */
+            mode: "shared" | "token" | "public";
+            /**
+             * @description the school's site the portal course is of, for a portal that is a site per school; null for a portal of one site
+             * @example https://canvas.example.edu
+             */
+            instance: string | null;
+            /** @description the course's id on its portal */
+            externalId: string;
+            /** @example 2026 */
+            year: number | null;
+            /** @description the portal course's name as the hub account sees it; null for a portal read with users' own accounts (what those hold is theirs), or when the hub account sees none */
+            name: string | null;
+        };
+        HubCourseResponse: {
+            id: string;
+            /** @example os */
+            slug: string;
+            /** @example Operativni sistemi */
+            name: string;
+            /** @description how many users are granted the course */
+            readers: number;
+            /** @description the portal courses linked to it, by year */
+            links: components["schemas"]["HubLinkResponse"][];
+        };
+        CourseReaderResponse: {
+            userId: string;
+            name: string;
+            email: string;
+            /** @description banned now, for good or until a time to come */
+            banned: boolean;
+        };
+        CourseRefResponse: {
+            id: string;
+            /** @example os */
+            slug: string;
+            /** @example Operativni sistemi */
+            name: string;
+        };
+        LinkablePortalCourseResponse: {
+            /** @example canvas */
+            portal: string;
+            /** @example Canvas */
+            label: string;
+            /** @enum {string} */
+            mode: "shared" | "public";
+            /** @description the course's id on its portal */
+            externalId: string;
+            name: string;
+            /** @description the course it is linked to now, if any */
+            course: components["schemas"]["CourseRefResponse"] | null;
+        };
+        LinkableResponse: {
+            /** @description how many portal courses match, on every page */
+            total: number;
+            /** @description by name */
+            portalCourses: components["schemas"]["LinkablePortalCourseResponse"][];
         };
         SnippetResponse: {
             /** @description up to 400 characters of the page as indexed: plain text, whatever HTML the file had included, so render it as text */
@@ -567,7 +688,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CourseCreatedResponse"];
+                };
             };
             /** @description for admins only */
             403: {
@@ -949,6 +1072,101 @@ export interface operations {
             };
             /** @description no such user */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    HubCoursesController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description every course an admin made, by name, with its links */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HubCourseResponse"][];
+                };
+            };
+            /** @description for admins only */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    HubCoursesController_readers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                courseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the users granted the course, by name */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseReaderResponse"][];
+                };
+            };
+            /** @description for admins only */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description no such course */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    HubCoursesController_linkable: {
+        parameters: {
+            query?: {
+                offset?: number;
+                limit?: number;
+                /** @description words in a portal course's name, in any case, with or without diacritics */
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description a page of the courses of the shared and public portals whose names have the words, by name: those a course can link (never a portal read with users' own accounts) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkableResponse"];
+                };
+            };
+            /** @description for admins only */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

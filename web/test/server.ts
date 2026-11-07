@@ -38,3 +38,11 @@ export const server = setupServer(
 
 export const signedIn = () =>
   server.use(http.get(auth('/get-session'), () => HttpResponse.json(session)));
+
+// the same user, an admin
+export const signedInAsAdmin = () =>
+  server.use(
+    http.get(auth('/get-session'), () =>
+      HttpResponse.json({ ...session, user: { ...user, role: 'admin' } }),
+    ),
+  );

@@ -1,5 +1,12 @@
 import { ApiExtraModels, ApiProperty, getSchemaPath } from '@nestjs/swagger';
-import type { Json, MediaType, PluginName, PortalId } from '@app/kernel';
+import type {
+  Json,
+  LinkMode,
+  MediaType,
+  PluginName,
+  PortalId,
+} from '@app/kernel';
+import type { CourseReaderDto } from '../../../identity/contracts.js';
 import {
   LEFT_OUT,
   type LeftOut,
@@ -9,6 +16,12 @@ import {
   TextPage,
 } from '../../../processing/contracts.js';
 import type { Via } from '../../application/grouping.js';
+import type {
+  HubCourseView,
+  HubLinkView,
+  LinkablePortalCourseView,
+  LinkableView,
+} from '../../application/hub-courses.js';
 import type {
   CourseView,
   FileDetailsView,
@@ -247,4 +260,88 @@ export class SearchResponse implements SearchView {
     description: 'best first, a file, a member or a post each (`type`)',
   })
   results!: (FileResultResponse | PostResultResponse)[];
+}
+
+export class CourseRefResponse {
+  @ApiProperty() id!: string;
+  @ApiProperty({ example: 'os' }) slug!: string;
+  @ApiProperty({ example: 'Operativni sistemi' }) name!: string;
+}
+
+export class HubLinkResponse implements HubLinkView {
+  @ApiProperty({ type: String, example: 'canvas' }) portal!: PortalId;
+  @ApiProperty({
+    example: 'Canvas',
+    description:
+      'the name the portal is shown by, its id unless the hub names it',
+  })
+  label!: string;
+  @ApiProperty({
+    enum: ['shared', 'token', 'public'],
+    description:
+      "how the portal is read: shared, by the hub account; token, by users' own accounts; public, by whoever picked the course",
+  })
+  mode!: LinkMode;
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    example: 'https://canvas.example.edu',
+    description:
+      "the school's site the portal course is of, for a portal that is a site per school; null for a portal of one site",
+  })
+  instance!: string | null;
+  @ApiProperty({ description: "the course's id on its portal" })
+  externalId!: string;
+  @ApiProperty({ type: Number, nullable: true, example: 2026 })
+  year!: number | null;
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description:
+      "the portal course's name as the hub account sees it; null for a portal read with users' own accounts (what those hold is theirs), or when the hub account sees none",
+  })
+  name!: string | null;
+}
+
+export class HubCourseResponse implements HubCourseView {
+  @ApiProperty() id!: string;
+  @ApiProperty({ example: 'os' }) slug!: string;
+  @ApiProperty({ example: 'Operativni sistemi' }) name!: string;
+  @ApiProperty({ description: 'how many users are granted the course' })
+  readers!: number;
+  @ApiProperty({
+    type: [HubLinkResponse],
+    description: 'the portal courses linked to it, by year',
+  })
+  links!: HubLinkResponse[];
+}
+
+export class CourseReaderResponse implements CourseReaderDto {
+  @ApiProperty() userId!: string;
+  @ApiProperty() name!: string;
+  @ApiProperty() email!: string;
+  @ApiProperty({ description: 'banned now, for good or until a time to come' })
+  banned!: boolean;
+}
+
+export class LinkablePortalCourseResponse implements LinkablePortalCourseView {
+  @ApiProperty({ type: String, example: 'canvas' }) portal!: PortalId;
+  @ApiProperty({ example: 'Canvas' }) label!: string;
+  @ApiProperty({ enum: ['shared', 'public'] }) mode!: 'shared' | 'public';
+  @ApiProperty({ description: "the course's id on its portal" })
+  externalId!: string;
+  @ApiProperty() name!: string;
+  @ApiProperty({
+    type: CourseRefResponse,
+    nullable: true,
+    description: 'the course it is linked to now, if any',
+  })
+  course!: CourseRefResponse | null;
+}
+
+export class LinkableResponse implements LinkableView {
+  @ApiProperty({ description: 'how many portal courses match, on every page' })
+  total!: number;
+  @ApiProperty({ type: [LinkablePortalCourseResponse], description: 'by name' })
+  portalCourses!: LinkablePortalCourseResponse[];
 }

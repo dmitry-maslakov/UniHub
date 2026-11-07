@@ -37,11 +37,15 @@ import { PrismaItemRepository } from './infrastructure/prisma-item.repository.js
 import { PrismaPortalCourseRepository } from './infrastructure/prisma-portal-course.repository.js';
 import { PrismaPortalFileRepository } from './infrastructure/prisma-portal-file.repository.js';
 import { PrismaViewRepository } from './infrastructure/prisma-view.repository.js';
-import { ListPortalCatalogHandler } from './infrastructure/read/catalog.read.js';
+import {
+  ListPortalCatalogHandler,
+  ListSharedPortalCoursesHandler,
+} from './infrastructure/read/catalog.read.js';
 import {
   FindCourseHandler,
   GetPortalCourseHandler,
   ListCoursesHandler,
+  ListHubCoursesHandler,
 } from './infrastructure/read/courses.read.js';
 import {
   FindFileHandler,
@@ -93,6 +97,7 @@ import { HasBytesHandler } from './infrastructure/read/views.read.js';
     AdoptRecordsHandler,
     HasBytesHandler,
     ListCoursesHandler,
+    ListHubCoursesHandler,
     FindCourseHandler,
     GetPortalCourseHandler,
     ListCourseItemsHandler,
@@ -108,6 +113,7 @@ import { HasBytesHandler } from './infrastructure/read/views.read.js';
     ListFilesOfContentHandler,
     ListFilesWithContentHandler,
     ListPortalCatalogHandler,
+    ListSharedPortalCoursesHandler,
   ],
 })
 export class CatalogModule {}
