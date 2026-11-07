@@ -8,7 +8,7 @@ import axios, {
 } from 'axios';
 import axiosRetry, { exponentialDelay } from 'axios-retry';
 import LinkHeader from 'http-link-header';
-import { portalRequests } from '@app/plugin-sdk';
+import { portalRequests, refusedByGuard } from '@app/plugin-sdk';
 import {
   CanvasError,
   DownloadFailedError,
@@ -85,9 +85,12 @@ export class CanvasApi {
     axiosRetry(this.http, {
       retries: RETRY.retries,
       retryDelay: (n, error) => exponentialDelay(n, error, RETRY.delayFactor),
-      // what isn't Canvas's answer is the network's
+      // what isn't Canvas's answer is the network's, but an address the
+      // guard refused, which it refuses again
       retryCondition: (error) =>
-        !axios.isCancel(error) && (refusal(error)?.transient ?? true),
+        !axios.isCancel(error) &&
+        !refusedByGuard(error) &&
+        (refusal(error)?.transient ?? true),
       // each try gets the whole timeout, not what the last ones left
       shouldResetTimeout: true,
     });

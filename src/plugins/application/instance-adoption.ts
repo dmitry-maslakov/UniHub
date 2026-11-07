@@ -9,10 +9,13 @@ import { PluginCatalog } from './plugin-catalog.js';
 // Rows from before a portal's connector told its sites apart (README,
 // Canvas): the records and users' accounts of a portal whose settings name
 // its site, kept with none, are that site's, all of them in one
-// transaction or none. Once a process, as the worker starts and before a
-// run gets its context, so no run stamps a record of the site beside its
-// old one; again by the next run if it failed. None left, it changes
-// nothing.
+// transaction or none. Once a process, as the worker starts, and before a
+// run of the portal gets its context or an admin's link names a record of
+// the site, so neither makes one beside its old one; again by the next
+// that waits if it failed. None left, it changes nothing. A record kept
+// twice all the same is one (Instances), unless runs sent both, which are
+// left as they are and logged: never a failure, which would hold up the
+// portal's runs.
 @Injectable()
 export class InstanceAdoption {
   private readonly logger = new Logger(InstanceAdoption.name);
@@ -43,7 +46,7 @@ export class InstanceAdoption {
   @Transactional()
   private async adopt() {
     for (const { portal, instance } of this.plugins.configuredInstances) {
-      const records = await this.commands.execute(
+      const { records, twice } = await this.commands.execute(
         new AdoptRecordsCommand(portal, instance),
       );
       const accounts = await this.commands.execute(
@@ -52,6 +55,10 @@ export class InstanceAdoption {
       if (records || accounts)
         this.logger.log(
           `${portal}: ${records} records and ${accounts} accounts are ${instance}'s now`,
+        );
+      if (twice.length)
+        this.logger.warn(
+          `${portal}: ${twice.length} records kept both with no site and as ${instance}'s, each sent by runs, are left as they are: ${twice.slice(0, 10).join(', ')}`,
         );
     }
   }

@@ -104,12 +104,13 @@ export const pluginSettings = (env: Record<string, string> = {}) =>
 // linked by `credentials` (one with none no longer reads), each reading the
 // site its credential names; the shared account of any other portal, at
 // the site `catalog`'s connector's settings name. Rows from before sites
-// are adopted already.
+// are adopted already, unless `adoption` says otherwise.
 export const directoryOf = (
   accounts: Record<string, string[]> = {},
   credentials: Record<string, Credential> = {},
   ingest = {} as IngestService,
   catalog = catalogOf({}),
+  adoption = { done: async () => {} } as InstanceAdoption,
 ) =>
   new ConnectionDirectory(
     ingest,
@@ -135,5 +136,5 @@ export const directoryOf = (
     ]).queries,
     pluginSettings(),
     catalog,
-    { done: async () => {} } as InstanceAdoption,
+    adoption,
   );

@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { Instance, Secret } from '@app/kernel';
+import { Secret, type Instance } from '@app/kernel';
+import { UnreadableCredentialError } from './errors.js';
 import type { PortalAccountState } from './portal-account.js';
 
 // what a sealed credential is bound to, of the account's snapshot
@@ -13,14 +14,21 @@ export interface SealedCredential {
   url: Instance | null;
 }
 
-// as it's sealed: JSON
-const Sealed = z.object({ token: z.string().min(1), url: Instance.nullable() });
+// As it's sealed: JSON. Its site was checked as it was sealed, and what
+// opens is what was sealed (the vault authenticates it), so only its shape
+// is read back, never the rules again: one a later rule refused would
+// otherwise read as a token alone and go to another site.
+const Sealed = z.object({
+  token: z.string().min(1),
+  url: z.string().min(1).brand<'Instance'>().nullable(),
+});
 
 export const sealedText = ({ token, url }: SealedCredential) =>
   JSON.stringify({ token: token.reveal(), url });
 
 // One sealed before credentials kept their site is its token alone, which
-// is never JSON of that shape (no token is a JSON object)
+// is never a JSON object; one that is and isn't of that shape doesn't open
+// (UnreadableCredentialError).
 export function fromSealedText(text: string): SealedCredential {
   let json: unknown = null;
   try {
@@ -28,10 +36,11 @@ export function fromSealedText(text: string): SealedCredential {
   } catch {
     // the token alone
   }
+  if (typeof json !== 'object' || json === null || Array.isArray(json))
+    return { token: new Secret(text), url: null };
   const sealed = Sealed.safeParse(json);
-  return sealed.success
-    ? { token: new Secret(sealed.data.token), url: sealed.data.url }
-    : { token: new Secret(text), url: null };
+  if (!sealed.success) throw new UnreadableCredentialError();
+  return { token: new Secret(sealed.data.token), url: sealed.data.url };
 }
 
 // Keeps credentials sealed at rest. A sealed one is nothing without the

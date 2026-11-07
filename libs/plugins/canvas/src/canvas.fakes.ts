@@ -78,7 +78,8 @@ export class FakeCanvas {
 
 // A file store on a socket of its own, for what msw can't fake: it sends
 // part of a file and ends the connection; under /held/ it keeps it open
-// instead, and under /silent/ it never answers. Behind msw, a spec lets it
+// instead, under /silent/ it never answers, and under /inside/ it
+// redirects to an address of the hub's own network. Behind msw, a spec lets it
 // through (passthrough()). It listens on loopback, which the sdk's guard
 // on portal requests refuses (its own spec checks that), so a spec that
 // downloads from it lets that one address in: vi.mock of
@@ -96,6 +97,10 @@ export class CuttingFileStore {
     this.requests.emit('request');
     this.closed = new Promise((done) => req.socket.once('close', done));
     if (req.url?.startsWith('/silent/')) return;
+    if (req.url?.startsWith('/inside/')) {
+      res.writeHead(302, { location: 'http://10.0.0.7/latest/' }).end();
+      return;
+    }
     res.writeHead(200, { 'content-length': String(4 * 1024 * 1024) });
     res.write(Buffer.alloc(64 * 1024));
     if (!req.url?.startsWith('/held/')) req.socket.end();

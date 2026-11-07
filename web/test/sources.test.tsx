@@ -135,7 +135,7 @@ describe('sources', () => {
     ).not.toContain(TOKEN);
   });
 
-  it("asks for the school's address first, sending nothing", async () => {
+  it("asks for the school's address first, sending nothing and keeping the token", async () => {
     signedIn();
     listPortals();
     const put = vi.fn();
@@ -148,7 +148,7 @@ describe('sources', () => {
       await screen.findByText(/Enter the address you open Canvas at/),
     ).toBeVisible();
     expect(put).not.toHaveBeenCalled();
-    expect(screen.getByLabelText('Token')).toHaveValue('');
+    expect(screen.getByLabelText('Token')).toHaveValue(TOKEN);
   });
 
   it('empties the field even when Canvas refuses the token', async () => {

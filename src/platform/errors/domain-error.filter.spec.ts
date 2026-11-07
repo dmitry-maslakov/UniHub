@@ -38,18 +38,22 @@ describe('DomainErrorFilter', () => {
   const log = vi.spyOn(Logger.prototype, 'error').mockReturnValue();
   beforeEach(() => log.mockClear());
 
-  it('answers each kind as Nest answers its status', () => {
+  it('answers each kind as Nest answers its status, with its reason', () => {
     expect(http(new GoneError('course not found'))).toEqual({
       status: 404,
       body: {
         statusCode: 404,
         message: 'course not found',
         error: 'Not Found',
+        code: 'GONE',
       },
     });
     expect(http(new TakenError('taken')).status).toBe(409);
     expect(http(new InvalidValueError('course slug', 'A B')).status).toBe(400);
-    expect(http(new AwayError('try again later')).status).toBe(503);
+    expect(http(new AwayError('try again later'))).toMatchObject({
+      status: 503,
+      body: { code: 'AWAY' },
+    });
   });
 
   it('logs the kind that means the hub is failing, and no other', () => {

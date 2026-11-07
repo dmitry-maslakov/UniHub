@@ -109,7 +109,8 @@ export class CanvasConnector
   // Canvas shows the token's user is no Canvas, as one away is.
   async identify(credential: Credential, signal: AbortSignal) {
     const url = this.siteOf(credential);
-    if (await hostedByInstructure(url)) throw new TokensNotAllowedError();
+    if (await hostedByInstructure(url, signal))
+      throw new TokensNotAllowedError();
     const pasted = credential.token.reveal();
     const api = new CanvasApi({ ...this.config, url, token: pasted, signal });
     try {
@@ -128,8 +129,9 @@ export class CanvasConnector
     }
   }
 
-  // The Canvas a user's token is of: the one it was linked with, or for
-  // one linked before tokens kept theirs, the school's (CANVAS_URL)
+  // The Canvas a user's token is of, as the hub says: the one it was
+  // linked with, or the one its account was given since; for one linked
+  // before tokens kept theirs and given none yet, the school's (CANVAS_URL)
   private siteOf({ url }: Credential) {
     const site = url ?? this.config.url;
     if (!site)

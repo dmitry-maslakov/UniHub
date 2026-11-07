@@ -25,4 +25,16 @@ describe('a refused link', () => {
       }),
     ).toBe("Moodle couldn't be reached just now. Try again later.");
   });
+
+  it("says when the hub needs an address the page didn't ask for", () => {
+    expect(
+      tokenErrorText(new ApiError(400, { code: 'URL_NEEDED' }), {
+        label: 'School LMS',
+        site: false,
+      }),
+    ).toMatch(/^Linking School LMS needs your school's address/);
+    expect(tokenErrorText(new ApiError(400, undefined), canvas)).toMatch(
+      /^That address or token doesn't look right/,
+    );
+  });
 });

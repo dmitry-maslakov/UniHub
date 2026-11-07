@@ -22,8 +22,9 @@ import { tokenErrorText } from '../lib/token-error';
 // site per school (`site`), with the school's address, which also says
 // where the token is made. Write-only: the token field is uncontrolled and
 // emptied the moment it's sent, whatever comes back, so a refused token is
-// typed again rather than kept anywhere. `onUnavailable` for a source that
-// links no account of this user's.
+// typed again rather than kept anywhere; one not sent for an address that
+// can't be right stays, as the school's Canvas shows a new one only once.
+// `onUnavailable` for a source that links no account of this user's.
 export function TokenForm({
   portal: { portal, label, linked, instance },
   site,
@@ -62,11 +63,12 @@ export function TokenForm({
 
   const submit = () => {
     const token = field.current?.value.trim() ?? '';
-    if (field.current) field.current.value = '';
     setTried(true);
     setEmpty(!token);
+    if (!token || (site && !school)) return;
+    if (field.current) field.current.value = '';
     pending.current = token;
-    if (token && (!site || school)) link.mutate(site ? school! : undefined);
+    link.mutate(site ? school! : undefined);
   };
 
   return (

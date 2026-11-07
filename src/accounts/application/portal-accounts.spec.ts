@@ -215,7 +215,7 @@ describe('PortalAccounts', () => {
     expect(store.rows.size).toBe(0);
   });
 
-  it("gives a run the account's site, and a credential linked before credentials kept one none", async () => {
+  it("gives a run the account's site, the one a credential sealed before credentials kept one goes to too", async () => {
     const { service, store, vault, setToken } = accounts({ links: SITES });
     await setToken('ana', LMS, TOKEN, SITE);
     const row = store.rows.get('ana:lms')!;
@@ -224,14 +224,20 @@ describe('PortalAccounts', () => {
       credential: { kind: 'token', url: SITE },
       instance: SITE,
     });
-    // from before: sealed with no site, its account adopted since
+    // from before: sealed with no site, its account given one since
     row.sealed = vault.seal(
       { token: new Secret(TOKEN), url: null },
       row.account,
     );
+    expect(await service.credential(row.account.id)).toMatchObject({
+      credential: { kind: 'token', url: SITE },
+      instance: SITE,
+    });
+    // given none yet: the connector's settings say
+    row.account = { ...row.account, instance: NO_INSTANCE };
     const legacy = await service.credential(row.account.id);
     expect(legacy?.credential).not.toHaveProperty('url');
-    expect(legacy?.instance).toBe(SITE);
+    expect(legacy?.instance).toBe(NO_INSTANCE);
   });
 
   it("gives a portal's accounts kept with no site the one its settings name", async () => {

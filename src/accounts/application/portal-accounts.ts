@@ -181,7 +181,10 @@ export class PortalAccounts implements OnApplicationBootstrap {
   }
 
   // The credential of an account that reads now, opened for its run, which
-  // seal of it that is, and the site the account reads
+  // seal of it that is, and the site the account reads. One sealed before
+  // credentials kept their site goes to the site its account was given
+  // (InstanceAdoption), the one its records are stamped with, whatever the
+  // portal's settings say since.
   async credential(
     id: string,
     now = new Date(),
@@ -195,7 +198,10 @@ export class PortalAccounts implements OnApplicationBootstrap {
     if (!reads) return null;
     const opened = this.vault.open(sealed, account.snapshot);
     return {
-      credential: credentialOf(opened),
+      credential: credentialOf({
+        ...opened,
+        url: opened.url ?? (account.instance || null),
+      }),
       seal: sealOf(sealed),
       instance: account.instance,
     };

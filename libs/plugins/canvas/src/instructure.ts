@@ -10,26 +10,44 @@ const ENDS = new Set(['ENODATA', 'ENOTFOUND']);
 // a chain longer than this leads nowhere a request would get to either
 const MAX_CNAMES = 8;
 
-export type ResolveCname = (host: string) => Promise<string[]>;
+// a name's CNAMEs, looked up until the signal stops it
+export type ResolveCname = (
+  host: string,
+  signal: AbortSignal,
+) => Promise<string[]>;
 
-const resolver = new Resolver({ timeout: 5_000, tries: 2 });
-const cnameOf: ResolveCname = (host) => resolver.resolveCname(host);
+// a resolver of its own for each lookup, so stopping one stops no other's
+const cnameOf: ResolveCname = async (host, signal) => {
+  const resolver = new Resolver({ timeout: 5_000, tries: 2 });
+  const cancel = () => resolver.cancel();
+  signal.addEventListener('abort', cancel, { once: true });
+  try {
+    return await resolver.resolveCname(host);
+  } finally {
+    signal.removeEventListener('abort', cancel);
+  }
+};
 
 // Whether Instructure hosts the Canvas at `instance`, following its CNAMEs
-// one by one. A lookup that fails for another reason than the chain ending
-// fails this, as a Canvas that can't be reached.
+// one by one, until `signal` stops it (linking's wait for an answer). A
+// lookup that fails for another reason than the chain ending fails this,
+// as a Canvas that can't be reached.
 export async function hostedByInstructure(
   instance: string,
+  signal: AbortSignal,
   resolveCname: ResolveCname = cnameOf,
 ) {
   let host = new URL(instance).hostname;
   for (let hop = 0; hop <= MAX_CNAMES; hop++) {
+    signal.throwIfAborted();
     if (HOSTED.test(host)) return true;
     try {
-      const [next] = await resolveCname(host);
+      const [next] = await resolveCname(host, signal);
       if (!next) return false;
       host = next.toLowerCase().replace(/\.$/, '');
     } catch (error) {
+      // a lookup cancelled: stopped, not failed
+      signal.throwIfAborted();
       if (ENDS.has((error as NodeJS.ErrnoException).code ?? '')) return false;
       throw error;
     }

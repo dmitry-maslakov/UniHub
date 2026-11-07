@@ -10,8 +10,9 @@ export interface Credential {
   kind: 'token';
   token: Secret;
   // the site the token is of, for a portal with instances (HasInstances),
-  // the one place the token may go; none for one linked before credentials
-  // carried it, which is the connector's configuredInstance()
+  // the one place the token may go; for one linked before credentials
+  // carried it, the site the hub gave its account since, and none until
+  // then, which is the connector's configuredInstance()
   url?: Instance;
 }
 

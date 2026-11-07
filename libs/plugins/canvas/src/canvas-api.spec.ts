@@ -433,6 +433,17 @@ describe('CanvasApi on a file store that lets go', () => {
     await got;
   });
 
+  it("fails at once a request the guard refuses where it's redirected, trying it once", async () => {
+    const error = await api({ url: store.url })
+      .get('/inside/1')
+      .then(
+        () => expect.unreachable(),
+        (error: unknown) => error,
+      );
+    expect(error).toBeInstanceOf(NoAnswerError);
+    expect(store.asked).toEqual(['/inside/1']);
+  });
+
   it('fails a download the run stops, read or not', async () => {
     const before = new AbortController();
     const unread = await download('/held/1', { signal: before.signal });

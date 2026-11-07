@@ -572,10 +572,13 @@ describe('CanvasConnector, as a user links a token', () => {
     }
   });
 
-  it('sends no token to a Canvas that Instructure hosts', async () => {
+  it('sends no token to a Canvas that Instructure hosts, asked within the wait for an answer', async () => {
     vi.mocked(hostedByInstructure).mockResolvedValueOnce(true);
     await expect(identify()).rejects.toBeInstanceOf(TokensNotAllowedError);
-    expect(vi.mocked(hostedByInstructure)).toHaveBeenCalledWith(SITE);
+    expect(vi.mocked(hostedByInstructure)).toHaveBeenCalledWith(
+      SITE,
+      expect.any(AbortSignal),
+    );
     expect(canvas.asked).toEqual([]);
   });
 

@@ -241,14 +241,17 @@ describe('portal accounts', { timeout: 20_000 }, () => {
     );
     expect(unwelcome.body.code).toBe('TOKENS_NOT_ALLOWED');
     // a site's address on a portal of sites alone, and an https one
-    keep(await put(bo, 'school', TOKENS.good).expect(400));
+    const needed = keep(await put(bo, 'school', TOKENS.good).expect(400));
+    expect(needed.body.code).toBe('URL_NEEDED');
     keep(
       await put(bo, 'school', TOKENS.good, 'http://lms.example.edu').expect(
         400,
       ),
     );
-    keep(await put(bo, 'linked', TOKENS.good, SITE).expect(400));
-    keep(await put(bo, 'linked', TOKENS.away).expect(503));
+    const taken = keep(await put(bo, 'linked', TOKENS.good, SITE).expect(400));
+    expect(taken.body.code).toBe('URL_NOT_TAKEN');
+    const away = keep(await put(bo, 'linked', TOKENS.away).expect(503));
+    expect(away.body.code).toBe('PORTAL_UNREACHABLE');
     keep(await put(bo, 'linked', TOKENS.bad).expect(400));
     keep(
       await http()

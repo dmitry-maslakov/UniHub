@@ -11,15 +11,15 @@ import { Connection } from '../src/ingest/contracts.js';
 import type { Mail } from '../src/identity/domain/mailer.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
 import { ConnectionDirectory } from '../src/plugins/application/connection-directory.js';
-import { InstanceAdoption } from '../src/plugins/contracts.js';
 import { accounts, ORIGIN } from './accounts.js';
 import { bootApp, bootWorker } from './app.js';
 
 // A portal that is a site per school as the app wires it: rows from before
-// given the site its settings name, by a worker as it starts and in one
-// transaction; a shared run's records stamped with that site, and an
-// admin's link naming a portal course of it. The rules are checked on
-// fakes (InstanceAdoption, ConnectionDirectory, PluginCatalog).
+// given the site its settings name, by a worker as it starts, a record kept
+// twice merged by the SQL that adopts them, which an app from before can't
+// insert again; a shared run's records stamped with that site, and an
+// admin's link naming a portal course of it. The other rules are checked
+// on fakes (InstanceAdoption, ConnectionDirectory, PluginCatalog).
 
 const PORTAL = 'sites-lms';
 const OTHER = 'sites-other';
@@ -52,7 +52,7 @@ describe('instances', { timeout: 30_000 }, () => {
     await api.close();
   });
 
-  it('gives rows from before their site as a worker starts, all of them in one transaction or none', async () => {
+  it('gives rows from before their site as a worker starts, one kept twice the same record', async () => {
     const prisma = api.get(PrismaService);
     const old = (portal: string, externalId: string) => ({
       id: randomUUID(),
@@ -73,42 +73,47 @@ describe('instances', { timeout: 30_000 }, () => {
         portalUser: '4242',
       },
     });
-    // one of its site already beside one from before: stamping the old one
-    // fails, and nothing of it is kept
-    await prisma.file.createMany({
-      data: [{ ...old(PORTAL, 'twin'), instance: SITE }, old(PORTAL, 'twin')],
+    // a course a run sent, and one of its site beside it, made for an
+    // admin's link before the worker came: the link goes to the first
+    const sent = old(PORTAL, 'linked');
+    await prisma.portalCourse.create({ data: sent });
+    await prisma.courseVersion.create({
+      data: { id: sent.id, portalCourseId: sent.id, name: 'OS' },
     });
+    const early = await prisma.portalCourse.create({
+      data: { ...old(PORTAL, 'linked'), instance: SITE },
+    });
+    await prisma.course.create({
+      data: {
+        slug: 'sites-early',
+        name: 'OS',
+        links: { create: { portalCourseId: early.id } },
+      },
+    });
+    // a file runs sent both ways: left as it is
+    for (const instance of [NO_INSTANCE, SITE]) {
+      const file = await prisma.file.create({
+        data: { ...old(PORTAL, 'twice'), instance },
+      });
+      await prisma.fileVersion.create({
+        data: { id: file.id, fileId: file.id, name: 'a.pdf' },
+      });
+    }
+    const site = async (
+      rows: { findFirstOrThrow: (q: object) => Promise<{ instance: string }> },
+      where: object,
+    ) => (await rows.findFirstOrThrow({ where })).instance;
     const sites = async () => ({
-      course: (
-        await prisma.portalCourse.findFirstOrThrow({
-          where: { portal: PORTAL, externalId: 'c1' },
-        })
-      ).instance,
-      item: (await prisma.item.findFirstOrThrow({ where: { portal: PORTAL } }))
-        .instance,
-      file: (
-        await prisma.file.findFirstOrThrow({
-          where: { portal: PORTAL, externalId: 'f1' },
-        })
-      ).instance,
-      account: (
-        await prisma.portalAccount.findFirstOrThrow({
-          where: { portal: PORTAL },
-        })
-      ).instance,
-      other: (
-        await prisma.portalCourse.findFirstOrThrow({
-          where: { portal: OTHER },
-        })
-      ).instance,
+      course: await site(prisma.portalCourse, {
+        portal: PORTAL,
+        externalId: 'c1',
+      }),
+      item: await site(prisma.item, { portal: PORTAL }),
+      file: await site(prisma.file, { portal: PORTAL, externalId: 'f1' }),
+      account: await site(prisma.portalAccount, { portal: PORTAL }),
+      other: await site(prisma.portalCourse, { portal: OTHER }),
     });
 
-    await expect(api.get(InstanceAdoption).done()).rejects.toThrow();
-    expect(Object.values(await sites())).toEqual(Array(5).fill(NO_INSTANCE));
-
-    await prisma.file.deleteMany({
-      where: { portal: PORTAL, instance: NO_INSTANCE, externalId: 'twin' },
-    });
     worker = await bootWorker({ imports: [SitesModule] });
     await vi.waitFor(async () => expect((await sites()).course).toBe(SITE), {
       timeout: 10_000,
@@ -121,6 +126,34 @@ describe('instances', { timeout: 30_000 }, () => {
       account: SITE,
       other: NO_INSTANCE,
     });
+    expect(
+      await prisma.portalCourse.findMany({
+        where: { portal: PORTAL, externalId: 'linked' },
+        select: {
+          id: true,
+          instance: true,
+          link: { select: { course: { select: { slug: true } } } },
+        },
+      }),
+    ).toEqual([
+      {
+        id: sent.id,
+        instance: SITE,
+        link: { course: { slug: 'sites-early' } },
+      },
+    ]);
+    expect(
+      (
+        await prisma.file.findMany({
+          where: { portal: PORTAL, externalId: 'twice' },
+          orderBy: { instance: 'asc' },
+        })
+      ).map(({ instance }) => instance),
+    ).toEqual([NO_INSTANCE, SITE]);
+    // an app from before can't keep a record of the site twice
+    await expect(
+      prisma.portalCourse.create({ data: old(PORTAL, 'c1') }),
+    ).rejects.toThrow();
   });
 
   it("stamps a shared run's records with the site its settings name, and an admin links a portal course of it", async () => {

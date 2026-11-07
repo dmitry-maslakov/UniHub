@@ -1,5 +1,8 @@
 // Canvas is a site per school: its account is linked with the school's
-// address, and its tokens are made on the school's own Canvas.
+// address, and its tokens are made on the school's own Canvas. Known by
+// name for now, until the hub says which sources take an address (their
+// connectors' manifests, to come); the hub asks for one it isn't given
+// (URL_NEEDED, token-error.ts).
 export const isSitePortal = (portal: string) => portal === 'canvas';
 
 // The school's site from what was typed, as the hub takes it: an https

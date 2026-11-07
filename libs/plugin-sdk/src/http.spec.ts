@@ -2,7 +2,12 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { Readable } from 'node:stream';
 import axios from 'axios';
-import { guarded, MAX_ANSWER_BYTES, portalRequests } from './http.js';
+import {
+  guarded,
+  MAX_ANSWER_BYTES,
+  portalRequests,
+  refusedByGuard,
+} from './http.js';
 
 // A server of the hub's own network, as a portal plugin's request would
 // reach it, and what it was asked: none of it, mostly.
@@ -62,6 +67,34 @@ describe('portal requests', () => {
       await refusal(http.get(`http://files.example.edu:${port}/`, { lookup })),
     ).toMatch(/10\.0\.0\.7.*is not allowed/);
     expect(asked).toEqual([]);
+  });
+
+  it('tell a refusal from the network failing', async () => {
+    const failed = (request: Promise<unknown>) =>
+      request.then(
+        () => expect.unreachable(),
+        (error: unknown) => error,
+      );
+    const { port, close } = await ok();
+    close();
+
+    expect(
+      refusedByGuard(
+        await failed(
+          axios.create(portalRequests).get(`http://10.0.0.7:${port}/`),
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      refusedByGuard(
+        await failed(
+          axios
+            .create(guarded({ allowIPAddressList: ['127.0.0.1'] }))
+            .get(`http://127.0.0.1:${port}/`),
+        ),
+      ),
+    ).toBe(false);
+    expect(refusedByGuard('is not allowed')).toBe(false);
   });
 
   it('check every hop: a redirect inside is refused, by address or by name', async () => {

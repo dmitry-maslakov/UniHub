@@ -32,3 +32,14 @@ export const guarded = (filter: RequestFilteringAgentOptions = {}) =>
 // the same agents for every portal request, whoever gave its address: a
 // user or the plugin's settings
 export const portalRequests = guarded();
+
+// how the agents say they refused an address
+const REFUSED = /^DNS lookup .+ is not allowed\b/;
+
+// Whether a request failed as the guard refused where it went, its error
+// or what caused it: no answer came, and none would on a retry.
+export function refusedByGuard(error: unknown) {
+  for (let at = error; at instanceof Error; at = at.cause)
+    if (REFUSED.test(at.message)) return true;
+  return false;
+}

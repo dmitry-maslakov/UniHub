@@ -47,15 +47,16 @@ export class ConnectionDirectory {
   // credential, and what it finds shows at its slot; and which seal of the
   // credential that is, to say which one the portal refused (none for the
   // shared account's, the owner's to replace). Null for an account that no
-  // longer reads. Not before the rows from before sites were told apart
-  // have theirs (InstanceAdoption).
+  // longer reads. For a portal of sites, not before the rows from before
+  // sites were told apart have theirs (InstanceAdoption); the other
+  // portals' runs don't wait on it.
   async context(
     connection: Connection,
     signal: AbortSignal,
     start = new Date(),
   ): Promise<{ context: ConnectorContext; seal: string | null } | null> {
-    await this.adoption.done();
     const { portal, account } = connection;
+    if (this.plugins.hasInstances(portal)) await this.adoption.done();
     const base = { connection: { portal, account }, signal };
     if (connection.shared) {
       const shared = connection.at(this.plugins.configuredInstance(portal));

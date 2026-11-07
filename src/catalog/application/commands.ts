@@ -6,6 +6,7 @@ import type {
   MediaType,
   PortalId,
 } from '@app/kernel';
+import type { Adopted } from '../domain/instances.js';
 import type { PortalRef, PortalSite } from '../domain/portal-ref.js';
 import type { Shown } from '../domain/publication.js';
 import type { Stamp } from '../domain/view/view.repository.js';
@@ -187,9 +188,9 @@ export class ForgetAccountCommand extends Command<void> {
 }
 
 // The portal's records kept with no site, from before its connector told
-// its sites apart, are the site's (README, Canvas): how many were. None
-// left, it changes nothing.
-export class AdoptRecordsCommand extends Command<number> {
+// its sites apart, are the site's (README, Canvas): how many were, and any
+// kept twice that were left. None left, it changes nothing.
+export class AdoptRecordsCommand extends Command<Adopted> {
   constructor(
     public readonly portal: PortalId,
     public readonly instance: Instance,

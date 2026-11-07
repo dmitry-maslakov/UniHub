@@ -1,6 +1,6 @@
 import { ApiError } from '@/shared/api';
 
-// the hub's reason for a 422, as its body names it
+// the hub's reason for a refusal, as its body names it
 const codeOf = (error: ApiError) =>
   (error.error as { code?: string } | undefined)?.code;
 
@@ -14,6 +14,8 @@ export function tokenErrorText(
     return "Couldn't link the account. Try again.";
   switch (error.status) {
     case 400:
+      if (codeOf(error) === 'URL_NEEDED')
+        return `Linking ${label} needs your school's address, which this page can't take yet. Ask an admin of the hub.`;
       return site
         ? "That address or token doesn't look right. The address starts with https://, and a token has no spaces or line breaks."
         : "That doesn't look like a token. It has no spaces or line breaks.";

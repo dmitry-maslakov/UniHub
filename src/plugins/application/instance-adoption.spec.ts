@@ -62,7 +62,7 @@ async function adoption(commands: FakeBus) {
 describe('InstanceAdoption', () => {
   it('gives the records and accounts of a portal whose settings name its site that site, once a process', async () => {
     const commands = new FakeBus([
-      [AdoptRecordsCommand, () => 3],
+      [AdoptRecordsCommand, () => ({ records: 3, twice: [] })],
       [AdoptAccountsCommand, () => 1],
     ]);
     const adopting = await adoption(commands);
@@ -75,6 +75,23 @@ describe('InstanceAdoption', () => {
     ]);
   });
 
+  it('logs the records kept twice it left, and goes through', async () => {
+    const commands = new FakeBus([
+      [AdoptRecordsCommand, () => ({ records: 0, twice: ['17', '18'] })],
+      [AdoptAccountsCommand, () => 0],
+    ]);
+    const adopting = await adoption(commands);
+    const warned = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => {});
+
+    await adopting.done();
+    expect(warned).toHaveBeenCalledExactlyOnceWith(
+      expect.stringMatching(/^canvas: 2 records .* left as they are: 17, 18$/),
+    );
+    warned.mockRestore();
+  });
+
   it('tries again on the next ask once it failed, and logs a failure at start', async () => {
     let failing = true;
     const commands = new FakeBus([
@@ -82,7 +99,7 @@ describe('InstanceAdoption', () => {
         AdoptRecordsCommand,
         () => {
           if (failing) throw new Error('database away');
-          return 0;
+          return { records: 0, twice: [] };
         },
       ],
       [AdoptAccountsCommand, () => 0],
