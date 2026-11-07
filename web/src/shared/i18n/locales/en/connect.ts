@@ -1,7 +1,7 @@
 export default {
   title: 'Connect AI',
   description:
-    'Let an AI app read your courses as you: read-only, and you can cut it off here at any time.',
+    'Let an AI app read your courses as you: read-only, and you can revoke its API key here at any time.',
   keys: {
     title: 'API keys',
     description:

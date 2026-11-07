@@ -10,7 +10,9 @@ export function RowList({
   children: ReactNode;
 }) {
   return (
-    <ul className={classes.list} aria-label={label}>
+    // list-style: none makes WebKit drop the list role
+    // oxlint-disable-next-line jsx-a11y/no-redundant-roles
+    <ul className={classes.list} role="list" aria-label={label}>
       {children}
     </ul>
   );

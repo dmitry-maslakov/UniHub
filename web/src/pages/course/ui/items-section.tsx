@@ -7,6 +7,7 @@ import { useFormat } from '@/shared/i18n';
 import { webAddress } from '@/shared/lib';
 import {
   EmptyState,
+  ErrorState,
   ListSkeleton,
   QueryState,
   Row,
@@ -96,6 +97,12 @@ export function ItemsSection({ slug }: { slug: string }) {
           </RowList>
         )}
       </QueryState>
+      {items.isFetchNextPageError && (
+        <ErrorState
+          error={items.error}
+          onRetry={() => void items.fetchNextPage()}
+        />
+      )}
       {items.hasNextPage && (
         <Button
           variant="default"

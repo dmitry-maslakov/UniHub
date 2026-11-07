@@ -1,13 +1,67 @@
-import { screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { describe, expect, it } from 'vitest';
+import { Providers } from '@/app/entrypoint/providers';
+import { createQueryClient } from '@/app/entrypoint/query-client';
+import { ApiError } from '@/shared/api';
+import { QueryState } from '@/shared/ui';
 import { renderApp } from './render';
 import { auth, server, signedIn } from './server';
 
 const api = (path: string) => `http://localhost:3000/api${path}`;
 
 describe('states', () => {
+  it('keeps a list on screen when a refetch of it fails', async () => {
+    signedIn();
+    let failing = false;
+    server.use(
+      http.get(api('/courses'), () =>
+        failing
+          ? HttpResponse.json({ statusCode: 500 }, { status: 500 })
+          : HttpResponse.json([
+              {
+                slug: 'os',
+                name: 'Operating systems',
+                sources: [],
+                portalCourses: [],
+              },
+            ]),
+      ),
+      http.get(api('/me/portals'), () => HttpResponse.json([])),
+    );
+    const { queryClient } = renderApp('/');
+    expect(await screen.findByText('Operating systems')).toBeVisible();
+
+    failing = true;
+    await queryClient.invalidateQueries({ queryKey: ['get', '/api/courses'] });
+
+    expect(screen.getByText('Operating systems')).toBeVisible();
+    expect(screen.queryByText("Couldn't load this")).toBeNull();
+  }, 15000);
+
+  it('shows what notFound says for a 404, with no retry', () => {
+    render(
+      <Providers queryClient={createQueryClient()}>
+        <QueryState
+          query={{
+            isPending: false,
+            isError: true,
+            error: new ApiError(404, undefined),
+            data: undefined,
+            refetch: () => undefined,
+          }}
+          notFound={<p>Nothing here</p>}
+        >
+          {() => <p>data</p>}
+        </QueryState>
+      </Providers>,
+    );
+
+    expect(screen.getByText('Nothing here')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+  });
+
   it('shows a retry on a list that failed, and loads it again', async () => {
     signedIn();
     let failing = true;

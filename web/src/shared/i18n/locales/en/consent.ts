@@ -7,7 +7,7 @@ export default {
   can: {
     title: 'It will be able to',
     read: 'Read and search your courses, posts and files (read-only)',
-    stay: 'Stay connected until you revoke it or change your password, or for 30 days after you last use it',
+    stay: 'Stay connected until you change your password, or for 30 days after you last use it',
   },
   returnTo: "You'll return to <strong>{{host}}</strong>",
   notEncrypted: '(not encrypted)',

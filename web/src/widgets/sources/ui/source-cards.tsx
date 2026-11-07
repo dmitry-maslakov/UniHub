@@ -26,7 +26,9 @@ export function SourceCards({ order }: { order: TitleOrder }) {
       }
     >
       {(data) => (
-        <ul className={classes.list} aria-label={t('list.aria')}>
+        // list-style: none makes WebKit drop the list role
+        // oxlint-disable-next-line jsx-a11y/no-redundant-roles
+        <ul className={classes.list} role="list" aria-label={t('list.aria')}>
           {orderSources(data).map((portal) =>
             portal.mode === 'public' ? (
               <li key={portal.portal} className={classes.row}>

@@ -1,4 +1,4 @@
-import { SegmentedControl } from '@mantine/core';
+import { SegmentedControl, VisuallyHidden } from '@mantine/core';
 import { useTranslation } from 'react-i18next';
 import { LANGUAGES, type Language } from '@/shared/i18n';
 
@@ -15,7 +15,17 @@ export function LanguageSwitch() {
       aria-label={t('language.label')}
       value={i18n.resolvedLanguage ?? 'en'}
       onChange={(lng) => void i18n.changeLanguage(lng)}
-      data={LANGUAGES.map((lng) => ({ value: lng, label: labels[lng] }))}
+      data={LANGUAGES.map((lng) => ({
+        value: lng,
+        label: (
+          <>
+            <span aria-hidden>{labels[lng]}</span>
+            <VisuallyHidden lang={lng}>
+              {t(lng === 'en' ? 'language.en' : 'language.sr')}
+            </VisuallyHidden>
+          </>
+        ),
+      }))}
     />
   );
 }

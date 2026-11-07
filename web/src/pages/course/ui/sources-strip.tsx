@@ -15,7 +15,9 @@ export function SourcesStrip({
   const { t } = useTranslation('courses');
   if (!portalCourses.length) return null;
   return (
-    <ul className={classes.sources} aria-label={t('sources.aria')}>
+    // list-style: none makes WebKit drop the list role
+    // oxlint-disable-next-line jsx-a11y/no-redundant-roles
+    <ul className={classes.sources} role="list" aria-label={t('sources.aria')}>
       {portalCourses.map((part) => {
         const address = webAddress(part.url);
         const name = part.year

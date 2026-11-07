@@ -4,7 +4,7 @@ import type { Messages } from '../../messages';
 export default {
   title: 'Poveži AI',
   description:
-    'Dozvoli AI aplikaciji da čita tvoje predmete u tvoje ime: samo čitanje, i ovde je možeš isključiti kad god hoćeš.',
+    'Dozvoli AI aplikaciji da čita tvoje predmete u tvoje ime: samo čitanje, a njen API ključ možeš ovde opozvati kad god hoćeš.',
   keys: {
     title: 'API ključevi',
     description:

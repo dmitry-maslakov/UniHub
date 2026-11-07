@@ -12,7 +12,7 @@ export default {
   signOut: {
     title: 'Odjava',
     description:
-      'Odjavljuje ovaj pregledač. API ključevi i povezane aplikacije rade dok ih ne opozoveš.',
+      'Odjavljuje ovaj pregledač. API ključevi rade dok ih ne opozoveš.',
     action: 'Odjavi se',
   },
 } satisfies Messages<typeof en>;

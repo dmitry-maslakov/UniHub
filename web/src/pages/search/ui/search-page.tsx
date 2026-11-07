@@ -20,7 +20,12 @@ export function SearchPage() {
     '/api/search',
     { params: { query: { q } } },
     // a refused search is refused again, and a limit is waited out
-    { enabled: q.length >= 2, retry: false },
+    {
+      enabled: q.length >= 2,
+      retry: false,
+      // each search counts against the hub's per-minute limit
+      refetchOnWindowFocus: false,
+    },
   );
   const results = search.data?.results;
 
@@ -29,19 +34,19 @@ export function SearchPage() {
       <PageTitle description={t('description')}>{t('title')}</PageTitle>
       <SearchForm key={q} q={q} />
       <Box aria-live="polite" mt="xl">
-        {search.isFetching && <ListSkeleton rows={3} label={t('searching')} />}
+        {search.isLoading && <ListSkeleton rows={3} label={t('searching')} />}
         {search.isError && (
           // no retry: the form is the retry
           <Alert color="red" role="alert">
             {t(searchErrorKey(search.error))}
           </Alert>
         )}
-        {results && !results.length && !search.isFetching && (
+        {results && !results.length && (
           <EmptyState title={t('empty.title', { q })}>
             {t('empty.body')}
           </EmptyState>
         )}
-        {results && results.length > 0 && !search.isFetching && (
+        {results && results.length > 0 && (
           <RowList label={t('results.aria')}>
             {results.map((result) => (
               <ResultRow key={resultKey(result)} result={result} />

@@ -4,6 +4,7 @@ import { api } from '@/shared/api';
 import { useFormat } from '@/shared/i18n';
 import {
   EmptyState,
+  ErrorState,
   ListSkeleton,
   QueryState,
   Row,
@@ -83,6 +84,12 @@ export function FilesSection({ slug }: { slug: string }) {
           </RowList>
         )}
       </QueryState>
+      {files.isFetchNextPageError && (
+        <ErrorState
+          error={files.error}
+          onRetry={() => void files.fetchNextPage()}
+        />
+      )}
       {files.hasNextPage && (
         <Button
           variant="default"

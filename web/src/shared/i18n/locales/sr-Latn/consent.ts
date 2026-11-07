@@ -10,7 +10,7 @@ export default {
   can: {
     title: 'Moći će da',
     read: 'čita i pretražuje tvoje predmete, objave i fajlove (samo čitanje)',
-    stay: 'ostane povezana dok je ne opozoveš ili ne promeniš lozinku, ili 30 dana od poslednje upotrebe',
+    stay: 'ostane povezana dok ne promeniš lozinku, ili 30 dana od poslednje upotrebe',
   },
   returnTo: 'Vratićeš se na <strong>{{host}}</strong>',
   notEncrypted: '(nije šifrovano)',

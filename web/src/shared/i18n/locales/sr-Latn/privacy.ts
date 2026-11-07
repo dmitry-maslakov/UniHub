@@ -44,7 +44,7 @@ export default {
   },
   security: {
     title: 'Bezbednost',
-    body: 'UniHub se služi samo preko HTTPS-a. Tokeni portala su šifrovani, a API ključevi se čuvaju kao heš.',
+    body: 'UniHub radi samo preko HTTPS-a. Tokeni portala su šifrovani, a API ključevi se čuvaju kao heš.',
   },
   changes: {
     title: 'Izmene',

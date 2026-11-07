@@ -45,7 +45,11 @@ describe('languages', () => {
     renderApp('/sign-in');
 
     await userEvent.click(
-      await screen.findByRole('radio', { name: 'SR' }, { timeout: 3000 }),
+      await screen.findByRole(
+        'radio',
+        { name: 'Srpski (latinica)' },
+        { timeout: 3000 },
+      ),
     );
 
     expect(

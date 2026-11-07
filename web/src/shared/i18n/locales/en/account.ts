@@ -9,7 +9,7 @@ export default {
   signOut: {
     title: 'Sign out',
     description:
-      'Signs this browser out. Your API keys and connected apps keep working until you revoke them.',
+      'Signs this browser out. Your API keys keep working until you revoke them.',
     action: 'Sign out',
   },
 };

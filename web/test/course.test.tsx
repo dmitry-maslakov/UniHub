@@ -76,6 +76,35 @@ describe('course page', () => {
     ).toBeNull();
   });
 
+  it('says when the next page of posts fails, and loads it on retry', async () => {
+    setup();
+    let failing = true;
+    server.use(
+      http.get(api('/courses/os/items'), ({ request }) => {
+        const offset = Number(
+          new URL(request.url).searchParams.get('offset') ?? 0,
+        );
+        return offset > 0 && failing
+          ? HttpResponse.json({ statusCode: 500 }, { status: 500 })
+          : HttpResponse.json(posts.slice(offset, offset + 50));
+      }),
+    );
+    renderApp('/courses/os');
+    expect(await screen.findByText('Post 50')).toBeVisible();
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Show more posts' }),
+    );
+
+    expect(
+      await screen.findByText("Couldn't load this", {}, { timeout: 8000 }),
+    ).toBeVisible();
+    expect(screen.getByText('Post 50')).toBeVisible();
+    failing = false;
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+    expect(await screen.findByText('Post 51')).toBeVisible();
+  }, 20000);
+
   it('says a locked post and a file without content are not available yet', async () => {
     setup([post(1, null)], [file(1, false), file(2)]);
     renderApp('/courses/os');
