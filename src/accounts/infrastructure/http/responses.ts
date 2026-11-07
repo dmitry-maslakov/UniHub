@@ -54,6 +54,11 @@ export class PortalResponse implements PortalView {
       "how many courses of a public portal's catalog you picked; null for any other portal",
   })
   picked!: number | null;
+  @ApiProperty({
+    description:
+      'your own account of it was just linked and is being read for the first time: true until the course list that first read finds shows (its posts and files follow, course by course); false when not linked, expired or revoked. No counts or times, which could tell how long a read took',
+  })
+  firstSync!: boolean;
 }
 
 export class CatalogCourseResponse implements CatalogCourseView {

@@ -37,6 +37,12 @@ const FRESH_SESSION_PATHS = [
 // what MCP's tools take of an OAuth client: reading courses, read-only
 export const MCP_SCOPES = ['courses:read'];
 
+// What an app is told to ask for, by a 401's challenge and /api/mcp's
+// resource metadata: MCP's scope, and offline_access, the authorization
+// server's, for a refresh token. An app that asks for what the resource
+// names (ChatGPT) would get none otherwise, and sign in again every hour.
+export const ASKED_SCOPES = [...MCP_SCOPES, 'offline_access'];
+
 // /api/mcp as OAuth names it, the resource its access tokens are bound to
 // (RFC 8707): exactly the URL a user gives an AI app
 export const mcpResource = (baseURL: string) =>
@@ -300,13 +306,13 @@ export function createAuth({
       // root (WellKnownController). No openid: no ID tokens or UserInfo
       mcp({
         resource: mcpResource(baseURL),
-        scopes: [...MCP_SCOPES, 'offline_access'],
+        scopes: ASKED_SCOPES,
         // its row, which the provider writes on the first request, with its
         // scopes named: Prisma takes no null for a list
         resources: [
           {
             identifier: mcpResource(baseURL),
-            allowedScopes: [...MCP_SCOPES, 'offline_access'],
+            allowedScopes: ASKED_SCOPES,
           },
         ],
         // no client_credentials: every token is a user's

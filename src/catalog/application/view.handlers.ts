@@ -74,6 +74,8 @@ export class ViewCoursesHandler implements ICommandHandler<ViewCoursesCommand> {
     );
     const change = viewChange(before, sent, gone);
     await this.views.apply('course', account, change, at);
+    // a listing of none shows too: the account's view is there, empty
+    await this.views.showsFrom(account, at.shownFrom);
     // what it saw in a course it's no longer in goes with the course
     const still = new Set(sent.map((s) => s.recordId));
     for (const { recordId: course } of change.hide.filter(

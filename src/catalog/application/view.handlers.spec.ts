@@ -296,12 +296,28 @@ describe('views of users’ accounts', () => {
     ).rejects.toBeInstanceOf(UnknownReferenceError);
   });
 
-  it('forgets an account, everything it saw', async () => {
+  it("keeps since when an account's view shows: the earliest a listing of it did, of no course too", async () => {
+    const { courses, views } = await viewing();
+    await courses('ana', ['c1'], 5);
+    await courses('ana', ['c1', 'c2'], 70);
+    await courses('bo', [], 30);
+    await courses('bo', [], 3);
+
+    expect(views.shown).toEqual(
+      new Map([
+        ['ana', at(5).shownFrom],
+        ['bo', at(3).shownFrom],
+      ]),
+    );
+  });
+
+  it('forgets an account, everything it saw and since when', async () => {
     const { courses, pass, views, commands } = await viewing();
     await courses('ana', ['c1']);
     await pass('ana', [open(post('news'))]);
     await commands.execute(new ForgetAccountCommand('ana'));
 
     expect(views.sights.has('ana')).toBe(false);
+    expect(views.shown.has('ana')).toBe(false);
   });
 });

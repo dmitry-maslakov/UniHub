@@ -3,7 +3,7 @@ import type { ConfigType } from '@nestjs/config';
 import { QueryBus } from '@nestjs/cqrs';
 import type { ConnectorContext } from '@app/plugin-sdk';
 import type { PortalId } from '@app/kernel';
-import { publication } from '../../catalog/contracts.js';
+import { publication, ViewsShownQuery } from '../../catalog/contracts.js';
 import {
   Connection,
   IngestService,
@@ -44,11 +44,12 @@ export class ConnectionDirectory {
   }
 
   // What a run that started at `start` gets: a user's account's, its
-  // credential, and what it finds shows at its slot; and which seal of the
-  // credential that is, to say which one the portal refused (none for the
-  // shared account's, the owner's to replace). Null for an account that no
-  // longer reads. For a portal of sites, not before the rows from before
-  // sites were told apart have theirs (InstanceAdoption); the other
+  // credential, and what it finds shows at its slot, or as each pass ends
+  // in the account's first run, nothing of it shown yet; and which seal of
+  // the credential that is, to say which one the portal refused (none for
+  // the shared account's, the owner's to replace). Null for an account
+  // that no longer reads. For a portal of sites, not before the rows from
+  // before sites were told apart have theirs (InstanceAdoption); the other
   // portals' runs don't wait on it.
   async context(
     connection: Connection,
@@ -75,8 +76,12 @@ export class ConnectionDirectory {
     if (!found) return null;
     const { credential, seal, instance } = found;
     const slot = slotOf(start, this.gridOf(connection));
+    const shown = await this.queries.execute(
+      new ViewsShownQuery([account], start),
+    );
+    const timing = { slot, first: !shown.includes(account) };
     const run: Run = {
-      shown: (ended) => publication(slot, ended, this.config.publishing),
+      shown: (ended) => publication(timing, ended, this.config.publishing),
       leaseMs: this.config.pollTimeoutMs,
     };
     return {

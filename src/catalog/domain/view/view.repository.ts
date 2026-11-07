@@ -63,8 +63,12 @@ export abstract class ViewRepository {
     change: ViewChange,
     at: Shown,
   ): Promise<void>;
-  // an account gone: its sights, so nothing of what it saw stays; what no
-  // other account sees then is removed (its event to the outbox)
+  // the account's view shows from `from`, unless it did from earlier:
+  // since when it shows is the earliest a listing of it showed from
+  abstract showsFrom(account: string, from: Date): Promise<void>;
+  // an account gone: its sights and since when its view shows, so nothing
+  // of what it saw stays; what no other account sees then is removed (its
+  // event to the outbox)
   abstract forget(account: string): Promise<void>;
   // the bytes of a file at a size and date as the portal gave them, for
   // every user's account's version of it there that has none yet; whether

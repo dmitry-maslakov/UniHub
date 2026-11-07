@@ -12,6 +12,7 @@ import { PortalAccounts } from './application/portal-accounts.js';
 import { PortalPicks } from './application/portal-picks.js';
 import { PortalLinksHandler } from './application/portal-links.handler.js';
 import { UserDeletedHandler } from './application/user-deleted.handler.js';
+import { UserPortalsHandler } from './application/user-portals.handler.js';
 import { ViewingAccountsHandler } from './application/viewing-accounts.handler.js';
 import { WantedCoursesHandler } from './application/wanted-courses.handler.js';
 import { CredentialVault } from './domain/credential-vault.js';
@@ -32,7 +33,9 @@ import { ReconcileWantedSchedule } from './infrastructure/reconcile-wanted.sched
 // portal's are linked (PORTAL_LINKS), the token a user sets, sealed apart
 // from the account, and who that is on the portal, as its connector says
 // (plugins), and which of them a user reads through (ViewingAccountsQuery,
-// for access); every portal is shared unless PORTAL_LINKS says otherwise.
+// for access) and how each stands (UserPortalsQuery, catalog saying whether
+// its first pass showed yet); every portal is shared unless PORTAL_LINKS
+// says otherwise.
 // Of a public portal, the courses each user picks of its catalog (from
 // catalog), read through its one account, and those its connector is asked
 // to sync (WantedCoursesQuery, for ingest). Answers plugins which accounts
@@ -66,6 +69,7 @@ import { ReconcileWantedSchedule } from './infrastructure/reconcile-wanted.sched
     PortalPicks,
     UserDeletedHandler,
     ViewingAccountsHandler,
+    UserPortalsHandler,
     PortalLinksHandler,
     WantedCoursesHandler,
     PortalReadersHandler,

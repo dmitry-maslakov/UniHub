@@ -224,9 +224,25 @@ export class PrismaViewRepository extends ViewRepository {
       });
   }
 
-  // The account's sights go; what no other account sees now is removed
-  // with them (item.removed, file.removed), so the index and plugins let go
-  // of it at once rather than at the next reconcile
+  // the earliest a listing of it showed from: one kept from a slot to come
+  // (20261107190000_account_views) gives way to a first run's
+  @Transactional(Propagation.Mandatory)
+  async showsFrom(account: string, from: Date) {
+    const { accountView } = this.txHost.tx;
+    await accountView.createMany({
+      data: { account, shownFrom: from },
+      skipDuplicates: true,
+    });
+    await accountView.updateMany({
+      where: { account, shownFrom: { gt: from } },
+      data: { shownFrom: from },
+    });
+  }
+
+  // The account's sights go, and since when its view showed; what no other
+  // account sees now is removed with them (item.removed, file.removed), so
+  // the index and plugins let go of it at once rather than at the next
+  // reconcile
   @Transactional()
   async forget(account: string) {
     const { tx } = this.txHost;
@@ -246,6 +262,7 @@ export class PrismaViewRepository extends ViewRepository {
     });
     for (const sights of [tx.courseSight, tx.itemSight, tx.fileSight])
       await (sights as typeof tx.itemSight).deleteMany({ where: { account } });
+    await tx.accountView.deleteMany({ where: { account } });
     await this.events([
       ...items.map(({ id, item }): CatalogEvent => ({
         topic: ITEM_REMOVED,

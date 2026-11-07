@@ -365,3 +365,17 @@ export class HasBytesQuery extends Query<boolean> {
     super();
   }
 }
+
+// For plugins' runs and accounts' lists.
+
+// Which of these users' accounts have had a pass shown by `at` since they
+// were linked (or replaced): the others' next run is their first
+// (README, Portal accounts). Nothing of when, or of what they saw.
+export class ViewsShownQuery extends Query<string[]> {
+  constructor(
+    public readonly accounts: readonly string[],
+    public readonly at: Date,
+  ) {
+    super();
+  }
+}

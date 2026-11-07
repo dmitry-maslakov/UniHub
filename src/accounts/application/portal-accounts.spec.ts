@@ -8,6 +8,7 @@ import {
   type PortalUser,
 } from '@app/plugin-sdk';
 import { Instance, NO_INSTANCE, PortalId, Secret } from '@app/kernel';
+import { ViewsShownQuery } from '../../catalog/contracts.js';
 import { IsAdminQuery } from '../../identity/contracts.js';
 import { catalogOf, poll } from '../../../test/discovered-plugins.js';
 import { FakeBus } from '../../../test/fake-bus.js';
@@ -92,8 +93,15 @@ function accounts({
     },
     ['catalog'],
   );
+  // the accounts catalog says have had a pass shown
+  const shown = new Set<string>();
   const queries = new FakeBus([
     [IsAdminQuery, ({ userId }: IsAdminQuery) => userId === 'bo'],
+    [
+      ViewsShownQuery,
+      ({ accounts: asked }: ViewsShownQuery) =>
+        asked.filter((id) => shown.has(id)),
+    ],
   ]);
   const commands = new FakeBus();
   const store = new InMemoryAccounts();
@@ -131,6 +139,8 @@ function accounts({
     picks,
     asked,
     setToken,
+    shown,
+    asks: queries.sent,
     told: commands.sent,
   };
 }
@@ -416,6 +426,7 @@ describe('PortalAccounts', () => {
         status: null,
         expiresAt: null,
         picked: null,
+        firstSync: false,
       },
     ]);
     expect(await service.list('bo')).toEqual(
@@ -428,6 +439,7 @@ describe('PortalAccounts', () => {
         status: 'expired',
         expiresAt: past,
         picked: null,
+        firstSync: false,
       })),
     );
 
@@ -441,7 +453,29 @@ describe('PortalAccounts', () => {
       portal: TEAMS,
       mode: 'shared',
       linked: true,
+      firstSync: false,
     });
+  });
+
+  it('says an account that reads is in its first sync until catalog says a pass of it showed, and asks nothing for a user with none', async () => {
+    const { service, store, setToken, shown, asks } = accounts();
+    await setToken('ana', MOODLE);
+    const firstSync = async () =>
+      (await service.list('ana')).map((p) => [p.portal, p.firstSync]);
+
+    expect(await firstSync()).toEqual([[MOODLE, true]]);
+    shown.add(store.rows.get('ana:moodle')!.account.id);
+    expect(await firstSync()).toEqual([[MOODLE, false]]);
+
+    // revoked, it reads nothing: no first sync to wait for
+    shown.clear();
+    const row = store.rows.get('ana:moodle')!;
+    row.account = { ...row.account, status: 'revoked' };
+    expect(await firstSync()).toEqual([[MOODLE, false]]);
+
+    asks.length = 0;
+    await service.list('cy');
+    expect(asks.some((q) => q instanceof ViewsShownQuery)).toBe(false);
   });
 
   it('lists a public portal with how many of its courses the user picked, never as linked', async () => {
@@ -471,6 +505,7 @@ describe('PortalAccounts', () => {
       status: null,
       expiresAt: null,
       picked: 1,
+      firstSync: false,
     });
     expect((await service.list('cy'))[0]).toMatchObject({
       portal: CATALOG,

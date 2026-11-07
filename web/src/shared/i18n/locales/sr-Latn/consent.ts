@@ -12,6 +12,7 @@ export default {
     read: 'čita i pretražuje tvoje predmete, objave i fajlove (samo čitanje)',
     stay: 'ostane povezana dok ne promeniš lozinku, ili 30 dana od poslednje upotrebe',
   },
+  hourOnly: 'Povezano sat vremena; posle toga aplikacija te ponovo pita.',
   returnTo: 'Vratićeš se na <strong>{{host}}</strong>',
   notEncrypted: '(nije šifrovano)',
   loopback: {

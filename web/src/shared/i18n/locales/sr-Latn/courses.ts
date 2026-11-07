@@ -19,6 +19,10 @@ export default {
     addSource: {
       title: 'Dodaj izvor',
     },
+    firstSync: {
+      title: 'Prvi put čitamo tvoj {{label}}',
+      body: 'Tvoji predmeti će se pojaviti ovde za nekoliko minuta. Možeš da ostaviš ovu stranicu otvorenu.',
+    },
   },
   course: {
     head: 'Predmet',

@@ -15,6 +15,7 @@ const portal = (
   status: null,
   expiresAt: null,
   picked: null,
+  firstSync: false,
 });
 
 describe('orderSources', () => {

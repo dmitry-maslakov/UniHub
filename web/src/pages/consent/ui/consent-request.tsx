@@ -34,8 +34,9 @@ export function ConsentRequestView({ request }: { request: ConsentRequest }) {
         <Section title={t('can.title')}>
           <List spacing={4}>
             <List.Item>{t('can.read')}</List.Item>
-            <List.Item>{t('can.stay')}</List.Item>
+            {request.staysConnected && <List.Item>{t('can.stay')}</List.Item>}
           </List>
+          {!request.staysConnected && <Text>{t('hourOnly')}</Text>}
         </Section>
         <Text>
           <Trans

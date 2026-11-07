@@ -8,6 +8,9 @@ export interface ConsentRequest {
   loopback: boolean;
   // an http: address that isn't this computer's: the answer goes unencrypted
   insecure: boolean;
+  // it asked for offline_access, so it gets a refresh token and stays
+  // connected; else its access ends with its hour-long token
+  staysConnected: boolean;
 }
 
 const web = (url: URL) => url.protocol === 'https:' || url.protocol === 'http:';
@@ -36,6 +39,7 @@ export function isLoopback(hostname: string) {
 export function readConsentRequest(search: {
   client_id?: string;
   redirect_uri?: string;
+  scope?: string;
   sig?: string;
 }): ConsentRequest | undefined {
   const client = parse(search.client_id);
@@ -49,5 +53,9 @@ export function readConsentRequest(search: {
     returnTo: web(redirect) ? redirect.host : `${redirect.protocol}//`,
     loopback,
     insecure: redirect.protocol === 'http:' && !loopback,
+    // Better Auth puts the scopes it grants in the signed query, the
+    // defaults too when the app named none
+    staysConnected:
+      search.scope?.split(' ').includes('offline_access') ?? false,
   };
 }

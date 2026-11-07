@@ -4,10 +4,11 @@
 // imports it from its own file.
 export {
   PortalLinksQuery,
+  UserPortalsQuery,
   ViewingAccountsQuery,
   WantedCoursesQuery,
 } from './application/queries.js';
-export type { Viewing } from './application/portal-accounts.js';
+export type { PortalView, Viewing } from './application/portal-accounts.js';
 // how a name is matched against words, as the catalog does, for lists that
 // search names
 export { nameHas } from './domain/catalog-page.js';

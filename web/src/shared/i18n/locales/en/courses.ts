@@ -16,6 +16,10 @@ export default {
     addSource: {
       title: 'Add a source',
     },
+    firstSync: {
+      title: 'Reading your {{label}} for the first time',
+      body: 'Your courses show up here in a few minutes. You can leave this page open.',
+    },
   },
   course: {
     head: 'Course',

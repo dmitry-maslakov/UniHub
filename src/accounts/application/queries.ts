@@ -1,12 +1,21 @@
 import { Query } from '@nestjs/cqrs';
 import type { LinkMode, PortalId } from '@app/kernel';
-import type { Viewing } from './portal-accounts.js';
+import type { PortalView, Viewing } from './portal-accounts.js';
 
 // The portals read with users' own accounts, and the user's own accounts in
 // them that read now; the public portals, and the user's picks
 // (PortalAccounts.viewing): what access cuts a user's reads of those
 // portals to
 export class ViewingAccountsQuery extends Query<Viewing> {
+  constructor(public readonly userId: string) {
+    super();
+  }
+}
+
+// The portals as the user sees their own links to them, as
+// GET /api/me/portals lists them (PortalAccounts.list): what access tells
+// an agent of why the user reads no course
+export class UserPortalsQuery extends Query<PortalView[]> {
   constructor(public readonly userId: string) {
     super();
   }

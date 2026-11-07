@@ -61,6 +61,16 @@ describe('the consent request', () => {
     ).toBe('myapp://');
   });
 
+  it('says the app stays connected only when it asked for offline_access', () => {
+    const stays = (scope?: string) =>
+      readConsentRequest({ ...signed, scope })?.staysConnected;
+    expect(stays('courses:read offline_access')).toBe(true);
+    expect(stays('offline_access courses:read')).toBe(true);
+    expect(stays('courses:read')).toBe(false);
+    expect(stays('courses:read offline_accessx')).toBe(false);
+    expect(stays(undefined)).toBe(false);
+  });
+
   it('refuses a query missing what it needs', () => {
     expect(readConsentRequest({})).toBeUndefined();
     expect(readConsentRequest({ ...signed, sig: undefined })).toBeUndefined();

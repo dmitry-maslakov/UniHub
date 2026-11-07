@@ -172,6 +172,8 @@ export class InMemoryViews extends ViewRepository {
   readonly records = new Map<string, string>();
   readonly versions = new Map<string, Version>();
   readonly sights = new Map<string, Map<string, Sight>>();
+  // since when each account's view shows
+  readonly shown = new Map<string, Date>();
   // versions made, by kind
   readonly made: Version[] = [];
 
@@ -243,8 +245,14 @@ export class InMemoryViews extends ViewRepository {
       sights.get(versionId)!.hiddenFrom = at.shownFrom;
   }
 
+  async showsFrom(account: string, from: Date) {
+    const had = this.shown.get(account);
+    if (!had || had > from) this.shown.set(account, from);
+  }
+
   async forget(account: string) {
     this.sights.delete(account);
+    this.shown.delete(account);
   }
 
   async storeBytes(fileId: string, stamp: Stamp, hash: string) {
