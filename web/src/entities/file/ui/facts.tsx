@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 // What a tree row says about itself, on its right and on one line
 export function Facts({ children }: { children: ReactNode }) {
   return (
-    <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
+    <Text component="span" size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
       {children}
     </Text>
   );

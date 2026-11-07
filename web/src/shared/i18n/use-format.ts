@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Language } from './instance';
 
@@ -73,8 +72,16 @@ export function formatters(lang: Language | string) {
   };
 }
 
+// one set per language for the whole app: a row asks for it, it isn't built per row
+const cache = new Map<string, ReturnType<typeof formatters>>();
+
 export function useFormat() {
   const { i18n } = useTranslation();
   const lang = i18n.resolvedLanguage ?? 'en';
-  return useMemo(() => formatters(lang), [lang]);
+  let found = cache.get(lang);
+  if (!found) {
+    found = formatters(lang);
+    cache.set(lang, found);
+  }
+  return found;
 }

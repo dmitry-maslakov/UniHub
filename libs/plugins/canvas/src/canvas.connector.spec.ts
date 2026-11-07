@@ -174,19 +174,22 @@ describe('CanvasConnector', () => {
       display_name: 'card.png',
       folder_id: 4,
     };
-    canvas.answers[`${COURSE}/folders`] = [
-      ...folders,
-      {
-        id: 4,
-        name: 'course_image',
-        full_name: 'course files/course_image',
-        parent_folder_id: 1,
-      },
-    ];
+    const folder = {
+      id: 4,
+      name: 'course_image',
+      full_name: 'course files/pics',
+      parent_folder_id: 1,
+    };
+    canvas.answers[`${COURSE}/folders`] = [...folders, folder];
     canvas.answers[`${COURSE}/files`] = [...files, picture];
     const ingest = new RecordingIngest();
     await run(ingest);
+    expect(ingest.files.has('3004')).toBe(true);
 
+    // the folder turns out to be the card's picture folder
+    folder.full_name = 'course files/course_image';
+    await run(ingest);
+    expect(ingest.removedFiles).toContain('3004');
     expect(ingest.files.has('3004')).toBe(false);
     expect(ingest.files.has('3001')).toBe(true);
   });

@@ -64,8 +64,12 @@ function createStore() {
     setMany: change,
     clear: () => set(new Map()),
     // drops what is no longer among `live` keys
+    // (a member lives as long as its archive does)
     keepOnly: (live: ReadonlySet<string>) => {
-      const kept = [...ticked].filter(([key]) => live.has(key));
+      const kept = [...ticked].filter(
+        ([key, t]) =>
+          live.has(key) || (t.member !== undefined && live.has(t.file)),
+      );
       if (kept.length !== ticked.size) set(new Map(kept));
     },
   };

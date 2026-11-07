@@ -17,18 +17,21 @@ export function NewFiles({
   files,
   slug,
   selection,
+  now,
   onShowAll,
 }: {
   files: readonly Schemas['FileResponse'][];
   slug: string;
   selection: Selection;
+  // when the list was read: "new" is measured from then
+  now: number;
   onShowAll: () => void;
 }) {
   const { t } = useTranslation('courses');
-  const fresh = useMemo(() => {
-    const now = new Date();
-    return newestFirst(files).filter((file) => isNew(file, now));
-  }, [files]);
+  const fresh = useMemo(
+    () => newestFirst(files).filter((file) => isNew(file, new Date(now))),
+    [files, now],
+  );
   if (!fresh.length) return null;
   return (
     <Box mb="lg">

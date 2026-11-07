@@ -28,7 +28,7 @@ export function FolderBranch({
       label={name}
       leftSection={icon}
       rightSection={
-        <Group gap={6} wrap="nowrap">
+        <Group component="span" gap={6} wrap="nowrap">
           {facts && <Facts>{facts}</Facts>}
           <IconChevronRight
             className={classes.chevron}

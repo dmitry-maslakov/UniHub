@@ -155,7 +155,7 @@ describe('a course', () => {
           new URL(request.url).searchParams.get('offset') ?? 0,
         );
         return offset > 0 && failing
-          ? HttpResponse.json({ statusCode: 500 }, { status: 403 })
+          ? HttpResponse.json({ statusCode: 500 }, { status: 500 })
           : HttpResponse.json(posts.slice(offset, offset + 50));
       }),
     );
@@ -350,6 +350,51 @@ describe('a course', () => {
       expect(router.state.location.search).toEqual({ member: 'src/main.c' }),
     );
     expect(router.state.location.pathname).toBe('/courses/os/files/f1');
+  });
+
+  it('keeps a member ticked in the tree when the file list is read again', async () => {
+    const zip = {
+      ...file(1, true, ''),
+      name: 'lab.zip',
+      mime: 'application/zip',
+    };
+    setup(posts, [zip]);
+    server.use(
+      http.get(api('/files/f1/members'), () =>
+        HttpResponse.json([
+          {
+            path: 'src/main.c',
+            size: 900,
+            mime: 'text/x-c',
+            leftOut: null,
+            texts: [],
+          },
+        ]),
+      ),
+    );
+    const { queryClient } = renderApp('/courses/os');
+
+    const tree = await screen.findByRole('navigation', {
+      name: 'Files by folder',
+    });
+    await userEvent.click(within(tree).getByRole('button', { name: /^lab\.zip/ }));
+    await userEvent.click(
+      await within(tree).findByRole('checkbox', { name: 'Select main.c' }),
+    );
+    expect(screen.getByText('1 selected, 900 B')).toBeVisible();
+
+    // a sync added a file: the list comes back as new data
+    server.use(
+      http.get(api('/courses/os/files'), () =>
+        HttpResponse.json({
+          files: [zip, file(2, true, '')],
+          capped: false,
+        }),
+      ),
+    );
+    await queryClient.invalidateQueries();
+    expect(await within(tree).findByText('file-2.pdf')).toBeVisible();
+    expect(screen.getByText('1 selected, 900 B')).toBeVisible();
   });
 
   it('says when nothing inside an archive could be read, and when it fails', async () => {

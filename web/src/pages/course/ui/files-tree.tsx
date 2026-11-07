@@ -65,6 +65,7 @@ export function FilesTree({
                   files={all}
                   slug={slug}
                   selection={selection}
+                  now={files.dataUpdatedAt}
                   onShowAll={() => onViewChange('newest')}
                 />
                 <FolderTree files={all} slug={slug} selection={selection} />
