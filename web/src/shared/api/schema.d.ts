@@ -459,6 +459,11 @@ export interface components {
             /** @description you have an account of it linked; never of a public one */
             linked: boolean;
             /**
+             * @description the address of the school's site your account is of, on a portal that is a site per school; null when not linked, or for a portal of one site
+             * @example https://canvas.example.edu
+             */
+            instance: string | null;
+            /**
              * @description null when not linked
              * @enum {string|null}
              */
@@ -1002,12 +1007,21 @@ export interface operations {
                 "application/json": {
                     /** @description a token of your own the portal gave you; never read back */
                     token: string;
+                    /** @description your school's address on a portal that is a site per school (Canvas), https://canvas.example.edu; none for any other */
+                    url?: string;
                 };
             };
         };
         responses: {
-            /** @description linked; a token of the same portal user keeps the account, another's makes a new one */
+            /** @description linked; a token of the same portal user of the same school's site keeps the account, any other makes a new one */
             204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description not a token, or the school's address missing on a portal that is a site per school (Canvas; code URL_NEEDED), not an https one, or given for any other portal (URL_NOT_TAKEN) */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1027,7 +1041,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description the portal didn't take the token */
+            /** @description the portal didn't take the token (code TOKEN_REFUSED), or its site takes no pasted tokens, as a Canvas Instructure hosts (TOKENS_NOT_ALLOWED) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1041,7 +1055,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description the portal could not be asked; try again later */
+            /** @description the portal could not be asked, or no such portal answers at the address, within 30 s (code PORTAL_UNREACHABLE); try again later */
             503: {
                 headers: {
                     [name: string]: unknown;

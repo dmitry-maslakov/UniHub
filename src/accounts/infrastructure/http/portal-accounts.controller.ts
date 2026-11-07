@@ -61,7 +61,7 @@ export class PortalAccountsController {
   })
   @ApiBadRequestResponse({
     description:
-      "not a token, or the school's address missing on a portal that is a site per school (Canvas), not an https one, or given for any other portal",
+      "not a token, or the school's address missing on a portal that is a site per school (Canvas; code URL_NEEDED), not an https one, or given for any other portal (URL_NOT_TAKEN)",
   })
   @ApiForbiddenResponse({
     description: 'sign in again: this needs a session signed in within a day',
@@ -75,7 +75,7 @@ export class PortalAccountsController {
   })
   @ApiServiceUnavailableResponse({
     description:
-      'the portal could not be asked, or no such portal answers at the address, within 30 s; try again later',
+      'the portal could not be asked, or no such portal answers at the address, within 30 s (code PORTAL_UNREACHABLE); try again later',
   })
   @ApiTooManyRequestsResponse({ description: '10 a minute' })
   async setToken(
