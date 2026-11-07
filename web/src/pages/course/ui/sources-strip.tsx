@@ -1,8 +1,8 @@
 import { Anchor, Group, Text } from '@mantine/core';
+import { useTranslation } from 'react-i18next';
 import { SourceBadge } from '@/entities/source';
 import type { Schemas } from '@/shared/api';
 import { webAddress } from '@/shared/lib';
-import { viaText } from '../lib/via';
 import classes from './course.module.css';
 
 // Where a course's posts and files come from: each of its portal courses,
@@ -12,12 +12,17 @@ export function SourcesStrip({
 }: {
   portalCourses: Schemas['PortalCourseResponse'][];
 }) {
+  const { t } = useTranslation('courses');
   if (!portalCourses.length) return null;
   return (
-    <ul className={classes.sources} aria-label="Sources">
+    // list-style: none makes WebKit drop the list role
+    // oxlint-disable-next-line jsx-a11y/no-redundant-roles
+    <ul className={classes.sources} role="list" aria-label={t('sources.aria')}>
       {portalCourses.map((part) => {
         const address = webAddress(part.url);
-        const name = `${part.name}${part.year ? ` (${part.year})` : ''}`;
+        const name = part.year
+          ? t('sources.withYear', { name: part.name, year: part.year })
+          : part.name;
         return (
           <li key={`${part.portal}~${part.externalId}`}>
             <Group gap="xs" wrap="nowrap" align="baseline" miw={0}>
@@ -27,7 +32,7 @@ export function SourcesStrip({
                   <Anchor
                     href={address}
                     target="_blank"
-                    rel="noreferrer"
+                    rel="noopener noreferrer"
                     inherit
                   >
                     {name}
@@ -37,7 +42,7 @@ export function SourcesStrip({
                 )}
                 <Text span size="sm" c="dimmed">
                   {' · '}
-                  {viaText(part.via)}
+                  {t(`sources.via.${part.via}`)}
                 </Text>
               </Text>
             </Group>

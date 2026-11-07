@@ -5,6 +5,10 @@
 // (URL_NEEDED, token-error.ts).
 export const isSitePortal = (portal: string) => portal === 'canvas';
 
+// what the address field shows before anything is typed: an address is a
+// value, not a text to translate
+export const SITE_PLACEHOLDER = 'https://canvas.example.edu';
+
 // The school's site from what was typed, as the hub takes it: an https
 // address of a DNS name, any page of it, the scheme left out too; its
 // origin, or null when it can't be one

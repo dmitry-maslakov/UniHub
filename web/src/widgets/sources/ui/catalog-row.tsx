@@ -1,8 +1,10 @@
 import { Anchor, Badge, Checkbox, Group, Stack } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import type { Schemas } from '@/shared/api';
+import { useTranslation } from 'react-i18next';
+import { ApiError, type Schemas } from '@/shared/api';
 import { webAddress } from '@/shared/lib';
+import { Row, RowAction } from '@/shared/ui';
 import { setPicked } from '../api/picks';
 import { pickErrorText } from '../lib/pick-error';
 import classes from './portal-catalog.module.css';
@@ -18,31 +20,41 @@ export function CatalogRow({
   portal: string;
   course: Schemas['CatalogCourseResponse'];
 }) {
+  const { t } = useTranslation('sources');
   const queryClient = useQueryClient();
+  const refresh = (paths: string[]) =>
+    Promise.all(
+      paths.map((path) =>
+        queryClient.invalidateQueries({ queryKey: ['get', path] }),
+      ),
+    );
   const toggle = useMutation({
     mutationFn: async (pick: boolean) => {
       await setPicked(portal, course.externalId, pick);
     },
     onSuccess: () =>
-      Promise.all(
-        [
-          '/api/portals/{portal}/catalog',
-          '/api/me/portals',
-          '/api/courses',
-        ].map((path) =>
-          queryClient.invalidateQueries({ queryKey: ['get', path] }),
-        ),
-      ),
-    onError: (error, pick) =>
-      notifications.show({ color: 'red', message: pickErrorText(error, pick) }),
+      refresh([
+        '/api/portals/{portal}/catalog',
+        '/api/me/portals',
+        '/api/courses',
+      ]),
+    onError: (error, pick) => {
+      notifications.show({
+        color: 'red',
+        message: pickErrorText(t, error, pick),
+      });
+      // a course the catalog no longer has: the catalog is read again
+      if (error instanceof ApiError && error.status === 404)
+        void refresh(['/api/portals/{portal}/catalog']);
+    },
   });
   const picked = toggle.isPending ? toggle.variables : course.picked;
   // what the site's connector sent: a link only if it's a web address
   const address = webAddress(course.url);
 
   return (
-    <li className={classes.row}>
-      <Stack gap="sm" miw={0} style={{ flex: 1 }}>
+    <Row>
+      <Stack gap="sm" miw={0} style={{ flex: '1 1 14rem' }}>
         <Group gap="xs" wrap="nowrap" align="flex-start" miw={0}>
           <Checkbox
             checked={picked}
@@ -52,16 +64,7 @@ export function CatalogRow({
             styles={{ label: { overflowWrap: 'anywhere' } }}
           />
           {course.isNew && (
-            <Badge
-              variant="default"
-              radius="sm"
-              size="md"
-              fz="xs"
-              tt="none"
-              style={{ flexShrink: 0 }}
-            >
-              New
-            </Badge>
+            <Badge style={{ flexShrink: 0 }}>{t('catalog.new')}</Badge>
           )}
         </Group>
         {course.picked && !toggle.isPending && (
@@ -71,18 +74,19 @@ export function CatalogRow({
         )}
       </Stack>
       {address && (
-        <Anchor
-          href={address}
-          target="_blank"
-          rel="noreferrer"
-          size="sm"
-          c="dimmed"
-          style={{ flexShrink: 0 }}
-          aria-label={`Open ${course.name} on its site`}
-        >
-          Open
-        </Anchor>
+        <RowAction>
+          <Anchor
+            href={address}
+            target="_blank"
+            rel="noopener noreferrer"
+            size="sm"
+            c="dimmed"
+            aria-label={t('catalog.openAria', { name: course.name })}
+          >
+            {t('catalog.open')}
+          </Anchor>
+        </RowAction>
       )}
-    </li>
+    </Row>
   );
 }

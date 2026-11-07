@@ -1,16 +1,16 @@
-import { Box, Text, Title } from '@mantine/core';
-import { AnchorLink } from '@/shared/ui';
+import { Box } from '@mantine/core';
+import { useTranslation } from 'react-i18next';
+import { AnchorLink, NotFoundState } from '@/shared/ui';
 
 export function NotFoundPage() {
+  const { t } = useTranslation('shell');
   return (
     <Box component="main" maw="25rem" mx="auto" px="md" py="xxl">
-      <Title order={1} mb="xs">
-        Page not found
-      </Title>
-      <Text c="dimmed" mb="md">
-        The link may be old, or mistyped.
-      </Text>
-      <AnchorLink to="/">Go to your courses</AnchorLink>
+      <NotFoundState
+        title={t('notFound.title')}
+        description={t('notFound.description')}
+        back={<AnchorLink to="/">{t('notFound.home')}</AnchorLink>}
+      />
     </Box>
   );
 }

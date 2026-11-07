@@ -1,7 +1,9 @@
 import { NativeSelect, Text } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, type Schemas } from '@/shared/api';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
+import { coursesQuery } from '@/entities/course';
+import { errorCode, type Schemas } from '@/shared/api';
 import { showWith } from '../api/picks';
 import { linkedCourse, ownCourses } from '../lib/own-courses';
 import { showWithErrorText } from '../lib/pick-error';
@@ -17,26 +19,34 @@ export function ShowWith({
   portal: string;
   course: Schemas['CatalogCourseResponse'];
 }) {
+  const { t } = useTranslation('sources');
   const queryClient = useQueryClient();
-  const courses = api.useQuery('get', '/api/courses');
+  const courses = useQuery(coursesQuery());
+  const refresh = () =>
+    Promise.all(
+      ['/api/portals/{portal}/catalog', '/api/courses'].map((path) =>
+        queryClient.invalidateQueries({ queryKey: ['get', path] }),
+      ),
+    );
   const move = useMutation({
     mutationFn: async (into: string | null) => {
       await showWith(portal, course.externalId, into);
     },
-    onSuccess: () =>
-      Promise.all(
-        ['/api/portals/{portal}/catalog', '/api/courses'].map((path) =>
-          queryClient.invalidateQueries({ queryKey: ['get', path] }),
-        ),
-      ),
-    onError: (error) =>
-      notifications.show({ color: 'red', message: showWithErrorText(error) }),
+    onSuccess: refresh,
+    onError: (error) => {
+      notifications.show({
+        color: 'red',
+        message: showWithErrorText(t, error),
+      });
+      // the course is no longer the user's own: what they see is read again
+      if (errorCode(error) === 'NOT_YOUR_COURSE') void refresh();
+    },
   });
   const linked = linkedCourse(courses.data ?? [], portal, course.externalId);
   if (linked)
     return (
       <Text size="sm" c="dimmed">
-        Shown with {linked.name}, as an admin linked it.
+        {t('showWith.linked', { name: linked.name })}
       </Text>
     );
   const own = ownCourses(courses.data ?? []);
@@ -47,10 +57,10 @@ export function ShowWith({
   const value = (move.isPending ? move.variables : course.into) ?? '';
   return (
     <NativeSelect
-      label="Show with"
+      label={t('showWith.label')}
       description={
         suggested && value !== suggested.slug
-          ? `${suggested.name} has some of the same files.`
+          ? t('showWith.sameFiles', { name: suggested.name })
           : undefined
       }
       size="sm"
@@ -59,11 +69,11 @@ export function ShowWith({
       value={value}
       onChange={(event) => move.mutate(event.currentTarget.value || null)}
       data={[
-        { value: '', label: 'On its own' },
+        { value: '', label: t('showWith.alone') },
         ...(suggested
           ? [
               {
-                group: 'Suggested',
+                group: t('showWith.suggested'),
                 items: [{ value: suggested.slug, label: suggested.name }],
               },
             ]
@@ -71,7 +81,7 @@ export function ShowWith({
         ...(rest.length
           ? [
               {
-                group: suggested ? 'Your other courses' : 'Your courses',
+                group: t(suggested ? 'showWith.others' : 'showWith.yours'),
                 items: rest.map(({ slug, name }) => ({
                   value: slug,
                   label: name,

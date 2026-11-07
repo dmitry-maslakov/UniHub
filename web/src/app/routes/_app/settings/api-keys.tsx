@@ -1,8 +1,8 @@
-import { createFileRoute } from '@tanstack/react-router';
-import { ApiKeysPage } from '@/pages/api-keys';
-import { pageHead } from '@/shared/lib';
+import { createFileRoute, redirect } from '@tanstack/react-router';
 
+// where API keys were made before Connect AI
 export const Route = createFileRoute('/_app/settings/api-keys')({
-  head: pageHead('API keys'),
-  component: ApiKeysPage,
+  beforeLoad: () => {
+    throw redirect({ to: '/connect', replace: true });
+  },
 });

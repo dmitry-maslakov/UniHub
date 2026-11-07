@@ -1,13 +1,13 @@
 import { ApiError } from '@/shared/api';
 
-// What a failed search says, and what to do next
-export function searchErrorText(error: unknown) {
+// the key of what a failed search says
+export function searchErrorKey(error: unknown) {
   switch (error instanceof ApiError ? error.status : undefined) {
     case 429:
-      return 'Slow down: search allows 20 searches a minute. Wait a moment, then search again.';
+      return 'error.rateLimited';
     case 503:
-      return 'Search is unavailable right now. Try again in a little while.';
+      return 'error.unavailable';
     default:
-      return "Couldn't search just now. Try again.";
+      return 'error.other';
   }
 }

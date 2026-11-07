@@ -1,30 +1,28 @@
 import { NavLink, Stack } from '@mantine/core';
-import { Link } from '@tanstack/react-router';
+import { Link, useRouterState } from '@tanstack/react-router';
+import { useTranslation } from 'react-i18next';
+import { isCurrent } from '../lib/is-current';
+import { navItems } from '../model/nav-items';
 import classes from './app-layout.module.css';
 
-const items = [
-  { to: '/', label: 'My courses' },
-  { to: '/search', label: 'Search' },
-  { to: '/sources', label: 'Sources' },
-  { to: '/account', label: 'Account' },
-  { to: '/settings/api-keys', label: 'API keys' },
-] as const;
-
-// My courses is the home page, so only an exact match is it
-const exact = (to: string) => ({ exact: to === '/' });
+const usePathname = () =>
+  useRouterState({ select: (s) => s.location.pathname });
 
 // The header's links on wide screens
 export function MainNav() {
+  const { t } = useTranslation('shell');
+  const pathname = usePathname();
   return (
-    <nav aria-label="Main" className={classes.nav}>
-      {items.map((item) => (
+    <nav aria-label={t('nav.aria')} className={classes.nav}>
+      {navItems.map((item) => (
         <Link
           key={item.to}
           to={item.to}
           className={classes.link}
-          activeOptions={exact(item.to)}
+          activeOptions={{ exact: true }}
+          aria-current={isCurrent(pathname, item.to) ? 'page' : undefined}
         >
-          {item.label}
+          {t(item.label)}
         </Link>
       ))}
     </nav>
@@ -33,18 +31,25 @@ export function MainNav() {
 
 // The same links in the drawer on narrow ones
 export function DrawerNav({ onNavigate }: { onNavigate: () => void }) {
+  const { t } = useTranslation('shell');
+  const pathname = usePathname();
   return (
-    <Stack component="nav" aria-label="Main" gap={4}>
-      {items.map((item) => (
-        <NavLink
-          key={item.to}
-          component={Link}
-          to={item.to}
-          label={item.label}
-          activeOptions={exact(item.to)}
-          onClick={onNavigate}
-        />
-      ))}
+    <Stack component="nav" aria-label={t('nav.aria')} gap={4}>
+      {navItems.map((item) => {
+        const current = isCurrent(pathname, item.to);
+        return (
+          <NavLink
+            key={item.to}
+            component={Link}
+            to={item.to}
+            label={t(item.label)}
+            active={current}
+            aria-current={current ? 'page' : undefined}
+            onClick={onNavigate}
+            styles={{ root: { minHeight: 44 } }}
+          />
+        );
+      })}
     </Stack>
   );
 }

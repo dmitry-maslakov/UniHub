@@ -6,7 +6,19 @@ import { renderApp } from './render';
 import { server, signedIn } from './server';
 
 const search = (handler: Parameters<typeof http.get>[1]) =>
-  server.use(http.get('http://localhost:3000/api/search', handler));
+  server.use(
+    http.get('http://localhost:3000/api/search', handler),
+    http.get('http://localhost:3000/api/courses', () =>
+      HttpResponse.json([
+        {
+          slug: 'os',
+          name: 'Operating systems',
+          sources: [],
+          portalCourses: [],
+        },
+      ]),
+    ),
+  );
 
 describe('search', () => {
   it('reads the words from the address, and links a hit to its course', async () => {
@@ -47,6 +59,10 @@ describe('search', () => {
     expect(
       within(list).getByRole('link', { name: 'Download' }),
     ).toHaveAttribute('href', '/api/files/f1/content');
+    // the course by its name, not its slug
+    expect(
+      await within(list).findByText('Operating systems · page 3'),
+    ).toBeVisible();
   });
 
   it('puts what is typed into the address', async () => {
@@ -60,9 +76,7 @@ describe('search', () => {
     );
     await userEvent.click(screen.getByRole('button', { name: 'Search' }));
 
-    expect(
-      await screen.findByText(/Nothing in your courses matches/),
-    ).toBeVisible();
+    expect(await screen.findByText(/Nothing matches/)).toBeVisible();
     expect(router.state.location.search).toEqual({ q: 'heap' });
   });
 
@@ -85,9 +99,7 @@ describe('search words', () => {
     });
     renderApp('/search?q=%20%20stack%20');
 
-    expect(
-      await screen.findByText(/Nothing in your courses matches/),
-    ).toBeVisible();
+    expect(await screen.findByText(/Nothing matches/)).toBeVisible();
     expect(asked).toBe('stack');
   });
 });

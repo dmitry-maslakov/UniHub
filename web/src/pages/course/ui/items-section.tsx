@@ -1,14 +1,31 @@
-import { Anchor, Button, Loader, Stack, Text, Title } from '@mantine/core';
+import { Anchor, Button } from '@mantine/core';
+import { useTranslation } from 'react-i18next';
+import { useKindLabel } from '@/entities/course';
+import { usePortalLabel } from '@/entities/source';
 import { api } from '@/shared/api';
+import { useFormat } from '@/shared/i18n';
 import { webAddress } from '@/shared/lib';
-import { day } from '../lib/format';
+import {
+  EmptyState,
+  ErrorState,
+  ListSkeleton,
+  QueryState,
+  Row,
+  RowAction,
+  RowList,
+  RowText,
+  Section,
+} from '@/shared/ui';
 import { useDeepLink } from '../lib/use-deep-link';
-import classes from './course.module.css';
 
 const PAGE = 50;
 
 // A course's posts, newest first, fifty at a time
 export function ItemsSection({ slug }: { slug: string }) {
+  const { t } = useTranslation(['courses', 'common']);
+  const { date } = useFormat();
+  const kind = useKindLabel();
+  const portal = usePortalLabel();
   const items = api.useInfiniteQuery(
     'get',
     '/api/courses/{slug}/items',
@@ -31,49 +48,60 @@ export function ItemsSection({ slug }: { slug: string }) {
   );
 
   return (
-    <Stack component="section" gap="xs" aria-labelledby="posts">
-      <Title order={2} id="posts">
-        Posts
-      </Title>
-      {items.isPending && <Loader size="sm" aria-label="Loading posts" />}
-      {items.isError && (
-        <Text c="red" role="alert">
-          Couldn't load the posts. Reload the page to try again.
-        </Text>
-      )}
-      {items.data && !rows.length && (
-        <Text c="dimmed">No posts in this course yet.</Text>
-      )}
-      {rows.length > 0 && (
-        <ul className={classes.list} aria-labelledby="posts">
-          {rows.map((item) => {
-            const address = webAddress(item.url);
-            return (
-              <li key={item.id} id={`item-${item.id}`} className={classes.row}>
-                <Stack gap={2} miw={0}>
-                  <Text fw={600}>{item.title ?? item.kind}</Text>
-                  <Text size="sm" c="dimmed">
-                    {[item.kind, day(item.publishedAt)]
-                      .filter(Boolean)
-                      .join(' · ')}
-                    {item.raw === null && ' · Not available yet'}
-                  </Text>
-                </Stack>
-                {address && (
-                  <Anchor
-                    href={address}
-                    size="sm"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={`Open ${item.title ?? item.kind} on ${item.portal}`}
-                  >
-                    On {item.portal}
-                  </Anchor>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+    <Section title={t('posts.title')} id="posts">
+      <QueryState
+        query={items}
+        loading={<ListSkeleton label={t('posts.loading')} />}
+        isEmpty={() => !rows.length}
+        empty={
+          <EmptyState title={t('posts.empty.title')}>
+            {t('posts.empty.body')}
+          </EmptyState>
+        }
+      >
+        {() => (
+          <RowList label={t('posts.aria')}>
+            {rows.map((item) => {
+              const address = webAddress(item.url);
+              const title = item.title ?? kind(item.kind);
+              return (
+                <Row key={item.id} id={`item-${item.id}`}>
+                  <RowText
+                    title={title}
+                    meta={[
+                      // an untitled post is named by its kind already
+                      item.title && kind(item.kind),
+                      date(item.publishedAt),
+                      item.raw === null && t('common:state.notAvailableYet'),
+                    ]}
+                  />
+                  {address && (
+                    <RowAction>
+                      <Anchor
+                        href={address}
+                        size="sm"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={t('posts.openOnAria', {
+                          title,
+                          portal: portal(item.portal),
+                        })}
+                      >
+                        {t('posts.openOn', { portal: portal(item.portal) })}
+                      </Anchor>
+                    </RowAction>
+                  )}
+                </Row>
+              );
+            })}
+          </RowList>
+        )}
+      </QueryState>
+      {items.isFetchNextPageError && (
+        <ErrorState
+          error={items.error}
+          onRetry={() => void items.fetchNextPage()}
+        />
       )}
       {items.hasNextPage && (
         <Button
@@ -82,9 +110,9 @@ export function ItemsSection({ slug }: { slug: string }) {
           loading={items.isFetchingNextPage}
           onClick={() => void items.fetchNextPage()}
         >
-          Show more posts
+          {t('posts.more')}
         </Button>
       )}
-    </Stack>
+    </Section>
   );
 }

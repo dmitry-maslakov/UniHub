@@ -24,16 +24,16 @@ describe('sign-in', () => {
         HttpResponse.json({ apiKeys: [], total: 0 }),
       ),
     );
-    const { router } = renderApp('/sign-in?next=/settings/api-keys');
+    const { router } = renderApp('/sign-in?next=/connect');
 
     await userEvent.type(await screen.findByLabelText('Email'), 'ana@uni.test');
     await userEvent.type(screen.getByLabelText('Password'), 'pw');
     await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
 
     expect(
-      await screen.findByRole('heading', { name: 'API keys' }),
+      await screen.findByRole('heading', { name: 'Connect AI' }),
     ).toBeInTheDocument();
-    expect(router.state.location.pathname).toBe('/settings/api-keys');
+    expect(router.state.location.pathname).toBe('/connect');
   });
 
   it('says what went wrong', async () => {

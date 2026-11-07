@@ -1,96 +1,76 @@
 import { Anchor, List, Stack, Text } from '@mantine/core';
-import { PageTitle } from '@/shared/ui';
-import { CONTACT, UPDATED } from '../model/policy';
-import { Section } from './section';
+import { Trans, useTranslation } from 'react-i18next';
+import { useFormat } from '@/shared/i18n';
+import { PageTitle, Section } from '@/shared/ui';
+import { CONTACT, SITE, UPDATED } from '../model/policy';
 
 export function PrivacyPage() {
-  const mail = <Anchor href={`mailto:${CONTACT}`}>{CONTACT}</Anchor>;
+  const { t } = useTranslation('privacy');
+  const { date } = useFormat();
+  // the contact's address, a link to write to; a paragraph that holds it
+  const mail = { mail: <Anchor href={`mailto:${CONTACT}`} /> };
   return (
     <>
-      <PageTitle description={`Last updated ${UPDATED}`}>
-        Privacy policy
+      <PageTitle
+        description={t('updated', { date: date(`${UPDATED}T12:00:00`) })}
+      >
+        {t('title')}
       </PageTitle>
       <Stack gap="xl">
-        <Section title="Who runs it">
+        <Section title={t('who.title')}>
           <Text>
-            UniHub at unihub.rs is run by an individual student developer.
-            Questions about your data go to {mail}.
+            <Trans
+              t={t}
+              i18nKey="who.body"
+              values={{ site: SITE, contact: CONTACT }}
+              components={mail}
+            />
           </Text>
         </Section>
 
-        <Section title="What we store, and why">
-          <Text>Your account, so you can sign in and use the hub:</Text>
+        <Section title={t('stored.title')}>
+          <Text>{t('stored.intro')}</Text>
           <List>
-            <List.Item>your email and name;</List.Item>
-            <List.Item>
-              a password hash, or a link to your Google sign-in;
-            </List.Item>
-            <List.Item>
-              your sessions, with the IP address and browser (user agent) each
-              was made from;
-            </List.Item>
-            <List.Item>your API keys, stored hashed;</List.Item>
-            <List.Item>
-              consents and tokens for the AI apps you connect.
-            </List.Item>
+            <List.Item>{t('stored.items.email')}</List.Item>
+            <List.Item>{t('stored.items.password')}</List.Item>
+            <List.Item>{t('stored.items.sessions')}</List.Item>
+            <List.Item>{t('stored.items.keys')}</List.Item>
+            <List.Item>{t('stored.items.consents')}</List.Item>
           </List>
-          <Text>
-            Portal tokens you link are encrypted at rest. They are write-only:
-            you can replace or remove one, but nothing shows it back.
-          </Text>
-          <Text>
-            Course content fetched from learning portals with your own token, or
-            with the operator's: posts, files, the text extracted from them and
-            the search index built on it. You see only your own view of it.
-          </Text>
+          <Text>{t('stored.tokens')}</Text>
+          <Text>{t('stored.content')}</Text>
         </Section>
 
-        <Section title="Google sign-in">
-          <Text>
-            Signing in with Google reads only your basic profile and email (the
-            openid, email and profile scopes). Nothing else is requested from
-            Google, and Google data is used for nothing but signing you in.
-          </Text>
+        <Section title={t('google.title')}>
+          <Text>{t('google.body')}</Text>
         </Section>
 
-        <Section title="Sharing">
-          <Text>
-            We don't sell data, show ads, or use third-party analytics or
-            trackers. Three kinds of processors are involved:
-          </Text>
+        <Section title={t('sharing.title')}>
+          <Text>{t('sharing.intro')}</Text>
           <List>
-            <List.Item>Resend delivers our emails;</List.Item>
-            <List.Item>Cloudflare carries the traffic;</List.Item>
-            <List.Item>
-              the AI apps you choose to connect get read-only access to what you
-              can read, and nothing more.
-            </List.Item>
+            <List.Item>{t('sharing.items.mail')}</List.Item>
+            <List.Item>{t('sharing.items.traffic')}</List.Item>
+            <List.Item>{t('sharing.items.apps')}</List.Item>
           </List>
         </Section>
 
-        <Section title="Keeping and deleting your data">
+        <Section title={t('keeping.title')}>
           <Text>
-            When your account is deleted, your sessions, API keys, linked portal
-            accounts and tokens, and your connected apps' consents and tokens
-            are deleted with it, and so is what your linked portal accounts
-            brought in that no other account can see. Course content that other
-            accounts can also see stays while they do. To have your account
-            deleted, write to {mail}.
+            <Trans
+              t={t}
+              i18nKey="keeping.body"
+              values={{ contact: CONTACT }}
+              components={mail}
+            />
           </Text>
         </Section>
 
-        <Section title="Security">
-          <Text>
-            The hub is served over HTTPS only. Portal tokens are encrypted, and
-            API keys are stored hashed.
-          </Text>
+        <Section title={t('security.title')}>
+          <Text>{t('security.body')}</Text>
         </Section>
 
-        <Section title="Changes">
-          <Text>
-            If this policy changes, this page changes, and the date at the top
-            with it.
-          </Text>
+        <Section title={t('changes.title')}>
+          <Text>{t('changes.body')}</Text>
         </Section>
       </Stack>
     </>

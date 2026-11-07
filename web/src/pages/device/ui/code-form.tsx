@@ -1,19 +1,19 @@
 import { Button, Stack, TextInput } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useNavigate } from '@tanstack/react-router';
+import { useTranslation } from 'react-i18next';
 import { normalizeCode } from '../lib/user-code';
 
 // The code typed in, for a screen whose QR code can't be scanned
 export function CodeForm({ initial = '' }: { initial?: string }) {
+  const { t } = useTranslation('device');
   const navigate = useNavigate();
   const form = useForm({
     mode: 'uncontrolled',
     initialValues: { code: initial },
     validate: {
       code: (value) =>
-        /^[A-Z0-9]{4,}$/.test(normalizeCode(value))
-          ? null
-          : 'Enter the code the screen shows',
+        /^[A-Z0-9]{4,}$/.test(normalizeCode(value)) ? null : t('form.invalid'),
     },
   });
   return (
@@ -25,7 +25,7 @@ export function CodeForm({ initial = '' }: { initial?: string }) {
     >
       <Stack gap="md" align="stretch">
         <TextInput
-          label="Code on the screen"
+          label={t('form.label')}
           placeholder="ABCD-EFGH"
           autoComplete="off"
           autoCapitalize="characters"
@@ -39,7 +39,7 @@ export function CodeForm({ initial = '' }: { initial?: string }) {
           key={form.key('code')}
           {...form.getInputProps('code')}
         />
-        <Button type="submit">Continue</Button>
+        <Button type="submit">{t('form.action')}</Button>
       </Stack>
     </form>
   );

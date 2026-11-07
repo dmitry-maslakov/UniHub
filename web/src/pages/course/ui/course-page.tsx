@@ -1,7 +1,14 @@
-import { Loader, Stack, Text } from '@mantine/core';
+import { Stack } from '@mantine/core';
 import { getRouteApi } from '@tanstack/react-router';
-import { api } from '@/shared/api';
-import { AnchorLink, PageTitle } from '@/shared/ui';
+import { useTranslation } from 'react-i18next';
+import { useCourse } from '@/entities/course';
+import {
+  AnchorLink,
+  ListSkeleton,
+  NotFoundState,
+  PageTitle,
+  QueryState,
+} from '@/shared/ui';
 import { FilesSection } from './files-section';
 import { ItemsSection } from './items-section';
 import { SourcesStrip } from './sources-strip';
@@ -12,35 +19,35 @@ const route = getRouteApi('/_app/courses/$slug');
 // sources come from the list, which also says whether the user may read it
 // at all.
 export function CoursePage() {
+  const { t } = useTranslation('courses');
   const { slug } = route.useParams();
-  const courses = api.useQuery('get', '/api/courses');
-  const course = courses.data?.find((c) => c.slug === slug);
-
-  if (courses.isPending) return <Loader size="sm" aria-label="Loading" />;
-  if (courses.isError)
-    return (
-      <Text c="red" role="alert">
-        Couldn't load this course. Reload the page to try again.
-      </Text>
-    );
-  if (!course)
-    return (
-      <>
-        <PageTitle description="It may have been removed, or it isn't one of yours.">
-          Course not found
-        </PageTitle>
-        <AnchorLink to="/">Back to your courses</AnchorLink>
-      </>
-    );
+  const { query, course } = useCourse(slug);
 
   return (
-    <>
-      <PageTitle>{course.name}</PageTitle>
-      <Stack gap="xxl">
-        <SourcesStrip portalCourses={course.portalCourses} />
-        <ItemsSection slug={slug} />
-        <FilesSection slug={slug} />
-      </Stack>
-    </>
+    <QueryState
+      query={query}
+      loading={<ListSkeleton rows={3} label={t('list.loading')} />}
+      isEmpty={() => !course}
+      empty={
+        <NotFoundState
+          title={t('course.notFound.title')}
+          description={t('course.notFound.description')}
+          back={<AnchorLink to="/">{t('course.notFound.back')}</AnchorLink>}
+        />
+      }
+    >
+      {() =>
+        course && (
+          <>
+            <PageTitle>{course.name}</PageTitle>
+            <Stack gap="xxl">
+              <SourcesStrip portalCourses={course.portalCourses} />
+              <ItemsSection slug={slug} />
+              <FilesSection slug={slug} />
+            </Stack>
+          </>
+        )
+      }
+    </QueryState>
   );
 }

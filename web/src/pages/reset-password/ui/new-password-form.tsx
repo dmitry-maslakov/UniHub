@@ -3,6 +3,8 @@ import { schemaResolver, useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
 import { useMutation } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
+import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { z } from 'zod';
 import { useSessionActions } from '@/entities/session';
 import { authClient, authError } from '@/shared/api';
@@ -12,22 +14,24 @@ import { newPasswordSchema } from '../model/schema';
 // Sets the new password. Better Auth signs out every session and the hub
 // drops the user's API keys with it, so they sign in afresh.
 export function NewPasswordForm({ token }: { token: string }) {
+  const { t } = useTranslation('auth');
+  const schema = useMemo(() => newPasswordSchema(t), [t]);
   const navigate = useNavigate();
   const { refresh } = useSessionActions();
-  const form = useForm<z.infer<typeof newPasswordSchema>>({
+  const form = useForm<z.infer<typeof schema>>({
     mode: 'uncontrolled',
     initialValues: { password: '', confirm: '' },
-    validate: schemaResolver(newPasswordSchema, { sync: true }),
+    validate: schemaResolver(schema, { sync: true }),
   });
   const reset = useMutation({
-    mutationFn: ({ password }: z.infer<typeof newPasswordSchema>) =>
+    mutationFn: ({ password }: z.infer<typeof schema>) =>
       authClient.resetPassword({ newPassword: password, token }),
     onSuccess: async () => {
       // every session ended with it, this browser's too
       await refresh();
       notifications.show({
-        title: 'Password changed',
-        message: 'Sign in with your new password.',
+        title: t('newPassword.notify.title'),
+        message: t('newPassword.notify.body'),
       });
       await navigate({ to: '/sign-in' });
     },
@@ -38,21 +42,18 @@ export function NewPasswordForm({ token }: { token: string }) {
       <Stack gap="md">
         {reset.isError && (
           <Alert color="red" role="alert">
-            {authMessage(
-              authError(reset.error),
-              "Couldn't change your password. Try again.",
-            )}
+            {authMessage(authError(reset.error), t('newPassword.failed'))}
           </Alert>
         )}
         <PasswordInput
-          label="New password"
+          label={t('newPassword.label')}
           autoComplete="new-password"
-          description="At least 8 characters."
+          description={t('newPassword.help')}
           key={form.key('password')}
           {...form.getInputProps('password')}
         />
         <PasswordInput
-          label="New password again"
+          label={t('newPassword.confirm')}
           autoComplete="new-password"
           key={form.key('confirm')}
           {...form.getInputProps('confirm')}
@@ -62,7 +63,7 @@ export function NewPasswordForm({ token }: { token: string }) {
           fullWidth
           loading={reset.isPending || reset.isSuccess}
         >
-          Change password
+          {t('newPassword.action')}
         </Button>
       </Stack>
     </form>

@@ -54,6 +54,7 @@ const setup = (items: unknown[] = posts, files: unknown[] = []) => {
       return HttpResponse.json(items.slice(offset, offset + 50));
     }),
     http.get(api('/courses/os/files'), () => HttpResponse.json(files)),
+    http.get(api('/me/portals'), () => HttpResponse.json([])),
   );
 };
 
@@ -75,14 +76,41 @@ describe('course page', () => {
     ).toBeNull();
   });
 
+  it('says when the next page of posts fails, and loads it on retry', async () => {
+    setup();
+    let failing = true;
+    server.use(
+      http.get(api('/courses/os/items'), ({ request }) => {
+        const offset = Number(
+          new URL(request.url).searchParams.get('offset') ?? 0,
+        );
+        return offset > 0 && failing
+          ? HttpResponse.json({ statusCode: 500 }, { status: 500 })
+          : HttpResponse.json(posts.slice(offset, offset + 50));
+      }),
+    );
+    renderApp('/courses/os');
+    expect(await screen.findByText('Post 50')).toBeVisible();
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Show more posts' }),
+    );
+
+    expect(
+      await screen.findByText("Couldn't load this", {}, { timeout: 8000 }),
+    ).toBeVisible();
+    expect(screen.getByText('Post 50')).toBeVisible();
+    failing = false;
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+    expect(await screen.findByText('Post 51')).toBeVisible();
+  }, 20000);
+
   it('says a locked post and a file without content are not available yet', async () => {
     setup([post(1, null)], [file(1, false), file(2)]);
     renderApp('/courses/os');
 
     expect(
-      await screen.findByText(
-        /Announcement.*Not available yet|announcement.*Not available yet/,
-      ),
+      await screen.findByText(/Announcement.*Not available yet/),
     ).toBeVisible();
     expect(
       await screen.findByText(/lectures · 1.4 MB · Not available yet/),
@@ -160,5 +188,42 @@ describe('course page', () => {
     expect(within(picked).getByText('catalog')).toBeVisible();
     expect(within(picked).queryByRole('link')).toBeNull();
     expect(within(picked).getByText(/picked by you/)).toBeVisible();
+  });
+
+  it('names the portal a post opens on by its label', async () => {
+    setup([{ ...post(1), url: 'https://canvas.example.edu/courses/1/a/1' }]);
+    server.use(
+      http.get(api('/me/portals'), () =>
+        HttpResponse.json([
+          {
+            portal: 'canvas',
+            label: 'Canvas',
+            mode: 'token',
+            linked: true,
+            instance: null,
+            status: 'linked',
+            expiresAt: null,
+            picked: null,
+          },
+        ]),
+      ),
+    );
+    renderApp('/courses/os');
+
+    expect(
+      await screen.findByRole('link', { name: 'Open Post 1 on Canvas' }),
+    ).toHaveTextContent('On Canvas');
+  });
+
+  it('says the course is not found when it is not in the list', async () => {
+    setup();
+    renderApp('/courses/other');
+
+    expect(
+      await screen.findByRole('heading', { name: 'Course not found' }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole('link', { name: 'Back to My courses' }),
+    ).toHaveAttribute('href', '/');
   });
 });

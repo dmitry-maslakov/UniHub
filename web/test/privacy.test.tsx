@@ -10,7 +10,7 @@ describe('privacy policy', () => {
       await screen.findByRole('heading', { name: 'Privacy policy' }),
     ).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/privacy');
-    expect(screen.getByText('Last updated 2026-11-06')).toBeInTheDocument();
+    expect(screen.getByText('Last updated Nov 6, 2026')).toBeInTheDocument();
     expect(
       screen.getAllByRole('link', {
         name: 'unihub-support@googlegroups.com',

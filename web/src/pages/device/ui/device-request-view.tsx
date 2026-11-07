@@ -1,27 +1,27 @@
-import { Alert, Loader, Stack, Text } from '@mantine/core';
+import { Alert, Stack, Text, ThemeIcon } from '@mantine/core';
 import { IconCircleCheck, IconCircleX } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { authError } from '@/shared/api';
+import { AnchorLink, TextSkeleton } from '@/shared/ui';
 import { deviceRequest } from '../api/device-request';
 import { CodeForm } from './code-form';
 import { DeviceDecision } from './device-decision';
-import { AnchorLink } from '@/shared/ui';
 
 // What became of a code: still to answer, answered, or not one at all
 export function DeviceRequestView({ code }: { code: string }) {
+  const { t } = useTranslation(['device', 'shell']);
   const request = useQuery(deviceRequest(code));
 
   if (request.isPending)
-    return <Loader size="sm" aria-label="Looking up the code" />;
+    return <TextSkeleton lines={2} label={t('lookingUp')} />;
 
   if (request.isError) {
     const expired = authError(request.error)?.code === 'expired_token';
     return (
       <Stack gap="lg">
         <Alert color="red" role="alert">
-          {expired
-            ? 'That code has expired. Start again on the screen to get a new one.'
-            : "That code isn't one we know. Check it against the screen and enter it again."}
+          {expired ? t('expired') : t('unknown')}
         </Alert>
         <CodeForm />
       </Stack>
@@ -36,20 +36,18 @@ export function DeviceRequestView({ code }: { code: string }) {
   const Icon = approved ? IconCircleCheck : IconCircleX;
   return (
     <Stack gap="md" align="flex-start">
-      <Icon
+      <ThemeIcon
+        variant="transparent"
         size={32}
-        stroke={1.5}
-        color={`var(--mantine-color-${approved ? 'petrol' : 'gray'}-filled)`}
-      />
+        c={approved ? 'petrol' : 'dimmed'}
+      >
+        <Icon size={32} stroke={1.5} />
+      </ThemeIcon>
       <Text fw={600} size="lg">
-        {approved ? 'Approved' : 'Denied'}
+        {approved ? t('approved.title') : t('denied.title')}
       </Text>
-      <Text c="dimmed">
-        {approved
-          ? 'The screen signs in on its own in a moment. You can close this page.'
-          : "The screen won't be signed in. If that was a mistake, start again on it."}
-      </Text>
-      <AnchorLink to="/">Go to your courses</AnchorLink>
+      <Text c="dimmed">{approved ? t('approved.body') : t('denied.body')}</Text>
+      <AnchorLink to="/">{t('shell:notFound.home')}</AnchorLink>
     </Stack>
   );
 }

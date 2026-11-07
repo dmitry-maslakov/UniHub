@@ -28,7 +28,7 @@ One place, and one account, for the materials of every course, built so an AI ag
 
 - Sign-in: email and password with a confirmed email, Google when the hub has it set up, sessions by cookie. What outlasts a session (an API key, approving a screen) needs one signed in within a day.
 - API keys expire after 90 days; a new password revokes them all.
-- UI text is English only for now.
+- UI text in Serbian (Latin) and English, chosen from the browser and switchable.
 - A generic hub: no school, portal or deployment is named anywhere in the product.
 
 ## Brand Commitments

@@ -1,7 +1,7 @@
 import {
-  Button,
   Group,
   Loader,
+  Pagination,
   Stack,
   Text,
   TextInput,
@@ -9,17 +9,19 @@ import {
   type TitleOrder,
 } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
+import { keepPreviousData } from '@tanstack/react-query';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { api, type Schemas } from '@/shared/api';
+import { EmptyState, ListSkeleton, QueryState, RowList } from '@/shared/ui';
 import { CatalogRow } from './catalog-row';
-import classes from './portal-catalog.module.css';
 
-const PAGE = 20;
+const PAGE = 10;
 
 // A public portal's catalog: the courses of a site anyone can read, each
-// picked or not, searched by name, twenty at a time so a long catalog
-// doesn't bury the portals after it. What the user picks is what the hub
-// reads for them there.
+// picked or not, searched by name, ten a page so that a long catalog never
+// buries the sources after it. What the user picks is what the hub reads
+// for them there.
 export function PortalCatalog({
   portal,
   order,
@@ -27,94 +29,107 @@ export function PortalCatalog({
   portal: Schemas['PortalResponse'];
   order: TitleOrder;
 }) {
+  const { t } = useTranslation(['sources', 'common']);
   const [search, setSearch] = useState('');
   const [q] = useDebouncedValue(search.trim(), 300);
-  const catalog = api.useInfiniteQuery(
+  // the page asked for, with the words it was asked for: new words start
+  // at the first
+  const [paging, setPaging] = useState({ q: '', page: 1 });
+  const page = paging.q === q ? paging.page : 1;
+  const catalog = api.useQuery(
     'get',
     '/api/portals/{portal}/catalog',
     {
       params: {
         path: { portal: portal.portal },
-        query: { limit: PAGE, ...(q && { q }) },
+        query: { limit: PAGE, offset: (page - 1) * PAGE, ...(q && { q }) },
       },
     },
-    {
-      pageParamName: 'offset',
-      initialPageParam: 0,
-      getNextPageParam: (last, all) => {
-        const shown = all.reduce((n, page) => n + page.courses.length, 0);
-        return shown < last.total ? shown : undefined;
-      },
-      placeholderData: (previous) => previous,
-    },
+    { placeholderData: keepPreviousData },
   );
-  const courses = catalog.data?.pages.flatMap((page) => page.courses) ?? [];
-  const listId = `catalog-${portal.portal}`;
 
   return (
     <Stack gap="sm">
       <Group justify="space-between" align="baseline" wrap="nowrap">
-        <Title order={order} id={listId}>
-          {portal.label}
-        </Title>
+        <Title order={order}>{portal.label}</Title>
         <Text size="sm" c="dimmed" style={{ flexShrink: 0 }}>
-          {portal.picked ? `${portal.picked} picked` : 'None picked'}
+          {portal.picked
+            ? t('catalog.picked', { count: portal.picked })
+            : t('catalog.nonePicked')}
         </Text>
       </Group>
       <Text size="sm" c="dimmed" maw="60ch">
-        A public site anyone can read. Pick the courses you follow: they show up
-        under My courses, and their posts and files once the hub next reads the
-        site. Show one with a course of your own to read the two in one place.
+        {t('catalog.description')}
       </Text>
       <TextInput
         type="search"
-        label="Find a course"
-        placeholder="Part of its name"
+        label={t('catalog.search.label')}
+        placeholder={t('catalog.search.placeholder')}
         value={search}
         onChange={(event) => setSearch(event.currentTarget.value)}
         rightSection={
-          catalog.isFetching && !catalog.isFetchingNextPage ? (
-            <Loader size="xs" aria-label="Searching" />
+          catalog.isFetching ? (
+            <Loader size="xs" aria-label={t('catalog.searching')} />
           ) : null
         }
         maw="24rem"
       />
-      {catalog.isPending && (
-        <Loader size="sm" aria-label={`Loading ${portal.label}'s courses`} />
-      )}
-      {catalog.isError && (
-        <Text c="red" role="alert">
-          Couldn't load the courses. Reload the page to try again.
-        </Text>
-      )}
-      {catalog.data && !courses.length && (
-        <Text c="dimmed">
-          {q
-            ? `No course's name has “${q}”.`
-            : 'The site lists no courses yet.'}
-        </Text>
-      )}
-      {courses.length > 0 && (
-        <ul className={classes.list} aria-labelledby={listId}>
-          {courses.map((course) => (
-            <CatalogRow
-              key={course.externalId}
-              portal={portal.portal}
-              course={course}
-            />
-          ))}
-        </ul>
-      )}
-      {catalog.hasNextPage && (
-        <Button
-          variant="default"
-          w="fit-content"
-          loading={catalog.isFetchingNextPage}
-          onClick={() => void catalog.fetchNextPage()}
-        >
-          Show more courses
-        </Button>
-      )}
+      <QueryState
+        query={catalog}
+        loading={
+          <ListSkeleton
+            rows={3}
+            label={t('catalog.loading', { label: portal.label })}
+          />
+        }
+        isEmpty={(data) => !data.courses.length}
+        empty={
+          q ? (
+            <EmptyState title={t('catalog.noMatch.title', { q })}>
+              {t('catalog.noMatch.body')}
+            </EmptyState>
+          ) : (
+            <EmptyState title={t('catalog.empty.title')}>
+              {t('catalog.empty.body')}
+            </EmptyState>
+          )
+        }
+      >
+        {(data) => (
+          <>
+            <RowList label={portal.label}>
+              {data.courses.map((course) => (
+                <CatalogRow
+                  key={course.externalId}
+                  portal={portal.portal}
+                  course={course}
+                />
+              ))}
+            </RowList>
+            {data.total > PAGE && (
+              <Pagination
+                mt="sm"
+                size="sm"
+                total={Math.ceil(data.total / PAGE)}
+                value={page}
+                siblings={0}
+                boundaries={1}
+                onChange={(p) => setPaging({ q, page: p })}
+                getControlProps={(control) => ({
+                  'aria-label': t(
+                    control === 'previous'
+                      ? 'common:pagination.previous'
+                      : 'common:pagination.next',
+                  ),
+                })}
+                getItemProps={(n) => ({
+                  'aria-label': t('common:pagination.page', { n }),
+                })}
+              />
+            )}
+          </>
+        )}
+      </QueryState>
     </Stack>
   );
 }

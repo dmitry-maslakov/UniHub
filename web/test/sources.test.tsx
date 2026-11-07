@@ -99,10 +99,10 @@ describe('sources', () => {
       await screen.findByLabelText("Your school's Canvas"),
       'canvas.example.edu',
     );
-    expect(screen.getByRole('link', { name: /Get a token/ })).toHaveAttribute(
-      'href',
-      `${SCHOOL}/profile/settings`,
-    );
+    const link = screen.getByRole('link', { name: /Get a token/ });
+    expect(link).toHaveAttribute('href', `${SCHOOL}/profile/settings`);
+    // the words are the link's own, not only its name
+    expect(link).toHaveTextContent('Get a token');
   });
 
   it('sends the token once, with the address, and keeps and shows it nowhere', async () => {
@@ -289,5 +289,38 @@ describe('sources', () => {
     );
 
     expect(await screen.findByText('Not linked.')).toBeVisible();
+  });
+
+  it('puts a source to link above a long catalog', async () => {
+    signedIn();
+    listPortals([
+      {
+        portal: 'catalog',
+        label: 'Course catalog',
+        mode: 'public',
+        linked: false,
+        instance: null,
+        status: null,
+        expiresAt: null,
+        picked: 0,
+      },
+      portals[1],
+    ]);
+    server.use(
+      http.get(api('/courses'), () => HttpResponse.json([])),
+      http.get(api('/portals/catalog/catalog'), () =>
+        HttpResponse.json({ total: 0, courses: [] }),
+      ),
+    );
+    renderApp('/sources');
+
+    const canvas = await screen.findByRole('heading', { name: 'Canvas' });
+    const catalog = await screen.findByRole('heading', {
+      name: 'Course catalog',
+    });
+    expect(
+      canvas.compareDocumentPosition(catalog) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 });

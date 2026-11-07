@@ -157,7 +157,41 @@ Flat. Depth comes from the hairline under the header and from overlays alone: me
 
 ### Navigation
 
-Header links in the label size, dimmed until hovered or current. The user's menu sits behind their initials, at the right.
+Header links in the label size, dimmed until hovered or current; My courses is current inside a course too. The one navigation is My courses, Search, Sources and Connect AI (and Admin, for admins). The user's menu sits behind their initials, at the right, and holds only what is theirs: Account, the color scheme, the language, Privacy and Sign out. Under 48em the links move into a drawer, each at least 44 px tall.
+
+### Lists
+
+- **Rows, never cards:** a list is a labelled list of rows with a hairline between them, none above the first or below the last. A row has padding of 16 px, its text on the left (a title in semibold, wrapping anywhere, and one dimmed line of meta parts joined by " · ") and at most one action on the right, which wraps under the text on a narrow screen.
+- **A row that opens something** is a link over the whole row: a quiet wash behind it on hover, the title underlined, the petrol focus ring on the keyboard.
+- **More** is a default button, "Show more …", under the list, never infinite scroll. Numbered pages only where the API gives a total.
+- **Badges** are small words in a light gray, for a state worth scanning for (a source, "New", "This device"). Red only for "Banned".
+
+### States
+
+Every view has all four, from the shared components and nothing else:
+
+- **Loading:** rows of skeleton lines, announced as loading. A page never blanks while it refetches.
+- **Empty:** a semibold line, a dimmed line saying what will fill it or what to do, at most one action. No icon, no illustration.
+- **Error:** a light red alert, "Couldn't load this", what happened by cause (offline, too many requests, unavailable, server, other) and a "Try again" button.
+- **Not found:** a page heading, why, and one link back.
+
+After an action, success is a notification (top center, message only); failure is a red alert next to the form that failed, or a red notification for a row action.
+
+### Destructive actions
+
+The trigger is a subtle red button. The confirmation asks in its title ("Revoke “Cursor”?"), says the consequence in one short sentence, and offers the verb ("Revoke key") in red beside "Keep it".
+
+### Copyable values
+
+A code, key, address or command is in monospace, with a "Copy" button beside it. Monospace is for nothing else.
+
+### Dark scheme
+
+Text on a filled petrol control is ink (#161a1a on #5fb1b5, 7:1) in the dark scheme and white in the light one. Red text on a subtle red button reads red in dark. The QR code's tile stays white with dark modules in both schemes, so a scanner can read it.
+
+### Language
+
+Serbian (Latin) and English. The language comes from the browser, can be switched from the user menu (or the header of the sign-in pages) and is remembered. Serbian is written in the informal second person singular ("Prijavi se", "Pokušaj ponovo"), with no verb form that guesses the user's gender. Words come from one glossary (predmet, objava, fajl, izvor, nalog, imejl), and a name, a code or an address stays as it is.
 
 ### Device code
 
