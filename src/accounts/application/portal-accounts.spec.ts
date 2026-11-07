@@ -491,7 +491,7 @@ describe('PortalAccounts', () => {
     expect(await service.viewing('ana', before)).toEqual({
       portals: [CANVAS, MOODLE],
       accounts: [moodle.account.id],
-      picks: { portals: [], courses: [] },
+      picks: { portals: [], courses: [], into: new Map() },
     });
     // nobody else's, nor one past its expiry
     expect((await service.viewing('cy', before)).accounts).toEqual([]);
@@ -513,20 +513,24 @@ describe('PortalAccounts', () => {
     expect(await shared.service.viewing('ana')).toEqual({
       portals: [],
       accounts: [],
-      picks: { portals: [], courses: [] },
+      picks: { portals: [], courses: [], into: new Map() },
     });
     expect(ofUser).not.toHaveBeenCalled();
   });
 
   it("reads a public portal by the user's picks alone, asking for no account", async () => {
     const { service, store, picks } = accounts({ links: { catalog: PUBLIC } });
-    picks.rows.push({ userId: 'ana', portalCourseId: 'pc-os' });
+    picks.rows.push({ userId: 'ana', portalCourseId: 'pc-os', into: 'pc-c1' });
     const ofUser = vi.spyOn(store, 'ofUser');
 
     expect(await service.viewing('ana')).toEqual({
       portals: [],
       accounts: [],
-      picks: { portals: [CATALOG], courses: ['pc-os'] },
+      picks: {
+        portals: [CATALOG],
+        courses: ['pc-os'],
+        into: new Map([['pc-os', 'pc-c1']]),
+      },
     });
     expect(ofUser).not.toHaveBeenCalled();
   });

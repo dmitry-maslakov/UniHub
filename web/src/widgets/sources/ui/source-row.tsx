@@ -1,4 +1,11 @@
-import { Button, Group, Stack, Text, Title } from '@mantine/core';
+import {
+  Button,
+  Group,
+  Stack,
+  Text,
+  Title,
+  type TitleOrder,
+} from '@mantine/core';
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -11,7 +18,13 @@ import classes from './sources.module.css';
 import { TokenForm } from './token-form';
 
 // One source: where the user's account of it stands, and what to do
-export function SourceRow({ portal }: { portal: Schemas['PortalResponse'] }) {
+export function SourceRow({
+  portal,
+  order,
+}: {
+  portal: Schemas['PortalResponse'];
+  order: TitleOrder;
+}) {
   const queryClient = useQueryClient();
   const [unavailable, setUnavailable] = useState(false);
   const { label } = portal;
@@ -49,7 +62,7 @@ export function SourceRow({ portal }: { portal: Schemas['PortalResponse'] }) {
       <Stack gap="md">
         <Group justify="space-between" align="flex-start" wrap="nowrap">
           <Stack gap={2} miw={0}>
-            <Title order={2}>{label}</Title>
+            <Title order={order}>{label}</Title>
             <Text size="sm" c="dimmed">
               {unavailable
                 ? `Linking your own account isn't open to you on ${label}. Ask an admin of the hub if you need it.`

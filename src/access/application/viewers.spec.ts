@@ -6,7 +6,7 @@ const [moodle, catalog] = ['moodle', 'catalog'].map((id) => PortalId.parse(id));
 const viewing = {
   portals: [moodle],
   accounts: ['ana-moodle'],
-  picks: { portals: [catalog], courses: ['os-picked'] },
+  picks: { portals: [catalog], courses: ['os-picked'], into: new Map() },
 };
 const scope = (granted: string[] | null, ownAccounts = true) =>
   ({ granted, ownAccounts }) as ReadScope;

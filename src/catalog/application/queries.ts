@@ -26,7 +26,9 @@ export interface CourseDto extends CourseRef {
     id: string;
     portal: PortalId;
     externalId: string;
+    // its name and address as the viewers see it
     name: string;
+    url: string | null;
     year: number | null;
   }[];
 }
@@ -113,10 +115,11 @@ export interface VisibleItemDto {
   publishedAt: Date | null;
 }
 
-// a file a course shows, by its content
+// a file a course shows, by its content, and the portal course it's in
 export interface VisibleContentDto {
   fileId: string;
   courseId: string;
+  portalCourseId: string;
   hash: ContentHash;
   name: string;
   path: string;

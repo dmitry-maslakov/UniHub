@@ -6,6 +6,7 @@ import {
   Text,
   TextInput,
   Title,
+  type TitleOrder,
 } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
 import { useState } from 'react';
@@ -21,8 +22,10 @@ const PAGE = 20;
 // reads for them there.
 export function PortalCatalog({
   portal,
+  order,
 }: {
   portal: Schemas['PortalResponse'];
+  order: TitleOrder;
 }) {
   const [search, setSearch] = useState('');
   const [q] = useDebouncedValue(search.trim(), 300);
@@ -51,7 +54,7 @@ export function PortalCatalog({
   return (
     <Stack gap="sm">
       <Group justify="space-between" align="baseline" wrap="nowrap">
-        <Title order={2} id={listId}>
+        <Title order={order} id={listId}>
           {portal.label}
         </Title>
         <Text size="sm" c="dimmed" style={{ flexShrink: 0 }}>
@@ -60,8 +63,8 @@ export function PortalCatalog({
       </Group>
       <Text size="sm" c="dimmed" maw="60ch">
         A public site anyone can read. Pick the courses you follow: they show up
-        under Courses, and their posts and files once the hub next reads the
-        site.
+        under My courses, and their posts and files once the hub next reads the
+        site. Show one with a course of your own to read the two in one place.
       </Text>
       <TextInput
         type="search"

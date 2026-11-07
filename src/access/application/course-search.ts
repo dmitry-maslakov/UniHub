@@ -11,9 +11,10 @@ import {
   ListContainedQuery,
   SearchTextsQuery,
 } from '../../processing/contracts.js';
+import { regroup } from './grouping.js';
 import { readableCourse } from './readable.js';
 import type { SearchRequest } from './search-request.js';
-import { readNothing, viewersOfUser } from './viewers.js';
+import { readingOf, readNothing } from './viewers.js';
 import { placesOf, searchResults, type SearchView } from './views.js';
 
 // Search over what a user may read, for REST and MCP. The index knows
@@ -71,15 +72,16 @@ export class CourseSearch {
     return { courses: [course], files, posts };
   }
 
-  // the courses, to name a result's, asked for alongside
+  // the courses, to name a result's as the user sees them, asked for
+  // alongside
   private async everywhere(userId: string) {
-    const viewers = await viewersOfUser(this.queries, userId);
+    const { viewers, into } = await readingOf(this.queries, userId);
     if (readNothing(viewers)) return { courses: [], files: [], posts: [] };
     const [courses, [files, posts]] = await Promise.all([
       this.queries.execute(new ListCoursesQuery(viewers)),
       this.visible(viewers, null),
     ]);
-    return { courses, files, posts };
+    return { courses: regroup(courses, viewers, into), files, posts };
   }
 
   // what the viewers' views open, of these portal courses or of all

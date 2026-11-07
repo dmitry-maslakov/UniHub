@@ -49,7 +49,7 @@ export function DeviceRequestView({ code }: { code: string }) {
           ? 'The screen signs in on its own in a moment. You can close this page.'
           : "The screen won't be signed in. If that was a mistake, start again on it."}
       </Text>
-      <AnchorLink to="/">Go to your account</AnchorLink>
+      <AnchorLink to="/">Go to your courses</AnchorLink>
     </Stack>
   );
 }

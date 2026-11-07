@@ -4,11 +4,13 @@ import { api } from '@/shared/api';
 import { AnchorLink, PageTitle } from '@/shared/ui';
 import { FilesSection } from './files-section';
 import { ItemsSection } from './items-section';
+import { SourcesStrip } from './sources-strip';
 
 const route = getRouteApi('/_app/courses/$slug');
 
-// A course's posts and files. Its name comes from the list, which also says
-// whether the user may read it at all.
+// A course's posts and files, under where they come from. Its name and
+// sources come from the list, which also says whether the user may read it
+// at all.
 export function CoursePage() {
   const { slug } = route.useParams();
   const courses = api.useQuery('get', '/api/courses');
@@ -27,21 +29,15 @@ export function CoursePage() {
         <PageTitle description="It may have been removed, or it isn't one of yours.">
           Course not found
         </PageTitle>
-        <AnchorLink to="/courses">Back to your courses</AnchorLink>
+        <AnchorLink to="/">Back to your courses</AnchorLink>
       </>
     );
 
   return (
     <>
-      <PageTitle
-        description={
-          [...new Set(course.portalCourses.map((p) => p.portal))].join(' · ') ||
-          undefined
-        }
-      >
-        {course.name}
-      </PageTitle>
+      <PageTitle>{course.name}</PageTitle>
       <Stack gap="xxl">
+        <SourcesStrip portalCourses={course.portalCourses} />
         <ItemsSection slug={slug} />
         <FilesSection slug={slug} />
       </Stack>

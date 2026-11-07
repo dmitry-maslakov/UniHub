@@ -406,9 +406,13 @@ describe('catalog', { timeout: 20_000 }, () => {
       ['b.pdf', a],
       ['copy.pdf', b],
     ]);
+    const { id: portalCourseId } = await prisma.portalCourse.findFirstOrThrow({
+      where: { portal, externalId: 'vis-a' },
+    });
     expect(listed[0]).toEqual({
       fileId: ids['a.pdf'],
       courseId: a,
+      portalCourseId,
       hash: sha256('%PDF slides'),
       name: 'a.pdf',
       path: '',

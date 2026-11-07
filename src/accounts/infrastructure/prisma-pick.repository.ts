@@ -25,6 +25,22 @@ export class PrismaPickRepository extends PickRepository {
     return rows.map(({ portalCourseId }) => portalCourseId);
   }
 
+  async ofUserWithInto(userId: string) {
+    const rows = await this.txHost.tx.pick.findMany({
+      where: { userId },
+      select: { portalCourseId: true, into: true },
+      orderBy: { portalCourseId: 'asc' },
+    });
+    return {
+      courses: rows.map(({ portalCourseId }) => portalCourseId),
+      into: new Map(
+        rows.flatMap(({ portalCourseId, into }) =>
+          into === null ? [] : [[portalCourseId, into] as const],
+        ),
+      ),
+    };
+  }
+
   // Two picks of one user's at once would both count the same picks and
   // both find room for one more. An advisory lock on the user serialises
   // them until the transaction ends, which a row lock can't do for picks
@@ -41,6 +57,13 @@ export class PrismaPickRepository extends PickRepository {
     await this.txHost.tx.pick.createMany({
       data: { userId, portalCourseId },
       skipDuplicates: true,
+    });
+  }
+
+  async showWith(userId: string, portalCourseId: string, into: string | null) {
+    await this.txHost.tx.pick.update({
+      where: { userId_portalCourseId: { userId, portalCourseId } },
+      data: { into },
     });
   }
 

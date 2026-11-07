@@ -10,7 +10,7 @@ export function NotFoundPage() {
       <Text c="dimmed" mb="md">
         The link may be old, or mistyped.
       </Text>
-      <AnchorLink to="/">Go to your account</AnchorLink>
+      <AnchorLink to="/">Go to your courses</AnchorLink>
     </Box>
   );
 }

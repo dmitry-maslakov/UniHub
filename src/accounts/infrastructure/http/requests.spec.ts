@@ -1,6 +1,6 @@
 import { inspect } from 'node:util';
 import { z } from 'zod';
-import { tokenRequest } from './requests.js';
+import { pickRequest, tokenRequest } from './requests.js';
 
 const TOKEN = '1~abcdefghijklmnopqrstuvwxyz';
 
@@ -57,5 +57,24 @@ describe('token request', () => {
       properties: { token: { type: 'string', writeOnly: true } },
       required: ['token'],
     });
+  });
+});
+
+describe('pick request', () => {
+  it('takes the course to show a pick with, none, or nothing to change', () => {
+    expect(pickRequest.parse({ into: 'canvas~297' })).toBe('canvas~297');
+    expect(pickRequest.parse({ into: 'os' })).toBe('os');
+    expect(pickRequest.parse({ into: null })).toBeNull();
+    // {}, and no body at all
+    expect(pickRequest.parse({})).toBeUndefined();
+    expect(pickRequest.parse(undefined)).toBeUndefined();
+  });
+
+  it("refuses what's no course's slug", () => {
+    for (const into of ['', 'OS', 'a b', 42, { slug: 'os' }])
+      expect(
+        pickRequest.safeParse({ into }).success,
+        JSON.stringify(into),
+      ).toBe(false);
   });
 });

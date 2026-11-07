@@ -968,15 +968,33 @@
             }
           }
         ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "into": {
+                    "description": "the slug of your course to show it with, one you read through your own account; null to show it on its own; left out, it stays as it was",
+                    "nullable": true,
+                    "type": "string",
+                    "pattern": "^(?:[a-z0-9]+(?:-[a-z0-9]+)*|[a-z0-9-]+~(?:~[A-Za-z0-9_-]{22}|[A-Za-z0-9._-]+))$"
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "204": {
-            "description": "picked, with no body or {}: you read it from now on"
+            "description": "picked, with no body or {}: you read it from now on, shown with the course `into` names if it does"
           },
           "404": {
             "description": "the portal is no public one, or has no such course"
           },
           "422": {
-            "description": "TOO_MANY_PICKS: you picked 100 already"
+            "description": "TOO_MANY_PICKS: you picked 100 already; NOT_YOUR_COURSE: `into` is no course you read through your own account"
           },
           "429": {
             "description": "30 a minute"
@@ -1068,19 +1086,41 @@
             "type": "string",
             "example": "canvas"
           },
+          "externalId": {
+            "type": "string",
+            "description": "the course's id on its portal",
+            "example": "297"
+          },
           "name": {
             "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "nullable": true,
+            "description": "the course on its portal"
           },
           "year": {
             "type": "number",
             "nullable": true,
             "example": 2026
+          },
+          "via": {
+            "type": "string",
+            "enum": [
+              "account",
+              "pick",
+              "link"
+            ],
+            "description": "how you read it: account, through your own account of its portal; pick, a public portal's course you picked; link, through the hub's account, in a course an admin made"
           }
         },
         "required": [
           "portal",
+          "externalId",
           "name",
-          "year"
+          "url",
+          "year",
+          "via"
         ]
       },
       "CourseResponse": {
@@ -1094,7 +1134,18 @@
             "type": "string",
             "example": "Operativni sistemi"
           },
+          "sources": {
+            "example": [
+              "canvas"
+            ],
+            "description": "the portals its portal courses come from, each once",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "portalCourses": {
+            "description": "by year, those that span years last; a pick you show with this course after them",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/PortalCourseResponse"
@@ -1104,6 +1155,7 @@
         "required": [
           "slug",
           "name",
+          "sources",
           "portalCourses"
         ]
       },
@@ -1652,6 +1704,16 @@
           "isNew": {
             "type": "boolean",
             "description": "the hub first saw it within 14 days"
+          },
+          "into": {
+            "type": "string",
+            "nullable": true,
+            "description": "the slug of your course you show it with, one you read through your own account; null when it's a course of its own, in a course an admin linked it to, or not picked"
+          },
+          "suggestedInto": {
+            "type": "string",
+            "nullable": true,
+            "description": "the slug of a course of yours to show it with: the one you read through your own account that shares the most files with it, at least 2, of those you see; null when none does, an admin linked it to a course, or not picked"
           }
         },
         "required": [
@@ -1659,7 +1721,9 @@
           "name",
           "url",
           "picked",
-          "isNew"
+          "isNew",
+          "into",
+          "suggestedInto"
         ]
       },
       "CatalogResponse": {

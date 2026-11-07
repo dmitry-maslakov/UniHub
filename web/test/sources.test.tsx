@@ -65,6 +65,9 @@ describe('sources', () => {
     renderApp('/sources');
 
     const list = await screen.findByRole('list', { name: 'Sources' });
+    expect(
+      within(list).getByRole('heading', { name: 'Canvas', level: 2 }),
+    ).toBeVisible();
     expect(within(list).getByText(/reads Campus for everyone/)).toBeVisible();
     expect(
       within(list).getByText(

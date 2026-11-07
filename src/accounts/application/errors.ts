@@ -74,3 +74,14 @@ export class NotInCatalogError extends NotFoundError {
     super(`no course of that id in the catalog of portal "${portal}"`);
   }
 }
+
+// What a pick was to be shown with is no course the user reads through an
+// account of their own: one of someone else's, an admin's they read only
+// through the hub, another pick, or none at all, one answer for all
+export class NotYourCourseError extends InvalidError {
+  readonly reason = 'NOT_YOUR_COURSE';
+
+  constructor() {
+    super('no course you read through an account of your own has that slug');
+  }
+}

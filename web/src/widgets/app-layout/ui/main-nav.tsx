@@ -3,14 +3,14 @@ import { Link } from '@tanstack/react-router';
 import classes from './app-layout.module.css';
 
 const items = [
-  { to: '/courses', label: 'Courses' },
+  { to: '/', label: 'My courses' },
   { to: '/search', label: 'Search' },
   { to: '/sources', label: 'Sources' },
-  { to: '/', label: 'Account' },
+  { to: '/account', label: 'Account' },
   { to: '/settings/api-keys', label: 'API keys' },
 ] as const;
 
-// Account is the home page, so only an exact match is it
+// My courses is the home page, so only an exact match is it
 const exact = (to: string) => ({ exact: to === '/' });
 
 // The header's links on wide screens
