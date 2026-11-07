@@ -6,7 +6,7 @@ import { firstSyncOf, portalsQuery, whileFirstSync } from '@/entities/source';
 
 // The user's courses, and the source whose account was just linked and is
 // read for the first time, if one is: the courses asked for again every
-// 30 s while it is, and once more as it ends, so what it found shows
+// 30 s while it is (portalsPending until the sources have answered), and once more as it ends, so what it found shows
 // without a reload whichever answer comes first
 export function useMyCourses() {
   const portals = useQuery(portalsQuery());
@@ -20,5 +20,5 @@ export function useMyCourses() {
   useEffect(() => {
     if (wasSyncing && !syncing) void refetch();
   }, [wasSyncing, syncing, refetch]);
-  return { courses, syncing };
+  return { courses, syncing, portalsPending: portals.isPending };
 }

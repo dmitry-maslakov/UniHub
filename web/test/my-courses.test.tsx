@@ -1,6 +1,6 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { http, HttpResponse } from 'msw';
+import { delay, http, HttpResponse } from 'msw';
 import { describe, expect, it, vi } from 'vitest';
 import { renderApp } from './render';
 import { server, signedIn } from './server';
@@ -147,9 +147,10 @@ describe('My courses', () => {
       expect(status).toHaveTextContent(
         'Your courses show up here in a few minutes. You can leave this page open.',
       );
+      // the sources stay, so the focus of a form that linked one stays
       expect(
-        screen.queryByRole('heading', { name: 'Add a source' }),
-      ).toBeNull();
+        screen.getByRole('heading', { name: 'Add a source' }),
+      ).toBeVisible();
       expect(screen.queryByText(/Nothing to read yet/)).toBeNull();
 
       read = true;
@@ -187,6 +188,44 @@ describe('My courses', () => {
     const list = await screen.findByRole('list', { name: 'Your courses' });
     expect(
       within(list).getByRole('link', { name: /Operativni sistemi/ }),
+    ).toBeVisible();
+  });
+
+  it('notes a first read above the courses already there', async () => {
+    signedIn();
+    server.use(
+      http.get(api('/courses'), () => HttpResponse.json([os])),
+      http.get(api('/me/portals'), () =>
+        HttpResponse.json([{ ...portals[0], firstSync: true }, portals[1]]),
+      ),
+    );
+    renderApp('/');
+
+    const note = await screen.findByText(
+      'Reading your Canvas for the first time',
+    );
+    expect(note.closest('output')).not.toBeNull();
+    expect(screen.getByRole('list', { name: 'Your courses' })).toBeVisible();
+  });
+
+  it('shows no empty state before the sources have answered', async () => {
+    signedIn();
+    server.use(
+      http.get(api('/courses'), () => HttpResponse.json([])),
+      http.get(api('/me/portals'), async () => {
+        await delay(100);
+        return HttpResponse.json([
+          { ...portals[0], firstSync: true },
+          portals[1],
+        ]);
+      }),
+    );
+    renderApp('/');
+
+    expect(await screen.findByText('Loading your courses')).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'Add a source' })).toBeNull();
+    expect(
+      await screen.findByText('Reading your Canvas for the first time'),
     ).toBeVisible();
   });
 
