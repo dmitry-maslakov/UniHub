@@ -105,8 +105,8 @@ describe('downloads', { timeout: 30_000 }, () => {
     }
 
     for (const [slug, externalId] of [
-      ['ar', 'c1'],
-      ['ispiti', 'c2'],
+      ['dl-ar', 'c1'],
+      ['dl-ispiti', 'c2'],
     ] as const) {
       await commands.execute(
         new CreateCourseCommand(Slug.parse(slug), CourseName.parse(slug)),
@@ -122,7 +122,7 @@ describe('downloads', { timeout: 30_000 }, () => {
     student = await signUp('student@downloads.test');
     stranger = await signUp('stranger@downloads.test');
     const { id: ar } = await prisma.course.findUniqueOrThrow({
-      where: { slug: 'ar' },
+      where: { slug: 'dl-ar' },
     });
     await commands.execute(
       new GrantCourseAccessCommand(await userId('student@downloads.test'), ar),
@@ -150,7 +150,7 @@ describe('downloads', { timeout: 30_000 }, () => {
     expect(created.headers['x-ratelimit-limit-downloads']).toBe('10');
     expect(created.body).toEqual({
       url: expect.stringMatching(/^\/api\/downloads\/[\w-]{22}$/),
-      name: 'ar.zip',
+      name: 'dl-ar.zip',
       count: 3,
       size: slides.length + notes.length + main.length,
     });
@@ -161,7 +161,7 @@ describe('downloads', { timeout: 30_000 }, () => {
       expect(zip.headers['content-type']).toBe('application/zip');
       expect(zip.headers['x-content-type-options']).toBe('nosniff');
       expect(zip.headers['content-disposition']).toBe(
-        'attachment; filename=ar.zip',
+        'attachment; filename=dl-ar.zip',
       );
       expect(await unzipped(zip.body)).toEqual(
         new Map([
