@@ -26,6 +26,7 @@ import { portalIngest } from './ingest.js';
 
 const PORTAL = 'downloads-test';
 const slides = Buffer.from('%PDF slides about caches');
+// no .txt: plugins.e2e-spec's text processor takes those, from any spec's queue
 const notes = Buffer.from('notes at the top');
 // a portal rounds sizes: this one reports a thousand bytes too many
 const rounded = Buffer.from('rounded off by the portal');
@@ -81,9 +82,9 @@ describe('downloads', { timeout: 30_000 }, () => {
     await ingest.course({ externalId: 'c2', name: 'Ispiti' });
     const files: [string, string, string, string, Buffer][] = [
       ['slides', 'c1', 'lectures', 'slides.pdf', slides],
-      ['notes', 'c1', '', 'notes.txt', notes],
+      ['notes', 'c1', '', 'notes.md', notes],
       ['labs', 'c1', 'Labs', 'labs.zip', await zipOf({ 'lab/a.c': main })],
-      ['rounded', 'c1', '', 'rounded.txt', rounded],
+      ['rounded', 'c1', '', 'rounded.md', rounded],
       ['exam', 'c2', '', 'exam.pdf', Buffer.from('%PDF answers')],
     ];
     for (const [externalId, course, path, name, content] of files) {
@@ -170,7 +171,7 @@ describe('downloads', { timeout: 30_000 }, () => {
       expect(await unzipped(zip.body)).toEqual(
         new Map([
           ['lectures/slides.pdf', slides.toString()],
-          ['notes.txt', notes.toString()],
+          ['notes.md', notes.toString()],
           ['Labs/labs/lab/a.c', main],
         ]),
       );
@@ -189,8 +190,8 @@ describe('downloads', { timeout: 30_000 }, () => {
 
     expect(await unzipped(zip.body)).toEqual(
       new Map([
-        ['rounded.txt', rounded.toString()],
-        ['notes.txt', notes.toString()],
+        ['rounded.md', rounded.toString()],
+        ['notes.md', notes.toString()],
       ]),
     );
   });
