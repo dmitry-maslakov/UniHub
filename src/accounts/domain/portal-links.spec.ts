@@ -1,5 +1,9 @@
 import { PortalId } from '@app/kernel';
-import { NotLinkableError, UnsupportedLinkError } from './errors.js';
+import {
+  NotLinkableError,
+  NotPickableError,
+  UnsupportedLinkError,
+} from './errors.js';
 import { PortalLinks, type PortalLink } from './portal-links.js';
 
 const portal = (id: string) => PortalId.parse(id);
@@ -12,6 +16,7 @@ const policy = links({
   canvas: { mode: 'token', adminsOnly: true },
   moodle: { mode: 'token', adminsOnly: false },
   teams: { mode: 'shared', adminsOnly: false },
+  catalog: { mode: 'public', adminsOnly: false },
 });
 
 describe('PortalLinks', () => {
@@ -25,14 +30,33 @@ describe('PortalLinks', () => {
   });
 
   it("opens the portals not shared to users, those for admins to admins' only", () => {
-    expect(policy.openTo(true)).toEqual(['canvas', 'moodle']);
-    expect(policy.openTo(false)).toEqual(['moodle']);
+    expect(policy.openTo(true)).toEqual(['canvas', 'catalog', 'moodle']);
+    expect(policy.openTo(false)).toEqual(['catalog', 'moodle']);
     expect(links({}).openTo(true)).toEqual([]);
   });
 
-  it("reads with users' own accounts every portal not shared, for admins or not", () => {
+  it("reads with users' own accounts the portals linked by token, for admins or not", () => {
     expect(policy.readWithAccounts()).toEqual(['canvas', 'moodle']);
     expect(links({}).readWithAccounts()).toEqual([]);
+  });
+
+  it('reads the public portals by picks, and lets courses be picked of those alone', () => {
+    expect(policy.readByPicks()).toEqual(['catalog']);
+    expect(links({}).readByPicks()).toEqual([]);
+    expect(() => policy.checkPicking(portal('catalog'))).not.toThrow();
+    for (const id of ['canvas', 'teams', 'elsewhere'])
+      expect(() => policy.checkPicking(portal(id))).toThrow(
+        new NotPickableError(portal(id)),
+      );
+  });
+
+  it('names a portal as PORTAL_LABELS does, else by its id', () => {
+    const named = new PortalLinks(
+      new Map(),
+      new Map([[portal('catalog'), 'Course catalog']]),
+    );
+    expect(named.label(portal('catalog'))).toBe('Course catalog');
+    expect(named.label(portal('canvas'))).toBe('canvas');
   });
 
   it("lets a user link by the portal's own mode, and an admin only one for admins", () => {
@@ -55,10 +79,13 @@ describe('PortalLinks', () => {
       return true;
     });
     // a shared portal needs nothing of its connector
-    expect(asked).toEqual(['canvas=token', 'moodle=token']);
+    expect(asked).toEqual(['canvas=token', 'moodle=token', 'catalog=public']);
 
     expect(() => policy.checkAgainst((p) => p !== 'moodle')).toThrow(
       new UnsupportedLinkError(portal('moodle'), 'token'),
+    );
+    expect(() => policy.checkAgainst((p) => p !== 'catalog')).toThrow(
+      new UnsupportedLinkError(portal('catalog'), 'public'),
     );
   });
 });

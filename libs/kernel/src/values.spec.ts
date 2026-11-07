@@ -1,5 +1,12 @@
 import { InvalidValueError, NotFoundError } from './errors.js';
-import { ContentHash, MediaType, PluginName, PortalId } from './values.js';
+import {
+  AccountLink,
+  ContentHash,
+  LinkMode,
+  MediaType,
+  PluginName,
+  PortalId,
+} from './values.js';
 
 const sha = 'ab'.repeat(32);
 
@@ -35,6 +42,13 @@ describe('portal ids and plugin names', () => {
     expect(PluginName.safeParse('office-text').success).toBe(true);
     for (const bad of ['', 'Canvas', 'a__b', 'a:b', 'a b'])
       expect(PortalId.safeParse(bad).success).toBe(false);
+  });
+});
+
+describe('link modes', () => {
+  it("link a user account by token alone: shared and public read the portal's one", () => {
+    expect(LinkMode.options).toEqual(['shared', 'token', 'public']);
+    expect(AccountLink.options).toEqual(['token']);
   });
 });
 

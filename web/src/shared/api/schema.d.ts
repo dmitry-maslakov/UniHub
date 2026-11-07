@@ -228,6 +228,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/portals/{portal}/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PortalCatalogController_catalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/picks/{portal}/{externalId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["PicksController_pick"];
+        post?: never;
+        delete: operations["PicksController_unpick"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -415,11 +447,16 @@ export interface components {
             /** @example canvas */
             portal: string;
             /**
-             * @description how its accounts are linked: shared, the one the hub reads with; token, your own
+             * @description the name it is shown by, its id unless the hub names it
+             * @example Canvas
+             */
+            label: string;
+            /**
+             * @description how it is read: shared, by the one account the hub reads with; token, by your own; public, the courses you pick of its catalog
              * @enum {string}
              */
-            mode: "shared" | "token";
-            /** @description you have an account of it linked */
+            mode: "shared" | "token" | "public";
+            /** @description you have an account of it linked; never of a public one */
             linked: boolean;
             /**
              * @description null when not linked
@@ -431,6 +468,25 @@ export interface components {
              * @description when the token stops working, if the portal says
              */
             expiresAt: string | null;
+            /** @description how many courses of a public portal's catalog you picked; null for any other portal */
+            picked: number | null;
+        };
+        CatalogCourseResponse: {
+            /** @description the course's id on its portal */
+            externalId: string;
+            name: string;
+            /** @description the course on its portal */
+            url: string | null;
+            /** @description you picked it: you read it here */
+            picked: boolean;
+            /** @description the hub first saw it within 14 days */
+            isNew: boolean;
+        };
+        CatalogResponse: {
+            /** @description how many courses match, on every page */
+            total: number;
+            /** @description by name */
+            courses: components["schemas"]["CatalogCourseResponse"][];
         };
     };
     responses: never;
@@ -1007,6 +1063,110 @@ export interface operations {
         responses: {
             /** @description no account of yours of the portal now, nor its token */
             204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PortalCatalogController_catalog: {
+        parameters: {
+            query?: {
+                offset?: number;
+                limit?: number;
+                /** @description words in a course's name, in any case, with or without diacritics */
+                q?: string;
+            };
+            header?: never;
+            path: {
+                portal: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description a page of its courses whose names have the words, by name */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogResponse"];
+                };
+            };
+            /** @description the portal is no public one */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PicksController_pick: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                portal: string;
+                externalId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description picked, with no body or {}: you read it from now on */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description the portal is no public one, or has no such course */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description TOO_MANY_PICKS: you picked 100 already */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 30 a minute */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PicksController_unpick: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                portal: string;
+                externalId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description not picked by you now, whether it was or wasn't */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 30 a minute */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

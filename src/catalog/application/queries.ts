@@ -34,6 +34,16 @@ export interface PortalCourseDto {
   meta: Json | null;
 }
 
+// a course of a portal's catalog, as the shared account sees it now, and
+// since when (the first time it sent it)
+export interface CatalogCourseDto {
+  id: string;
+  externalId: string;
+  name: string;
+  url: string | null;
+  since: Date;
+}
+
 export interface ItemDto {
   id: string;
   portal: PortalId;
@@ -109,20 +119,24 @@ export interface VisibleContentDto {
 // Whose views a user reads (access works it out, README: Portal accounts).
 // In the portals read as shared, all but `except`, the shared account's,
 // of the courses granted them (`courses`, null for every one); in the
-// others, what their own `accounts` see, whole, linked to a course or not.
-// A reader query finds only what these see now, and a file's content only
-// once their view opens it.
+// public ones (`picks.portals`), the shared account's too, of the portal
+// courses the user picked (`picks.courses`); in the others, what their own
+// `accounts` see, whole, linked to a course or not. A reader query finds
+// only what these see now, and a file's content only once their view
+// opens it.
 export interface Viewers {
   accounts: readonly string[];
   shared: { courses: readonly string[] | null; except: readonly PortalId[] };
+  picks: { portals: readonly PortalId[]; courses: readonly string[] };
 }
 
 // The courses the viewers read, by slug, each with its portal courses in
 // their view: a course granted, whatever it holds of them, or one that
-// links a portal course their own accounts see; then, by slug too, the
-// portal courses their own accounts see that no course links, each a
-// course of its own (portalCourseSlug, its id the portal course's). With
-// `slug`, the one of that slug alone, if they read it.
+// links a portal course their own accounts see or they picked; then, by
+// slug too, the portal courses their own accounts see or they picked that
+// no course links, each a course of its own (portalCourseSlug, its id the
+// portal course's). With `slug`, the one of that slug alone, if they read
+// it.
 export class ListCoursesQuery extends Query<CourseDto[]> {
   constructor(
     public readonly viewers: Viewers,
@@ -207,6 +221,18 @@ export class ListVisibleItemsQuery extends Query<VisibleItemDto[]> {
   constructor(
     public readonly viewers: Viewers,
     public readonly portalCourseIds: readonly string[] | null,
+  ) {
+    super();
+  }
+}
+
+// The courses of a portal as its shared account sees them now: a public
+// portal's catalog, which users pick from. With `externalId`, that one
+// alone, if it's there.
+export class ListPortalCatalogQuery extends Query<CatalogCourseDto[]> {
+  constructor(
+    public readonly portal: PortalId,
+    public readonly externalId?: string,
   ) {
     super();
   }

@@ -16,11 +16,14 @@ describe('PORTAL_LINKS', () => {
   });
 
   it('maps each portal to its mode, and who may link', () => {
-    const { data } = links('canvas=token/admins, moodle=token, teams=shared');
+    const { data } = links(
+      'canvas=token/admins, moodle=token, teams=shared, catalog=public',
+    );
     expect([...data!.links]).toEqual([
       ['canvas', { mode: 'token', adminsOnly: true }],
       ['moodle', { mode: 'token', adminsOnly: false }],
       ['teams', { mode: 'shared', adminsOnly: false }],
+      ['catalog', { mode: 'public', adminsOnly: false }],
     ]);
   });
 
@@ -32,9 +35,38 @@ describe('PORTAL_LINKS', () => {
       'Canvas=token',
       'canvas=token/students',
       'canvas=shared/admins',
+      'catalog=public/admins',
       'canvas=token,canvas=shared',
     ])
       expect(links(bad).success, bad).toBe(false);
+  });
+
+  it('needs no key for a portal read by picks alone', () => {
+    expect(parse({ PORTAL_LINKS: 'catalog=public' }).success).toBe(true);
+  });
+});
+
+describe('PORTAL_LABELS', () => {
+  it("names each portal it lists, and none it doesn't", () => {
+    expect(parse({}).data?.labels.size).toBe(0);
+    const { data } = parse({
+      PORTAL_LABELS: 'catalog=Course catalog , canvas=Canvas',
+    });
+    expect([...data!.labels]).toEqual([
+      ['catalog', 'Course catalog'],
+      ['canvas', 'Canvas'],
+    ]);
+  });
+
+  it('refuses a blank name, a portal id it would misread, or a portal twice', () => {
+    for (const bad of [
+      'catalog',
+      'catalog= ',
+      'Catalog=Catalog',
+      `catalog=${'x'.repeat(65)}`,
+      'catalog=A, catalog=B',
+    ])
+      expect(parse({ PORTAL_LABELS: bad }).success, bad).toBe(false);
   });
 });
 

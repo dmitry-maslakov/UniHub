@@ -12,19 +12,40 @@ import { FakeBus } from '../../../test/fake-bus.js';
 import { NotLinkableError, UnsupportedLinkError } from '../domain/errors.js';
 import { PortalLinks, type PortalLink } from '../domain/portal-links.js';
 import { AccountsChangedCommand } from '../../plugins/contracts.js';
-import { FakeVault, InMemoryAccounts } from './accounts.fakes.js';
+import {
+  catalogBus,
+  FakeVault,
+  InMemoryAccounts,
+  InMemoryPicks,
+  InMemoryWanted,
+} from './accounts.fakes.js';
 import { PortalUnavailableError, TokenRefusedError } from './errors.js';
 import { PortalAccounts } from './portal-accounts.js';
+import { PortalPicks } from './portal-picks.js';
 
 const TOKEN = '1~ana-pasted-token';
 const portal = (id: string) => PortalId.parse(id);
-const [CANVAS, MOODLE, TEAMS] = ['canvas', 'moodle', 'teams'].map(portal);
+const [CANVAS, MOODLE, TEAMS, CATALOG] = [
+  'canvas',
+  'moodle',
+  'teams',
+  'catalog',
+].map(portal);
 
-// canvas for admins, moodle for everyone, teams shared; bo is an admin
+// canvas for admins, moodle for everyone, teams shared, catalog public and
+// served over gRPC; bo is an admin
 const LINKS: Record<string, PortalLink> = {
   canvas: { mode: 'token', adminsOnly: true },
   moodle: { mode: 'token', adminsOnly: false },
 };
+const PUBLIC: PortalLink = { mode: 'public', adminsOnly: false };
+const course = (externalId: string) => ({
+  id: `pc-${externalId}`,
+  externalId,
+  name: externalId,
+  url: null,
+  since: new Date('2026-01-01T00:00:00Z'),
+});
 
 type Identify = (credential: Credential) => Promise<PortalUser>;
 
@@ -40,13 +61,16 @@ function accounts({
       return identify(credential);
     },
   };
-  const plugins = catalogOf({
-    polls: [
-      poll('canvas', connector, ['token']),
-      poll('moodle', connector, ['token']),
-      poll('teams'),
-    ],
-  });
+  const plugins = catalogOf(
+    {
+      polls: [
+        poll('canvas', connector, ['token']),
+        poll('moodle', connector, ['token']),
+        poll('teams'),
+      ],
+    },
+    ['catalog'],
+  );
   const queries = new FakeBus([
     [IsAdminQuery, ({ userId }: IsAdminQuery) => userId === 'bo'],
   ]);
@@ -55,19 +79,35 @@ function accounts({
   const vault = new FakeVault();
   const policy = new PortalLinks(
     new Map(Object.entries(links).map(([id, link]) => [portal(id), link])),
+    new Map([[CANVAS, 'Canvas']]),
   );
+  const picks = new InMemoryPicks();
   const service = new PortalAccounts(
     policy,
     store,
     vault,
     plugins,
+    new PortalPicks(
+      policy,
+      picks,
+      new InMemoryWanted(),
+      catalogBus({ catalog: [course('os'), course('net')] }).queries,
+    ),
     queries.queries,
     commands.commands,
   );
   service.onApplicationBootstrap();
   const setToken = (userId: string, p: PortalId, token = TOKEN) =>
     service.setToken(userId, p, new Secret(token));
-  return { service, store, vault, asked, setToken, told: commands.sent };
+  return {
+    service,
+    store,
+    vault,
+    picks,
+    asked,
+    setToken,
+    told: commands.sent,
+  };
 }
 
 describe('PortalAccounts', () => {
@@ -247,19 +287,23 @@ describe('PortalAccounts', () => {
     expect(await service.list('ana')).toEqual([
       {
         portal: MOODLE,
+        label: 'moodle',
         mode: 'token',
         linked: false,
         status: null,
         expiresAt: null,
+        picked: null,
       },
     ]);
     expect(await service.list('bo')).toEqual(
       [CANVAS, MOODLE].map((p) => ({
         portal: p,
+        label: p === CANVAS ? 'Canvas' : p,
         mode: 'token',
         linked: true,
         status: 'expired',
         expiresAt: past,
+        picked: null,
       })),
     );
 
@@ -276,6 +320,39 @@ describe('PortalAccounts', () => {
     });
   });
 
+  it('lists a public portal with how many of its courses the user picked, never as linked', async () => {
+    const { service, store, picks, setToken } = accounts({
+      links: { ...LINKS, catalog: PUBLIC },
+    });
+    picks.rows.push(
+      { userId: 'ana', portalCourseId: 'pc-os' },
+      { userId: 'bo', portalCourseId: 'pc-net' },
+      // no longer in its catalog
+      { userId: 'ana', portalCourseId: 'pc-gone' },
+    );
+    // an account of it left of when it was linked by token
+    await setToken('ana', MOODLE);
+    const moodle = store.rows.get('ana:moodle')!;
+    store.rows.set('ana:catalog', {
+      ...moodle,
+      account: { ...moodle.account, portal: CATALOG },
+    });
+
+    expect((await service.list('ana'))[0]).toEqual({
+      portal: CATALOG,
+      label: 'catalog',
+      mode: 'public',
+      linked: false,
+      status: null,
+      expiresAt: null,
+      picked: 1,
+    });
+    expect((await service.list('cy'))[0]).toMatchObject({
+      portal: CATALOG,
+      picked: 0,
+    });
+  });
+
   it("reads through the user's own accounts that read now, in the portals not shared", async () => {
     const until = new Date('2026-12-30T08:00:00Z');
     const { service, store, setToken } = accounts({
@@ -289,6 +366,7 @@ describe('PortalAccounts', () => {
     expect(await service.viewing('ana', before)).toEqual({
       portals: [CANVAS, MOODLE],
       accounts: [moodle.account.id],
+      picks: { portals: [], courses: [] },
     });
     // nobody else's, nor one past its expiry
     expect((await service.viewing('cy', before)).accounts).toEqual([]);
@@ -310,6 +388,20 @@ describe('PortalAccounts', () => {
     expect(await shared.service.viewing('ana')).toEqual({
       portals: [],
       accounts: [],
+      picks: { portals: [], courses: [] },
+    });
+    expect(ofUser).not.toHaveBeenCalled();
+  });
+
+  it("reads a public portal by the user's picks alone, asking for no account", async () => {
+    const { service, store, picks } = accounts({ links: { catalog: PUBLIC } });
+    picks.rows.push({ userId: 'ana', portalCourseId: 'pc-os' });
+    const ofUser = vi.spyOn(store, 'ofUser');
+
+    expect(await service.viewing('ana')).toEqual({
+      portals: [],
+      accounts: [],
+      picks: { portals: [CATALOG], courses: ['pc-os'] },
     });
     expect(ofUser).not.toHaveBeenCalled();
   });
@@ -349,6 +441,10 @@ describe('PortalAccounts', () => {
     const before = new Date('2026-12-01T00:00:00Z');
 
     expect(await service.readers(TEAMS)).toEqual({ shared: true });
+    // a public one by its one account too
+    expect(
+      await accounts({ links: { catalog: PUBLIC } }).service.readers(CATALOG),
+    ).toEqual({ shared: true });
     expect(await service.readers(MOODLE, before)).toEqual({
       shared: false,
       accounts: [id('ana'), id('bo')],
@@ -410,5 +506,13 @@ describe('PortalAccounts', () => {
         accounts({ links: { [p]: { mode: 'token', adminsOnly: false } } }),
       ).toThrow(new UnsupportedLinkError(portal(p), 'token'));
     expect(() => accounts({ links: {} })).not.toThrow();
+  });
+
+  it('takes public for a portal served over gRPC alone', () => {
+    expect(() => accounts({ links: { catalog: PUBLIC } })).not.toThrow();
+    for (const p of ['moodle', 'elsewhere'])
+      expect(() => accounts({ links: { [p]: PUBLIC } })).toThrow(
+        new UnsupportedLinkError(portal(p), 'public'),
+      );
   });
 });

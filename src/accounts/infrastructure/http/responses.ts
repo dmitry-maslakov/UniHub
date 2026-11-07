@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import type { LinkMode, PortalId } from '@app/kernel';
 import type { AccountStatus } from '../../domain/portal-account.js';
+import type { CatalogEntry, CatalogPage } from '../../domain/catalog-page.js';
 import type { PortalView } from '../../application/portal-accounts.js';
 
 // What the routes answer with, described for OpenAPI: never a token, nor
@@ -9,12 +10,19 @@ import type { PortalView } from '../../application/portal-accounts.js';
 export class PortalResponse implements PortalView {
   @ApiProperty({ type: String, example: 'canvas' }) portal!: PortalId;
   @ApiProperty({
-    enum: ['shared', 'token'],
+    example: 'Canvas',
+    description: 'the name it is shown by, its id unless the hub names it',
+  })
+  label!: string;
+  @ApiProperty({
+    enum: ['shared', 'token', 'public'],
     description:
-      'how its accounts are linked: shared, the one the hub reads with; token, your own',
+      'how it is read: shared, by the one account the hub reads with; token, by your own; public, the courses you pick of its catalog',
   })
   mode!: LinkMode;
-  @ApiProperty({ description: 'you have an account of it linked' })
+  @ApiProperty({
+    description: 'you have an account of it linked; never of a public one',
+  })
   linked!: boolean;
   @ApiProperty({
     enum: ['linked', 'expired', 'revoked'],
@@ -28,4 +36,34 @@ export class PortalResponse implements PortalView {
     description: 'when the token stops working, if the portal says',
   })
   expiresAt!: Date | null;
+  @ApiProperty({
+    type: Number,
+    nullable: true,
+    description:
+      "how many courses of a public portal's catalog you picked; null for any other portal",
+  })
+  picked!: number | null;
+}
+
+export class CatalogCourseResponse implements CatalogEntry {
+  @ApiProperty({ description: "the course's id on its portal" })
+  externalId!: string;
+  @ApiProperty() name!: string;
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'the course on its portal',
+  })
+  url!: string | null;
+  @ApiProperty({ description: 'you picked it: you read it here' })
+  picked!: boolean;
+  @ApiProperty({ description: 'the hub first saw it within 14 days' })
+  isNew!: boolean;
+}
+
+export class CatalogResponse implements CatalogPage {
+  @ApiProperty({ description: 'how many courses match, on every page' })
+  total!: number;
+  @ApiProperty({ type: [CatalogCourseResponse], description: 'by name' })
+  courses!: CatalogCourseResponse[];
 }

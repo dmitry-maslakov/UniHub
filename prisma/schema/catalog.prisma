@@ -49,6 +49,9 @@ model PortalCourse {
   items      ItemVersion[]
   files      FileVersion[]
   link       CourseLink?
+  // users' picks of it, and its connector asked for it (accounts.prisma)
+  picks      Pick[]
+  wanted     WantedCourse?
 
   @@unique([portal, externalId])
 }

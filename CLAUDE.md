@@ -20,7 +20,7 @@ Declined:
 - connector token mapping to (portal, account): env tokens get replaced by API keys (#33), not extended
 - `actorId` in course access commands: the admin check is `@Roles([ADMIN_ROLE])` on the routes that send them (access's `CourseAccessController`)
 - a `source` column on course access (manual vs. from a portal): when per-user accounts come
-- portal courses not linked to a course, of a portal read as shared: nobody reads them through the API, admins included. A portal read with users' own accounts shows its own to whoever's account sees them, as courses of their own (README, Portal accounts)
+- portal courses not linked to a course, of a portal read as shared: nobody reads them through the API, admins included. A portal read with users' own accounts shows its own to whoever's account sees them, and a public one each course to whoever picked it (its content is public, the pick the user's own), as courses of their own (README, Portal accounts, Public portals)
 - tests of Better Auth's own device flow cases (deny, expiry, reuse)
 - file-level access: files inherit their course's
 - an app-wide limit per address: a campus behind NAT shares one address, so one script would lock everyone out. Better Auth limits `/api/auth` itself, MCP is limited per user
@@ -69,9 +69,11 @@ Put off:
 - a user's token's expiry is the one the portal gave at linking: a run doesn't renew it (the design's `expiresAt(at)`), and finds it `revoked` once the portal refuses it
 - a fetch lease isn't released: a run that took one and failed the download keeps that version's bytes from the other accounts' runs for the lease's time, as long as a run may take (`CONNECTOR_POLL_TIMEOUT_MINUTES`)
 - `CONNECTOR_CONCURRENCY` is per worker process and for every portal at once, not per portal
-- OAuth as a link mode, for a school that issues a developer key: built on branch `feat/135-oauth-mode` and kept there (openid-client with PKCE, the consent's state single-use in Redis, renewal, revoke on unlink); `shared` and `token` until then
+- OAuth as a link mode, for a school that issues a developer key: built on branch `feat/135-oauth-mode` and kept there (openid-client with PKCE, the consent's state single-use in Redis, renewal, revoke on unlink); `shared`, `token` and `public` until then
 - the `connector` mode: a user's own connector, with #33's keys bound to the user's account, accounts over gRPC
 - a deleted user's accounts go by an event Better Auth's delete hook sends once the delete has committed, on the in-process bus: a crash in between leaves them, unreachable (no session is the user's); a sweep against identity's users, once something reads with accounts
+- a banned user's picks keep their courses wanted, so the connector syncs them (up to 100 a user): bans are Better Auth's, and nothing tells accounts of one to start a grace; a ban reads none of it meanwhile
+- a public portal's catalog is matched and paged in memory, the whole of it read per request (Intl's collator ignores case and diacritics, đ as d too, which postgres' `unaccent` would need an extension for and `lower` a locale for): a directory of hundreds of courses; a portal of many thousands would want it in the database
 - a malformed JSON body's 400 quotes a few characters of it (V8's `JSON.parse` message, which Nest answers with): a token sent so shows a part of itself to its own sender, and isn't logged
 
 Done the standard way after all: global prefix, gRPC guard (#36).

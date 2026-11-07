@@ -46,7 +46,7 @@ npm run test:e2e
 ```
 
 - unit specs (`*.spec.ts`, next to the code) check the rules: the domain on its own, the use cases on in-memory fakes of their ports (`*.fakes.ts` beside them; `test/` has the shared ones: `FakeBus`, `InMemoryBlobs`, `sha256` of real content, plugins as discovery finds them)
-- e2e specs (`test/*.e2e-spec.ts`) check only what fakes can't: how records are written and read back, what the read queries find and in what order, the locks, the outbox rolling back with its transaction, BullMQ's deduplication, gRPC, each route and MCP tool once (and one bad request to each that declares a schema, since nothing else sees it is attached), the whole pipeline once (`plugins.e2e-spec.ts`), the search index's writes, the texts' and the records', and their repair (`search-index.e2e-spec.ts`), what OpenSearch answers a search, by the words and by meaning, and what of it the reranker gets (`search.e2e-spec.ts`), who finds what through the search route and tool, and their shared limit (`search-api.e2e-spec.ts`), what each user reads of a portal read with users' own accounts, by every route and by search (`views.e2e-spec.ts`), an AI app connecting by OAuth through the API, its client's metadata document from a fake transport, and MCP with its tokens (`oauth.e2e-spec.ts`, whose app listens: the hub fetches its own keys over loopback), the app with search off (`search-off.e2e-spec.ts`), an api process adding work that only a worker does (`roles.e2e-spec.ts`), what each process serves on its metrics port (`metrics.e2e-spec.ts`), and the text index's analyzers, whose rules live in OpenSearch (`search-analysis.e2e-spec.ts`: a word in Cyrillic, in Latin and without diacritics gives the same tokens, on the OpenSearch client alone). The others boot the app as `main.ts` sets it up (`bootApp()` in `test/app.ts`, with every role unless told; `bootWorker()` for a worker) on a database, redis db, folder and search indices (`unihub-e2e-*`) of their own (`test/env.ts`), made anew for every run, with `FakeEmbedder` and `FakeReranker` (`test/fake-models.ts`) for the models, so none is downloaded (the reranker busy, so the order they check is the index's, unless a spec gives it scores), and wait for what they wait on (the outbox's events, a job's state), never for a while
+- e2e specs (`test/*.e2e-spec.ts`) check only what fakes can't: how records are written and read back, what the read queries find and in what order, the locks, the outbox rolling back with its transaction, BullMQ's deduplication, gRPC, each route and MCP tool once (and one bad request to each that declares a schema, since nothing else sees it is attached), the whole pipeline once (`plugins.e2e-spec.ts`), the search index's writes, the texts' and the records', and their repair (`search-index.e2e-spec.ts`), what OpenSearch answers a search, by the words and by meaning, and what of it the reranker gets (`search.e2e-spec.ts`), who finds what through the search route and tool, and their shared limit (`search-api.e2e-spec.ts`), what each user reads of a portal read with users' own accounts, by every route and by search (`views.e2e-spec.ts`), and of a public portal by their picks, by every route, search and MCP, with what its connector is asked for over gRPC (`picks.e2e-spec.ts`), an AI app connecting by OAuth through the API, its client's metadata document from a fake transport, and MCP with its tokens (`oauth.e2e-spec.ts`, whose app listens: the hub fetches its own keys over loopback), the app with search off (`search-off.e2e-spec.ts`), an api process adding work that only a worker does (`roles.e2e-spec.ts`), what each process serves on its metrics port (`metrics.e2e-spec.ts`), and the text index's analyzers, whose rules live in OpenSearch (`search-analysis.e2e-spec.ts`: a word in Cyrillic, in Latin and without diacritics gives the same tokens, on the OpenSearch client alone). The others boot the app as `main.ts` sets it up (`bootApp()` in `test/app.ts`, with every role unless told; `bootWorker()` for a worker) on a database, redis db, folder and search indices (`unihub-e2e-*`) of their own (`test/env.ts`), made anew for every run, with `FakeEmbedder` and `FakeReranker` (`test/fake-models.ts`) for the models, so none is downloaded (the reranker busy, so the order they check is the index's, unless a spec gives it scores), and wait for what they wait on (the outbox's events, a job's state), never for a while
 
 ## Web
 
@@ -78,13 +78,13 @@ The API's types (`web/src/shared/api/schema.d.ts`) are generated from `web/opena
 
 The first admin: `npm run auth:create-admin -- --email you@example.com --password '…'`. After adding a Better Auth plugin, `npm run auth:generate` updates `prisma/schema/identity.prisma`.
 
-Every HTTP route needs a signed-in user unless it says `@AllowAnonymous()`. Admins read every course, other users the ones an admin granted them, a banned user nothing (by API key either). That's of the portals read as shared; one read with users' own accounts each user, an admin too, reads through their own account alone (Portal accounts, below).
+Every HTTP route needs a signed-in user unless it says `@AllowAnonymous()`. Admins read every course, other users the ones an admin granted them, a banned user nothing (by API key either). That's of the portals read as shared; one read with users' own accounts each user, an admin too, reads through their own account alone (Portal accounts, below), and a public one the courses they picked of its catalog (Public portals, below).
 
 ## REST API
 
 OpenAPI at `/api/docs`. A signed-in user reads the courses they were given:
 
-- `GET /api/courses`, then `/api/courses/{slug}/items` and `/files` (`offset`, `limit` up to 200, 50 by default). A course lists only its portal courses in the user's view, and a portal course of a portal read with users' own accounts that no course links is a course of its own, `{portal}~{externalId}` (Portal accounts, below)
+- `GET /api/courses`, then `/api/courses/{slug}/items` and `/files` (`offset`, `limit` up to 200, 50 by default). A course lists only its portal courses in the user's view, and a portal course of a portal read with users' own accounts, or one the user picked of a public portal, that no course links is a course of its own, `{portal}~{externalId}` (Portal accounts, Public portals, below)
 - `GET /api/items/{id}`: one post, as `/items` lists it (a search finds it by its id)
 - `GET /api/files/{id}`: the file and the texts made from it
 - `GET /api/files/{id}/text?page=2`: one page, slide or section of a text
@@ -94,7 +94,7 @@ OpenAPI at `/api/docs`. A signed-in user reads the courses they were given:
 
 Everything goes through `CourseReader` and `CourseSearch` (`src/access`), which MCP shares; 1200 calls a minute per user, and searches apart, 20 a minute.
 
-A user's own accounts of portals, by a token they set and never read back, are under `/api/me/portals` (Portal accounts, below).
+A user's own accounts of portals, by a token they set and never read back, are under `/api/me/portals` (Portal accounts, below); the courses they pick of a public portal's catalog under `/api/portals/{portal}/catalog` and `/api/me/picks` (Public portals, below).
 
 Admins set the courses up (`@Roles([ADMIN_ROLE])`):
 
@@ -204,17 +204,18 @@ A record gone from a listing that went through to the end is gone from the accou
 
 ### Portal accounts
 
-How a portal's accounts are linked is set per portal in `PORTAL_LINKS` (`canvas=token/admins, moodle=token`):
+How a portal's accounts are linked is set per portal in `PORTAL_LINKS` (`canvas=token/admins, moodle=token, catalog=public`), and the name each is shown by in `PORTAL_LABELS` (`canvas=Canvas, catalog=Course catalog`; its id when not named):
 
 - `shared`, every portal's unless it says otherwise, as before: the one account the plugin's settings give (`CANVAS_TOKEN`), read by whoever an admin lets read a course
 - `token`: each user links an account of their own by pasting a token the portal gave them; `/admins` lets only admins link one
-- only `shared` and `token` exist for now: `PORTAL_LINKS` refuses any other mode (a portal's consent page, a user's own connector). The app doesn't start with a mode the portal's connector doesn't name (`links`, Plugins above)
+- `public`: a site anyone may read, with no login, whose connector sends its whole directory of courses as its one account (shared); each user picks the courses they read of it (Public portals, below). Only a connector over gRPC takes it, as it's asked which courses are wanted (`Wanted`, External connectors), and none needs naming it
+- only `shared`, `token` and `public` exist for now: `PORTAL_LINKS` refuses any other mode (a portal's consent page, a user's own connector). The app doesn't start with a mode the portal's connector doesn't name (`links`, Plugins above), nor with `public` for a portal no gRPC token is for
 
 The token is a setting that's written, never read:
 
 - `PUT /api/me/portals/{portal}/token` with `{ "token": "…" }`: 204 once the portal's connector says whose it is (`identify`) and when it expires. Of the portal's user only their id on the portal is kept, never a name or an email. It needs a session signed in within the last day, as making an API key does (403 `SESSION_NOT_FRESH`), and takes 10 a minute per user (`X-RateLimit-*-link`), as each one asks the portal. A portal not linked by token, or one for admins to anyone else, is a 404; a token the portal doesn't take a 422 that says only that; the portal away, or no answer within 30 s, a 503. A token of the same portal user keeps the account, another's makes a new one in its place
 - `DELETE` on the same path unlinks: the account and its token go together, and so do what its runs saved and what it saw, as for one replaced by another portal user's; what no other account sees is removed with it, out of the search index at once
-- `GET /api/me/portals`: `[{ portal, mode, linked, status, expiresAt }]`, for each portal you may link an account of and each you have one of; `status` is `linked`, `expired` (past `expiresAt`) or `revoked`, null when not linked. Never the token or any hint of it, and nothing of anyone else: each user's account is their own, so the same portal user linked by two people is no conflict
+- `GET /api/me/portals`: `[{ portal, label, mode, linked, status, expiresAt, picked }]`, for each portal you may link an account of or pick courses of, and each you have an account of; `status` is `linked`, `expired` (past `expiresAt`) or `revoked`, null when not linked. Of a public portal, `linked` is false and `picked` the number of its catalog's courses you picked; `picked` is null for any other. Never the token or any hint of it, and nothing of anyone else: each user's account is their own, so the same portal user linked by two people is no conflict
 - no MCP tool sets or shows any of it, and the token goes in no log, error, job, Redis, the outbox or sync state. A deleted user's accounts go with them
 
 Tokens are sealed with AES-256-GCM (`node:crypto`), each for its own account, under `PORTAL_CREDENTIALS_SECRETS="2:…,1:…"`: keys of their own (`openssl rand -base64 32` each), never `BETTER_AUTH_SECRET`, needed once a portal links by token. The highest version seals, any listed opens: to rotate, add a higher version and keep the older ones while tokens sealed under them remain (a token set again is sealed under the new one). A version taken off leaves what it sealed unreadable, the copies in old backups too. Whoever holds both the database and the keys can open them; the hub has to, to use them.
@@ -241,6 +242,20 @@ What sharing the work still tells, by its timing and load, never who or what:
 
 The Canvas connector takes `token`; what that means on a hosted or a self-hosted Canvas is in Canvas tokens, below.
 
+### Public portals
+
+A portal set to `public` is a site anyone can read, its connector outside the hub (External connectors, below): it sends every course of the site's directory, as its one account, and those are the portal's catalog. Each user picks from it the courses they follow, and reads those, with no grant:
+
+- `GET /api/portals/{portal}/catalog?q=&offset=&limit=`: `{ total, courses: [{ externalId, name, url, picked, isNew }] }`, the catalog's courses by name (numbers by value), those whose name has `q` (up to 200 characters, matched in any case, with or without diacritics: `racunar` finds `Računarske mreže`, `dacki` finds `Đački`), `limit` up to 200 and 50 by default. `picked` says you picked it, `isNew` that the hub first saw it within 14 days. A portal that isn't public is a 404
+- `PUT /api/me/picks/{portal}/{externalId}`, with no body or `{}`: 204, picked, and picked again it's no new pick. A course the catalog doesn't have, or a portal that isn't public, is a 404; past 100 picks a 422 with `code: TOO_MANY_PICKS`
+- `DELETE` on the same path: 204, whether you had picked it or not, whatever the portal's mode is now
+- both take 30 a minute per user (`X-RateLimit-*-picks`), as each may have the connector sync another course
+- a course picked is read by the picker by every route, search and MCP, as a course of its own (`catalog~101`), or inside the course an admin linked it to: its posts, files and texts, through the portal's one account. A grant gives none of it, an admin reads only what they picked too, and a banned user nothing. A pick of a portal no longer public reads nothing
+- picks go with their user and with their portal course
+- no MCP tool picks or lists the catalog
+
+A course picked is wanted: its connector learns it by `Wanted` (External connectors, below), and sends its posts and files from then on. Once no one picks it, it stays wanted 14 days more, so a pick meanwhile finds its sync where it left off; the hourly reconcile then drops it, and starts that grace for a course whose last picker was deleted. A course no longer wanted isn't removed: the connector keeps it as it was, its state too. Nothing of who picks what, or how many, leaves the hub, and the timing does tell one thing: a course someone else picked shows its posts at once.
+
 ### Running a hub with users' own accounts
 
 The reference above says what the code does; this is what an operator decides. Everything here is off until a portal is set to `token`.
@@ -252,6 +267,7 @@ The reference above says what the code does; this is what an operator decides. E
 | a portal not named, or `canvas=shared` | the one account the operator configures (`CANVAS_TOKEN`); grants decide who reads | the plugin's settings |
 | `canvas=token` | every user may link an account of their own | a token each user pastes in settings |
 | `canvas=token/admins` | only admins may link; everyone else gets a 404 | the same |
+| `catalog=public` | every user picks courses of the site's catalog; no grant | none: the connector reads a site anyone may read |
 
 - A token is write-only: `PUT` replaces it, `DELETE` unlinks, nothing reads it back (no API answer, log, error, job or MCP tool shows it or a hint of it). Linking needs a session signed in within the last day.
 - Tokens are sealed with AES-256-GCM under `PORTAL_CREDENTIALS_SECRETS="2:<key>,1:<key>"`, versioned keys of 32 random bytes in base64 (`openssl rand -base64 32`), apart from `BETTER_AUTH_SECRET`. The app won't start with a `token` portal and no key. Rotating:
@@ -308,6 +324,8 @@ A token a user pastes has no scopes, so the Canvas client only reads (GET and HE
 ## External connectors
 
 A connector can also run as its own service, in any language, and send data over gRPC (`proto/ingest.proto`). Each one gets a token in `CONNECTOR_TOKENS="portal=token,…"` and sends it as `authorization: Bearer <token>`; the token decides the portal. The hub doesn't schedule these, they sync when they want.
+
+Of a portal set to `public` (Public portals, above), the connector sends the site's whole directory as `Course`s (a catalog that changes slowly needs it once a week or so), and asks `Wanted` which of them users want: their ids as `Course` sent them, picked now or within 14 days of their last pick, nothing of who picked them or how many. It sends posts and files of those alone, and of any it syncs anyway by its own settings; a course that drops out of `Wanted` it keeps as it was, removing nothing and keeping its state, so a pick later goes on from there. Of a portal that isn't public, `Wanted` answers none.
 
 A refused call's status says what to do: `INVALID_ARGUMENT` fix the record or skip it, `FAILED_PRECONDITION` send what it refers to first (a course before its posts), `DATA_LOSS` send the content again, `ABORTED` or `UNAVAILABLE` try again later. When the hub refused it, the `grpc-status-details-bin` trailer also has gRPC's standard `google.rpc.Status` with a `google.rpc.ErrorInfo`: `domain` is `unihub` and `reason` a name that never changes, to switch on instead of the message:
 

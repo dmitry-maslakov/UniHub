@@ -25,6 +25,7 @@ import {
 } from '../domain/portal-account.js';
 import { PortalLinks } from '../domain/portal-links.js';
 import { PortalUnavailableError, TokenRefusedError } from './errors.js';
+import { PortalPicks, type Picks } from './portal-picks.js';
 
 // how long linking waits for the portal to say whose a token is
 export const IDENTIFY_TIMEOUT_MS = 30_000;
@@ -48,20 +49,25 @@ const portalUser = z.object({
   expiresAt: z.date().nullable(),
 });
 
-// Whose views a user reads in the portals read with users' own accounts:
-// those portals, and the user's accounts in them that read now
+// Whose views a user reads in the portals not read as shared: those read
+// with users' own accounts, and the user's accounts in them that read now;
+// the public ones, and the courses the user picked
 export interface Viewing {
   portals: PortalId[];
   accounts: string[];
+  picks: Picks;
 }
 
-// a portal as one user sees their own link to it
+// a portal as one user sees their own link to it, or their picks of it
 export interface PortalView {
   portal: PortalId;
+  label: string;
   mode: LinkMode;
   linked: boolean;
   status: AccountStatus | null;
   expiresAt: Date | null;
+  // of a public portal's catalog; null for any other portal
+  picked: number | null;
 }
 
 // Each user's own accounts of the portals that link them (PortalLinks),
@@ -77,35 +83,45 @@ export class PortalAccounts implements OnApplicationBootstrap {
     private readonly accounts: PortalAccountRepository,
     private readonly vault: CredentialVault,
     private readonly plugins: PluginCatalog,
+    private readonly picks: PortalPicks,
     private readonly queries: QueryBus,
     private readonly commands: CommandBus,
   ) {}
 
   // A mode no connector here takes stops the app at startup, once every
-  // module has started: the plugins have been found by then.
+  // module has started: the plugins have been found by then. Public takes
+  // a connector over gRPC, which asks which courses are wanted (Wanted).
   onApplicationBootstrap() {
-    this.links.checkAgainst(
-      (portal, mode) => this.plugins.linker(portal, mode) !== null,
+    this.links.checkAgainst((portal, mode) =>
+      mode === 'public'
+        ? this.plugins.external(portal)
+        : this.plugins.linker(portal, mode) !== null,
     );
   }
 
-  // the portals the user may link an account of, and any they have one of
+  // the portals the user may link an account of or pick courses from, and
+  // any they have an account of
   async list(userId: string): Promise<PortalView[]> {
-    const [admin, accounts] = await Promise.all([
+    const [admin, accounts, picked] = await Promise.all([
       this.isAdmin(userId),
       this.accounts.ofUser(userId),
+      this.picks.counts(userId),
     ]);
     const theirs = new Map(accounts.map((a) => [a.portal, a]));
     const portals = new Set([...this.links.openTo(admin), ...theirs.keys()]);
     const now = new Date();
     return [...portals].sort().map((portal) => {
-      const account = theirs.get(portal);
+      const { mode } = this.links.of(portal);
+      // a public portal links no account, whatever one is left of before
+      const account = mode === 'public' ? undefined : theirs.get(portal);
       return {
         portal,
-        mode: this.links.of(portal).mode,
+        label: this.links.label(portal),
+        mode,
         linked: account !== undefined,
         status: account?.statusAt(now) ?? null,
         expiresAt: account?.expiresAt ?? null,
+        picked: picked.get(portal) ?? null,
       };
     });
   }
@@ -113,22 +129,26 @@ export class PortalAccounts implements OnApplicationBootstrap {
   // The portals read with users' own accounts, and the user's accounts in
   // them that are linked and not past their expiry: an expired or revoked
   // one reads nothing until it's linked again, and one of a portal read as
-  // shared now reads nothing either.
+  // shared now reads nothing either. The public portals, and the user's
+  // picks.
   async viewing(userId: string, now = new Date()): Promise<Viewing> {
     const portals = this.links.readWithAccounts();
-    // every portal read as shared: no account of the user's is asked for
-    if (!portals.length) return { portals, accounts: [] };
-    const accounts = (await this.accounts.ofUser(userId)).filter(
+    const [accounts, picks] = await Promise.all([
+      // none read with accounts: no account of the user's is asked for
+      portals.length ? this.accounts.ofUser(userId) : [],
+      this.picks.of(userId),
+    ]);
+    const reading = accounts.filter(
       (account) =>
         portals.includes(account.portal) && account.statusAt(now) === 'linked',
     );
-    return { portals, accounts: accounts.map(({ id }) => id) };
+    return { portals, accounts: reading.map(({ id }) => id), picks };
   }
 
-  // whose views the portal's runs are: the shared account's, or those of
-  // its users' own accounts that read now
+  // whose views the portal's runs are: those of its users' own accounts
+  // that read now, of a portal read with them; else the shared account's
   async readers(portal: PortalId, now = new Date()): Promise<PortalReaders> {
-    if (this.links.of(portal).mode === 'shared') return { shared: true };
+    if (this.links.of(portal).mode !== 'token') return { shared: true };
     const accounts = await this.accounts.linkedOf(portal, now);
     return { shared: false, accounts: accounts.map(({ id }) => id) };
   }

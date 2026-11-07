@@ -8,11 +8,20 @@ import { ReadScopeQuery, type ReadScope } from '../../identity/contracts.js';
 
 // Whose views a user reads (README, Portal accounts): in the portals read
 // as shared, the shared account's, of the courses granted them (an admin's
-// every one); in the portals read with users' own accounts, their own
-// accounts' that read now, an admin's as anyone's. A ban reads neither.
-export const viewersOf = (scope: ReadScope, viewing: Viewing): Viewers => ({
-  accounts: scope.ownAccounts ? viewing.accounts : [],
-  shared: { courses: scope.granted, except: viewing.portals },
+// every one); in the public ones, the shared account's of the courses they
+// picked, an admin's as anyone's, and no grant's; in the portals read with
+// users' own accounts, their own accounts' that read now, an admin's as
+// anyone's. A ban reads none of it.
+export const viewersOf = (
+  scope: ReadScope,
+  { portals, accounts, picks }: Viewing,
+): Viewers => ({
+  accounts: scope.ownAccounts ? accounts : [],
+  shared: { courses: scope.granted, except: [...portals, ...picks.portals] },
+  picks: {
+    portals: picks.portals,
+    courses: scope.ownAccounts ? picks.courses : [],
+  },
 });
 
 // the user's viewers now: identity's scope and accounts' accounts, asked
@@ -25,6 +34,6 @@ export async function viewersOfUser(queries: QueryBus, userId: string) {
   return viewersOf(scope, viewing);
 }
 
-// none granted and none of their own: nothing to read, nothing to ask
-export const readNothing = ({ accounts, shared }: Viewers) =>
-  !accounts.length && shared.courses?.length === 0;
+// none granted, picked or of their own: nothing to read, nothing to ask
+export const readNothing = ({ accounts, shared, picks }: Viewers) =>
+  !accounts.length && !picks.courses.length && shared.courses?.length === 0;

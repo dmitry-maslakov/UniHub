@@ -85,6 +85,11 @@ export class PluginCatalog implements OnModuleInit {
     return connector.instance as unknown as IdentifiesAccounts;
   }
 
+  // whether the portal's connector runs outside the hub, over gRPC
+  external(portal: PortalId) {
+    return this.tokens.portals().includes(portal);
+  }
+
   get pollConnectors() {
     return this.set.plugins.polls;
   }

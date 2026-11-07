@@ -13,8 +13,27 @@ export class NotLinkableError extends NotFoundError {
   }
 }
 
+// The portal has no catalog to pick courses from: it isn't public
+export class NotPickableError extends NotFoundError {
+  readonly reason = 'NOT_PICKABLE';
+
+  constructor(readonly portal: PortalId) {
+    super(`no catalog of portal "${portal}" to pick from`);
+  }
+}
+
+// A user picks at most so many courses (MAX_PICKS): one more is refused
+export class TooManyPicksError extends InvalidError {
+  readonly reason = 'TOO_MANY_PICKS';
+
+  constructor(readonly max: number) {
+    super(`at most ${max} courses picked: unpick one first`);
+  }
+}
+
 // PORTAL_LINKS names a mode the portal's connector doesn't take (or there's
-// no connector of the portal here): the app doesn't start
+// no connector of the portal here): the app doesn't start. Public takes a
+// connector over gRPC, which asks which courses are wanted
 export class UnsupportedLinkError extends InvalidError {
   readonly reason = 'UNSUPPORTED_LINK';
 
@@ -23,7 +42,9 @@ export class UnsupportedLinkError extends InvalidError {
     readonly mode: string,
   ) {
     super(
-      `PORTAL_LINKS: no connector here links accounts of "${portal}" by ${mode}`,
+      mode === 'public'
+        ? `PORTAL_LINKS: "${portal}" has no connector over gRPC to read it as public`
+        : `PORTAL_LINKS: no connector here links accounts of "${portal}" by ${mode}`,
     );
   }
 }

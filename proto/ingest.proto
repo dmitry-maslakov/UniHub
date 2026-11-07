@@ -29,6 +29,13 @@ service Ingest {
   rpc GetState (Empty) returns (State);
   // "null" saves null: GetState answers as if none was ever saved
   rpc SaveState (State) returns (Empty);
+  // The courses of the portal's catalog its users want synced: picked now,
+  // or within 14 days of their last pick going. Of a portal the hub reads
+  // as public, whose connector sends its whole catalog as courses, and
+  // items and files of these alone; none of another portal. Nothing of who
+  // picked them, or how many. A course no longer wanted is kept as it was,
+  // not removed, its state too, so a pick later goes on from there
+  rpc Wanted (Empty) returns (WantedCourses);
 }
 
 message Empty {}
@@ -96,4 +103,9 @@ message Ref {
 message State {
   // null when the connector never saved one
   optional string json = 1;
+}
+
+message WantedCourses {
+  // the courses' ids, as Course sent them
+  repeated string external_ids = 1;
 }

@@ -2,13 +2,14 @@ import { Loader, Text } from '@mantine/core';
 import { api } from '@/shared/api';
 import { PageTitle } from '@/shared/ui';
 import classes from './portal-accounts.module.css';
+import { PortalCatalog } from './portal-catalog';
 import { PortalRow } from './portal-row';
 
 export function PortalAccountsPage() {
   const portals = api.useQuery('get', '/api/me/portals');
   return (
     <>
-      <PageTitle description="Link your own account of a portal so the hub can read the courses you follow there. The token stays with the hub and is never shown again.">
+      <PageTitle description="Link your own account of a portal, or pick courses of a public one, so the hub can read the courses you follow there. A token stays with the hub and is never shown again.">
         Portal accounts
       </PageTitle>
       {portals.isPending && (
@@ -24,9 +25,15 @@ export function PortalAccountsPage() {
       )}
       {portals.data && portals.data.length > 0 && (
         <ul className={classes.list} aria-label="Portals">
-          {portals.data.map((portal) => (
-            <PortalRow key={portal.portal} portal={portal} />
-          ))}
+          {portals.data.map((portal) =>
+            portal.mode === 'public' ? (
+              <li key={portal.portal} className={classes.row}>
+                <PortalCatalog portal={portal} />
+              </li>
+            ) : (
+              <PortalRow key={portal.portal} portal={portal} />
+            ),
+          )}
         </ul>
       )}
     </>

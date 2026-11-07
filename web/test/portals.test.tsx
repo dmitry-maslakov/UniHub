@@ -11,17 +11,21 @@ const TOKEN = 'canvas-secret-token-4711';
 const portals = [
   {
     portal: 'campus',
+    label: 'campus',
     mode: 'shared',
     linked: false,
     status: null,
     expiresAt: null,
+    picked: null,
   },
   {
     portal: 'canvas',
+    label: 'canvas',
     mode: 'token',
     linked: false,
     status: null,
     expiresAt: null,
+    picked: null,
   },
 ];
 

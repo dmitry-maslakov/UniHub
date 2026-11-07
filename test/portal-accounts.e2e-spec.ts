@@ -116,10 +116,12 @@ describe('portal accounts', { timeout: 20_000 }, () => {
     expect(await list(ana)).toEqual([
       {
         portal: 'linked',
+        label: 'linked',
         mode: 'token',
         linked: true,
         status: 'linked',
         expiresAt: EXPIRES_AT,
+        picked: null,
       },
     ]);
     const [account] = await prisma.portalAccount.findMany({
