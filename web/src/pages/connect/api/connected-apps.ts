@@ -27,7 +27,7 @@ export const connectedAppsQuery = () =>
             name: await authClient.oauth2
               .publicClient({ query: { client_id: c.clientId } })
               .then(
-                (client) => client.client_name ?? null,
+                (client) => client.client_name?.trim() || null,
                 () => null,
               ),
             connectedAt: c.createdAt,

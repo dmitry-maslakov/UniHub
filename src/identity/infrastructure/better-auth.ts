@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { betterAuth } from 'better-auth';
 import {
+  APIError,
   createAuthMiddleware,
   freshSessionMiddleware,
   isAPIError,
@@ -177,8 +178,8 @@ export function createAuth({
       user: {
         delete: {
           after: async (user) => {
-            await dropAgentCredentials(user.id);
             onUserDeleted(user.id);
+            await dropAgentCredentials(user.id);
           },
         },
       },
@@ -202,6 +203,34 @@ export function createAuth({
           });
           await freshSessionMiddleware(ctx);
         }
+        // a user with a password gives it to delete the account, whatever
+        // the age of the session (Better Auth asks for it only to skip
+        // freshness)
+        if (ctx.path === '/delete-user') {
+          const session = await auth.api.getSession({
+            headers: ctx.headers,
+            query: { disableRefresh: true },
+          });
+          const password = (ctx.body as { password?: unknown } | undefined)
+            ?.password;
+          if (
+            session &&
+            !password &&
+            (await prisma.account.count({
+              where: { userId: session.user.id, providerId: 'credential' },
+            })) > 0
+          )
+            throw new APIError('BAD_REQUEST', {
+              code: 'PASSWORD_REQUIRED',
+              message: 'Enter your password to delete your account',
+            });
+        }
+        // expired device codes only pile up otherwise (Better Auth removes
+        // one only when it is polled)
+        if (ctx.path === '/device/code')
+          await prisma.deviceCode.deleteMany({
+            where: { expiresAt: { lt: new Date() } },
+          });
         // an app revoked loses its refresh tokens with its consent
         if (ctx.path === '/oauth2/delete-consent') {
           const session = await auth.api.getSession({

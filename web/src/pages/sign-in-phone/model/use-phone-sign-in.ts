@@ -40,6 +40,10 @@ export function usePhoneSignIn(next: string) {
     enabled: !!code.data && waited,
     gcTime: 0,
     retry: false,
+    // an answer given stays given: a denied or expired code is gone on the
+    // server, and an early poll only earns slow_down
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     refetchInterval: (query) => {
       const status = query.state.data;
       return !status || status === 'pending' || status === 'slowDown'

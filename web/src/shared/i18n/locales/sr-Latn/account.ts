@@ -59,6 +59,7 @@ export default {
         body: 'Svi ostali pregledači i ekrani se odjavljuju. Ovaj ostaje.',
         action: 'Odjavi ostale',
       },
+      failed: 'Odjava ostalih uređaja nije uspela. Pokušaj ponovo.',
     },
     notify: {
       others: 'Ostali uređaji su odjavljeni.',

@@ -80,7 +80,7 @@ export function SignInPhonePage() {
         )}
         {status === 'expired' && (
           <>
-            <Text>{t('phone.expired')}</Text>
+            <Text component="output">{t('phone.expired')}</Text>
             {newCodeButton}
           </>
         )}

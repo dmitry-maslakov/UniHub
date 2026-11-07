@@ -151,6 +151,21 @@ describe('signing in with a phone', () => {
     expect(await screen.findByText('ABCD-2345')).toBeVisible();
   });
 
+  it('does not ask again on focus once the phone has answered', async () => {
+    const polls = phone(['access_denied']);
+    renderApp('/sign-in/phone');
+    await screen.findByRole('alert', {}, { timeout: 4000 });
+
+    document.dispatchEvent(new Event('visibilitychange'));
+    window.dispatchEvent(new Event('focus'));
+    await later(3000);
+
+    expect(polls).toHaveLength(1);
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'The sign-in was denied on the phone.',
+    );
+  });
+
   it('says when the phone denied it', async () => {
     phone(['access_denied']);
     renderApp('/sign-in/phone');

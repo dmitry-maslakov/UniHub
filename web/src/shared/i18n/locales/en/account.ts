@@ -56,6 +56,7 @@ export default {
         body: 'Every other browser and screen is signed out. This one stays.',
         action: 'Sign out others',
       },
+      failed: "Couldn't sign out your other devices. Try again.",
     },
     notify: {
       others: 'Signed out everywhere else.',

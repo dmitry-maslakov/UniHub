@@ -201,6 +201,30 @@ describe('identity', { timeout: 20_000 }, () => {
     expect(await prisma.apikey.count({ where: { referenceId: id } })).toBe(0);
   });
 
+  it('asks a user with a password for it, even on a fresh session', async () => {
+    const cookie = await signUp('keep@uni.test');
+    const id = await userId('keep@uni.test');
+    const res = await post('/delete-user', {}, cookie);
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('PASSWORD_REQUIRED');
+    expect(await app.get(PrismaService).user.count({ where: { id } })).toBe(1);
+  });
+
+  it('prunes expired device codes when a new one is asked for', async () => {
+    const prisma = app.get(PrismaService);
+    const { body } = await post('/device/code', { client_id: 'unihub-web' });
+    await prisma.deviceCode.updateMany({
+      where: { deviceCode: body.device_code },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+    await post('/device/code', { client_id: 'unihub-web' }).expect(200);
+    expect(
+      await prisma.deviceCode.count({
+        where: { deviceCode: body.device_code },
+      }),
+    ).toBe(0);
+  });
+
   it('gives API keys to users just signed in, by cookie or token', async () => {
     const cookie = await signUp('di@uni.test');
     const { headers } = await post('/sign-in/email', {

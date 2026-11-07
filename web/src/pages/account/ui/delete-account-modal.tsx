@@ -14,6 +14,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { isSessionNotFresh, SignInAgain } from '@/features/sign-in-again';
 import { authClient, authError } from '@/shared/api';
+import { ErrorState } from '@/shared/ui';
 import { hasPassword, linkedAccountsQuery } from '../api/linked-accounts';
 
 // Better Auth wants the password, or for an account without one (Google) a
@@ -52,11 +53,16 @@ export function DeleteAccountModal({
     },
   });
   const code = authError(remove.error)?.code;
+  const close = () => {
+    form.reset();
+    remove.reset();
+    onClose();
+  };
 
   return (
     <Modal
       opened={opened}
-      onClose={onClose}
+      onClose={close}
       title={t('delete.confirm.title')}
       centered
     >
@@ -66,6 +72,12 @@ export function DeleteAccountModal({
       >
         <Stack gap="md">
           <Text size="sm">{t('delete.confirm.body')}</Text>
+          {accounts.isError && (
+            <ErrorState
+              error={accounts.error}
+              onRetry={() => void accounts.refetch()}
+            />
+          )}
           {withPassword && (
             <PasswordInput
               label={t('delete.password.label')}
@@ -86,14 +98,14 @@ export function DeleteAccountModal({
               )
             ))}
           <Group justify="flex-end" gap="sm">
-            <Button variant="default" onClick={onClose}>
+            <Button variant="default" onClick={close}>
               {t('delete.keep')}
             </Button>
             <Button
               color="red"
               type="submit"
               loading={remove.isPending || remove.isSuccess}
-              disabled={accounts.isPending}
+              disabled={!accounts.isSuccess}
             >
               {t('delete.action')}
             </Button>

@@ -20,6 +20,9 @@ export function CopyField({ label, value }: { label: string; value: string }) {
               variant="default"
               size="sm"
               onClick={copy}
+              aria-label={t(copied ? 'action.copiedNamed' : 'action.copyNamed', {
+                label,
+              })}
               leftSection={
                 copied ? (
                   <IconCheck size={16} stroke={1.75} />
