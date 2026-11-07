@@ -1,9 +1,14 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
-import { Secret } from '@app/kernel';
 import { accountsConfig, type VaultKey } from '../accounts.config.js';
-import { CredentialVault, type SealedFor } from '../domain/credential-vault.js';
+import {
+  CredentialVault,
+  fromSealedText,
+  sealedText,
+  type SealedCredential,
+  type SealedFor,
+} from '../domain/credential-vault.js';
 import { UnreadableCredentialError } from '../domain/errors.js';
 
 const CIPHER = 'aes-256-gcm';
@@ -34,7 +39,7 @@ export class AesGcmVault extends CredentialVault {
     this.keys = keys;
   }
 
-  seal(credential: Secret, account: SealedFor) {
+  seal(credential: SealedCredential, account: SealedFor) {
     // the settings refuse token links without a key
     const [{ version, key }] = this.keys;
     const iv = randomBytes(IV_BYTES);
@@ -43,7 +48,7 @@ export class AesGcmVault extends CredentialVault {
     });
     cipher.setAAD(boundTo(account));
     const sealed = Buffer.concat([
-      cipher.update(credential.reveal(), 'utf8'),
+      cipher.update(sealedText(credential), 'utf8'),
       cipher.final(),
     ]);
     return [
@@ -69,7 +74,7 @@ export class AesGcmVault extends CredentialVault {
         decipher.update(bytes(data)),
         decipher.final(),
       ]);
-      return new Secret(opened.toString('utf8'));
+      return fromSealedText(opened.toString('utf8'));
     } catch {
       // a wrong key, account, user, portal or tag: GCM tells none apart
       throw new UnreadableCredentialError();

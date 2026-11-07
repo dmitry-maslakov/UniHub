@@ -1,5 +1,5 @@
 import { Readable } from 'node:stream';
-import { PortalId } from '@app/kernel';
+import { Instance, NO_INSTANCE, PortalId } from '@app/kernel';
 import { sha256 } from '../../../test/sha256.js';
 import * as catalog from '../../catalog/contracts.js';
 import { Connection } from '../domain/connection.js';
@@ -25,7 +25,11 @@ const file = (externalId: string, more = {}) => ({
   ...more,
 });
 const stamp = { size: 10, sourceUpdatedAt: new Date(updatedAt) };
-const ref = (externalId: string) => ({ portal, externalId });
+const ref = (externalId: string) => ({
+  portal,
+  instance: NO_INSTANCE,
+  externalId,
+});
 const of = <T extends object>(
   sent: object[],
   kind: abstract new (...args: never[]) => T,
@@ -88,7 +92,7 @@ describe("a pass of a user's own account", () => {
     const [view] = of(sent, catalog.ViewCourseCommand);
     expect(view).toMatchObject({
       account: 'ana',
-      portal,
+      site: { portal, instance: NO_INSTANCE },
       course: 'c1',
       gone: { items: [], files: ['f9'] },
       at,
@@ -182,18 +186,32 @@ describe("an account's courses", () => {
         { externalId: 'c2', issues: [expect.stringMatching(/^name: /)] },
       ],
     });
-    await service.courses(ana, [nameless, course], run);
+    // an account of a site, whatever site the connector says
+    const site = Instance.parse('https://canvas.example.edu');
+    const bo = Connection.of({ portal, account: 'bo' }).at(site);
+    await service.courses(
+      bo,
+      [nameless, { ...course, instance: 'https://elsewhere.example.edu' }],
+      run,
+    );
 
-    const input = {
+    const input = (instance: Instance) => ({
       portal,
+      instance,
       externalId: 'c1',
       name: 'OS',
       url: null,
       meta: null,
-    };
+    });
     expect(sent).toEqual([
-      new catalog.UpsertPortalCourseCommand(input),
-      new catalog.ViewCoursesCommand('ana', portal, [input], ['c2'], at),
+      new catalog.UpsertPortalCourseCommand(input(NO_INSTANCE)),
+      new catalog.ViewCoursesCommand(
+        'bo',
+        { portal, instance: site },
+        [input(site)],
+        ['c2'],
+        at,
+      ),
     ]);
     await expect(service.courses(ana, course, run)).rejects.toThrow(
       MalformedRecordError,

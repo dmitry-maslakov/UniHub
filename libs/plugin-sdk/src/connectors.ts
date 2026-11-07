@@ -1,5 +1,5 @@
 import type { Readable } from 'node:stream';
-import type { ContentHash, Json, PortalId } from '@app/kernel';
+import type { ContentHash, Instance, Json, PortalId } from '@app/kernel';
 import type { AccountLink } from '@app/kernel';
 import type { Credential } from './accounts.js';
 import type { InvalidRecordError } from './errors.js';
@@ -13,22 +13,39 @@ import type { CourseRecord, FileRecord, ItemRecord } from './records.js';
 // push: the connector keeps its own connection (websocket, long poll...) in
 //       run(). Webhooks will come with the first connector that needs them.
 
-interface ConnectorOptions<L extends AccountLink> {
+interface ConnectorOptions<L extends AccountLink, I extends boolean> {
   portal: string;
   // how users may link accounts of their own on the portal, besides the
   // shared one; a connector that names any implements IdentifiesAccounts
   links?: readonly L[];
+  // The portal is a product each school runs on a site of its own
+  // (Canvas): a user's account is linked with its site's address, which
+  // its credential carries (Credential.url), and the hub keeps each site's
+  // records apart. A connector that says so implements HasInstances.
+  instances?: I;
 }
 
 export interface PollConnectorOptions<
   L extends AccountLink = AccountLink,
-> extends ConnectorOptions<L> {
+  I extends boolean = boolean,
+> extends ConnectorOptions<L, I> {
   // a cron pattern, e.g. '*/15 * * * *'
   schedule: string;
 }
 
-export type PushConnectorOptions<L extends AccountLink = AccountLink> =
-  ConnectorOptions<L>;
+export type PushConnectorOptions<
+  L extends AccountLink = AccountLink,
+  I extends boolean = boolean,
+> = ConnectorOptions<L, I>;
+
+// What a connector of a portal with instances (instances: true) says of
+// them.
+export interface HasInstances {
+  // The site its own settings read, for the shared account and for an
+  // account linked before credentials carried their site (one with no
+  // url); null when the settings name none.
+  configuredInstance(): Instance | null;
+}
 
 // Whose a run is: the shared account, which the plugin's own settings give,
 // or a user's own account, by the credential they linked. Reveal the

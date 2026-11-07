@@ -3,10 +3,11 @@ import { Logger } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import {
   CredentialRejectedError,
+  TokensNotAllowedError as SiteTakesNoTokens,
   type Credential,
   type PortalUser,
 } from '@app/plugin-sdk';
-import { PortalId, Secret } from '@app/kernel';
+import { Instance, NO_INSTANCE, PortalId, Secret } from '@app/kernel';
 import { IsAdminQuery } from '../../identity/contracts.js';
 import { catalogOf, poll } from '../../../test/discovered-plugins.js';
 import { FakeBus } from '../../../test/fake-bus.js';
@@ -21,18 +22,28 @@ import {
   InMemoryWanted,
   noTransactions,
 } from './accounts.fakes.js';
-import { PortalUnavailableError, TokenRefusedError } from './errors.js';
+import {
+  PortalUnreachableError,
+  SiteNeededError,
+  SiteNotTakenError,
+  TokenRefusedError,
+  TokensNotAllowedError,
+} from './errors.js';
 import { PortalAccounts } from './portal-accounts.js';
 import { PortalPicks } from './portal-picks.js';
 
 const TOKEN = '1~ana-pasted-token';
 const portal = (id: string) => PortalId.parse(id);
-const [CANVAS, MOODLE, TEAMS, CATALOG] = [
+const [CANVAS, MOODLE, TEAMS, CATALOG, LMS] = [
   'canvas',
   'moodle',
   'teams',
   'catalog',
+  'lms',
 ].map(portal);
+// two schools' sites of lms, a portal that is a site per school
+const SITE = Instance.parse('https://lms.example.edu');
+const OTHER_SITE = Instance.parse('https://lms.example.org');
 
 // canvas for admins, moodle for everyone, teams shared, catalog public and
 // served over gRPC; bo is an admin
@@ -48,13 +59,19 @@ const course = (externalId: string) => ({
   url: null,
   since: new Date('2026-01-01T00:00:00Z'),
 });
+const SITES: Record<string, PortalLink> = {
+  lms: { mode: 'token', adminsOnly: false },
+};
 
 type Identify = (credential: Credential) => Promise<PortalUser>;
 
 function accounts({
   identify = async () => ({ id: '4242', expiresAt: null }) as PortalUser,
   links = LINKS,
-}: { identify?: Identify; links?: Record<string, PortalLink> } = {}) {
+}: {
+  identify?: Identify;
+  links?: Record<string, PortalLink>;
+} = {}) {
   const asked: Credential[] = [];
   const connector = {
     poll: async () => {},
@@ -63,12 +80,14 @@ function accounts({
       return identify(credential);
     },
   };
+  const sited = { ...connector, configuredInstance: () => SITE };
   const plugins = catalogOf(
     {
       polls: [
         poll('canvas', connector, ['token']),
         poll('moodle', connector, ['token']),
         poll('teams'),
+        poll('lms', sited, ['token'], true),
       ],
     },
     ['catalog'],
@@ -99,8 +118,12 @@ function accounts({
     commands.commands,
   );
   service.onApplicationBootstrap();
-  const setToken = (userId: string, p: PortalId, token = TOKEN) =>
-    service.setToken(userId, p, new Secret(token));
+  const setToken = (
+    userId: string,
+    p: PortalId,
+    token = TOKEN,
+    url: Instance | null = null,
+  ) => service.setToken(userId, p, { token: new Secret(token), url });
   return {
     service,
     store,
@@ -137,7 +160,99 @@ describe('PortalAccounts', () => {
       status: 'linked',
       expiresAt: until,
     });
-    expect(vault.open(sealed, account).reveal()).toBe(TOKEN);
+    expect(vault.open(sealed, account).token.reveal()).toBe(TOKEN);
+  });
+
+  it('links an account of a site per school with its address, sealed with the token, and tells the connector which', async () => {
+    const { store, vault, asked, setToken } = accounts({ links: SITES });
+    await setToken('ana', LMS, TOKEN, SITE);
+
+    expect(asked).toEqual([
+      { kind: 'token', token: expect.any(Secret), url: SITE },
+    ]);
+    const [{ account, sealed }] = store.rows.values();
+    expect(account).toMatchObject({ portal: LMS, instance: SITE });
+    expect(vault.open(sealed, account).url).toBe(SITE);
+  });
+
+  it('needs the address on a portal of sites, and takes none on a portal of one, asking neither', async () => {
+    const { asked, store, setToken } = accounts({
+      links: { ...LINKS, ...SITES },
+    });
+
+    await expect(setToken('ana', LMS)).rejects.toThrow(SiteNeededError);
+    await expect(setToken('ana', MOODLE, TOKEN, SITE)).rejects.toThrow(
+      SiteNotTakenError,
+    );
+    expect(asked).toEqual([]);
+    expect(store.rows.size).toBe(0);
+  });
+
+  it("puts an account of another school's site in the old one's place, the same portal user's id or not", async () => {
+    const { store, setToken, told } = accounts({ links: SITES });
+    await setToken('ana', LMS, TOKEN, SITE);
+    const first = store.rows.get('ana:lms')!.account.id;
+    await setToken('ana', LMS, TOKEN, OTHER_SITE);
+    const { account } = store.rows.get('ana:lms')!;
+
+    expect(account).toMatchObject({ instance: OTHER_SITE, portalUser: '4242' });
+    expect(account.id).not.toBe(first);
+    expect(told.at(-1)).toEqual(
+      new AccountsChangedCommand(LMS, { linked: [account.id], gone: [first] }),
+    );
+  });
+
+  it('refuses a token where the site takes none, keeping nothing', async () => {
+    const { store, setToken } = accounts({
+      links: SITES,
+      identify: async () => {
+        throw new SiteTakesNoTokens();
+      },
+    });
+    await expect(setToken('ana', LMS, TOKEN, SITE)).rejects.toThrow(
+      TokensNotAllowedError,
+    );
+    expect(store.rows.size).toBe(0);
+  });
+
+  it("gives a run the account's site, the one a credential sealed before credentials kept one goes to too", async () => {
+    const { service, store, vault, setToken } = accounts({ links: SITES });
+    await setToken('ana', LMS, TOKEN, SITE);
+    const row = store.rows.get('ana:lms')!;
+
+    expect(await service.credential(row.account.id)).toMatchObject({
+      credential: { kind: 'token', url: SITE },
+      instance: SITE,
+    });
+    // from before: sealed with no site, its account given one since
+    row.sealed = vault.seal(
+      { token: new Secret(TOKEN), url: null },
+      row.account,
+    );
+    expect(await service.credential(row.account.id)).toMatchObject({
+      credential: { kind: 'token', url: SITE },
+      instance: SITE,
+    });
+    // given none yet: the connector's settings say
+    row.account = { ...row.account, instance: NO_INSTANCE };
+    const legacy = await service.credential(row.account.id);
+    expect(legacy?.credential).not.toHaveProperty('url');
+    expect(legacy?.instance).toBe(NO_INSTANCE);
+  });
+
+  it("gives a portal's accounts kept with no site the one its settings name", async () => {
+    const { service, store, setToken } = accounts({
+      links: { ...LINKS, ...SITES },
+    });
+    await setToken('ana', LMS, TOKEN, SITE);
+    await setToken('bo', MOODLE);
+    const lms = store.rows.get('ana:lms')!;
+    lms.account = { ...lms.account, instance: NO_INSTANCE };
+
+    expect(await service.adopt(LMS, SITE)).toBe(1);
+    expect(store.rows.get('ana:lms')!.account.instance).toBe(SITE);
+    expect(store.rows.get('bo:moodle')!.account.instance).toBe(NO_INSTANCE);
+    expect(await service.adopt(LMS, SITE)).toBe(0);
   });
 
   it("keeps the account for the same portal user's token, not for another's", async () => {
@@ -212,7 +327,7 @@ describe('PortalAccounts', () => {
       },
     });
     await expect(failing.setToken('ana', MOODLE)).rejects.toThrow(
-      new PortalUnavailableError(MOODLE, 'Error'),
+      new PortalUnreachableError(MOODLE, 'Error'),
     );
 
     // an answer the hub can't keep is the connector failing
@@ -225,7 +340,7 @@ describe('PortalAccounts', () => {
       const error = (await odd
         .setToken('ana', MOODLE)
         .catch((e: unknown) => e)) as Error;
-      expect(error).toBeInstanceOf(PortalUnavailableError);
+      expect(error).toBeInstanceOf(PortalUnreachableError);
       expect(error.cause).toBeUndefined();
       expect(odd.store.rows.size).toBe(0);
     }
@@ -255,7 +370,7 @@ describe('PortalAccounts', () => {
       });
       const error = (await setToken('ana', MOODLE).catch(
         (e: unknown) => e,
-      )) as PortalUnavailableError;
+      )) as PortalUnreachableError;
       expect(error).toMatchObject({ portal: MOODLE, failure });
       expect(error.cause).toBeUndefined();
 
@@ -297,6 +412,7 @@ describe('PortalAccounts', () => {
         label: 'moodle',
         mode: 'token',
         linked: false,
+        instance: null,
         status: null,
         expiresAt: null,
         picked: null,
@@ -308,6 +424,7 @@ describe('PortalAccounts', () => {
         label: p === CANVAS ? 'Canvas' : p,
         mode: 'token',
         linked: true,
+        instance: null,
         status: 'expired',
         expiresAt: past,
         picked: null,
@@ -350,6 +467,7 @@ describe('PortalAccounts', () => {
       label: 'catalog',
       mode: 'public',
       linked: false,
+      instance: null,
       status: null,
       expiresAt: null,
       picked: 1,
@@ -514,6 +632,14 @@ describe('PortalAccounts', () => {
     Object.assign(shared, { accounts: store });
 
     expect(await shared.credential(id)).toBeNull();
+  });
+
+  it('lists an account of a site per school with that site', async () => {
+    const { service, setToken } = accounts({ links: SITES });
+    await setToken('ana', LMS, TOKEN, SITE);
+    expect(await service.list('ana')).toEqual([
+      expect.objectContaining({ portal: LMS, linked: true, instance: SITE }),
+    ]);
   });
 
   it('stops at startup on a mode no connector here takes', () => {

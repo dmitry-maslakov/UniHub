@@ -1,4 +1,4 @@
-import { PortalId } from '@app/kernel';
+import { NO_INSTANCE, PortalId } from '@app/kernel';
 import { UnknownReferenceError } from '../domain/errors.js';
 import { ITEM_CHANGED, ITEM_REMOVED } from '../domain/events.js';
 import {
@@ -7,10 +7,14 @@ import {
   UpsertPortalCourseCommand,
   type ItemInput,
 } from './commands.js';
-import { onFakes } from './handlers.fakes.js';
+import { key, onFakes } from './handlers.fakes.js';
 
 const portal = PortalId.parse('canvas');
-const ref = (externalId: string) => ({ portal, externalId });
+const ref = (externalId: string) => ({
+  portal,
+  instance: NO_INSTANCE,
+  externalId,
+});
 const item = (fields: Partial<ItemInput> = {}): ItemInput => ({
   ...ref('post-1'),
   course: null,
@@ -49,7 +53,9 @@ describe('item commands', () => {
       false,
       true,
     ]);
-    expect(items.records.get('canvas:post-1')?.portalCourseId).toBe(course.id);
+    expect(items.records.get(key(ref('post-1')))?.portalCourseId).toBe(
+      course.id,
+    );
     const changed = {
       topic: ITEM_CHANGED,
       payload: { portal, itemId: first.id },

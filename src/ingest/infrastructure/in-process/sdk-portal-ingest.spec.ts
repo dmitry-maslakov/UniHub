@@ -1,7 +1,7 @@
 import { PassThrough, type Readable } from 'node:stream';
 import { buffer } from 'node:stream/consumers';
 import { InvalidRecordError, UnknownReferenceError } from '@app/plugin-sdk';
-import { InvalidError, PortalId } from '@app/kernel';
+import { InvalidError, NO_INSTANCE, PortalId } from '@app/kernel';
 import * as catalog from '../../../catalog/contracts.js';
 import type { IngestService } from '../../application/ingest.service.js';
 import { Connection } from '../../domain/connection.js';
@@ -9,7 +9,7 @@ import { MalformedRecordError } from '../../domain/errors.js';
 import { SdkPortalIngest } from './sdk-portal-ingest.js';
 
 const portal = PortalId.parse('canvas');
-const ref = { portal, externalId: 'x' };
+const ref = { portal, instance: NO_INSTANCE, externalId: 'x' };
 
 // what storage refuses past its limit
 class TooLargeError extends InvalidError {

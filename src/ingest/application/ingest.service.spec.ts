@@ -1,5 +1,5 @@
 import { Readable } from 'node:stream';
-import { PortalId } from '@app/kernel';
+import { Instance, NO_INSTANCE, PortalId } from '@app/kernel';
 import { InMemoryBlobs } from '../../../test/in-memory-blobs.js';
 import { sha256 } from '../../../test/sha256.js';
 import * as catalog from '../../catalog/contracts.js';
@@ -14,17 +14,20 @@ const someone = Connection.of({ portal, account: 'someone' });
 const stored = (blobs: InMemoryBlobs) => [...blobs.stored.values()].map(String);
 
 describe('IngestService', () => {
-  it("hands catalog a record as the connection's portal, nothing it may not set", async () => {
+  it("hands catalog a record as the connection's portal and site, nothing it may not set", async () => {
     const { service, sent } = ingest();
-    await service.course(shared, {
+    const site = Instance.parse('https://canvas.example.edu');
+    await service.course(Connection.shared(portal, site), {
       externalId: 'c1',
       name: 'OS',
       portal: 'someone-else',
+      instance: 'https://elsewhere.example.edu',
       id: 'chosen',
     });
     expect(sent).toEqual([
       new catalog.UpsertPortalCourseCommand({
         portal,
+        instance: site,
         externalId: 'c1',
         name: 'OS',
         url: null,
@@ -97,7 +100,10 @@ describe('IngestService', () => {
     expect(answer).toEqual({ hash, changed: true });
     expect(stored(blobs)).toEqual([slides]);
     expect(sent).toEqual([
-      new catalog.SetFileContentCommand({ portal, externalId: 'f1' }, hash),
+      new catalog.SetFileContentCommand(
+        { portal, instance: NO_INSTANCE, externalId: 'f1' },
+        hash,
+      ),
     ]);
   });
 
@@ -131,7 +137,11 @@ describe('IngestService', () => {
       changed: true,
     });
     expect(sent).toEqual([
-      new catalog.RemoveFileCommand({ portal, externalId: 'f1' }),
+      new catalog.RemoveFileCommand({
+        portal,
+        instance: NO_INSTANCE,
+        externalId: 'f1',
+      }),
     ]);
   });
 

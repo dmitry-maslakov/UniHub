@@ -1,23 +1,37 @@
-import { Button, Group, Stack, Text, Title } from '@mantine/core';
+import {
+  Button,
+  Group,
+  Stack,
+  Text,
+  Title,
+  type TitleOrder,
+} from '@mantine/core';
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { Schemas } from '@/shared/api';
 import { deleteToken } from '../api/portals';
+import { isSitePortal } from '../lib/site';
 import { statusText } from '../lib/status';
 import classes from './sources.module.css';
 import { TokenForm } from './token-form';
 
-// One portal, by the name it's shown by: how it's read, where the user's
-// account stands, and what to do
-export function PortalRow({ portal }: { portal: Schemas['PortalResponse'] }) {
+// One source: where the user's account of it stands, and what to do
+export function SourceRow({
+  portal,
+  order,
+}: {
+  portal: Schemas['PortalResponse'];
+  order: TitleOrder;
+}) {
   const queryClient = useQueryClient();
   const [unavailable, setUnavailable] = useState(false);
+  const { label } = portal;
   const unlink = useMutation({
     mutationFn: () => deleteToken(portal.portal),
     onSuccess: async () => {
-      notifications.show({ message: `${portal.label} is unlinked.` });
+      notifications.show({ message: `${label} is unlinked.` });
       await queryClient.invalidateQueries({
         queryKey: ['get', '/api/me/portals'],
       });
@@ -31,12 +45,11 @@ export function PortalRow({ portal }: { portal: Schemas['PortalResponse'] }) {
 
   const confirmUnlink = () =>
     modals.openConfirmModal({
-      title: `Unlink ${portal.label}?`,
+      title: `Unlink ${label}?`,
       children: (
         <Text size="sm">
-          The hub forgets your token and stops reading {portal.label} as you.
-          Courses only your account saw stop showing up. You can link it again
-          later.
+          The hub forgets your token and stops reading {label} as you. Courses
+          only your account saw stop showing up. You can link it again later.
         </Text>
       ),
       labels: { confirm: 'Unlink', cancel: 'Keep it' },
@@ -44,29 +57,26 @@ export function PortalRow({ portal }: { portal: Schemas['PortalResponse'] }) {
       onConfirm: () => unlink.mutate(),
     });
 
-  const linked = portal.status !== null;
   return (
     <li className={classes.row}>
-      <Stack gap="sm">
+      <Stack gap="md">
         <Group justify="space-between" align="flex-start" wrap="nowrap">
           <Stack gap={2} miw={0}>
-            <Title order={3} fz="md">
-              {portal.label}
-            </Title>
+            <Title order={order}>{label}</Title>
             <Text size="sm" c="dimmed">
               {unavailable
-                ? "Linking your own account isn't open to you on this portal. Ask an admin of the hub if you need it."
+                ? `Linking your own account isn't open to you on ${label}. Ask an admin of the hub if you need it.`
                 : statusText(portal)}
             </Text>
           </Stack>
-          {portal.mode === 'token' && linked && (
+          {portal.linked && (
             <Button
               variant="subtle"
               color="red"
               size="sm"
               loading={unlink.isPending}
               onClick={confirmUnlink}
-              aria-label={`Unlink ${portal.label}`}
+              aria-label={`Unlink ${label}`}
             >
               Unlink
             </Button>
@@ -74,9 +84,8 @@ export function PortalRow({ portal }: { portal: Schemas['PortalResponse'] }) {
         </Group>
         {portal.mode === 'token' && !unavailable && (
           <TokenForm
-            portal={portal.portal}
-            label={portal.label}
-            linked={linked}
+            portal={portal}
+            site={isSitePortal(portal.portal)}
             onUnavailable={() => setUnavailable(true)}
           />
         )}

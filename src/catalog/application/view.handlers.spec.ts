@@ -1,4 +1,4 @@
-import { ContentHash, PortalId } from '@app/kernel';
+import { ContentHash, Instance, NO_INSTANCE, PortalId } from '@app/kernel';
 import { UnknownReferenceError } from '../domain/errors.js';
 import type { Shown } from '../domain/publication.js';
 import {
@@ -20,6 +20,7 @@ const at = (minute: number): Shown => ({
 });
 const course = (externalId: string) => ({
   portal,
+  instance: NO_INSTANCE,
   externalId,
   name: `Course ${externalId}`,
   url: null,
@@ -27,6 +28,7 @@ const course = (externalId: string) => ({
 });
 const post = (externalId: string, title = externalId): ItemInput => ({
   portal,
+  instance: NO_INSTANCE,
   externalId,
   course: 'c1',
   kind: 'announcement',
@@ -37,6 +39,7 @@ const post = (externalId: string, title = externalId): ItemInput => ({
 });
 const file = (externalId: string, size = 10): FileInput => ({
   portal,
+  instance: NO_INSTANCE,
   externalId,
   course: 'c1',
   item: null,
@@ -69,7 +72,7 @@ async function viewing() {
     commands.execute(
       new ViewCoursesCommand(
         account,
-        portal,
+        { portal, instance: NO_INSTANCE },
         ids.map(course),
         refused,
         at(minute),
@@ -84,7 +87,7 @@ async function viewing() {
     commands.execute(
       new ViewCourseCommand(
         account,
-        portal,
+        { portal, instance: NO_INSTANCE },
         of,
         items,
         files,
@@ -115,6 +118,44 @@ describe('views of users’ accounts', () => {
     expect(posts).toHaveLength(2);
     expect(new Set(posts.map((v) => v.recordId)).size).toBe(1);
     expect([...views.of('ana').keys()]).toEqual([...views.of('bo').keys()]);
+  });
+
+  it("keeps two sites' records apart, whatever ids they share", async () => {
+    const { commands, courses, pass, views } = await viewing();
+    const site = {
+      portal,
+      instance: Instance.parse('https://lms.example.org'),
+    };
+    const there = <T extends object>(record: T) => ({ ...record, ...site });
+    await courses('ana', ['c1']);
+    await pass('ana', [open(post('news'))]);
+    await commands.execute(
+      new ViewCoursesCommand('bo', site, [there(course('c1'))], [], at(0)),
+    );
+    await commands.execute(
+      new ViewCourseCommand(
+        'bo',
+        site,
+        'c1',
+        [open(there(post('news')))],
+        [],
+        nothingGone,
+        at(0),
+      ),
+    );
+
+    for (const kind of ['course', 'item'])
+      expect(
+        new Set(
+          views.made.filter((v) => v.kind === kind).map((v) => v.recordId),
+        ).size,
+      ).toBe(2);
+    // and only a course of its own site holds a pass's records
+    await expect(
+      commands.execute(
+        new ViewCourseCommand('ana', site, 'c1', [], [], nothingGone, at(0)),
+      ),
+    ).rejects.toBeInstanceOf(UnknownReferenceError);
   });
 
   it("refuses a pass of a course the account's courses didn't name", async () => {
@@ -225,7 +266,7 @@ describe('views of users’ accounts', () => {
     await pass('cy', [], [open(file('slides', 20))]);
 
     const stamp = { size: 10, sourceUpdatedAt: file('slides').sourceUpdatedAt };
-    const slides = { portal, externalId: 'slides' };
+    const slides = { portal, instance: NO_INSTANCE, externalId: 'slides' };
     expect(
       await commands.execute(new StoreBytesCommand(slides, stamp, hash)),
     ).toEqual({ changed: true });
@@ -246,7 +287,11 @@ describe('views of users’ accounts', () => {
 
     await expect(
       commands.execute(
-        new StoreBytesCommand({ portal, externalId: 'nope' }, file('x'), hash),
+        new StoreBytesCommand(
+          { portal, instance: NO_INSTANCE, externalId: 'nope' },
+          file('x'),
+          hash,
+        ),
       ),
     ).rejects.toBeInstanceOf(UnknownReferenceError);
   });

@@ -1,8 +1,8 @@
-import { createFileRoute } from '@tanstack/react-router';
-import { PortalAccountsPage } from '@/pages/portal-accounts';
-import { pageHead } from '@/shared/lib';
+import { createFileRoute, redirect } from '@tanstack/react-router';
 
+// where portal accounts were linked before Sources
 export const Route = createFileRoute('/_app/settings/portals')({
-  head: pageHead('Portal accounts'),
-  component: PortalAccountsPage,
+  beforeLoad: () => {
+    throw redirect({ to: '/sources', replace: true });
+  },
 });

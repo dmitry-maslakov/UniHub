@@ -24,6 +24,10 @@ import {
 // the wait on a low quota; the backoff runs on fake timers
 const { sleep } = vi.hoisted(() => ({ sleep: vi.fn(async () => {}) }));
 vi.mock('node:timers/promises', () => ({ setTimeout: sleep }));
+// the file store listens on loopback (CuttingFileStore)
+vi.mock('request-filtering-agent', async (original) =>
+  (await import('./canvas.fakes.js')).letInLoopback(original),
+);
 
 const CANVAS = 'https://canvas.example.edu';
 const server = setupServer();
@@ -427,6 +431,17 @@ describe('CanvasApi on a file store that lets go', () => {
     await store.requested(2);
     run.abort('stopped');
     await got;
+  });
+
+  it("fails at once a request the guard refuses where it's redirected, trying it once", async () => {
+    const error = await api({ url: store.url })
+      .get('/inside/1')
+      .then(
+        () => expect.unreachable(),
+        (error: unknown) => error,
+      );
+    expect(error).toBeInstanceOf(NoAnswerError);
+    expect(store.asked).toEqual(['/inside/1']);
   });
 
   it('fails a download the run stops, read or not', async () => {

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { AccountLink, PortalId } from '@app/kernel';
+import type { AccountLink, Instance, PortalId } from '@app/kernel';
 
 // linked; expired, past its expiry or as a run found it; revoked, the
 // portal no longer taking its credential
@@ -16,6 +16,8 @@ export interface PortalAccountState {
   id: string;
   userId: string;
   portal: PortalId;
+  // the portal's site it was linked with, none for a portal of one site
+  instance: Instance;
   mode: AccountLink;
   portalUser: string;
   status: AccountStatus;
@@ -33,14 +35,21 @@ export class PortalAccount {
   }
 
   // Linked by a credential of `user`'s. The account the user had of the
-  // portal stays when the credential is the same portal user's, linked
-  // again; another portal user's is a new account, so nothing carries over.
+  // portal stays when the credential is the same portal user's of the same
+  // site, linked again; another's, or one of another site, is a new
+  // account, so nothing carries over.
   static link(
     had: PortalAccount | null,
-    of: { userId: string; portal: PortalId; mode: AccountLink },
+    of: {
+      userId: string;
+      portal: PortalId;
+      instance: Instance;
+      mode: AccountLink;
+    },
     user: PortalUser,
   ) {
-    const same = had?.state.portalUser === user.id;
+    const same =
+      had?.state.portalUser === user.id && had.state.instance === of.instance;
     return new PortalAccount({
       id: same ? had.id : randomUUID(),
       ...of,
@@ -56,6 +65,10 @@ export class PortalAccount {
 
   get portal() {
     return this.state.portal;
+  }
+
+  get instance() {
+    return this.state.instance;
   }
 
   get expiresAt() {
@@ -107,4 +120,6 @@ export abstract class PortalAccountRepository {
   abstract removeAllOf(
     userId: string,
   ): Promise<{ id: string; portal: PortalId }[]>;
+  // the portal's accounts with no site are this one's: how many were
+  abstract adopt(portal: PortalId, instance: Instance): Promise<number>;
 }

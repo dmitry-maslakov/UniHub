@@ -1,7 +1,14 @@
 import { Logger } from '@nestjs/common';
 import { http, HttpResponse, passthrough } from 'msw';
 import type { MockInstance } from 'vitest';
-import { CredentialRejectedError, PortalId, Secret } from '@app/plugin-sdk';
+import {
+  CredentialRejectedError,
+  Instance,
+  PortalId,
+  Secret,
+  TokensNotAllowedError,
+  type Credential,
+} from '@app/plugin-sdk';
 import { CanvasConnector, WARN_BEFORE_MS } from './canvas.connector.js';
 import {
   CANVAS_URL,
@@ -10,9 +17,19 @@ import {
   refusal,
   TOKEN,
 } from './canvas.fakes.js';
-import { CanvasError, TokenRejectedError } from './errors.js';
+import { CanvasError, NotCanvasError, TokenRejectedError } from './errors.js';
+import { hostedByInstructure } from './instructure.js';
 import { RecordingIngest } from './ingest.fakes.js';
 import { SyncState } from './listings.js';
+
+// the file store listens on loopback (CuttingFileStore)
+vi.mock('request-filtering-agent', async (original) =>
+  (await import('./canvas.fakes.js')).letInLoopback(original),
+);
+// no DNS in a spec: its own spec checks the CNAMEs
+vi.mock('./instructure.js', () => ({
+  hostedByInstructure: vi.fn(async () => false),
+}));
 
 const canvas = new FakeCanvas().listen();
 const store = new CuttingFileStore().listen();
@@ -20,8 +37,9 @@ const COURSE = '/api/v1/courses/101';
 const TOKEN_PATH = '/api/v1/users/self/tokens/1~abc';
 
 const portal = PortalId.parse('canvas');
-const connector = (token: string | null = TOKEN) =>
-  new CanvasConnector({ url: CANVAS_URL, token, userAgent: 'test' });
+const SITE = Instance.parse(CANVAS_URL);
+const connector = (token: string | null = TOKEN, url: Instance | null = SITE) =>
+  new CanvasConnector({ url, token, userAgent: 'test' });
 // the shared account's run, on the owner's token
 const run = (
   ingest: RecordingIngest,
@@ -33,13 +51,22 @@ const run = (
     ingest,
     signal,
   });
-// a user's own account's, on their token; the owner's is none
-const runAs = (ingest: RecordingIngest, token = TOKEN) =>
-  connector(null).poll({
+// a user's own account's, on their token of the Canvas they linked it
+// with; the owner's is none, and so is the school's address
+const runAs = (
+  ingest: RecordingIngest,
+  token = TOKEN,
+  { url = SITE as Instance | null, school = null as Instance | null } = {},
+) =>
+  connector(null, school).poll({
     connection: { portal, account: 'a-1' },
     account: {
       kind: 'user',
-      credential: async () => ({ kind: 'token', token: new Secret(token) }),
+      credential: async () => ({
+        kind: 'token',
+        token: new Secret(token),
+        ...(url && { url }),
+      }),
     },
     ingest,
     signal: new AbortController().signal,
@@ -467,34 +494,51 @@ describe("CanvasConnector, on a user's own token", () => {
     expect(ingest.listedCourses.size).toBe(0);
   });
 
+  it('reads the Canvas an account linked before accounts kept theirs as the school’s', async () => {
+    const ingest = new RecordingIngest();
+    await runAs(ingest, TOKEN, { url: null, school: SITE });
+    expect(ingest.listedCourses.size).toBe(1);
+
+    await expect(
+      runAs(new RecordingIngest(), TOKEN, { url: null }),
+    ).rejects.toThrow(/link it again/);
+  });
+
   it('takes a token Canvas no longer takes for the credential rejected', async () => {
     await expect(runAs(new RecordingIngest(), '1~revoked')).rejects.toThrow(
       CredentialRejectedError,
     );
   });
 
-  it("refuses to read as shared without the owner's token", async () => {
-    await expect(
-      connector(null).poll({
-        connection: { portal, account: 'shared' },
-        account: { kind: 'shared' },
-        ingest: new RecordingIngest(),
-        signal: new AbortController().signal,
-      }),
-    ).rejects.toThrow(/set CANVAS_TOKEN/);
+  it("refuses to read as shared without the owner's token and school", async () => {
+    for (const shared of [connector(null), connector(TOKEN, null)])
+      await expect(
+        shared.poll({
+          connection: { portal, account: 'shared' },
+          account: { kind: 'shared' },
+          ingest: new RecordingIngest(),
+          signal: new AbortController().signal,
+        }),
+      ).rejects.toThrow(/set CANVAS_URL and CANVAS_TOKEN/);
+  });
+
+  it('says the Canvas it reads as shared is the school’s', () => {
+    expect(connector().configuredInstance()).toBe(SITE);
+    expect(connector(null, null).configuredInstance()).toBeNull();
   });
 });
 
 describe('CanvasConnector, as a user links a token', () => {
-  // the owner's token is another, which Canvas doesn't take: each goes
-  // with its own requests
-  const identify = (token = TOKEN) =>
+  // The owner's token is another, which Canvas doesn't take, and the
+  // school's another Canvas: each goes with its own requests, to the Canvas
+  // the user named.
+  const identify = (token = TOKEN, url: Instance = SITE) =>
     new CanvasConnector({
-      url: CANVAS_URL,
+      url: Instance.parse('https://other.example.edu'),
       token: '1~the-owners-own',
       userAgent: 'test',
     }).identify(
-      { kind: 'token', token: new Secret(token) },
+      { kind: 'token', token: new Secret(token), url } satisfies Credential,
       new AbortController().signal,
     );
 
@@ -515,12 +559,27 @@ describe('CanvasConnector, as a user links a token', () => {
     expect(await identify()).toEqual({ id: '4242', expiresAt: null });
   });
 
-  it("rejects one Canvas doesn't take, or whose user it won't show", async () => {
+  it("rejects one Canvas doesn't take", async () => {
     await expect(identify('1~revoked')).rejects.toBeInstanceOf(
       CredentialRejectedError,
     );
-    canvas.answers['/api/v1/users/self'] = 403;
-    await expect(identify()).rejects.toBeInstanceOf(CredentialRejectedError);
+  });
+
+  it('takes an address where no Canvas shows the user for no Canvas, rejecting nothing', async () => {
+    for (const answer of [403, 404, { name: 'not a canvas user' }]) {
+      canvas.answers['/api/v1/users/self'] = answer;
+      await expect(identify()).rejects.toBeInstanceOf(NotCanvasError);
+    }
+  });
+
+  it('sends no token to a Canvas that Instructure hosts, asked within the wait for an answer', async () => {
+    vi.mocked(hostedByInstructure).mockResolvedValueOnce(true);
+    await expect(identify()).rejects.toBeInstanceOf(TokensNotAllowedError);
+    expect(vi.mocked(hostedByInstructure)).toHaveBeenCalledWith(
+      SITE,
+      expect.any(AbortSignal),
+    );
+    expect(canvas.asked).toEqual([]);
   });
 
   it('fails as Canvas does otherwise, rejecting nothing', async () => {

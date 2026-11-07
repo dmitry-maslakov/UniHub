@@ -34,3 +34,14 @@ export class CredentialRejectedError extends InvalidError {
     super('the portal did not take the credential');
   }
 }
+
+// The portal's site lets no app use a token a user pastes, whatever it is
+// (Canvas hosted by Instructure, whose API policy allows OAuth alone). It
+// says nothing of the credential.
+export class TokensNotAllowedError extends InvalidError {
+  readonly reason = 'TOKENS_NOT_ALLOWED';
+
+  constructor() {
+    super("the portal's site takes no pasted tokens");
+  }
+}

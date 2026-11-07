@@ -1,9 +1,10 @@
-import { PortalId } from '@app/kernel';
+import { Instance, PortalId } from '@app/kernel';
 import { PortalAccount } from './portal-account.js';
 
 const now = new Date('2026-11-06T12:00:00Z');
+const site = Instance.parse('https://canvas.example.edu');
 const canvas = { userId: 'ana', portal: PortalId.parse('canvas') };
-const of = { ...canvas, mode: 'token' as const };
+const of = { ...canvas, instance: site, mode: 'token' as const };
 const user = (id: string, expiresAt: Date | null = null) => ({ id, expiresAt });
 
 describe('PortalAccount', () => {
@@ -34,6 +35,19 @@ describe('PortalAccount', () => {
 
     expect(other.id).not.toBe(first.id);
     expect(other.snapshot.portalUser).toBe('5151');
+  });
+
+  it("is a new account when it's of another school's site, the same portal user's id or not", () => {
+    const first = PortalAccount.link(null, of, user('4242'));
+    const elsewhere = Instance.parse('https://lms.example.org');
+    const other = PortalAccount.link(
+      first,
+      { ...of, instance: elsewhere },
+      user('4242'),
+    );
+
+    expect(other.id).not.toBe(first.id);
+    expect(other.instance).toBe(elsewhere);
   });
 
   it('comes back linked whatever it was, a new credential being a new start', () => {

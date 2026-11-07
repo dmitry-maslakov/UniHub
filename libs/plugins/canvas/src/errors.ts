@@ -27,6 +27,16 @@ export class TokenRejectedError extends CanvasError {
     'canvas token expired or was revoked: make a new one and set CANVAS_TOKEN';
 }
 
+// No Canvas at a user's address shows the token's user: what answered
+// there is no Canvas, or not one this hub can read. Taken for a Canvas that
+// can't be reached, never for a token it refused.
+export class NotCanvasError extends Error {
+  constructor(url: string) {
+    super(`no canvas at ${new URL(url).origin} shows the token's user`);
+    this.name = new.target.name;
+  }
+}
+
 // No answer from Canvas after the retries, or not a whole one: the network
 // failed, nothing came in time, or what came isn't the JSON asked for. The
 // path shown and the reason only, as above: axios's own error holds the

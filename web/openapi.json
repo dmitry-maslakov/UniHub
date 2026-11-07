@@ -799,6 +799,11 @@
                     "pattern": "^[\\x21-\\x7e]{1,4096}$",
                     "writeOnly": true,
                     "description": "a token of your own the portal gave you; never read back"
+                  },
+                  "url": {
+                    "description": "your school's address on a portal that is a site per school (Canvas), https://canvas.example.edu; none for any other",
+                    "type": "string",
+                    "maxLength": 2048
                   }
                 },
                 "required": [
@@ -810,7 +815,10 @@
         },
         "responses": {
           "204": {
-            "description": "linked; a token of the same portal user keeps the account, another's makes a new one"
+            "description": "linked; a token of the same portal user of the same school's site keeps the account, any other makes a new one"
+          },
+          "400": {
+            "description": "not a token, or the school's address missing on a portal that is a site per school (Canvas; code URL_NEEDED), not an https one, or given for any other portal (URL_NOT_TAKEN)"
           },
           "403": {
             "description": "sign in again: this needs a session signed in within a day"
@@ -819,13 +827,13 @@
             "description": "the portal links no account of yours by token"
           },
           "422": {
-            "description": "the portal didn't take the token"
+            "description": "the portal didn't take the token (code TOKEN_REFUSED), or its site takes no pasted tokens, as a Canvas Instructure hosts (TOKENS_NOT_ALLOWED)"
           },
           "429": {
             "description": "10 a minute"
           },
           "503": {
-            "description": "the portal could not be asked; try again later"
+            "description": "the portal could not be asked, or no such portal answers at the address, within 30 s (code PORTAL_UNREACHABLE); try again later"
           }
         },
         "security": [
@@ -1635,6 +1643,12 @@
             "type": "boolean",
             "description": "you have an account of it linked; never of a public one"
           },
+          "instance": {
+            "type": "string",
+            "nullable": true,
+            "example": "https://canvas.example.edu",
+            "description": "the address of the school's site your account is of, on a portal that is a site per school; null when not linked, or for a portal of one site"
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -1662,6 +1676,7 @@
           "label",
           "mode",
           "linked",
+          "instance",
           "status",
           "expiresAt",
           "picked"

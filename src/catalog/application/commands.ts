@@ -1,27 +1,31 @@
 import { Command } from '@nestjs/cqrs';
-import type { ContentHash, Json, MediaType, PortalId } from '@app/kernel';
-import type { PortalRef } from '../domain/portal-ref.js';
+import type {
+  ContentHash,
+  Instance,
+  Json,
+  MediaType,
+  PortalId,
+} from '@app/kernel';
+import type { Adopted } from '../domain/instances.js';
+import type { PortalRef, PortalSite } from '../domain/portal-ref.js';
 import type { Shown } from '../domain/publication.js';
 import type { Stamp } from '../domain/view/view.repository.js';
 import type { AcademicYear, CourseName, Slug } from '../domain/values.js';
 
 // What catalog does when asked: ingest writes what portals send (by the
-// portal's ids, so `course` and `item` are theirs too), admins make courses.
+// portal's ids, so `course` and `item` are theirs too, of the same site),
+// admins make courses.
 // The values are checked where they come in, so the types say they were;
 // text and json come as postgres keeps them (the kernel's StoredText and
 // StoredJson), so what a portal sends again compares equal to what's stored.
 
-export interface PortalCourseInput {
-  portal: PortalId;
-  externalId: string;
+export interface PortalCourseInput extends PortalRef {
   name: string;
   url: string | null;
   meta: Json | null;
 }
 
-export interface ItemInput {
-  portal: PortalId;
-  externalId: string;
+export interface ItemInput extends PortalRef {
   course: string | null;
   kind: string;
   title: string | null;
@@ -30,9 +34,7 @@ export interface ItemInput {
   raw: Json;
 }
 
-export interface FileInput {
-  portal: PortalId;
-  externalId: string;
+export interface FileInput extends PortalRef {
   course: string | null;
   item: string | null;
   name: string;
@@ -129,14 +131,14 @@ export interface Seen<T> {
   open: boolean;
 }
 
-// What a user's account sees of a portal's courses, from now on (none it
-// saw before but these, and those `kept` names by the portal's ids: listed,
-// but their records refused, so what the account saw of them stays), shown
-// at `at`
+// What a user's account sees of a portal's courses on its site, from now
+// on (none it saw before but these, and those `kept` names by the portal's
+// ids: listed, but their records refused, so what the account saw of them
+// stays), shown at `at`
 export class ViewCoursesCommand extends Command<void> {
   constructor(
     public readonly account: string,
-    public readonly portal: PortalId,
+    public readonly site: PortalSite,
     public readonly courses: readonly PortalCourseInput[],
     public readonly kept: readonly string[],
     public readonly at: Shown,
@@ -152,7 +154,7 @@ export class ViewCoursesCommand extends Command<void> {
 export class ViewCourseCommand extends Command<void> {
   constructor(
     public readonly account: string,
-    public readonly portal: PortalId,
+    public readonly site: PortalSite,
     public readonly course: string,
     public readonly items: readonly Seen<ItemInput>[],
     public readonly files: readonly Seen<FileInput>[],
@@ -181,6 +183,18 @@ export class StoreBytesCommand extends Command<{ changed: boolean }> {
 // An account gone, unlinked or replaced: what it saw goes with it
 export class ForgetAccountCommand extends Command<void> {
   constructor(public readonly account: string) {
+    super();
+  }
+}
+
+// The portal's records kept with no site, from before its connector told
+// its sites apart, are the site's (README, Canvas): how many were, and any
+// kept twice that were left. None left, it changes nothing.
+export class AdoptRecordsCommand extends Command<Adopted> {
+  constructor(
+    public readonly portal: PortalId,
+    public readonly instance: Instance,
+  ) {
     super();
   }
 }

@@ -6,6 +6,7 @@ import {
   Text,
   TextInput,
   Title,
+  type TitleOrder,
 } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
 import { useState } from 'react';
@@ -21,8 +22,10 @@ const PAGE = 20;
 // reads for them there.
 export function PortalCatalog({
   portal,
+  order,
 }: {
   portal: Schemas['PortalResponse'];
+  order: TitleOrder;
 }) {
   const [search, setSearch] = useState('');
   const [q] = useDebouncedValue(search.trim(), 300);
@@ -51,7 +54,7 @@ export function PortalCatalog({
   return (
     <Stack gap="sm">
       <Group justify="space-between" align="baseline" wrap="nowrap">
-        <Title order={3} fz="md" id={listId}>
+        <Title order={order} id={listId}>
           {portal.label}
         </Title>
         <Text size="sm" c="dimmed" style={{ flexShrink: 0 }}>

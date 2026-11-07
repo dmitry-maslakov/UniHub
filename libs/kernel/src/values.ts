@@ -47,6 +47,38 @@ export type PortalId = z.output<typeof PortalId>;
 export const PluginName = name.brand<'PluginName'>();
 export type PluginName = z.output<typeof PluginName>;
 
+// Where a portal's records and accounts come from, when the portal is a
+// product each school runs on a site of its own (Canvas): the site's
+// origin, https and a DNS name in lower case, with no port (443), path or
+// userinfo, and never an IP literal. The address of any page of it gives
+// it, its scheme left out too: 'Canvas.Example.edu/courses/1' is
+// 'https://canvas.example.edu'.
+export const Instance = z
+  .string()
+  .trim()
+  .transform((value) =>
+    /^[a-z][a-z\d+.-]*:/i.test(value) ? value : `https://${value}`,
+  )
+  .pipe(z.url({ protocol: /^https$/, hostname: z.regexes.domain }))
+  .transform((value, ctx) => {
+    const url = new URL(value);
+    if (url.port || url.username || url.password) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'an https address with no port and no user in it',
+        input: value,
+      });
+      return z.NEVER;
+    }
+    return url.origin;
+  })
+  .brand<'Instance'>();
+export type Instance = z.output<typeof Instance>;
+
+// what a record or an account of a portal that is one site carries (a gRPC
+// portal's): no instance
+export const NO_INSTANCE = '' as Instance;
+
 // How a portal's accounts are linked (README, Portal accounts): `shared`,
 // the one account its plugin's settings give, read by whoever an admin lets
 // read its courses; `token`, each user's own, by a token they paste;

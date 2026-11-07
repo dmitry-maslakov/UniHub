@@ -1,6 +1,6 @@
 import { Command, Query } from '@nestjs/cqrs';
 import type { Credential } from '@app/plugin-sdk';
-import type { PortalId } from '@app/kernel';
+import type { Instance, PortalId } from '@app/kernel';
 
 // What plugins ask of users' own accounts, which the accounts module keeps
 // and answers (it depends on plugins, not the other way round), and what
@@ -19,10 +19,12 @@ export class PortalReadersQuery extends Query<PortalReaders> {
 
 // the credential a user's account was linked by, for a run of it, and
 // which seal of it that is (nothing of the credential), to say which one
-// the portal refused
+// the portal refused; and the portal's site the account reads, which its
+// records are stamped with
 export interface AccountCredential {
   credential: Credential;
   seal: string;
+  instance: Instance;
 }
 
 // null once the account no longer reads
@@ -51,6 +53,18 @@ export class AccountsChangedCommand extends Command<void> {
   constructor(
     readonly portal: PortalId,
     readonly change: { linked?: string[]; gone?: string[] },
+  ) {
+    super();
+  }
+}
+
+// The portal's accounts kept with no site, from before its connector told
+// its sites apart, are the site's (README, Canvas): how many were, in the
+// transaction of whoever asks, beside the records' own
+export class AdoptAccountsCommand extends Command<number> {
+  constructor(
+    readonly portal: PortalId,
+    readonly instance: Instance,
   ) {
     super();
   }

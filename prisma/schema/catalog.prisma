@@ -35,10 +35,14 @@ model CourseLink {
 // from before writes to them still (that migration, CLAUDE.md: Put off).
 
 // a course as it exists in one portal (canvas course, moodle course, teams team...).
-// portal is a plugin id, not an enum, so a new plugin doesn't need a migration
+// portal is a plugin id, not an enum, so a new plugin doesn't need a migration.
+// instance is the portal's site the record comes from, for a portal each
+// school runs on a site of its own (Canvas): its https origin, '' for a
+// portal of one site. The same on PortalCourse, Item and File.
 model PortalCourse {
   id         String          @id @default(uuid())
   portal     String
+  instance   String          @default("")
   externalId String
   // from before versions
   name       String?         @ignore
@@ -50,13 +54,14 @@ model PortalCourse {
   files      FileVersion[]
   link       CourseLink?
 
-  @@unique([portal, externalId])
+  @@unique([portal, instance, externalId])
 }
 
 // anything a portal publishes that isn't a file: posts, announcements, pages...
 model Item {
   id             String        @id @default(uuid())
   portal         String
+  instance       String        @default("")
   externalId     String
   // from before versions
   portalCourseId String?       @ignore
@@ -71,12 +76,13 @@ model Item {
   // the files attached to it, in their versions
   files          FileVersion[]
 
-  @@unique([portal, externalId])
+  @@unique([portal, instance, externalId])
 }
 
 model File {
   id              String        @id @default(uuid())
   portal          String
+  instance        String        @default("")
   externalId      String
   // from before versions
   portalCourseId  String?       @ignore
@@ -93,7 +99,7 @@ model File {
   updatedAt       DateTime?     @ignore
   versions        FileVersion[]
 
-  @@unique([portal, externalId])
+  @@unique([portal, instance, externalId])
 }
 
 model CourseVersion {

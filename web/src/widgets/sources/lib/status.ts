@@ -1,16 +1,30 @@
 import type { Schemas } from '@/shared/api';
+import { hostOf } from './site';
 
-// Where a portal's account stands, in the student's words
-export function statusText({ mode, status }: Schemas['PortalResponse']) {
+const date = new Intl.DateTimeFormat('en', { dateStyle: 'medium' });
+
+// Where a source's account stands, in the student's words
+export function statusText({
+  label,
+  mode,
+  status,
+  instance,
+  expiresAt,
+}: Schemas['PortalResponse']) {
   if (mode === 'shared')
-    return 'The hub reads this portal for everyone. Nothing to link.';
+    return `The hub reads ${label} for everyone now, so your own account isn't used. Unlink it if you like.`;
   switch (status) {
-    case 'linked':
-      return 'Linked.';
+    case 'linked': {
+      const where = instance ? ` to ${hostOf(instance)}` : '';
+      const until = expiresAt
+        ? ` The token works until ${date.format(new Date(expiresAt))}.`
+        : '';
+      return `Linked${where}.${until}`;
+    }
     case 'expired':
-      return 'Your token expired. Replace it to read this portal again.';
+      return `Your token expired. Replace it to read ${label} again.`;
     case 'revoked':
-      return 'The portal revoked your token. Replace it to read this portal again.';
+      return `${label} no longer takes your token. Replace it to read ${label} again.`;
     default:
       return 'Not linked.';
   }

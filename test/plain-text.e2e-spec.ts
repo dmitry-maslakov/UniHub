@@ -2,7 +2,7 @@ import { Readable } from 'node:stream';
 import type { INestApplication } from '@nestjs/common';
 import { CommandBus } from '@nestjs/cqrs';
 import iconv from 'iconv-lite';
-import { PortalId } from '@app/kernel';
+import { NO_INSTANCE, PortalId } from '@app/kernel';
 import { PlainTextModule } from '@app/plugins/plain-text';
 import {
   CourseName,
@@ -41,7 +41,13 @@ describe('plain-text', { timeout: 30_000 }, () => {
       Readable.from([iconv.encode(notes, 'win1250')]),
     );
     ({ id: fileId } = await app.get(PrismaService).file.findUniqueOrThrow({
-      where: { portal_externalId: { portal: PORTAL, externalId: 'notes' } },
+      where: {
+        portal_instance_externalId: {
+          instance: NO_INSTANCE,
+          portal: PORTAL,
+          externalId: 'notes',
+        },
+      },
     }));
 
     const commands = app.get(CommandBus);
@@ -51,7 +57,11 @@ describe('plain-text', { timeout: 30_000 }, () => {
     await commands.execute(
       new LinkPortalCourseCommand(
         Slug.parse('ppj'),
-        { portal: PortalId.parse(PORTAL), externalId: 'c1' },
+        {
+          portal: PortalId.parse(PORTAL),
+          instance: NO_INSTANCE,
+          externalId: 'c1',
+        },
         null,
       ),
     );

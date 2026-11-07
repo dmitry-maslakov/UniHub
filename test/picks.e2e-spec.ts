@@ -179,6 +179,7 @@ describe('public portals and picks', { timeout: 60_000 }, () => {
         label: 'Course catalog',
         mode: 'public',
         linked: false,
+        instance: null,
         status: null,
         expiresAt: null,
         picked: 1,

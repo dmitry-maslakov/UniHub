@@ -1,5 +1,11 @@
 import { Query } from '@nestjs/cqrs';
-import type { ContentHash, Json, MediaType, PortalId } from '@app/kernel';
+import type {
+  ContentHash,
+  Instance,
+  Json,
+  MediaType,
+  PortalId,
+} from '@app/kernel';
 import type { PortalRef } from '../domain/portal-ref.js';
 import type { CourseSlug } from '../domain/values.js';
 import type { Stamp } from '../domain/view/view.repository.js';
@@ -145,6 +151,15 @@ export class ListCoursesQuery extends Query<CourseDto[]> {
     public readonly viewers: Viewers,
     public readonly slug?: CourseSlug,
   ) {
+    super();
+  }
+}
+
+// The site of a portal whose portal courses an admin links: the one its
+// connector's settings read (CANVAS_URL), none for a portal of one site.
+// Plugins answer it.
+export class ConfiguredInstanceQuery extends Query<Instance> {
+  constructor(public readonly portal: PortalId) {
     super();
   }
 }

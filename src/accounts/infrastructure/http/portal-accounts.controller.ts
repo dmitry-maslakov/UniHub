@@ -10,6 +10,7 @@ import {
   UseFilters,
 } from '@nestjs/common';
 import {
+  ApiBadRequestResponse,
   ApiBearerAuth,
   ApiForbiddenResponse,
   ApiNoContentResponse,
@@ -20,10 +21,11 @@ import {
   ApiTooManyRequestsResponse,
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
-import { PortalId, type Secret } from '@app/kernel';
+import { PortalId } from '@app/kernel';
 import { Limited } from '../../../access/contracts.js';
 import { CurrentUserId, FreshSession } from '../../../identity/contracts.js';
 import { PortalAccounts } from '../../application/portal-accounts.js';
+import type { SealedCredential } from '../../domain/credential-vault.js';
 import { tokenRequest } from './requests.js';
 import { PortalResponse } from './responses.js';
 import { TokenRefusedFilter } from './token-refused.filter.js';
@@ -55,7 +57,11 @@ export class PortalAccountsController {
   @UseFilters(TokenRefusedFilter)
   @ApiNoContentResponse({
     description:
-      "linked; a token of the same portal user keeps the account, another's makes a new one",
+      "linked; a token of the same portal user of the same school's site keeps the account, any other makes a new one",
+  })
+  @ApiBadRequestResponse({
+    description:
+      "not a token, or the school's address missing on a portal that is a site per school (Canvas; code URL_NEEDED), not an https one, or given for any other portal (URL_NOT_TAKEN)",
   })
   @ApiForbiddenResponse({
     description: 'sign in again: this needs a session signed in within a day',
@@ -64,18 +70,20 @@ export class PortalAccountsController {
     description: 'the portal links no account of yours by token',
   })
   @ApiUnprocessableEntityResponse({
-    description: "the portal didn't take the token",
+    description:
+      "the portal didn't take the token (code TOKEN_REFUSED), or its site takes no pasted tokens, as a Canvas Instructure hosts (TOKENS_NOT_ALLOWED)",
   })
   @ApiServiceUnavailableResponse({
-    description: 'the portal could not be asked; try again later',
+    description:
+      'the portal could not be asked, or no such portal answers at the address, within 30 s (code PORTAL_UNREACHABLE); try again later',
   })
   @ApiTooManyRequestsResponse({ description: '10 a minute' })
   async setToken(
     @CurrentUserId() userId: string,
     @Param('portal', portalParam) portal: PortalId,
-    @Body({ schema: tokenRequest }) token: Secret,
+    @Body({ schema: tokenRequest }) credential: SealedCredential,
   ) {
-    await this.accounts.setToken(userId, portal, token);
+    await this.accounts.setToken(userId, portal, credential);
   }
 
   @Delete(':portal/token')

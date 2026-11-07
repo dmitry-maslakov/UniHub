@@ -1,4 +1,4 @@
-import { PortalId } from '@app/kernel';
+import { NO_INSTANCE, PortalId } from '@app/kernel';
 import { CourseSlugTakenError, UnknownCourseError } from '../domain/errors.js';
 import { AcademicYear, CourseName, Slug } from '../domain/values.js';
 import {
@@ -9,7 +9,11 @@ import {
 } from './commands.js';
 import { onFakes } from './handlers.fakes.js';
 
-const portalCourse = { portal: PortalId.parse('canvas'), externalId: '1388' };
+const portalCourse = {
+  portal: PortalId.parse('canvas'),
+  instance: NO_INSTANCE,
+  externalId: '1388',
+};
 const year = AcademicYear.parse(2026);
 
 async function catalog() {

@@ -37,7 +37,7 @@ export class PrismaPortalCourseRepository
 
   async recordId(ref: PortalRef) {
     const row = await this.txHost.tx.portalCourse.findUnique({
-      where: { portal_externalId: ofRecord(ref) },
+      where: { portal_instance_externalId: ofRecord(ref) },
       select: { id: true },
     });
     return row?.id ?? null;

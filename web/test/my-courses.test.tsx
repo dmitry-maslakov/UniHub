@@ -13,6 +13,7 @@ const portals = [
     label: 'Canvas',
     mode: 'token',
     linked: true,
+    instance: 'https://canvas.example.edu',
     status: 'linked',
     expiresAt: null,
     picked: null,
@@ -22,6 +23,7 @@ const portals = [
     label: 'Course catalog',
     mode: 'public',
     linked: false,
+    instance: null,
     status: null,
     expiresAt: null,
     picked: 0,
@@ -116,7 +118,11 @@ describe('My courses', () => {
       within(list).getByRole('link', { name: /Operativni sistemi/ }),
     ).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Add a source' })).toBeVisible();
-    expect(screen.getByRole('list', { name: 'Portals' })).toBeVisible();
+    expect(screen.getByRole('list', { name: 'Sources' })).toBeVisible();
+    // a level under Add a source
+    expect(
+      screen.getByRole('heading', { name: 'Course catalog', level: 3 }),
+    ).toBeVisible();
     expect(screen.queryByText(/Nothing to read yet/)).toBeNull();
   });
 

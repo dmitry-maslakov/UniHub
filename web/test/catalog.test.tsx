@@ -12,6 +12,7 @@ const portal = {
   label: 'Course catalog',
   mode: 'public',
   linked: false,
+  instance: null,
   status: null,
   expiresAt: null,
   picked: 0,
@@ -107,7 +108,7 @@ describe('a public portal’s catalog', () => {
   it('lists its courses with what is new, and picks and unpicks one', async () => {
     signedIn();
     const { picks } = hub();
-    renderApp('/settings/portals');
+    renderApp('/sources');
 
     const list = await screen.findByRole('list', { name: 'Course catalog' });
     expect(within(list).getByText('New')).toBeVisible();
@@ -132,7 +133,7 @@ describe('a public portal’s catalog', () => {
   it('links a course to its site only by a web address', async () => {
     signedIn();
     hub();
-    renderApp('/settings/portals');
+    renderApp('/sources');
 
     expect(
       await screen.findByRole('link', {
@@ -147,7 +148,7 @@ describe('a public portal’s catalog', () => {
   it('asks the hub for the courses whose names have the words', async () => {
     signedIn();
     const { asked } = hub();
-    renderApp('/settings/portals');
+    renderApp('/sources');
 
     await userEvent.type(
       await screen.findByLabelText('Find a course'),
@@ -176,7 +177,7 @@ describe('a public portal’s catalog', () => {
         ),
       ),
     );
-    renderApp('/settings/portals');
+    renderApp('/sources');
 
     const box = await screen.findByRole('checkbox', {
       name: 'Računarske mreže',
@@ -197,7 +198,7 @@ describe('a public portal’s catalog', () => {
       suggested: 'lms~os',
       picked: ['os'],
     });
-    renderApp('/settings/portals');
+    renderApp('/sources');
 
     const select = await screen.findByLabelText('Show with');
     // on its own until she says otherwise; a course she reads only through
@@ -229,7 +230,7 @@ describe('a public portal’s catalog', () => {
   it('offers nothing to show a pick with to a user with no course of her own', async () => {
     signedIn();
     hub({ own: [mine('admins', 'From the hub', 'link')], picked: ['os'] });
-    const { queryClient } = renderApp('/settings/portals');
+    const { queryClient } = renderApp('/sources');
 
     expect(
       await screen.findByRole('checkbox', { name: 'Operativni sistemi' }),
@@ -266,7 +267,7 @@ describe('a public portal’s catalog', () => {
       ],
       picked: ['os'],
     });
-    renderApp('/settings/portals');
+    renderApp('/sources');
 
     expect(
       await screen.findByText('Shown with Algorithms, as an admin linked it.'),

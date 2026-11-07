@@ -3,7 +3,7 @@ import type { INestApplication } from '@nestjs/common';
 import { CommandBus } from '@nestjs/cqrs';
 import type { Client } from '@opensearch-project/opensearch';
 import type { PortalIngest } from '@app/plugin-sdk';
-import { PluginName, PortalId } from '@app/kernel';
+import { NO_INSTANCE, PluginName, PortalId } from '@app/kernel';
 import {
   AcademicYear,
   CourseName,
@@ -108,7 +108,13 @@ describe('search API', { timeout: 60_000 }, () => {
     );
     files[externalId] = (
       await app.get(PrismaService).file.findUniqueOrThrow({
-        where: { portal_externalId: { portal: PORTAL, externalId } },
+        where: {
+          portal_instance_externalId: {
+            instance: NO_INSTANCE,
+            portal: PORTAL,
+            externalId,
+          },
+        },
       })
     ).id;
   };
@@ -131,7 +137,13 @@ describe('search API', { timeout: 60_000 }, () => {
     });
     posts[externalId] = (
       await app.get(PrismaService).item.findUniqueOrThrow({
-        where: { portal_externalId: { portal: PORTAL, externalId } },
+        where: {
+          portal_instance_externalId: {
+            instance: NO_INSTANCE,
+            portal: PORTAL,
+            externalId,
+          },
+        },
       })
     ).id;
     await indexed(`post__${posts[externalId]}`);
@@ -142,7 +154,13 @@ describe('search API', { timeout: 60_000 }, () => {
     await hub.content(externalId, Readable.from(['\x89PNG']));
     files[externalId] = (
       await app.get(PrismaService).file.findUniqueOrThrow({
-        where: { portal_externalId: { portal: PORTAL, externalId } },
+        where: {
+          portal_instance_externalId: {
+            instance: NO_INSTANCE,
+            portal: PORTAL,
+            externalId,
+          },
+        },
       })
     ).id;
     await indexed(`file__${files[externalId]}`);
@@ -179,7 +197,11 @@ describe('search API', { timeout: 60_000 }, () => {
       await commands.execute(
         new LinkPortalCourseCommand(
           Slug.parse(slug),
-          { portal: PortalId.parse(PORTAL), externalId: slug },
+          {
+            portal: PortalId.parse(PORTAL),
+            instance: NO_INSTANCE,
+            externalId: slug,
+          },
           AcademicYear.parse(2026),
         ),
       );

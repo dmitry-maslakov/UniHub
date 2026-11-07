@@ -18,7 +18,8 @@ import {
 // What users' own accounts see (README, Portal accounts): each pass gives
 // one account's view of a course, as versions the accounts that see a
 // record alike share, and the account's sights of them, shown and opened
-// at the times the pass's publication gives.
+// at the times the pass's publication gives. A version is of a record of
+// the account's site; what it holds, and so its fingerprint, isn't.
 
 // the account's view of a kind, as what it sent changes it
 async function changeView(
@@ -44,14 +45,14 @@ export class ViewCoursesHandler implements ICommandHandler<ViewCoursesCommand> {
   constructor(private readonly views: ViewRepository) {}
 
   @Transactional()
-  async execute({ account, portal, courses, kept, at }: ViewCoursesCommand) {
+  async execute({ account, site, courses, kept, at }: ViewCoursesCommand) {
     const ids = await this.views.recordIds(
       'course',
-      portal,
+      site,
       courses.map((c) => c.externalId),
     );
     const sent: Sighting[] = [];
-    for (const { portal: _, ...record } of courses) {
+    for (const { portal: _, instance: __, ...record } of courses) {
       const { externalId, ...data } = record;
       const recordId = idOf(ids, externalId);
       const versionId = await this.views.versionOf(
@@ -65,7 +66,7 @@ export class ViewCoursesHandler implements ICommandHandler<ViewCoursesCommand> {
     // a whole listing: what it didn't send is gone, but for the courses
     // whose records were refused, kept with what the account saw in them
     const refused = new Set(
-      (await this.views.recordIds('course', portal, kept, false)).values(),
+      (await this.views.recordIds('course', site, kept, false)).values(),
     );
     const before = await this.views.sightings('course', account, null);
     const gone = new Set(
@@ -90,7 +91,7 @@ export class ViewCourseHandler implements ICommandHandler<ViewCourseCommand> {
   @Transactional()
   async execute({
     account,
-    portal,
+    site,
     course,
     items,
     files,
@@ -98,43 +99,56 @@ export class ViewCourseHandler implements ICommandHandler<ViewCourseCommand> {
     at,
   }: ViewCourseCommand) {
     const courseId = (
-      await this.views.recordIds('course', portal, [course], false)
+      await this.views.recordIds('course', site, [course], false)
     ).get(course);
     const named =
       courseId !== undefined &&
       (await this.views.sightings('course', account, null)).some(
         (s) => s.recordId === courseId,
       );
-    if (!named) throw new UnknownReferenceError(portal, course);
-    const itemIds = await this.views.recordIds('item', portal, [
+    if (!named) throw new UnknownReferenceError(site.portal, course);
+    const itemIds = await this.views.recordIds('item', site, [
       ...items.map(({ record }) => record.externalId),
       ...files.flatMap(({ record }) => (record.item ? [record.item] : [])),
     ]);
     const fileIds = await this.views.recordIds(
       'file',
-      portal,
+      site,
       files.map(({ record }) => record.externalId),
     );
     const sentItems: Sighting[] = [];
     for (const { record, open } of items) {
-      const { portal: _, course: __, externalId, ...data } = record;
+      const {
+        portal: _,
+        instance: __,
+        course: ___,
+        externalId,
+        ...data
+      } = record;
       const recordId = idOf(itemIds, externalId);
       const versionId = await this.views.versionOf(
         'item',
         recordId,
-        fingerprintOf({ ...record, portal: undefined }),
+        fingerprintOf({ ...record, portal: undefined, instance: undefined }),
         { ...data, portalCourseId: courseId },
       );
       sentItems.push({ recordId, versionId, open });
     }
     const sentFiles: Sighting[] = [];
     for (const { record, open } of files) {
-      const { portal: _, course: __, externalId, item, ...data } = record;
+      const {
+        portal: _,
+        instance: __,
+        course: ___,
+        externalId,
+        item,
+        ...data
+      } = record;
       const recordId = idOf(fileIds, externalId);
       const versionId = await this.views.versionOf(
         'file',
         recordId,
-        fingerprintOf({ ...record, portal: undefined }),
+        fingerprintOf({ ...record, portal: undefined, instance: undefined }),
         {
           ...data,
           portalCourseId: courseId,
@@ -145,7 +159,7 @@ export class ViewCourseHandler implements ICommandHandler<ViewCourseCommand> {
     }
     const goneOf = async (kind: Kind, externalIds: readonly string[]) =>
       new Set(
-        (await this.views.recordIds(kind, portal, externalIds, false)).values(),
+        (await this.views.recordIds(kind, site, externalIds, false)).values(),
       );
     await changeView(
       this.views,
@@ -184,7 +198,7 @@ export class StoreBytesHandler implements ICommandHandler<StoreBytesCommand> {
   @Transactional()
   async execute({ file, stamp, hash }: StoreBytesCommand) {
     const fileId = (
-      await this.views.recordIds('file', file.portal, [file.externalId], false)
+      await this.views.recordIds('file', file, [file.externalId], false)
     ).get(file.externalId);
     if (!fileId) throw new UnknownReferenceError(file.portal, file.externalId);
     return { changed: await this.views.storeBytes(fileId, stamp, hash) };

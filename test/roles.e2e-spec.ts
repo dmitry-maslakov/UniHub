@@ -99,6 +99,7 @@ describe('roles', () => {
         'reconcile-wanted',
       ],
       timeouts: [
+        'adopt-instances',
         'poll-schedule',
         'push-connections',
         'reconcile-at-start',

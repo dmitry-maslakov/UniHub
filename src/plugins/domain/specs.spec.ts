@@ -84,6 +84,15 @@ describe('plugin specs', () => {
       );
   });
 
+  it('say whether the portal is a site per school, and none unless told', () => {
+    expect(pushSpec({ portal: 'canvas', instances: true }).instances).toBe(
+      true,
+    );
+    expect(pollSpec({ portal: 'moodle', schedule: '@hourly' }).instances).toBe(
+      false,
+    );
+  });
+
   it('refuse one it would refuse once the schedules are set', () => {
     for (const bad of ['61 * * * *', '0 25 * * *', 'every hour', ''])
       expect(() => pollSpec({ portal: 'moodle', schedule: bad })).toThrow(

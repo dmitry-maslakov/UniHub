@@ -5,6 +5,9 @@ model PortalAccount {
   id         String            @id
   userId     String
   portal     String
+  // the portal's site it was linked with (the records' instance, catalog),
+  // '' for a portal of one site
+  instance   String            @default("")
   // how it was linked: token
   mode       String
   // the portal's own id for its user, never a name or an email

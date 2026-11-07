@@ -1,7 +1,7 @@
 import { Readable } from 'node:stream';
 import type { INestApplication } from '@nestjs/common';
 import { CommandBus } from '@nestjs/cqrs';
-import { PluginName, PortalId } from '@app/kernel';
+import { NO_INSTANCE, PluginName, PortalId } from '@app/kernel';
 import {
   AcademicYear,
   CourseName,
@@ -117,7 +117,13 @@ describe('MCP', { timeout: 20_000 }, () => {
     });
     fileId = (
       await prisma.file.findUniqueOrThrow({
-        where: { portal_externalId: { portal: PORTAL, externalId: 'f1' } },
+        where: {
+          portal_instance_externalId: {
+            instance: NO_INSTANCE,
+            portal: PORTAL,
+            externalId: 'f1',
+          },
+        },
       })
     ).id;
     const { id: courseId } = await commands.execute(
@@ -126,7 +132,11 @@ describe('MCP', { timeout: 20_000 }, () => {
     await commands.execute(
       new LinkPortalCourseCommand(
         Slug.parse('alg'),
-        { portal: PortalId.parse(PORTAL), externalId: 'c1' },
+        {
+          portal: PortalId.parse(PORTAL),
+          instance: NO_INSTANCE,
+          externalId: 'c1',
+        },
         AcademicYear.parse(2026),
       ),
     );

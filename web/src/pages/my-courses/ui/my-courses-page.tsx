@@ -44,7 +44,7 @@ export function MyCoursesPage() {
         </Text>
       )}
       {courses.data && !courses.data.length && firstVisit === false && (
-        <AnchorLink to="/settings/portals">Add a source</AnchorLink>
+        <AnchorLink to="/sources">Add a source</AnchorLink>
       )}
       {courses.data && courses.data.length > 0 && (
         <ul className={classes.list} aria-label="Your courses">
@@ -87,7 +87,7 @@ export function MyCoursesPage() {
           <Title order={2} id="add-a-source">
             Add a source
           </Title>
-          <SourceCards />
+          <SourceCards order={3} />
         </Stack>
       )}
     </>

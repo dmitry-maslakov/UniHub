@@ -2,6 +2,7 @@ import type { AccountLink } from '@app/kernel';
 import type { IdentifiesAccounts } from './accounts.js';
 import type { AggregatorOptions, HandlesMessages } from './aggregators.js';
 import type {
+  HasInstances,
   PollConnectorOptions,
   PollsPortal,
   PushConnectorOptions,
@@ -27,8 +28,9 @@ import type {
 // digits and dashes. Connectors outside the repo talk to the hub over gRPC.
 //
 // Each decorator only fits a class that implements its kind, so a poll
-// connector without poll(), one that names links without identify(), or an
-// aggregator that doesn't handle every topic it listens to, doesn't compile.
+// connector without poll(), one that names links without identify(), one
+// of a portal with instances without configuredInstance(), or an aggregator
+// that doesn't handle every topic it listens to, doesn't compile.
 
 type Class<T> = abstract new (...args: any[]) => T;
 
@@ -37,18 +39,29 @@ type Linking<L extends AccountLink> = [L] extends [never]
   ? unknown
   : IdentifiesAccounts;
 
-export function PollConnector<L extends AccountLink = never>(
-  options: PollConnectorOptions<L>,
-) {
-  return <C extends Class<PollsPortal & Linking<L>>>(target: C) => {
+// what a connector of a portal with instances implements
+type Instancing<I extends boolean> = [I] extends [true]
+  ? HasInstances
+  : unknown;
+
+export function PollConnector<
+  L extends AccountLink = never,
+  I extends boolean = false,
+>(options: PollConnectorOptions<L, I>) {
+  return <C extends Class<PollsPortal & Linking<L> & Instancing<I>>>(
+    target: C,
+  ) => {
     PollConnectorMark(options)(target);
   };
 }
 
-export function PushConnector<L extends AccountLink = never>(
-  options: PushConnectorOptions<L>,
-) {
-  return <C extends Class<PushesFromPortal & Linking<L>>>(target: C) => {
+export function PushConnector<
+  L extends AccountLink = never,
+  I extends boolean = false,
+>(options: PushConnectorOptions<L, I>) {
+  return <C extends Class<PushesFromPortal & Linking<L> & Instancing<I>>>(
+    target: C,
+  ) => {
     PushConnectorMark(options)(target);
   };
 }

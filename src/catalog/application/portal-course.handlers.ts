@@ -10,9 +10,9 @@ export class UpsertPortalCourseHandler implements ICommandHandler<UpsertPortalCo
 
   @Transactional()
   async execute({
-    data: { portal, externalId, ...props },
+    data: { portal, instance, externalId, ...props },
   }: UpsertPortalCourseCommand) {
-    const ref = { portal, externalId };
+    const ref = { portal, instance, externalId };
     const found = await this.courses.getForUpdate(ref);
     const course =
       found ??

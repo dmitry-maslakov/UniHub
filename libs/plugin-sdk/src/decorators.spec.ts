@@ -91,6 +91,40 @@ describe('plugin decorators', () => {
     ]).toHaveLength(4);
   });
 
+  it('fit a connector of a portal with instances only if it says which its settings read', () => {
+    // @ts-expect-error a portal with instances, and no configuredInstance()
+    @PollConnector({ portal: 'o', schedule: '* * * * *', instances: true })
+    class PollWithoutInstance {
+      async poll() {}
+    }
+
+    // @ts-expect-error the same for a push connector
+    @PushConnector({ portal: 'p', instances: true })
+    class PushWithoutInstance {
+      async run() {}
+    }
+
+    @PollConnector({
+      portal: 'q',
+      schedule: '* * * * *',
+      links: ['token'],
+      instances: true,
+    })
+    class Configured {
+      async poll() {}
+      async identify() {
+        return { id: '1', expiresAt: null };
+      }
+      configuredInstance() {
+        return null;
+      }
+    }
+
+    expect([PollWithoutInstance, PushWithoutInstance, Configured]).toHaveLength(
+      3,
+    );
+  });
+
   it('give an aggregator the messages of its topics', () => {
     // @ts-expect-error a topic that doesn't exist
     @Aggregator({ name: 'f', topics: ['course.ingested'] })

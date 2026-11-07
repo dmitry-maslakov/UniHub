@@ -3,6 +3,7 @@
 export {
   AccountLink,
   ContentHash,
+  Instance,
   LinkMode,
   MediaType,
   PortalId,
@@ -14,6 +15,7 @@ export * from './aggregators.js';
 export * from './connectors.js';
 export * from './decorators.js';
 export * from './errors.js';
+export { MAX_ANSWER_BYTES, portalRequests, refusedByGuard } from './http.js';
 export * from './messages.js';
 export * from './parsing.js';
 export * from './processors.js';

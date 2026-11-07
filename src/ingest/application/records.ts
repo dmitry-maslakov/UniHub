@@ -74,25 +74,38 @@ function parse<T extends z.ZodType>(schema: T, raw: unknown, what: string) {
   );
 }
 
-// a record of this connection's portal, by the portal's id
-export const toRef = ({ portal }: Connection, id: unknown): PortalRef => ({
+// A record of this connection's portal, by the portal's id, of the site
+// the connection reads: the one place a record gets its portal and site,
+// which no plugin sends
+export const toRef = (
+  { portal, instance }: Connection,
+  id: unknown,
+): PortalRef => ({
   portal,
+  instance,
   externalId: parse(externalId, id, 'externalId'),
 });
 
-export const toPortalCourseInput = (
-  { portal }: Connection,
+export function toPortalCourseInput(
+  connection: Connection,
   raw: unknown,
-): PortalCourseInput => ({ ...parse(courseRecord, raw, 'course'), portal });
+): PortalCourseInput {
+  const course = parse(courseRecord, raw, 'course');
+  return { ...course, ...toRef(connection, course.externalId) };
+}
 
-export const toItemInput = (
-  { portal }: Connection,
-  raw: unknown,
-): ItemInput => ({ ...parse(itemRecord, raw, 'item'), portal });
+export function toItemInput(connection: Connection, raw: unknown): ItemInput {
+  const item = parse(itemRecord, raw, 'item');
+  return { ...item, ...toRef(connection, item.externalId) };
+}
 
-export function toFileInput({ portal }: Connection, raw: unknown): FileInput {
+export function toFileInput(connection: Connection, raw: unknown): FileInput {
   const { updatedAt, ...file } = parse(fileRecord, raw, 'file');
-  return { ...file, sourceUpdatedAt: updatedAt, portal };
+  return {
+    ...file,
+    sourceUpdatedAt: updatedAt,
+    ...toRef(connection, file.externalId),
+  };
 }
 
 // whatever json the connector wants back on its next run

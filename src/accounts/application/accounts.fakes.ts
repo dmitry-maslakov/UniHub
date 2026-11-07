@@ -5,13 +5,17 @@ import {
   ClsPluginTransactional,
   NoOpTransactionalAdapter,
 } from '@nestjs-cls/transactional';
-import type { PortalId, Secret } from '@app/kernel';
+import { NO_INSTANCE, type Instance, type PortalId } from '@app/kernel';
 import {
   ListPortalCatalogQuery,
   type CatalogCourseDto,
 } from '../../catalog/contracts.js';
 import { FakeBus } from '../../../test/fake-bus.js';
-import { CredentialVault, type SealedFor } from '../domain/credential-vault.js';
+import {
+  CredentialVault,
+  type SealedCredential,
+  type SealedFor,
+} from '../domain/credential-vault.js';
 import { UnreadableCredentialError } from '../domain/errors.js';
 import { PickRepository } from '../domain/picks.js';
 import {
@@ -91,6 +95,19 @@ export class InMemoryAccounts extends PortalAccountRepository {
       }
     return removed;
   }
+
+  async adopt(portal: PortalId, instance: Instance) {
+    let count = 0;
+    for (const row of this.rows.values())
+      if (
+        row.account.portal === portal &&
+        row.account.instance === NO_INSTANCE
+      ) {
+        row.account = { ...row.account, instance };
+        count++;
+      }
+    return count;
+  }
 }
 
 // what a sealed credential is bound to, as one key
@@ -98,9 +115,10 @@ const key = ({ id, userId, portal }: SealedFor) => `${id}:${userId}:${portal}`;
 
 // seals as "sealed-<n>", keeping what each was, for its account only
 export class FakeVault extends CredentialVault {
-  private readonly kept: { credential: Secret; boundTo: string }[] = [];
+  private readonly kept: { credential: SealedCredential; boundTo: string }[] =
+    [];
 
-  seal(credential: Secret, account: SealedFor) {
+  seal(credential: SealedCredential, account: SealedFor) {
     this.kept.push({ credential, boundTo: key(account) });
     return `sealed-${this.kept.length - 1}`;
   }

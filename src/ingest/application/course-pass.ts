@@ -6,7 +6,7 @@ import type { BlobStore } from '../../storage/contracts.js';
 import type { Connection } from '../domain/connection.js';
 import { MalformedRecordError } from '../domain/errors.js';
 import type { FetchLeases } from '../domain/fetch-leases.js';
-import { toFileInput, toItemInput } from './records.js';
+import { toFileInput, toItemInput, toRef } from './records.js';
 
 // A run of a connection: when what its passes find shows. The shared
 // account's shows at once; a user's account's at its slot (catalog's
@@ -173,20 +173,17 @@ export class SharedPass extends CoursePass {
   }
 
   protected async close(gone: Gone) {
-    const { portal } = this.connection;
-    for (const externalId of gone.items.filter((id) => !this.items.has(id)))
-      await this.removed(new catalog.RemoveItemCommand({ portal, externalId }));
-    for (const externalId of gone.files.filter((id) => !this.files.has(id)))
-      await this.removed(new catalog.RemoveFileCommand({ portal, externalId }));
+    const ref = (id: string) => toRef(this.connection, id);
+    for (const id of gone.items.filter((id) => !this.items.has(id)))
+      await this.removed(new catalog.RemoveItemCommand(ref(id)));
+    for (const id of gone.files.filter((id) => !this.files.has(id)))
+      await this.removed(new catalog.RemoveFileCommand(ref(id)));
   }
 
-  protected async store(
-    { portal, externalId }: catalog.FileInput,
-    content: Readable,
-  ) {
+  protected async store(input: catalog.FileInput, content: Readable) {
     const { hash } = await this.ports.blobs.put(content);
     const { changed } = await this.ports.commands.execute(
-      new catalog.SetFileContentCommand({ portal, externalId }, hash),
+      new catalog.SetFileContentCommand(refOf(input), hash),
     );
     if (changed) this.ports.notify();
     return { hash };
@@ -223,7 +220,7 @@ export class AccountPass extends CoursePass {
 
   protected async sendFile(input: catalog.FileInput, fetchable: boolean) {
     if (!fetchable) return false;
-    const file = { portal: input.portal, externalId: input.externalId };
+    const file = refOf(input);
     const stamp = stampOf(input);
     const has = await this.ports.queries.execute(
       new catalog.HasBytesQuery(file, stamp),
@@ -235,7 +232,7 @@ export class AccountPass extends CoursePass {
   }
 
   protected async close(gone: Gone) {
-    const { portal, account } = this.connection;
+    const { portal, instance, account } = this.connection;
     const items = [...this.items.values()].map((record) => ({
       record,
       open: this.seen.get(record.externalId) ?? true,
@@ -247,7 +244,7 @@ export class AccountPass extends CoursePass {
     await this.ports.commands.execute(
       new catalog.ViewCourseCommand(
         account,
-        portal,
+        { portal, instance },
         this.course,
         items,
         files,
@@ -260,18 +257,20 @@ export class AccountPass extends CoursePass {
 
   protected async store(input: catalog.FileInput, content: Readable) {
     const { hash } = await this.ports.blobs.put(content);
-    const { portal, externalId } = input;
     const { changed } = await this.ports.commands.execute(
-      new catalog.StoreBytesCommand(
-        { portal, externalId },
-        stampOf(input),
-        hash,
-      ),
+      new catalog.StoreBytesCommand(refOf(input), stampOf(input), hash),
     );
     if (changed) this.ports.notify();
     return { hash };
   }
 }
+
+// a record's ref, of what toRef gave it
+const refOf = ({ portal, instance, externalId }: catalog.FileInput) => ({
+  portal,
+  instance,
+  externalId,
+});
 
 // what the portal says of a file's bytes
 const stampOf = ({ size, sourceUpdatedAt }: catalog.FileInput) => ({

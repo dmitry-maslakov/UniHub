@@ -1,4 +1,4 @@
-import { MediaType, PortalId } from '@app/kernel';
+import { MediaType, NO_INSTANCE, PortalId } from '@app/kernel';
 import { sha256 } from '../../../test/sha256.js';
 import { MisplacedFileError, UnknownReferenceError } from '../domain/errors.js';
 import { FILE_CONTENT_CHANGED, FILE_REMOVED } from '../domain/events.js';
@@ -10,10 +10,14 @@ import {
   UpsertPortalCourseCommand,
   type FileInput,
 } from './commands.js';
-import { onFakes } from './handlers.fakes.js';
+import { key, onFakes } from './handlers.fakes.js';
 
 const portal = PortalId.parse('canvas');
-const ref = (externalId: string) => ({ portal, externalId });
+const ref = (externalId: string) => ({
+  portal,
+  instance: NO_INSTANCE,
+  externalId,
+});
 const hash = sha256('%PDF lecture 5');
 const file = (fields: Partial<FileInput> = {}): FileInput => ({
   ...ref('f1'),
@@ -66,7 +70,7 @@ describe('file commands', () => {
     );
 
     expect(result).toMatchObject({ changed: true, needsContent: true });
-    expect(files.records.get('canvas:f1')).toMatchObject({
+    expect(files.records.get(key(ref('f1')))).toMatchObject({
       id: result.id,
       placement: { portalCourseId: a.id, itemId: post.id },
     });

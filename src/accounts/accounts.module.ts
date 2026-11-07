@@ -5,6 +5,7 @@ import { accountsConfig } from './accounts.config.js';
 import {
   AccountCredentialHandler,
   AccountRejectedHandler,
+  AdoptAccountsHandler,
   PortalReadersHandler,
 } from './application/plugin-ports.handlers.js';
 import { PortalAccounts } from './application/portal-accounts.js';
@@ -69,6 +70,7 @@ import { ReconcileWantedSchedule } from './infrastructure/reconcile-wanted.sched
     AccountCredentialHandler,
     AccountRejectedHandler,
     ReconcileWantedSchedule,
+    AdoptAccountsHandler,
   ],
 })
 export class AccountsModule {}

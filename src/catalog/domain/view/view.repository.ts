@@ -1,4 +1,5 @@
-import type { Json, MediaType, PortalId } from '@app/kernel';
+import type { Json, MediaType } from '@app/kernel';
+import type { PortalSite } from '../portal-ref.js';
 import type { Shown } from '../publication.js';
 import type { Sighting, ViewChange } from './view.js';
 
@@ -33,11 +34,11 @@ export type Kind = keyof VersionData;
 // post's ITEM_CHANGED; a file's FILE_CONTENT_CHANGED, when its bytes are the
 // hub's already).
 export abstract class ViewRepository {
-  // the hub's ids for these records of the portal, made for the new ones
-  // unless `make` is false
+  // the hub's ids for these records of the portal's site, made for the new
+  // ones unless `make` is false
   abstract recordIds(
     kind: Kind,
-    portal: PortalId,
+    site: PortalSite,
     externalIds: readonly string[],
     make?: boolean,
   ): Promise<Map<string, string>>;

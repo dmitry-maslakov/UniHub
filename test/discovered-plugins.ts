@@ -9,7 +9,7 @@ import type {
   Topic,
   UnpacksContent,
 } from '@app/plugin-sdk';
-import { PortalId } from '@app/kernel';
+import { NO_INSTANCE, PortalId } from '@app/kernel';
 import type {
   ConnectorTokens,
   IngestService,
@@ -19,6 +19,7 @@ import {
   PortalReadersQuery,
 } from '../src/plugins/application/accounts.js';
 import { ConnectionDirectory } from '../src/plugins/application/connection-directory.js';
+import type { InstanceAdoption } from '../src/plugins/application/instance-adoption.js';
 import { PluginCatalog } from '../src/plugins/application/plugin-catalog.js';
 import type { Found } from '../src/plugins/application/plugin-discovery.js';
 import {
@@ -38,12 +39,17 @@ import { FakeBus } from './fake-bus.js';
 // of processing, which reads them through PluginCatalog.
 
 // `links`: what the connector names in its decorator, which then lets only
-// an instance that identifies accounts through
+// an instance that identifies accounts through; `instances`, that its portal
+// is a site per school, which lets only one that says its settings' site
 export const poll = (
   portal: string,
   instance: PollsPortal = { poll: async () => {} },
   links: AccountLink[] = [],
-) => ({ spec: pollSpec({ portal, schedule: '0 0 1 1 *', links }), instance });
+  instances = false,
+) => ({
+  spec: pollSpec({ portal, schedule: '0 0 1 1 *', links, instances }),
+  instance,
+});
 
 export const push = (
   portal: string,
@@ -95,12 +101,16 @@ export const pluginSettings = (env: Record<string, string> = {}) =>
   pluginsSettings.parse(env) as ConfigType<typeof pluginsConfig>;
 
 // Who runs are for: the users' own accounts `accounts` names for a portal,
-// linked by `credentials` (one with none no longer reads); the shared
-// account of any other portal
+// linked by `credentials` (one with none no longer reads), each reading the
+// site its credential names; the shared account of any other portal, at
+// the site `catalog`'s connector's settings name. Rows from before sites
+// are adopted already, unless `adoption` says otherwise.
 export const directoryOf = (
   accounts: Record<string, string[]> = {},
   credentials: Record<string, Credential> = {},
   ingest = {} as IngestService,
+  catalog = catalogOf({}),
+  adoption = { done: async () => {} } as InstanceAdoption,
 ) =>
   new ConnectionDirectory(
     ingest,
@@ -116,9 +126,15 @@ export const directoryOf = (
         AccountCredentialQuery,
         ({ account }: AccountCredentialQuery) =>
           credentials[account]
-            ? { credential: credentials[account], seal: `seal-of-${account}` }
+            ? {
+                credential: credentials[account],
+                seal: `seal-of-${account}`,
+                instance: credentials[account].url ?? NO_INSTANCE,
+              }
             : null,
       ],
     ]).queries,
     pluginSettings(),
+    catalog,
+    adoption,
   );

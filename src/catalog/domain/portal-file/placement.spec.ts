@@ -1,12 +1,15 @@
-import { PortalId } from '@app/kernel';
+import { NO_INSTANCE, PortalId } from '@app/kernel';
 import { MisplacedFileError } from '../errors.js';
 import { placeFile } from './placement.js';
 
 const portal = PortalId.parse('canvas');
-const course = (id: string) => ({ id, ref: { portal, externalId: `c-${id}` } });
+const course = (id: string) => ({
+  id,
+  ref: { portal, instance: NO_INSTANCE, externalId: `c-${id}` },
+});
 const post = (id: string, portalCourseId: string | null) => ({
   id,
-  ref: { portal, externalId: `p-${id}` },
+  ref: { portal, instance: NO_INSTANCE, externalId: `p-${id}` },
   portalCourseId,
 });
 

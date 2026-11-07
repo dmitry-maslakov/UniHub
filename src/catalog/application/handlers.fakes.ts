@@ -24,7 +24,7 @@ import {
   type FileState,
 } from '../domain/portal-file/portal-file.js';
 import { PortalFileRepository } from '../domain/portal-file/portal-file.repository.js';
-import type { PortalRef } from '../domain/portal-ref.js';
+import type { PortalRef, PortalSite } from '../domain/portal-ref.js';
 import type { Shown } from '../domain/publication.js';
 import type { Sighting, ViewChange } from '../domain/view/view.js';
 import {
@@ -54,10 +54,11 @@ import {
 } from './view.handlers.js';
 
 // In-memory ports for the handlers' unit tests: the records as last saved,
-// by the portal's id, and the events save() would have written to the
-// outbox.
+// by the portal's site and id, and the events save() would have written to
+// the outbox.
 
-const key = ({ portal, externalId }: PortalRef) => `${portal}:${externalId}`;
+export const key = ({ portal, instance, externalId }: PortalRef) =>
+  JSON.stringify([portal, instance, externalId]);
 
 // keeps what save() was given, and loads it anew, as a database would
 class InMemory<S extends Ingested, T extends CatalogAggregate<S>> {
@@ -176,13 +177,13 @@ export class InMemoryViews extends ViewRepository {
 
   async recordIds(
     kind: Kind,
-    portal: string,
+    { portal, instance }: PortalSite,
     externalIds: readonly string[],
     make = true,
   ) {
     const ids = new Map<string, string>();
     for (const externalId of externalIds) {
-      const key = `${kind}:${portal}:${externalId}`;
+      const key = JSON.stringify([kind, portal, instance, externalId]);
       if (make && !this.records.has(key)) this.records.set(key, randomUUID());
       const id = this.records.get(key);
       if (id) ids.set(externalId, id);
