@@ -75,10 +75,6 @@ export default {
       folders: 'By folder',
       newest: 'Newest first',
     },
-    new: {
-      title: 'New',
-      action: 'Show all new ({{count}})',
-    },
     newest: {
       aria: 'Files, newest first',
     },
