@@ -8,10 +8,9 @@ import { targetOf } from '../lib/target-of';
 import type { FilesView } from '../model/search';
 import { FilesViewSwitch } from './files-view-switch';
 import { FolderTree } from './folder-tree';
-import { NewFiles } from './new-files';
 import { NewestFiles } from './newest-files';
 
-// A course's files: by folder under what's new, or one list newest first
+// A course's files: by folder, or one list newest first
 export function FilesTree({
   slug,
   selection,
@@ -60,16 +59,7 @@ export function FilesTree({
             {shown === 'newest' ? (
               <NewestFiles files={all} slug={slug} selection={selection} />
             ) : (
-              <>
-                <NewFiles
-                  files={all}
-                  slug={slug}
-                  selection={selection}
-                  now={files.dataUpdatedAt}
-                  onShowAll={() => onViewChange('newest')}
-                />
-                <FolderTree files={all} slug={slug} selection={selection} />
-              </>
+              <FolderTree files={all} slug={slug} selection={selection} />
             )}
           </>
         );

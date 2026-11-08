@@ -820,57 +820,6 @@ describe("what's new in a course", () => {
   beforeEach(() => vi.useFakeTimers({ toFake: ['Date'], now: NOW }));
   afterEach(() => vi.useRealTimers());
 
-  it('shows what its portal changed in the last 14 days above the folders, each with its folder and date', async () => {
-    setup(posts, [
-      dated(1, daysAgo(2), 'Predavanja/2026'),
-      dated(2, daysAgo(60), 'Vežbe'),
-      dated(3, null, ''),
-    ]);
-    renderApp('/courses/os');
-
-    const fresh = await screen.findByRole('region', { name: 'New' });
-    const links = within(fresh).getAllByRole('link');
-    expect(links).toHaveLength(1);
-    expect(links[0]).toHaveAttribute('href', '/courses/os/files/f1');
-    expect(links[0]).toHaveTextContent('Predavanja/2026');
-    expect(links[0]).toHaveTextContent('1.4 MB · Nov 5');
-    expect(
-      screen.getByRole('navigation', { name: 'Files by folder' }),
-    ).toBeVisible();
-  });
-
-  it('shows no New block when nothing changed in the last 14 days', async () => {
-    setup(posts, [dated(1, daysAgo(15)), dated(2, null)]);
-    renderApp('/courses/os');
-
-    await screen.findByRole('navigation', { name: 'Files by folder' });
-    expect(screen.queryByRole('region', { name: 'New' })).toBeNull();
-  });
-
-  it('shows ten new files, and all of them newest first on request', async () => {
-    setup(
-      posts,
-      Array.from({ length: 12 }, (_, i) => dated(i + 1, daysAgo(i + 1))),
-    );
-    const { router } = renderApp('/courses/os');
-
-    const fresh = await screen.findByRole('region', { name: 'New' });
-    const links = within(fresh).getAllByRole('link');
-    expect(links).toHaveLength(10);
-    expect(links[0]).toHaveTextContent('file-1.pdf');
-
-    await userEvent.click(
-      within(fresh).getByRole('button', { name: 'Show all new (12)' }),
-    );
-    const list = await screen.findByRole('navigation', {
-      name: 'Files, newest first',
-    });
-    expect(within(list).getAllByRole('link')).toHaveLength(12);
-    expect(router.state.location.search).toEqual({ view: 'newest' });
-    expect(screen.getByRole('radio', { name: 'Newest first' })).toBeChecked();
-    expect(screen.queryByRole('region', { name: 'New' })).toBeNull();
-  });
-
   it('lists every file newest first, the undated last, kept in the address', async () => {
     setup(posts, [
       dated(1, daysAgo(40), 'Vežbe'),
@@ -918,7 +867,6 @@ describe("what's new in a course", () => {
       await screen.findByRole('navigation', { name: 'Files by folder' }),
     ).toBeVisible();
     expect(screen.queryByRole('radiogroup', { name: 'Show files' })).toBeNull();
-    expect(screen.queryByRole('region', { name: 'New' })).toBeNull();
   });
 
   it("shows a file's size and date on one line", async () => {

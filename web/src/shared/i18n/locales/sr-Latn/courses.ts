@@ -78,10 +78,6 @@ export default {
       folders: 'Po folderima',
       newest: 'Najnovije',
     },
-    new: {
-      title: 'Novo',
-      action: 'Prikaži sve nove ({{count}})',
-    },
     newest: {
       aria: 'Fajlovi, najnoviji prvi',
     },
