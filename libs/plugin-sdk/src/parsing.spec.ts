@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events';
 import { Readable } from 'node:stream';
 import { Worker } from 'node:worker_threads';
 import { firstMessage, readUpTo } from './parsing.js';
@@ -56,5 +57,13 @@ describe('firstMessage', () => {
 
     await expect(firstMessage(stuck, 50)).rejects.toThrow();
     expect(stuck.threadId).toBe(-1);
+  });
+
+  it("doesn't wait long for a worker that never ends", async () => {
+    const hung = Object.assign(new EventEmitter(), {
+      terminate: () => new Promise<number>(() => {}),
+    }) as unknown as Worker;
+
+    await expect(firstMessage(hung, 10, 10)).rejects.toThrow();
   });
 });

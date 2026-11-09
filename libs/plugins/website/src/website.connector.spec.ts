@@ -492,9 +492,12 @@ describe('WebsiteConnector', () => {
       serve('/p/b');
       // the section's skipFiles pattern never ends on that link text
       const real = AbortSignal.timeout.bind(AbortSignal);
-      vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms) =>
-        real(ms === 20_000 ? 300 : ms),
-      );
+      let cut = false;
+      vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms) => {
+        if (ms !== 20_000 || cut) return real(ms);
+        cut = true;
+        return real(300);
+      });
       await run({ sections: [{ ...withFiles, skipFiles: '^(a+)+$' }] });
 
       expect([...ingest.items.keys()]).toEqual(['/p/b']);
