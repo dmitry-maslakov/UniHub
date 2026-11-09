@@ -1,7 +1,7 @@
 import { ConditionalModule } from '@nestjs/config';
 import { ArchivesModule } from '@app/plugins/archives';
 import { CanvasModule } from '@app/plugins/canvas';
-import { OcrModule } from '@app/plugins/ocr';
+import { OcrModule, ReaderModule, VisionModule } from '@app/plugins/ocr';
 import { OfficeTextModule } from '@app/plugins/office-text';
 import { PlainTextModule } from '@app/plugins/plain-text';
 import { pluginsConfig } from './plugins.config.js';
@@ -25,4 +25,6 @@ export const plugins = [
   plugin('ocr', OcrModule),
   plugin('office-text', OfficeTextModule),
   plugin('plain-text', PlainTextModule),
+  plugin('reader', ReaderModule),
+  plugin('vision', VisionModule),
 ];
