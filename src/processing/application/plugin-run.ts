@@ -40,3 +40,17 @@ export function takenName<N extends FileFact>(
   }
   return null;
 }
+
+// What `run` makes, or the signal's reason once it aborts: a run that ignores
+// the signal doesn't hold the job up past it.
+export function until<T>(signal: AbortSignal | undefined, run: Promise<T>) {
+  if (!signal) return run;
+  const aborted = new Promise<never>((_, reject) => {
+    if (signal.aborted) reject(signal.reason);
+    else
+      signal.addEventListener('abort', () => reject(signal.reason), {
+        once: true,
+      });
+  });
+  return Promise.race([run, aborted]);
+}

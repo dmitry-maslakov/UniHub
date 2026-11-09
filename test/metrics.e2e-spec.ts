@@ -65,14 +65,17 @@ describe('metrics', () => {
         expect([...ofWorker.names]).toContain('unihub_queue_counts_read');
         expect(ofWorker.series('unihub_queue_rate_limited')).toEqual([
           'unihub_queue_rate_limited{queue="connectors"}',
+          'unihub_queue_rate_limited{queue="models"}',
           'unihub_queue_rate_limited{queue="plugins"}',
           'unihub_queue_rate_limited{queue="search-index"}',
         ]);
         expect(ofWorker.series('unihub_queue_jobs')).toEqual(
           expect.arrayContaining(
-            ['waiting', 'active', 'delayed', 'failed'].map(
-              (state) =>
-                `unihub_queue_jobs{queue="search-index",state="${state}"}`,
+            ['search-index', 'models'].flatMap((queue) =>
+              ['waiting', 'active', 'delayed', 'failed'].map(
+                (state) =>
+                  `unihub_queue_jobs{queue="${queue}",state="${state}"}`,
+              ),
             ),
           ),
         );

@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
+import type { DefaultJobOptions } from 'bullmq';
 import { TerminusModule } from '@nestjs/terminus';
+import { ConfigModule } from '@nestjs/config';
+import { roleConfig } from '../platform/role/role.config.js';
 import { whenSearchOn } from '../platform/search/opensearch.config.js';
 import { PluginsModule } from '../plugins/contracts.js';
 import { StorageModule } from '../storage/contracts.js';
@@ -24,6 +27,8 @@ import { BullmqPluginJobQueue } from './infrastructure/bullmq-plugin-job-queue.j
 import { CatalogFileFacts } from './infrastructure/catalog-file-facts.js';
 import { OtelSearchMetrics } from './infrastructure/otel-search-metrics.js';
 import { HtmlTextModule } from './infrastructure/html-text.module.js';
+import { ModelsWorker } from './infrastructure/models.worker.js';
+import { MODELS_QUEUE } from './infrastructure/models.queue.js';
 import { PLUGINS_QUEUE } from './infrastructure/plugins.queue.js';
 import { PluginsWorker } from './infrastructure/plugins.worker.js';
 import { PrismaRepresentationRepository } from './infrastructure/prisma-representation.repository.js';
@@ -42,21 +47,25 @@ import { TextSearchModule } from './infrastructure/search/text-search.module.js'
 
 const DAY = 24 * 60 * 60;
 
+const JOB_OPTIONS: DefaultJobOptions = {
+  // plugins have to be idempotent
+  attempts: 5,
+  backoff: { type: 'exponential', delay: 5_000 },
+  // a finished job keeps its id for a day, longer than the outbox may take
+  // to publish the same message again; content queued again meanwhile is
+  // mostly done already, the reconciler does the rest
+  removeOnComplete: { age: DAY },
+  removeOnFail: { age: 14 * DAY },
+};
+
 @Module({
   imports: [
-    BullModule.registerQueue({
-      name: PLUGINS_QUEUE,
-      defaultJobOptions: {
-        // plugins have to be idempotent
-        attempts: 5,
-        backoff: { type: 'exponential', delay: 5_000 },
-        // a finished job keeps its id for a day, longer than the outbox may
-        // take to publish the same message again; content queued again
-        // meanwhile is mostly done already, the reconciler does the rest
-        removeOnComplete: { age: DAY },
-        removeOnFail: { age: 14 * DAY },
-      },
-    }),
+    // the heavy processors' jobs wait in their own, for a run of APP_ROLE=models
+    BullModule.registerQueue(
+      { name: PLUGINS_QUEUE, defaultJobOptions: JOB_OPTIONS },
+      { name: MODELS_QUEUE, defaultJobOptions: JOB_OPTIONS },
+    ),
+    ConfigModule.forFeature(roleConfig),
     // the worker asks whether the database is up before blaming a plugin
     TerminusModule,
     StorageModule,
@@ -83,6 +92,7 @@ const DAY = 24 * 60 * 60;
     UnpackContent,
     Reconcile,
     PluginsWorker,
+    ModelsWorker,
     ReconcileSchedule,
     {
       provide: RepresentationRepository,

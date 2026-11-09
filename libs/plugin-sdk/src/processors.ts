@@ -10,6 +10,13 @@ export interface ContentProcessorOptions {
   // media types ('application/pdf') or extensions ('.pdf'), any case; an
   // extension is a file's last ('.gz' of labs.tar.gz), so '.tar.gz' is refused
   accepts: readonly string[];
+  // Set by a processor backed by a model that is only up while there is work
+  // for it. Its jobs wait in a queue of their own, which a batch run drains
+  // (a process with APP_ROLE=models), one job at a time, and each gets
+  // `timeoutMinutes` (a whole number, at least 1) to run: `input.signal`
+  // aborts then, and the job fails and is tried again. Without it a
+  // processor runs in the hub's ordinary queue, as it always did.
+  heavy?: { timeoutMinutes: number };
 }
 
 export interface ProcessorInput {
@@ -24,6 +31,10 @@ export interface ProcessorInput {
   hash: ContentHash;
   // a fresh stream on every call, closed by the hub after the run
   content(): Promise<Readable>;
+  // A heavy processor's: aborts past its `timeoutMinutes` and when the
+  // process shuts down, where the job goes back to wait. Stop on it, and
+  // reject.
+  signal?: AbortSignal;
 }
 
 // text split the way the source is split: pages of a pdf, slides of a deck

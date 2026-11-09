@@ -39,6 +39,26 @@ describe('ProcessorSpec', () => {
   });
 });
 
+describe('a heavy ProcessorSpec', () => {
+  const of = (heavy?: { timeoutMinutes: number }) =>
+    ProcessorSpec.of({ name: 'ocr', version: 1, accepts: ['.png'], heavy });
+
+  it('is heavy with a time limit in milliseconds, or else neither', () => {
+    expect([of().heavy, of().timeLimitMs]).toEqual([false, null]);
+    expect([
+      of({ timeoutMinutes: 20 }).heavy,
+      of({ timeoutMinutes: 20 }).timeLimitMs,
+    ]).toEqual([true, 20 * 60_000]);
+  });
+
+  it('refuses a limit that is not a whole number of minutes', () => {
+    for (const timeoutMinutes of [0, -5, 1.5, Number.NaN])
+      expect(() => of({ timeoutMinutes })).toThrow(
+        new InvalidValueError('heavy timeout', String(timeoutMinutes)),
+      );
+  });
+});
+
 describe('UnpackerSpec', () => {
   it("matches as a processor's does, taking its entries as files are matched", () => {
     const spec = UnpackerSpec.of({

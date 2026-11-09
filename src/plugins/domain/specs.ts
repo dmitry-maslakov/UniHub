@@ -110,6 +110,19 @@ const accepted = (entry: string): Accepted => {
   return { entry, as: type.data };
 };
 
+const MINUTE = 60_000;
+
+interface Heavy {
+  timeoutMinutes: number;
+}
+
+const heavyLimit = (heavy: Heavy | undefined) => {
+  if (!heavy) return null;
+  if (!Number.isInteger(heavy.timeoutMinutes) || heavy.timeoutMinutes < 1)
+    throw new InvalidValueError('heavy timeout', String(heavy.timeoutMinutes));
+  return heavy.timeoutMinutes * MINUTE;
+};
+
 interface ContentOptions {
   name: string;
   version: number;
@@ -149,8 +162,24 @@ abstract class ContentSpec {
 }
 
 export class ProcessorSpec extends ContentSpec {
-  static of(options: ContentOptions) {
-    return new ProcessorSpec(...parsed(options));
+  private constructor(
+    name: PluginName,
+    version: number,
+    accepts: readonly Accepted[],
+    // set for a heavy processor: how long a run of it may take
+    readonly timeLimitMs: number | null,
+  ) {
+    super(name, version, accepts);
+  }
+
+  static of(options: ContentOptions & { heavy?: Heavy }) {
+    const [name, version, accepts] = parsed(options);
+    return new ProcessorSpec(name, version, accepts, heavyLimit(options.heavy));
+  }
+
+  // its jobs wait in the queue of their own, for a model to be started
+  get heavy() {
+    return this.timeLimitMs !== null;
   }
 }
 
