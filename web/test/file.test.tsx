@@ -654,6 +654,21 @@ describe('a file', () => {
     expect(back).toHaveAttribute('href', '/search?q=stack&course=os');
   });
 
+  it('goes back to the search it was opened from, kind and typed words too', async () => {
+    setup();
+    renderApp(
+      '/courses/os/files/f1?q=stack&course=os&type=files&from=stack%20OS',
+    );
+
+    const back = await screen.findByRole('link', {
+      name: 'Back to search results',
+    });
+    expect(back).toHaveAttribute(
+      'href',
+      '/search?q=stack&course=os&type=files&from=stack+OS',
+    );
+  });
+
   it('shows text as text, never as HTML', async () => {
     setup({
       text: () =>

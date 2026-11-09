@@ -1,13 +1,30 @@
 import { Button, Group, TextInput } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useNavigate } from '@tanstack/react-router';
+import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { coursesQuery } from '@/entities/course';
+import { scopeOf } from '../lib/course-initials';
 
 // The words to look for; searching puts them in the address, the course
-// the search is limited to kept
-export function SearchForm({ q, course }: { q: string; course?: string }) {
+// the search is limited to kept, and the kind. With no course yet, a word
+// that is one course's initials names it instead (course-initials.ts), and
+// the words as typed go in `from`, to put back, and stay while the words
+// are not changed.
+export function SearchForm({
+  q,
+  course,
+  type,
+  from,
+}: {
+  q: string;
+  course?: string;
+  type?: 'files' | 'posts';
+  from?: string;
+}) {
   const { t } = useTranslation('search');
   const navigate = useNavigate();
+  const courses = useQuery(coursesQuery()).data ?? [];
   const form = useForm({
     mode: 'uncontrolled',
     initialValues: { q },
@@ -19,9 +36,21 @@ export function SearchForm({ q, course }: { q: string; course?: string }) {
     <search>
       <form
         noValidate
-        onSubmit={form.onSubmit(({ q: words }) =>
-          navigate({ to: '/search', search: { q: words.trim(), course } }),
-        )}
+        onSubmit={form.onSubmit(({ q: typed }) => {
+          const words = typed.trim();
+          const scoped = course ? null : scopeOf(words, courses);
+          return navigate({
+            to: '/search',
+            search: scoped
+              ? { q: scoped.q, course: scoped.course.slug, type, from: words }
+              : {
+                  q: words,
+                  course,
+                  type,
+                  from: words === q ? from : undefined,
+                },
+          });
+        })}
       >
         <Group align="flex-start" gap="sm" wrap="wrap">
           <TextInput

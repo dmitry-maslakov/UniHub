@@ -31,11 +31,15 @@ export class CourseSearch {
 
   async search(
     userId: string,
-    { q, course, limit }: SearchRequest,
+    { q, course, type, limit }: SearchRequest,
   ): Promise<SearchView> {
-    const { courses, files, posts } = course
+    const read = course
       ? await this.inCourse(userId, course)
       : await this.everywhere(userId);
+    // only these kinds: the other's ids aren't given to the index
+    const { courses } = read;
+    const files = type === 'posts' ? [] : read.files;
+    const posts = type === 'files' ? [] : read.posts;
     if (!files.length && !posts.length) return { results: [] };
     const archives = [...new Set(files.map(({ hash }) => hash))];
     const contained = archives.length

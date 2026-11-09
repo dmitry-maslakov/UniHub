@@ -11,6 +11,12 @@ export const searchRequest = z.object({
       'words, a phrase or a code identifier; Latin or Cyrillic, with or without č ć š ž đ',
     ),
   course: CourseSlug.optional().describe('course slug: search only there'),
+  type: z
+    .enum(['files', 'posts'])
+    .optional()
+    .describe(
+      'files (files and archive members) or posts only; both when absent',
+    ),
   limit: z.coerce
     .number()
     .int()

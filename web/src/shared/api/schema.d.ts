@@ -1431,6 +1431,8 @@ export interface operations {
                 q: string;
                 /** @description course slug: search only there */
                 course?: string;
+                /** @description files (files and archive members) or posts only; both when absent */
+                type?: "files" | "posts";
                 /** @description results, at most */
                 limit?: number;
             };

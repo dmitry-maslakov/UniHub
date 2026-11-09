@@ -5,8 +5,15 @@ import { useCourseNames } from '@/entities/course';
 
 const route = getRouteApi('/_app/search');
 
-// The course a search is limited to, which one click widens to all
-export function SearchScope({ course }: { course: string }) {
+// The course a search is limited to, which one click widens to all.
+// A course named by its initials gives them back to the words it took them from.
+export function SearchScope({
+  course,
+  from,
+}: {
+  course: string;
+  from?: string;
+}) {
   const { t } = useTranslation('search');
   const courseName = useCourseNames();
   const navigate = route.useNavigate();
@@ -23,7 +30,12 @@ export function SearchScope({ course }: { course: string }) {
       }}
       onRemove={() =>
         void navigate({
-          search: (s) => ({ ...s, course: undefined }),
+          search: (s) => ({
+            ...s,
+            q: from ?? s.q,
+            course: undefined,
+            from: undefined,
+          }),
           replace: true,
         })
       }

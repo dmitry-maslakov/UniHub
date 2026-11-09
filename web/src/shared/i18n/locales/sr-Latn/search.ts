@@ -18,6 +18,7 @@ export default {
   empty: {
     title: 'Ništa ne odgovara upitu „{{q}}”',
     body: 'Probaj druge reči ili manje njih.',
+    bodyFiltered: 'Probaj druge reči ili pretraži sve.',
   },
   error: {
     rateLimited:
@@ -29,6 +30,12 @@ export default {
   result: {
     inArchive: 'U arhivi {{archive}}',
     nameMatch: 'Poklapa se ime',
+  },
+  type: {
+    aria: 'Šta se pretražuje',
+    all: 'Sve',
+    files: 'Fajlovi',
+    posts: 'Objave',
   },
   scope: {
     course: 'U predmetu {{name}}',

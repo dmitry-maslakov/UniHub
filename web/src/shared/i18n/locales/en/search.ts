@@ -15,6 +15,7 @@ export default {
   empty: {
     title: 'Nothing matches “{{q}}”',
     body: 'Try other words, or fewer.',
+    bodyFiltered: 'Try other words, or search everything.',
   },
   error: {
     rateLimited:
@@ -26,6 +27,12 @@ export default {
   result: {
     inArchive: 'In {{archive}}',
     nameMatch: 'Name matches',
+  },
+  type: {
+    aria: 'What to search',
+    all: 'All',
+    files: 'Files',
+    posts: 'Posts',
   },
   scope: {
     course: 'In {{name}}',
