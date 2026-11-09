@@ -109,7 +109,7 @@ export class CourseTools {
   @Tool({
     name: 'read_file',
     description:
-      "One page (slide, section) of the text made from a file, or from a file inside an archive (`member`, its path from list_members or search), with how many pages there are. Read the next page with page + 1. With no `processor` it gives every text there is of the page, each under its name, and `ocr` is read by machine off a picture and can have mistakes; diagrams and formulas aren't in the text, view_file shows them. A file can have a text per processor, each paged on its own: read a page from search with the processor it names.",
+      "One page (slide, section) of the text made from a file, or from a file inside an archive (`member`, its path from list_members or search), with how many pages there are. Read the next page with page + 1. With no `processor` it gives every text there is of the page, each under its name, and `ocr`, `reader` and `vision` are made by machine from a picture and can have mistakes (`ocr` and `reader` read the page, `vision` says what's on it); diagrams and formulas aren't in the text, view_file shows them. A file can have a text per processor, each paged on its own: read a page from search with the processor it names.",
     parameters: fileText,
     annotations: readOnly,
   })

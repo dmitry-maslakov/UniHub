@@ -20,6 +20,7 @@ export default {
     title: 'Tekst',
     loading: 'Učitava se tekst',
     recognized: 'Mašinski pročitano sa slike, pa može imati grešaka.',
+    described: 'Mašinski opis, pa može biti netačan.',
   },
   view: {
     which: 'U kom prikazu da se čita',
