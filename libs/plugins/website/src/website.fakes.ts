@@ -2,7 +2,6 @@ import { text } from 'node:stream/consumers';
 import type { Readable } from 'node:stream';
 import { delay, http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
-import { StoredJson } from '@app/kernel';
 import {
   ContentHash,
   InvalidRecordError,
@@ -108,6 +107,14 @@ export const page = (main: string, title = 'A page') =>
 export const TEXT =
   'Notes of the lecture, with enough words to be worth reading.';
 
+// a NUL in a string or a key, not a backslash and u0000 written out
+const hasNul = (value: unknown): boolean =>
+  typeof value === 'string'
+    ? value.includes('\u0000')
+    : value !== null && typeof value === 'object'
+      ? Object.entries(value).some(([k, v]) => hasNul(k) || hasNul(v))
+      : false;
+
 // What the hub would keep of the connector's runs, record by record
 // (a portal read as shared), as it answers: a file's content is wanted until
 // it has some (`wantsContent` off, never). Like the hub's, it refuses a NUL
@@ -128,8 +135,7 @@ export class RecordingIngest implements PortalIngest {
 
   private accept(record: object) {
     this.signal?.throwIfAborted();
-    // as it travels: dates as their text
-    if (!StoredJson.safeParse(JSON.parse(JSON.stringify(record))).success)
+    if (hasNul(JSON.parse(JSON.stringify(record))))
       throw new InvalidRecordError(['contains a NUL character']);
   }
 

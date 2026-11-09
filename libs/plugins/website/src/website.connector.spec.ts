@@ -506,7 +506,7 @@ describe('WebsiteConnector', () => {
       site.set('/sitemap.xml', sitemap('/p/a', '/p/b'));
       await run();
 
-      const body = (ingest.items.get('/p/a')?.raw as { body: string }).body;
+      const { body } = ingest.items.get('/p/a')!.raw as { body: string };
       // 200 levels deep, no deeper
       expect(body).toContain('<div>'.repeat(200));
       expect(body).not.toContain('<div>'.repeat(201));
