@@ -70,10 +70,50 @@ const collapse: Types.Core_Search.FieldCollapse = {
   },
 };
 
-const words = (text: string) =>
-  ({
-    multi_match: { query: text, type: 'most_fields', fields: FIELDS },
-  }) satisfies Types.Common_QueryDsl.QueryContainer;
+// the analyses of natural text, which tolerate a typo; code identifiers and
+// exact forms don't
+const NATURAL = FIELDS.filter((field) => field !== 'text.code');
+
+// a word that reads as code: an underscore, a digit, or a capital after a
+// lowercase letter (camelCase), which is matched exactly or not at all
+const isIdentifier = (word: string) => /[_\p{N}]|\p{Ll}\p{Lu}/u.test(word);
+
+// The words in every analysis, exactly; and, boosted less, those of them that
+// are not identifiers in the analyses of natural text with a typo or two
+// allowed, so an exact match ranks above a fuzzy one (a fuzzy clause matches
+// the exact word too, which only adds)
+export const words = (text: string) => {
+  const natural = text.split(/\s+/).filter((word) => !isIdentifier(word));
+  return {
+    bool: {
+      should: [
+        {
+          multi_match: {
+            query: text,
+            type: 'most_fields' as const,
+            fields: FIELDS,
+            boost: 2,
+          },
+        },
+        ...(natural.length
+          ? [
+              {
+                multi_match: {
+                  query: natural.join(' '),
+                  type: 'most_fields' as const,
+                  fields: NATURAL,
+                  fuzziness: 'AUTO',
+                  prefix_length: 1,
+                  max_expansions: 20,
+                },
+              },
+            ]
+          : []),
+      ],
+      minimum_should_match: 1,
+    },
+  } satisfies Types.Common_QueryDsl.QueryContainer;
+};
 
 // the records of a kind with these ids, if any
 const records = (kind: RecordKind, ids: readonly string[]) =>

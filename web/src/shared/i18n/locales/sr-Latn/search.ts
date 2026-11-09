@@ -30,6 +30,12 @@ export default {
     inArchive: 'U arhivi {{archive}}',
     nameMatch: 'Poklapa se ime',
   },
+  type: {
+    aria: 'Šta se pretražuje',
+    all: 'Sve',
+    files: 'Fajlovi',
+    posts: 'Objave',
+  },
   scope: {
     course: 'U predmetu {{name}}',
     remove: 'Pretraži sve predmete',

@@ -294,6 +294,34 @@ describe('search API', { timeout: 60_000 }, () => {
     ]);
   });
 
+  it('searches files or posts only when asked, through the route and the tool alike', async () => {
+    const student = await reader('kinds', 'ours');
+    const key = await keyOf(student);
+    const kinds = (results: Result[]) => [
+      ...new Set(results.map((r) => r.type)),
+    ];
+
+    expect(kinds(await found(student, 'kolokvijum iz niti'))).toEqual(
+      expect.arrayContaining(['post']),
+    );
+    const posted = (
+      await search(student, { q: 'kolokvijum iz niti', type: 'posts' }).expect(
+        200,
+      )
+    ).body.results as Result[];
+    const filed = (
+      await search(student, { q: 'kolokvijum iz niti', type: 'files' }).expect(
+        200,
+      )
+    ).body.results as Result[];
+    expect(kinds(posted)).toEqual(['post']);
+    expect(filed).not.toEqual([]);
+    expect(kinds(filed)).not.toContain('post');
+    const mcp = await tool(key, { q: 'kolokvijum iz niti', type: 'posts' });
+    expect(JSON.parse(mcp.content[0].text)).toEqual({ results: posted });
+    await search(student, { q: 'semafor', type: 'folders' }).expect(400);
+  });
+
   it('finds a file with no text by its name, and nothing of a removed post from then on', async () => {
     const student = await reader('names', 'ours');
 

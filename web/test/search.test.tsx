@@ -5,18 +5,21 @@ import { describe, expect, it } from 'vitest';
 import { renderApp } from './render';
 import { server, signedIn } from './server';
 
-const search = (handler: Parameters<typeof http.get>[1]) =>
+const course = (slug: string, name: string) => ({
+  slug,
+  name,
+  sources: [],
+  portalCourses: [],
+});
+
+const search = (
+  handler: Parameters<typeof http.get>[1],
+  courses = [course('os', 'Operating systems')],
+) =>
   server.use(
     http.get('http://localhost:3000/api/search', handler),
     http.get('http://localhost:3000/api/courses', () =>
-      HttpResponse.json([
-        {
-          slug: 'os',
-          name: 'Operating systems',
-          sources: [],
-          portalCourses: [],
-        },
-      ]),
+      HttpResponse.json(courses),
     ),
   );
 
@@ -222,6 +225,140 @@ describe('search', () => {
     renderApp('/search?q=stack');
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/Slow down/);
+  });
+});
+
+describe('search by type', () => {
+  it('limits the search to files or posts, kept in the address', async () => {
+    signedIn();
+    const types: (string | null)[] = [];
+    search(({ request }) => {
+      types.push(new URL(request.url).searchParams.get('type'));
+      return HttpResponse.json({ results: [fileHit()] });
+    });
+    const { router } = renderApp('/search?q=stack&course=os');
+
+    await screen.findByRole('list', { name: 'Results' });
+    expect(screen.getByRole('radio', { name: 'All' })).toBeChecked();
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Posts' }));
+
+    await waitFor(() => expect(types).toEqual([null, 'posts']));
+    expect(router.state.location.search).toEqual({
+      q: 'stack',
+      course: 'os',
+      type: 'posts',
+    });
+
+    // the kind is kept when the words change, and when the course is dropped
+    const field = screen.getByLabelText('Search your courses');
+    await userEvent.clear(field);
+    await userEvent.type(field, 'heap');
+    await userEvent.click(screen.getByRole('button', { name: 'Search' }));
+    await waitFor(() =>
+      expect(router.state.location.search).toEqual({
+        q: 'heap',
+        course: 'os',
+        type: 'posts',
+      }),
+    );
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Search all courses' }),
+    );
+    await waitFor(() =>
+      expect(router.state.location.search).toEqual({
+        q: 'heap',
+        type: 'posts',
+      }),
+    );
+
+    await userEvent.click(screen.getByRole('radio', { name: 'All' }));
+    await waitFor(() =>
+      expect(router.state.location.search).toEqual({ q: 'heap' }),
+    );
+  });
+});
+
+describe("search by a course's initials", () => {
+  const courses = [
+    course('asp', 'Algoritmi i strukture podataka'),
+    course('ar', 'Arhitektura računara'),
+    course('aa', 'Analiza i algebra'),
+    course('ag', 'Algebra i analiza'),
+  ];
+  const searchFor = async (words: string) => {
+    signedIn();
+    const asked: URLSearchParams[] = [];
+    search(({ request }) => {
+      asked.push(new URL(request.url).searchParams);
+      return HttpResponse.json({ results: [] });
+    }, courses);
+    const view = renderApp('/search');
+    await userEvent.type(
+      await screen.findByLabelText('Search your courses'),
+      words,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Search' }));
+    return { ...view, asked };
+  };
+
+  it('scopes the search to the course, and puts the word back when the scope is removed', async () => {
+    const { router, asked } = await searchFor('stek ASP');
+
+    expect(
+      await screen.findByText('In Algoritmi i strukture podataka'),
+    ).toBeVisible();
+    expect(router.state.location.search).toEqual({
+      q: 'stek',
+      course: 'asp',
+      from: 'stek ASP',
+    });
+    await waitFor(() => expect(asked.at(-1)?.get('course')).toBe('asp'));
+    expect(asked.at(-1)?.get('q')).toBe('stek');
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Search all courses' }),
+    );
+
+    await waitFor(() =>
+      expect(router.state.location.search).toEqual({ q: 'stek ASP' }),
+    );
+    await waitFor(() => expect(asked.at(-1)?.get('q')).toBe('stek ASP'));
+    expect(asked.at(-1)?.get('course')).toBeNull();
+    expect(screen.queryByText(/^In /)).toBeNull();
+  });
+
+  it('leaves a word alone', async () => {
+    const { router } = await searchFor('ASP');
+
+    await waitFor(() =>
+      expect(router.state.location.search).toEqual({ q: 'ASP' }),
+    );
+  });
+
+  it('scopes nothing by initials two courses share', async () => {
+    const { router } = await searchFor('stek AA');
+
+    await waitFor(() =>
+      expect(router.state.location.search).toEqual({ q: 'stek AA' }),
+    );
+  });
+
+  it('leaves a link that names a course alone', async () => {
+    signedIn();
+    search(() => HttpResponse.json({ results: [] }), courses);
+    const { router } = renderApp('/search?q=stek%20AR&course=asp');
+
+    const field = await screen.findByLabelText('Search your courses');
+    await userEvent.click(screen.getByRole('button', { name: 'Search' }));
+
+    expect(field).toHaveValue('stek AR');
+    await waitFor(() =>
+      expect(router.state.location.search).toEqual({
+        q: 'stek AR',
+        course: 'asp',
+      }),
+    );
   });
 });
 

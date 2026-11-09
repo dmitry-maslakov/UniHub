@@ -6,6 +6,7 @@ import {
   hybridBody,
   keywordBody,
   searchRequest,
+  words as wordsQuery,
 } from './text-index.search.js';
 
 const processors = [PluginName.parse('office-text')];
@@ -82,12 +83,42 @@ describe('keywordBody', () => {
     });
   });
 
-  it('matches the words in every analysis of the text', () => {
-    expect(body.query.bool.must.multi_match).toEqual({
+  it('matches the words in every analysis of the text, exactly', () => {
+    expect(body.query.bool.must.bool.should[0].multi_match).toEqual({
       query: 'semafor',
       type: 'most_fields',
       fields: ['text', 'text.sr', 'text.en', 'text.code'],
+      boost: 2,
     });
+  });
+});
+
+describe('words', () => {
+  const fuzzy = (text: string) => wordsQuery(text).bool.should[1]?.multi_match;
+
+  it('allows a typo in the analyses of natural text, not in the code one', () => {
+    expect(fuzzy('algoritmi')).toEqual({
+      query: 'algoritmi',
+      type: 'most_fields',
+      fields: ['text', 'text.sr', 'text.en'],
+      fuzziness: 'AUTO',
+      prefix_length: 1,
+      max_expansions: 20,
+    });
+  });
+
+  it('leaves identifiers out of the fuzzy part, keeping the other words', () => {
+    expect(fuzzy('camelCaseName')).toBeUndefined();
+    expect(fuzzy('snake_case')).toBeUndefined();
+    expect(fuzzy('x2')).toBeUndefined();
+    expect(fuzzy('semafor getUserName  niti')?.query).toBe('semafor niti');
+    expect(wordsQuery('getUserName').bool.should[0].multi_match.query).toBe(
+      'getUserName',
+    );
+  });
+
+  it('does not take a capital or a name for an identifier', () => {
+    expect(fuzzy('Algoritmi OOP')?.query).toBe('Algoritmi OOP');
   });
 });
 

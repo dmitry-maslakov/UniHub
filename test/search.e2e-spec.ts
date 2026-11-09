@@ -65,6 +65,8 @@ const book = Array.from(
   { length: 12 },
   (_, i) => `mreža i opet mreža, strana ${i + 1}`,
 ).join('\f');
+const exactWord = 'algoritmi i strukture podataka';
+const typoWord = 'algoritmmi i strukture podataka';
 const sheets = [1, 2, 3].map((n) => `mreža, list ${n}`);
 
 describe('search', { timeout: 60_000 }, () => {
@@ -130,6 +132,8 @@ describe('search', { timeout: 60_000 }, () => {
     await upload('lecture.txt', lecture);
     await upload('elsewhere.txt', elsewhere);
     await upload('book.txt', book);
+    await upload('exact.txt', exactWord);
+    await upload('typo.txt', typoWord);
     for (const [i, sheet] of sheets.entries())
       await upload(`sheet-${i}.txt`, sheet);
     // the reconcile at start may queue the texts other specs left first
@@ -176,6 +180,19 @@ describe('search', { timeout: 60_000 }, () => {
         records: [],
       },
     ]);
+  });
+
+  it('finds a word with a typo, an exact match first, and an identifier only exactly', async () => {
+    const both = [exactWord, typoWord];
+
+    expect((await byWords('algoritmmi', both)).map(({ hash }) => hash)).toEqual(
+      [typoWord, exactWord].map(sha256),
+    );
+    expect((await byWords('algoritmi', both)).map(({ hash }) => hash)).toEqual(
+      [exactWord, typoWord].map(sha256),
+    );
+    expect(await byWords('camelCaseNme', [lecture])).toEqual([]);
+    expect(await byWords('camelCaseName', [lecture])).not.toEqual([]);
   });
 
   // the hybrid query's raw scores come out far outside 0 to 1, a few huge
@@ -284,7 +301,11 @@ describe('search', { timeout: 60_000 }, () => {
           member: null,
           snippet: {
             text: 'raspored-semafora.txt',
-            highlights: [[0, 8]],
+            // semafora is within a typo of semafor
+            highlights: [
+              [0, 8],
+              [9, 17],
+            ],
           },
         },
       ],

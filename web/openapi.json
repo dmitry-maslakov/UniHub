@@ -1019,6 +1019,20 @@
             }
           },
           {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "description": "files (files and archive members) or posts only; both when absent",
+            "schema": {
+              "description": "files (files and archive members) or posts only; both when absent",
+              "type": "string",
+              "enum": [
+                "files",
+                "posts"
+              ]
+            }
+          },
+          {
             "name": "limit",
             "required": false,
             "in": "query",

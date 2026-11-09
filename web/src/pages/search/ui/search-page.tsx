@@ -8,6 +8,7 @@ import { searchErrorKey } from '../lib/search-error';
 import { ResultRow } from './result-row';
 import { SearchForm } from './search-form';
 import { SearchScope } from './search-scope';
+import { SearchType } from './search-type';
 
 const route = getRouteApi('/_app/search');
 
@@ -15,11 +16,11 @@ const route = getRouteApi('/_app/search');
 // archives
 export function SearchPage() {
   const { t } = useTranslation('search');
-  const { q = '', course } = route.useSearch();
+  const { q = '', course, type, from } = route.useSearch();
   const search = api.useQuery(
     'get',
     '/api/search',
-    { params: { query: { q, course } } },
+    { params: { query: { q, course, type } } },
     // a refused search is refused again, and a limit is waited out
     {
       enabled: q.length >= 2,
@@ -33,10 +34,13 @@ export function SearchPage() {
   return (
     <>
       <PageTitle description={t('description')}>{t('title')}</PageTitle>
-      <SearchForm key={q} q={q} course={course} />
+      <SearchForm key={q} q={q} course={course} type={type} />
+      <Box mt="md">
+        <SearchType type={type} />
+      </Box>
       {course && (
         <Box mt="md">
-          <SearchScope course={course} />
+          <SearchScope course={course} from={from} />
         </Box>
       )}
       <Box aria-live="polite" mt="xl">

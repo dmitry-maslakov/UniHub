@@ -246,6 +246,29 @@ describe('CourseSearch', () => {
     ]);
   });
 
+  it('gives the index only the kind asked for', async () => {
+    const { queries, search } = searching();
+
+    await search.search('ana', request({ q: 'semafor', type: 'posts' }));
+    await search.search('ana', request({ q: 'semafor', type: 'files' }));
+
+    const [byPosts, byFiles] = sentOf(queries, SearchTextsQuery).map(
+      ({ among }) => among,
+    );
+    expect(byPosts).toEqual({
+      contents: [],
+      posts: ['p1'],
+      files: [],
+      archives: [],
+    });
+    expect(byFiles).toEqual({
+      contents: [slides, notes],
+      posts: [],
+      files: ['f1', 'f2', 'f3'],
+      archives: [slides, notes],
+    });
+  });
+
   it('answers a content as its first file, in the order found, naming the other files that hold it', async () => {
     const { search } = searching();
 

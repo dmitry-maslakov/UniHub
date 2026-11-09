@@ -27,6 +27,12 @@ export default {
     inArchive: 'In {{archive}}',
     nameMatch: 'Name matches',
   },
+  type: {
+    aria: 'What to search',
+    all: 'All',
+    files: 'Files',
+    posts: 'Posts',
+  },
   scope: {
     course: 'In {{name}}',
     remove: 'Search all courses',
