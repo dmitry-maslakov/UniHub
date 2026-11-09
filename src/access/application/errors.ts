@@ -1,4 +1,4 @@
-import { InvalidError, NotFoundError } from '@app/kernel';
+import { InvalidError, NotFoundError, UnprocessableError } from '@app/kernel';
 
 // what a user asked for and can't read: gone, never there, or not theirs,
 // one answer for all three
@@ -19,5 +19,15 @@ export class DownloadTooLargeError extends InvalidError {
 
   constructor(readonly maxBytes: number) {
     super(`more than ${maxBytes} bytes in all`);
+  }
+}
+
+// a file the user can read, but not as a picture: neither an image nor a
+// PDF, or too large, or broken
+export class NotViewableError extends UnprocessableError {
+  readonly reason = 'NOT_VIEWABLE';
+
+  constructor(why: string, options?: ErrorOptions) {
+    super(`not viewable: ${why}`, options);
   }
 }

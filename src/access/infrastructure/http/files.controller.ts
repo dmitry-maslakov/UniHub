@@ -5,6 +5,7 @@ import {
   Param,
   ParseUUIDPipe,
   Query,
+  Res,
   StreamableFile,
 } from '@nestjs/common';
 import {
@@ -13,17 +14,21 @@ import {
   ApiOkResponse,
   ApiProduces,
   ApiTags,
+  ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import { create as contentDisposition } from 'content-disposition';
+import type { Response } from 'express';
 import { CurrentUserId } from '../../../identity/contracts.js';
 import { CourseReader } from '../../application/course-reader.js';
 import {
   contentSchema,
   pageSchema,
   textPageSchema,
+  viewSchema,
   type ContentAt,
   type Page,
   type TextAt,
+  type ViewAt,
 } from '../../application/page.js';
 import { opensInline } from '../../application/inline.js';
 import { Limited } from '../throttle.js';
@@ -37,11 +42,11 @@ import {
 @ApiBearerAuth()
 @ApiNotFoundResponse()
 @Controller('files')
-@Limited('api')
 export class FilesController {
   constructor(private readonly reader: CourseReader) {}
 
   @Get(':id')
+  @Limited('api')
   @ApiOkResponse({ type: FileDetailsResponse })
   file(
     @CurrentUserId() userId: string,
@@ -51,6 +56,7 @@ export class FilesController {
   }
 
   @Get(':id/members')
+  @Limited('api')
   @ApiOkResponse({
     type: [MemberResponse],
     description:
@@ -65,6 +71,7 @@ export class FilesController {
   }
 
   @Get(':id/text')
+  @Limited('api')
   @ApiOkResponse({
     type: TextPageResponse,
     description:
@@ -79,6 +86,7 @@ export class FilesController {
   }
 
   @Get(':id/content')
+  @Limited('api')
   @ApiProduces('application/octet-stream')
   @ApiOkResponse({
     description:
@@ -104,6 +112,36 @@ export class FilesController {
             ? 'inline'
             : 'attachment',
       }),
+    });
+  }
+
+  @Get(':id/view')
+  @Limited('views')
+  @ApiProduces('image/jpeg')
+  @ApiOkResponse({
+    description:
+      'the file as a picture: a JPEG of an image, or of one page of a PDF (`page`, from 1; `X-Page-Count` says how many it has), at most 1568 pixels on a side. A PDF page past the last is not found; a file that is neither an image nor a PDF, or is too large, is 422 NOT_VIEWABLE',
+    headers: {
+      'X-Page-Count': {
+        description: 'how many pages the PDF has',
+        schema: { type: 'integer' },
+      },
+    },
+  })
+  @ApiUnprocessableEntityResponse()
+  @Header('X-Content-Type-Options', 'nosniff')
+  @Header('Cache-Control', 'private, max-age=3600')
+  async view(
+    @CurrentUserId() userId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query({ schema: viewSchema }) at: ViewAt,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const shown = await this.reader.view(userId, id, at);
+    if (shown.pages !== null) res.setHeader('X-Page-Count', shown.pages);
+    return new StreamableFile(shown.data, {
+      type: shown.mime,
+      disposition: 'inline',
     });
   }
 }

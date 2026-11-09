@@ -6,6 +6,7 @@ import {
   Logger,
   NotFoundException,
   ServiceUnavailableException,
+  UnprocessableEntityException,
   type ArgumentsHost,
   type HttpExceptionOptions,
 } from '@nestjs/common';
@@ -19,6 +20,7 @@ const HTTP: Record<
   'not-found': NotFoundException,
   conflict: ConflictException,
   invalid: BadRequestException,
+  unprocessable: UnprocessableEntityException,
   unavailable: ServiceUnavailableException,
 };
 

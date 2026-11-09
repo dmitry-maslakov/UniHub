@@ -21,6 +21,12 @@ export default {
     loading: 'Učitava se tekst',
     which: 'Koji tekst da se prikaže',
   },
+  view: {
+    which: 'U kom prikazu da se čita',
+    text: 'Tekst',
+    page: 'Stranica',
+    failed: 'Slika nije mogla da se učita.',
+  },
   position: {
     page: 'Strana {{n}} od {{total}}',
     slide: 'Slajd {{n}} od {{total}}',

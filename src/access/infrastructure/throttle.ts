@@ -26,6 +26,9 @@ const LIMITS = {
   // picking a public portal's course or unpicking it, per user (accounts):
   // each one may have its connector sync another course
   picks: 30,
+  // a file shown as a picture, per user (REST): each one renders an image or
+  // a PDF page, a PDF in a thread of its own
+  views: 60,
   // asking for a zip of several files, per user: each one checks every
   // item (the zip is fetched under `zips`)
   downloads: 10,

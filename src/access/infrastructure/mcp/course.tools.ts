@@ -5,7 +5,11 @@ import { z } from 'zod';
 import { CourseSlug } from '../../../catalog/contracts.js';
 import { HubPages } from '../../../identity/contracts.js';
 import { CourseReader } from '../../application/course-reader.js';
-import { pageSchema, textPageSchema } from '../../application/page.js';
+import {
+  pageSchema,
+  textPageSchema,
+  viewSchema,
+} from '../../application/page.js';
 import { McpErrorsFilter } from './mcp-errors.filter.js';
 import { McpUserId } from './mcp-user-id.js';
 import { json, jsonWithNote, readOnly } from './tool-results.js';
@@ -18,6 +22,7 @@ const post = z.object({
 });
 const file = z.uuid().describe('file id from list_files or search');
 const fileText = textPageSchema.extend({ file });
+const fileView = viewSchema.extend({ file });
 const fileMembers = pageSchema.extend({ file });
 
 // The same reads as the REST API, through the same CourseReader
@@ -103,7 +108,7 @@ export class CourseTools {
   @Tool({
     name: 'read_file',
     description:
-      'One page (slide, section) of the text made from a file, or from a file inside an archive (`member`, its path from list_members or search), with how many pages there are. Read the next page with page + 1. A file can have a text per processor, each paged on its own: read a page from search with the processor it names.',
+      "One page (slide, section) of the text made from a file, or from a file inside an archive (`member`, its path from list_members or search), with how many pages there are. Read the next page with page + 1. An image has no text, and a page's text leaves out its diagrams and formulas: view_file shows them. A file can have a text per processor, each paged on its own: read a page from search with the processor it names.",
     parameters: fileText,
     annotations: readOnly,
   })
@@ -117,6 +122,36 @@ export class CourseTools {
         {
           type: 'text' as const,
           text: `page ${text.page} of ${text.pages} (${text.processor} v${text.version})\n\n${text.text}`,
+        },
+      ],
+    };
+  }
+
+  @Tool({
+    name: 'view_file',
+    description:
+      "An image file, or one page of a PDF (`page`, from 1), or the same of a file inside an archive (`member`), as a picture. Use it to see an image, a scan, or a diagram or formula that a page's text from read_file doesn't carry. Any other file is not viewable. Counted as any call.",
+    parameters: fileView,
+    annotations: readOnly,
+  })
+  async view(
+    @Payload() { file, ...at }: z.output<typeof fileView>,
+    @McpUserId() userId: string,
+  ) {
+    const shown = await this.reader.view(userId, file, at);
+    return {
+      content: [
+        {
+          type: 'image' as const,
+          data: shown.data.toString('base64'),
+          mimeType: shown.mime,
+        },
+        {
+          type: 'text' as const,
+          text:
+            shown.pages === null
+              ? shown.name
+              : `${shown.name}, page ${shown.page} of ${shown.pages}`,
         },
       ],
     };

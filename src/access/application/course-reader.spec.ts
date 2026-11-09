@@ -27,7 +27,8 @@ import {
   ListTextsQuery,
 } from '../../processing/contracts.js';
 import { CourseReader } from './course-reader.js';
-import { NotReadableError } from './errors.js';
+import { NotReadableError, NotViewableError } from './errors.js';
+import { PageRenderer } from './renderer.js';
 
 const portal = PortalId.parse('canvas');
 const content = '%PDF slides of f1';
@@ -51,7 +52,32 @@ const file = (id: string, courseId: string, content = true): CourseFileDto => ({
   contentHash: content ? hash : null,
   removed: false,
 });
-const files = [file('f1', os.id), file('f2', net.id), file('f3', os.id, false)];
+const picture = 'png bytes';
+const files = [
+  file('f1', os.id),
+  file('f2', net.id),
+  file('f3', os.id, false),
+  {
+    ...file('f4', os.id),
+    name: 'plot.png',
+    mime: MediaType.parse('image/png'),
+    contentHash: sha256(picture),
+  },
+];
+
+// three pages in any PDF; what it shows is the bytes it was given
+class FakeRenderer extends PageRenderer {
+  async image(data: Buffer) {
+    return Buffer.from(`jpeg of ${data.toString()}`);
+  }
+  async pdf(data: Buffer, page: number) {
+    if (page > 3) throw new NotReadableError('page');
+    return {
+      pages: 3,
+      data: Buffer.from(`jpeg of ${data.toString()} p${page}`),
+    };
+  }
+}
 const item = (id: string, courseId: string): CourseItemDto => ({
   id,
   courseId,
@@ -179,8 +205,11 @@ function reader() {
         page <= text.pages ? { ...text, page, text: `page ${page}` } : null,
     ],
   ]);
-  const blobs = new InMemoryBlobs({ holding: [content, code] });
-  return { queries, reader: new CourseReader(queries.queries, blobs) };
+  const blobs = new InMemoryBlobs({ holding: [content, code, picture] });
+  return {
+    queries,
+    reader: new CourseReader(queries.queries, blobs, new FakeRenderer()),
+  };
 }
 
 describe('CourseReader', () => {
@@ -333,6 +362,36 @@ describe('CourseReader', () => {
     expect((await stream.toArray()).join('')).toBe(content);
   });
 
+  it('shows an image, or a page of a PDF, as a picture, by the access content has', async () => {
+    const { reader: r } = reader();
+    expect(await r.view('ana', 'f4', { page: 1 })).toEqual({
+      name: 'plot.png',
+      data: Buffer.from(`jpeg of ${picture}`),
+      mime: 'image/jpeg',
+      pages: null,
+      page: null,
+    });
+    const shown = await r.view('ana', 'f1', { page: 2 });
+    expect(shown).toEqual(
+      expect.objectContaining({ pages: 3, page: 2, mime: 'image/jpeg' }),
+    );
+    expect(shown.data.toString()).toBe(`jpeg of ${content} p2`);
+    await expect(r.view('ana', 'f1', { page: 4 })).rejects.toThrowError(
+      new NotReadableError('page'),
+    );
+    // another course's, and a file without content: not found, as content()
+    await expect(r.view('ana', 'f2', { page: 1 })).rejects.toThrowError(
+      new NotReadableError('file'),
+    );
+    await expect(r.view('ana', 'f3', { page: 1 })).rejects.toThrowError(
+      new NotReadableError('file'),
+    );
+    // a member that is code
+    await expect(
+      r.view('ana', 'f1', { page: 1, member: main.path }),
+    ).rejects.toBeInstanceOf(NotViewableError);
+  });
+
   it('pages the members of a file it may read', async () => {
     const { reader: r, queries } = reader();
 
@@ -482,7 +541,11 @@ describe('CourseReader', () => {
       ],
       [ListCourseItemsQuery, () => []],
     ]);
-    const r = new CourseReader(queries.queries, new InMemoryBlobs());
+    const r = new CourseReader(
+      queries.queries,
+      new InMemoryBlobs(),
+      new FakeRenderer(),
+    );
 
     expect(await r.courses('ana')).toEqual([
       {

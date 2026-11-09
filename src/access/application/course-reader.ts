@@ -14,11 +14,14 @@ import {
   ListMembersQuery,
   ListTextsQuery,
 } from '../../processing/contracts.js';
+import { readUpTo } from '@app/plugin-sdk';
 import { UserPortalsQuery } from '../../accounts/contracts.js';
 import { BlobStore } from '../../storage/contracts.js';
-import { NotReadableError } from './errors.js';
+import { NotReadableError, NotViewableError } from './errors.js';
 import { noCoursesNote } from './no-courses.js';
-import type { FilesAt, Page, TextAt } from './page.js';
+import type { FilesAt, Page, TextAt, ViewAt } from './page.js';
+import { PageRenderer } from './renderer.js';
+import { VIEW_LIMITS, viewKind } from './viewable.js';
 import {
   fileOf,
   readableCourse,
@@ -36,6 +39,7 @@ export class CourseReader {
   constructor(
     private readonly queries: QueryBus,
     private readonly blobs: BlobStore,
+    private readonly renderer: PageRenderer,
   ) {}
 
   async courses(userId: string) {
@@ -136,6 +140,40 @@ export class CourseReader {
       fileId,
       member,
     );
+  }
+
+  // the file as a picture, read as content() is: a JPEG of an image, or of a
+  // page of a PDF (`pages` and `page` null for an image). Anything else, or
+  // too large, is not viewable; a page past the last is not found.
+  async view(userId: string, fileId: string, { page, member }: ViewAt) {
+    const { hash, name, mime } = await this.readableContent(
+      await viewersOfUser(this.queries, userId),
+      fileId,
+      member,
+    );
+    const kind = viewKind(mime, name);
+    if (!kind) throw new NotViewableError('neither a picture nor a PDF');
+    const source = await readUpTo(
+      await this.blobs.get(hash),
+      VIEW_LIMITS[kind],
+    );
+    if (!source) throw new NotViewableError('too large');
+    if (kind === 'image')
+      return {
+        name,
+        data: await this.renderer.image(source),
+        mime: 'image/jpeg' as const,
+        pages: null,
+        page: null,
+      };
+    const shown = await this.renderer.pdf(source, page);
+    return {
+      name,
+      data: shown.data,
+      mime: 'image/jpeg' as const,
+      pages: shown.pages,
+      page,
+    };
   }
 
   // What content() would open, without opening it: the name, the folder

@@ -1,6 +1,7 @@
 import { SegmentedControl } from '@mantine/core';
 import { getRouteApi } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
+import { viewKind } from '@/entities/file';
 import type { Schemas } from '@/shared/api';
 import { EmptyState, Section } from '@/shared/ui';
 import { pickText } from '../lib/text-choice';
@@ -22,7 +23,7 @@ export function TextSection({
   hasMembers?: boolean;
 }) {
   const { t } = useTranslation('file');
-  const { processor } = route.useSearch();
+  const { processor, show } = route.useSearch();
   const navigate = route.useNavigate();
 
   if (!file.hasContent)
@@ -31,8 +32,10 @@ export function TextSection({
         {t('noContent.body')}
       </EmptyState>
     );
+  // a picture has its own section; its text, if it has any, comes after
+  const kind = viewKind(member ? null : file.mime, member ?? file.name);
   if (member === undefined && !file.texts.length)
-    return hasMembers ? null : (
+    return hasMembers || kind === 'image' ? null : (
       <EmptyState title={t('noText.title')}>{t('noText.body')}</EmptyState>
     );
 
@@ -62,7 +65,33 @@ export function TextSection({
           aria-label={t('text.which')}
         />
       )}
-      <TextReader file={file} member={member} processor={chosen} />
+      {kind === 'pdf' && (
+        <SegmentedControl
+          size="sm"
+          w="fit-content"
+          maw="100%"
+          data={[
+            { value: 'text', label: t('view.text') },
+            { value: 'page', label: t('view.page') },
+          ]}
+          value={show ?? 'text'}
+          onChange={(value) =>
+            void navigate({
+              search: (s) => ({
+                ...s,
+                show: value === 'page' ? 'page' : undefined,
+              }),
+            })
+          }
+          aria-label={t('view.which')}
+        />
+      )}
+      <TextReader
+        file={file}
+        member={member}
+        processor={chosen}
+        asPage={kind === 'pdf' && show === 'page'}
+      />
     </Section>
   );
 }

@@ -462,6 +462,93 @@ describe('a file', () => {
     ).toBeVisible();
   });
 
+  it("shows an image as the hub's picture of it, with no empty state", async () => {
+    setup({
+      file: details({ name: 'plot.png', mime: 'image/png', texts: [] }),
+    });
+    renderApp('/courses/os/files/f1');
+
+    const image = await screen.findByRole('img', { name: 'plot.png' });
+    expect(image).toHaveAttribute('src', '/api/files/f1/view');
+    expect(screen.queryByText('No text in this file')).toBeNull();
+    expect(screen.queryByRole('radio', { name: 'Page' })).toBeNull();
+    expect(asked).toEqual([]);
+  });
+
+  it('shows a picture inside an archive by its member, and never an SVG', async () => {
+    setup({
+      file: details({ name: 'figs.zip', mime: 'application/zip', texts: [] }),
+      members: [member({ path: 'fig/a b.png', mime: 'image/png', texts: [] })],
+    });
+    renderApp('/courses/os/files/f1?member=fig%2Fa%20b.png');
+    expect(await screen.findByRole('img', { name: 'a b.png' })).toHaveAttribute(
+      'src',
+      '/api/files/f1/view?member=fig%2Fa%20b.png',
+    );
+  });
+
+  it('shows no picture of an SVG', async () => {
+    setup({
+      file: details({
+        name: 'logo.svg',
+        mime: 'image/svg+xml',
+        texts: [],
+      }),
+    });
+    renderApp('/courses/os/files/f1');
+    expect(await screen.findByRole('heading', { level: 1 })).toBeVisible();
+    expect(screen.queryByRole('img')).toBeNull();
+  });
+
+  it("switches a PDF between its text and its pages' pictures, kept in the address", async () => {
+    setup();
+    const { router } = renderApp('/courses/os/files/f1?page=2');
+
+    expect(await screen.findByText('text of part 2')).toBeVisible();
+    expect(
+      screen.getByRole('radio', { name: 'Text', checked: true }),
+    ).toBeVisible();
+    expect(screen.queryByRole('img', { name: /Lecture 5/ })).toBeNull();
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Page' }));
+    const image = await screen.findByRole('img', {
+      name: 'Lecture 5.pdf, Page 2',
+    });
+    expect(image).toHaveAttribute('src', '/api/files/f1/view?page=2');
+    expect(router.state.location.search).toEqual({ page: '2', show: 'page' });
+    expect(screen.queryByText('text of part 2')).toBeNull();
+
+    // the same paging control turns the page
+    await userEvent.click(screen.getByRole('button', { name: 'Next part' }));
+    expect(
+      await screen.findByRole('img', { name: 'Lecture 5.pdf, Page 3' }),
+    ).toHaveAttribute('src', '/api/files/f1/view?page=3');
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Text' }));
+    expect(await screen.findByText('text of part 3')).toBeVisible();
+    expect(router.state.location.search).toEqual({ page: '3' });
+  });
+
+  it('opens a PDF on its pages when the address says so, and not any other type', async () => {
+    setup();
+    renderApp('/courses/os/files/f1?show=page');
+    expect(
+      await screen.findByRole('img', { name: 'Lecture 5.pdf, Page 1' }),
+    ).toBeVisible();
+  });
+
+  it('offers no pages for a file that is not a PDF', async () => {
+    setup({
+      file: details({
+        name: 'notes.docx',
+        mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      }),
+    });
+    renderApp('/courses/os/files/f1?show=page');
+    expect(await screen.findByText('text of part 1')).toBeVisible();
+    expect(screen.queryByRole('radio', { name: 'Page' })).toBeNull();
+  });
+
   it('says a file without content is not available yet, and asks for no text', async () => {
     setup({ file: details({ hasContent: false, texts: [] }) });
     renderApp('/courses/os/files/f1');

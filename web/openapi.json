@@ -661,6 +661,73 @@
         ]
       }
     },
+    "/api/files/{id}/view": {
+      "get": {
+        "operationId": "FilesController_view",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "member",
+            "required": false,
+            "in": "query",
+            "description": "a file inside it, by its path as list_members or the members route gives it; the file itself by default",
+            "schema": {
+              "description": "a file inside it, by its path as list_members or the members route gives it; the file itself by default",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "the page of a PDF, from 1; an image has one",
+            "schema": {
+              "default": 1,
+              "description": "the page of a PDF, from 1; an image has one",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the file as a picture: a JPEG of an image, or of one page of a PDF (`page`, from 1; `X-Page-Count` says how many it has), at most 1568 pixels on a side. A PDF page past the last is not found; a file that is neither an image nor a PDF, or is too large, is 422 NOT_VIEWABLE",
+            "headers": {
+              "X-Page-Count": {
+                "description": "how many pages the PDF has",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": ""
+          },
+          "422": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "files"
+        ]
+      }
+    },
     "/api/downloads": {
       "post": {
         "operationId": "DownloadsController_create",

@@ -1,4 +1,10 @@
-export { contentUrl, opensInline } from './lib/content-url';
+export {
+  contentUrl,
+  opensInline,
+  viewable,
+  viewKind,
+  viewUrl,
+} from './lib/content-url';
 export { fileType, type FileType } from './lib/file-type';
 export { filesIn } from './lib/folder-files';
 export { OPEN_UP_TO, folderTree, type FolderNode } from './lib/folder-tree';

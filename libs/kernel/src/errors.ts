@@ -1,9 +1,9 @@
 // What went wrong, in terms every way in can answer: a missing thing, a
-// clash with what's there, input that can't be taken, or something the hub
+// clash with what's there, input that can't be taken, a thing it can't be asked of, or something the hub
 // needs that is away for now (try again later). Each module's errors extend
 // one of these; the edges (HTTP, MCP, gRPC) map the kind, not the class.
 export type DomainErrorKind =
-  'not-found' | 'conflict' | 'invalid' | 'unavailable';
+  'not-found' | 'conflict' | 'invalid' | 'unprocessable' | 'unavailable';
 
 export abstract class DomainError extends Error {
   abstract readonly kind: DomainErrorKind;
@@ -28,6 +28,11 @@ export abstract class ConflictError extends DomainError {
 
 export abstract class InvalidError extends DomainError {
   readonly kind = 'invalid';
+}
+
+// well-formed and understood, but of a kind the hub can't do that with
+export abstract class UnprocessableError extends DomainError {
+  readonly kind = 'unprocessable';
 }
 
 export abstract class UnavailableError extends DomainError {

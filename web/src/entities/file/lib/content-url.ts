@@ -24,3 +24,51 @@ export function contentUrl(
   const text = query.toString().replaceAll('+', '%20');
   return `/api/files/${fileId}/content${text && `?${text}`}`;
 }
+
+// The address of a file as a picture: an image, or one page of a PDF
+// (from 1), the file's or a member's
+export function viewUrl(
+  fileId: string,
+  { page, member }: { page?: number; member?: string } = {},
+) {
+  const query = new URLSearchParams();
+  if (page !== undefined) query.set('page', String(page));
+  if (member !== undefined) query.set('member', member);
+  const text = query.toString().replaceAll('+', '%20');
+  return `/api/files/${fileId}/view${text && `?${text}`}`;
+}
+
+const VIEW_BY_TYPE = {
+  'application/pdf': 'pdf',
+  'image/png': 'image',
+  'image/jpeg': 'image',
+  'image/gif': 'image',
+  'image/webp': 'image',
+} as const;
+const VIEW_BY_EXTENSION = {
+  pdf: 'pdf',
+  png: 'image',
+  jpg: 'image',
+  jpeg: 'image',
+  gif: 'image',
+  webp: 'image',
+} as const;
+
+type Lookup = Record<string, 'image' | 'pdf'>;
+
+// What the hub can show of a file as a picture, as its viewKind has it: an
+// image, or a PDF by the page; by media type, else by extension; never SVG
+export function viewKind(mime: string | null, name: string) {
+  const essence = mime?.split(';')[0]!.trim().toLowerCase() ?? '';
+  const byType = (VIEW_BY_TYPE as Lookup)[essence];
+  if (byType) return byType;
+  if (essence.includes('svg')) return null;
+  const dot = name.lastIndexOf('.');
+  if (dot <= 0) return null;
+  return (
+    (VIEW_BY_EXTENSION as Lookup)[name.slice(dot + 1).toLowerCase()] ?? null
+  );
+}
+
+export const viewable = (mime: string | null, name: string) =>
+  viewKind(mime, name) !== null;
