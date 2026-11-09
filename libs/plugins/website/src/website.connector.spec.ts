@@ -18,8 +18,11 @@ import {
   TEXT,
 } from './website.fakes.js';
 
+// every page starts a worker thread, seconds each on a busy CI runner
+vi.setConfig({ testTimeout: 30_000 });
+
 const site = new FakeSite().listen();
-const SECTION = { id: 'courses', name: 'Courses', sitemap: '/sitemap.xml' };
+const SECTION ={ id: 'courses', name: 'Courses', sitemap: '/sitemap.xml' };
 const DAY = 86_400_000;
 const today = () => Math.floor(Date.now() / DAY);
 const portal = PortalId.parse('website');
@@ -489,9 +492,12 @@ describe('WebsiteConnector', () => {
       serve('/p/b');
       // the section's skipFiles pattern never ends on that link text
       const real = AbortSignal.timeout.bind(AbortSignal);
-      vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms) =>
-        real(ms === 20_000 ? 300 : ms),
-      );
+      let cut = false;
+      vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms) => {
+        if (ms !== 20_000 || cut) return real(ms);
+        cut = true;
+        return real(300);
+      });
       await run({ sections: [{ ...withFiles, skipFiles: '^(a+)+$' }] });
 
       expect([...ingest.items.keys()]).toEqual(['/p/b']);
