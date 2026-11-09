@@ -90,6 +90,24 @@ export class FakePdfProcessor implements ProcessesContent {
   }
 }
 
+// backed by a model: its jobs wait in the `models` queue
+@ContentProcessor({
+  name: 'fake-heavy',
+  version: 1,
+  accepts: ['.heavy'],
+  heavy: { timeoutMinutes: 5 },
+})
+@Injectable()
+export class FakeHeavyProcessor implements ProcessesContent {
+  seen: string[] = [];
+
+  async process(input: ProcessorInput) {
+    const content = await text(await input.content());
+    this.seen.push(content);
+    return { parts: [`read: ${content}`] };
+  }
+}
+
 // Processors of these names that take no file, so none of them runs: a spec
 // writes their texts to postgres itself, read as long as they're on.
 export function processorsOn(...names: string[]) {
@@ -163,6 +181,7 @@ export class FlakyAggregator implements HandlesMessages<typeof ITEM_INGESTED> {
     FakeUnpacker,
     FakeAggregator,
     FlakyAggregator,
+    FakeHeavyProcessor,
   ],
 })
 export class FakePluginsModule {}

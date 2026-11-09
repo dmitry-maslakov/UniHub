@@ -25,6 +25,7 @@
     "proto:generate": "proto-loader-gen-types --longs=Number --grpcLib=@grpc/grpc-js --importFileExtension=.js -O src/ingest/infrastructure/grpc/generated proto/ingest.proto",
     "auth:generate": "auth generate --config src/identity/auth.cli.ts --output prisma/schema/identity.prisma --yes",
     "auth:create-admin": "auth create-admin --config src/identity/auth.cli.ts",
+    "models:pending": "node dist/main.js models-pending",
     "instances:adopt": "APP_ROLE=api node dist/main.js adopt-instances"
   },
   "dependencies": {

@@ -63,7 +63,11 @@ export const processor = (
   accepts: string[],
   instance: ProcessesContent = { process: async () => ({ parts: [] }) },
   version = 1,
-) => ({ spec: ProcessorSpec.of({ name, version, accepts }), instance });
+  heavy?: { timeoutMinutes: number },
+) => ({
+  spec: ProcessorSpec.of({ name, version, accepts, heavy }),
+  instance,
+});
 
 export const unpacker = (
   name: string,

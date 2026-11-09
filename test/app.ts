@@ -19,7 +19,7 @@ import {
 import { testVectors } from './env.js';
 import { FakeEmbedder, FakeReranker } from './fake-models.js';
 
-type Role = 'all' | 'api' | 'worker';
+type Role = 'all' | 'api' | 'worker' | 'models';
 
 // The app's modules in `role`, with the spec's own plugins and fakes for the
 // models. The reranker is busy, so a search answers in the index's order,
@@ -50,7 +50,7 @@ export async function bootApp({
   mails?: Mail[];
   clientMetadata?: ClientMetadataResourceFetch;
   imports?: Type[];
-  role?: Exclude<Role, 'worker'>;
+  role?: Exclude<Role, 'worker' | 'models'>;
 } = {}): Promise<INestApplication> {
   // serve-static picks its loader by the HTTP adapter, which a testing
   // module only gets after compiling: the one main.ts's app gets
@@ -74,4 +74,11 @@ export async function bootWorker({
   imports = [],
 }: { imports?: Type[] } = {}): Promise<INestApplicationContext> {
   return (await testApp(imports, 'worker').compile()).init();
+}
+
+// The batch run of APP_ROLE=models as main.ts starts it: no server either.
+export async function bootModels({
+  imports = [],
+}: { imports?: Type[] } = {}): Promise<INestApplicationContext> {
+  return (await testApp(imports, 'models').compile()).init();
 }
