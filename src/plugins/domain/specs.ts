@@ -50,6 +50,8 @@ export interface PushSpec {
 
 export interface PollSpec extends PushSpec {
   schedule: string;
+  // the portal's directory of courses, sent whole: users pick from it
+  catalog: boolean;
 }
 
 export interface AggregatorSpec<T extends string = string> {
@@ -74,9 +76,11 @@ export const pollSpec = (options: {
   schedule: string;
   links?: readonly string[];
   instances?: boolean;
+  catalog?: boolean;
 }): PollSpec => ({
   ...pushSpec(options),
   schedule: schedule(options.schedule),
+  catalog: options.catalog === true,
 });
 
 export const aggregatorSpec = <T extends string>(options: {

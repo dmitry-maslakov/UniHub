@@ -4,6 +4,7 @@ import { CanvasModule } from '@app/plugins/canvas';
 import { OcrModule } from '@app/plugins/ocr';
 import { OfficeTextModule } from '@app/plugins/office-text';
 import { PlainTextModule } from '@app/plugins/plain-text';
+import { WebsiteModule } from '@app/plugins/website';
 import { pluginsConfig } from './plugins.config.js';
 
 // A built-in plugin is on when its name is listed in PLUGINS ("office-text,moodle").
@@ -25,4 +26,5 @@ export const plugins = [
   plugin('ocr', OcrModule),
   plugin('office-text', OfficeTextModule),
   plugin('plain-text', PlainTextModule),
+  plugin('website', WebsiteModule),
 ];

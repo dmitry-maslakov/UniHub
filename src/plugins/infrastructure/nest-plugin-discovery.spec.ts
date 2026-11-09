@@ -67,6 +67,7 @@ describe('NestPluginDiscovery', () => {
         schedule: '*/15 * * * *',
         links: [],
         instances: false,
+        catalog: false,
       },
     ]);
     expect(found.pushes.map(({ spec }) => spec)).toEqual([

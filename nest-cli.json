@@ -69,6 +69,15 @@
       "compilerOptions": {
         "tsConfigPath": "libs/plugins/canvas/tsconfig.lib.json"
       }
+    },
+    "plugins/website": {
+      "type": "library",
+      "root": "libs/plugins/website",
+      "entryFile": "index",
+      "sourceRoot": "libs/plugins/website/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/plugins/website/tsconfig.lib.json"
+      }
     }
   }
 }

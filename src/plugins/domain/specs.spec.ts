@@ -113,6 +113,15 @@ describe('plugin specs', () => {
     );
   });
 
+  it('say whether a poll connector sends a catalog, and none unless told', () => {
+    expect(
+      pollSpec({ portal: 'site', schedule: '@hourly', catalog: true }).catalog,
+    ).toBe(true);
+    expect(pollSpec({ portal: 'moodle', schedule: '@hourly' }).catalog).toBe(
+      false,
+    );
+  });
+
   it('refuse one it would refuse once the schedules are set', () => {
     for (const bad of ['61 * * * *', '0 25 * * *', 'every hour', ''])
       expect(() => pollSpec({ portal: 'moodle', schedule: bad })).toThrow(

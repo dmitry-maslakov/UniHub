@@ -65,6 +65,12 @@
       ],
       "@app/plugins/plain-text/*": [
         "./libs/plugins/plain-text/src/*"
+      ],
+      "@app/plugins/website": [
+        "./libs/plugins/website/src/index.ts"
+      ],
+      "@app/plugins/website/*": [
+        "./libs/plugins/website/src/*"
       ]
     }
   },

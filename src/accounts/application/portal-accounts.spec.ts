@@ -88,6 +88,7 @@ function accounts({
         poll('canvas', connector, ['token']),
         poll('moodle', connector, ['token']),
         poll('teams'),
+        poll('site', undefined, [], false, true),
         poll('lms', sited, ['token'], true),
       ],
     },
@@ -685,8 +686,9 @@ describe('PortalAccounts', () => {
     expect(() => accounts({ links: {} })).not.toThrow();
   });
 
-  it('takes public for a portal served over gRPC alone', () => {
+  it('takes public for a portal served over gRPC or sending its catalog, and no other', () => {
     expect(() => accounts({ links: { catalog: PUBLIC } })).not.toThrow();
+    expect(() => accounts({ links: { site: PUBLIC } })).not.toThrow();
     for (const p of ['moodle', 'elsewhere'])
       expect(() => accounts({ links: { [p]: PUBLIC } })).toThrow(
         new UnsupportedLinkError(portal(p), 'public'),
