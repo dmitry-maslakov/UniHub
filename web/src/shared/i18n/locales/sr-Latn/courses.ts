@@ -31,6 +31,10 @@ export default {
       description: 'Možda je uklonjen ili nije tvoj.',
       back: 'Nazad na Moje predmete',
     },
+    processing: {
+      progress: 'Još se obrađuje: spremno {{done}} od {{total}} fajlova',
+      picturesLater: 'Tekst je spreman; slike se obrađuju u pozadini.',
+    },
     tabs: {
       files: 'Fajlovi',
       filesCount: 'Fajlovi ({{count}})',

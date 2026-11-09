@@ -139,6 +139,10 @@ export class InMemoryRepresentations extends RepresentationRepository {
     return this.saved.some((saved) => keyId(saved) === keyId(key));
   }
 
+  async keysOf(hashes: readonly ContentHash[]) {
+    return this.saved.filter(({ hash }) => hashes.includes(hash));
+  }
+
   async newest(hash: ContentHash, processor: PluginName) {
     return (
       this.saved

@@ -18,6 +18,7 @@ export {
   ListContainedQuery,
   ListMembersQuery,
   ListTextsQuery,
+  ListWaitingQuery,
   SearchTextsQuery,
   type ContainedMember,
   type MemberContent,
@@ -28,4 +29,5 @@ export {
   type TextHit,
   type TextInfo,
   type TextPage,
+  type WaitingContent,
 } from './application/queries.js';

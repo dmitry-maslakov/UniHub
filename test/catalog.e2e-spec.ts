@@ -415,6 +415,7 @@ describe('catalog', { timeout: 20_000 }, () => {
       portalCourseId,
       hash: sha256('%PDF slides'),
       name: 'a.pdf',
+      mime: null,
       path: '',
     });
     expect(

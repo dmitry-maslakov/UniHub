@@ -1,6 +1,38 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/api/admin/queues": {
+      "get": {
+        "operationId": "QueuesController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "the plugins, models and search index queues",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/QueueStatusResponse"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "for admins only"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/courses": {
       "post": {
         "operationId": "CoursesAdminController_create",
@@ -211,6 +243,45 @@
         },
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/courses/{slug}/processing": {
+      "get": {
+        "operationId": "CoursesController_progress",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "pattern": "^(?:[a-z0-9]+(?:-[a-z0-9]+)*|[a-z0-9-]+~(?:~[A-Za-z0-9_-]{22}|[A-Za-z0-9._-]+))$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "how much of the course's files the processors have read; `waiting` counts contents, by kind",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CourseProcessingResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "courses"
         ]
       }
     },
@@ -1464,6 +1535,30 @@
       }
     },
     "schemas": {
+      "QueueStatusResponse": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "plugins"
+          },
+          "waiting": {
+            "type": "number"
+          },
+          "active": {
+            "type": "number"
+          },
+          "failed": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "name",
+          "waiting",
+          "active",
+          "failed"
+        ]
+      },
       "CourseCreatedResponse": {
         "type": "object",
         "properties": {
@@ -1566,6 +1661,44 @@
           "name",
           "sources",
           "portalCourses"
+        ]
+      },
+      "WaitingResponse": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "number",
+            "description": "contents waiting for a text processor"
+          },
+          "pictures": {
+            "type": "number",
+            "description": "contents waiting for a heavy (model) processor"
+          }
+        },
+        "required": [
+          "text",
+          "pictures"
+        ]
+      },
+      "CourseProcessingResponse": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "distinct contents of the course's files (not archive members)"
+          },
+          "done": {
+            "type": "number",
+            "description": "contents no processor is yet to read"
+          },
+          "waiting": {
+            "$ref": "#/components/schemas/WaitingResponse"
+          }
+        },
+        "required": [
+          "total",
+          "done",
+          "waiting"
         ]
       },
       "ItemResponse": {

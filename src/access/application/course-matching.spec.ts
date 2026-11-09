@@ -61,6 +61,7 @@ const content = (portalCourseId: string, hash = h1): VisibleContentDto => ({
   portalCourseId,
   hash,
   name: 'f.pdf',
+  mime: null,
   path: '',
 });
 const contents = [

@@ -7,6 +7,7 @@ import { roleConfig } from '../platform/role/role.config.js';
 import { whenSearchOn } from '../platform/search/opensearch.config.js';
 import { PluginsModule } from '../plugins/contracts.js';
 import { StorageModule } from '../storage/contracts.js';
+import { ListWaiting } from './application/list-waiting.js';
 import { PostTextHandler } from './application/post-text.handler.js';
 import { DeliverMessage } from './application/deliver-message.js';
 import { Dispatch } from './application/dispatch.js';
@@ -31,6 +32,7 @@ import { ModelsWorker } from './infrastructure/models.worker.js';
 import { MODELS_QUEUE } from './infrastructure/models.queue.js';
 import { PLUGINS_QUEUE } from './infrastructure/plugins.queue.js';
 import { PluginsWorker } from './infrastructure/plugins.worker.js';
+import { QueuesController } from './infrastructure/queues.controller.js';
 import { PrismaRepresentationRepository } from './infrastructure/prisma-representation.repository.js';
 import { PrismaUnpackingRepository } from './infrastructure/prisma-unpacking.repository.js';
 import {
@@ -77,6 +79,7 @@ const JOB_OPTIONS: DefaultJobOptions = {
     // SearchTexts answers it's off
     whenSearchOn(TextSearchModule),
   ],
+  controllers: [QueuesController],
   providers: [
     ListTextsHandler,
     GetPageTextsHandler,
@@ -85,6 +88,7 @@ const JOB_OPTIONS: DefaultJobOptions = {
     FindMemberHandler,
     ListContainedHandler,
     PostTextHandler,
+    ListWaiting,
     SearchTexts,
     Dispatch,
     IndexMessages,

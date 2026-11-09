@@ -66,6 +66,12 @@ function hub(courses: object[] = [os, ar]) {
   const state = { courses };
   server.use(
     http.get(api('/admin/courses'), () => HttpResponse.json(state.courses)),
+    http.get(api('/admin/queues'), () =>
+      HttpResponse.json([
+        { name: 'plugins', waiting: 12, active: 2, failed: 0 },
+        { name: 'models', waiting: 340, active: 1, failed: 3 },
+      ]),
+    ),
   );
   return state;
 }
@@ -88,6 +94,22 @@ describe('admin, courses', () => {
     expect(
       within(rows[0]!).getByRole('link', { name: /Operativni sistemi/ }),
     ).toHaveAttribute('href', '/admin/courses/c1');
+  });
+
+  it('shows the background queues', async () => {
+    signedInAsAdmin();
+    hub();
+    renderApp('/admin/courses');
+
+    const table = await screen.findByRole('table', {
+      name: 'Background queues',
+    });
+    expect(
+      within(table).getByRole('row', { name: /models 340 1 3/ }),
+    ).toBeVisible();
+    expect(
+      within(table).getByRole('row', { name: /plugins 12 2 0/ }),
+    ).toBeVisible();
   });
 
   it('says there is no course yet', async () => {

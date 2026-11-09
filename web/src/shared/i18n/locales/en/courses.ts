@@ -28,6 +28,10 @@ export default {
       description: "It may have been removed, or it isn't one of yours.",
       back: 'Back to My courses',
     },
+    processing: {
+      progress: 'Still reading this course: {{done}} of {{total}} files ready',
+      picturesLater: 'Text is ready; pictures are read in the background.',
+    },
     tabs: {
       files: 'Files',
       filesCount: 'Files ({{count}})',

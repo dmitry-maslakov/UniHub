@@ -19,6 +19,7 @@ import type { FilesView } from '../model/search';
 import { CourseSearch } from './course-search';
 import { FilesTree } from './files-tree';
 import { PostsList } from './posts-list';
+import { ProcessingNote } from './processing-note';
 import { SourcesStrip } from './sources-strip';
 
 const route = getRouteApi('/_app/courses/$slug/');
@@ -60,6 +61,7 @@ export function CoursePage() {
         course && (
           <>
             <PageTitle>{course.name}</PageTitle>
+            <ProcessingNote slug={slug} />
             <Stack gap="lg">
               <SourcesStrip portalCourses={course.portalCourses} />
               <CourseSearch slug={slug} />

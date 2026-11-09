@@ -78,6 +78,16 @@ export default {
     },
     failed: 'To nije prošlo. Pokušaj ponovo.',
   },
+  processing: {
+    title: 'Obrada',
+    description:
+      'Šta pozadinski čitači tek treba da urade: tekstovi, slike (modeli) i indeks pretrage.',
+    aria: 'Pozadinski redovi',
+    queue: 'Red',
+    waiting: 'Čeka',
+    active: 'Aktivno',
+    failed: 'Neuspelo',
+  },
   courses: {
     new: {
       title: 'Novi predmet',

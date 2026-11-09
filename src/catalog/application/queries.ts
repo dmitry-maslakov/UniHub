@@ -148,6 +148,7 @@ export interface VisibleContentDto {
   portalCourseId: string;
   hash: ContentHash;
   name: string;
+  mime: MediaType | null;
   path: string;
 }
 

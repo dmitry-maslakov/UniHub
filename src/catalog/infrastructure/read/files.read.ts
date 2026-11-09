@@ -1,5 +1,6 @@
 import { QueryHandler, type IQueryHandler } from '@nestjs/cqrs';
 import { InjectTransactionHost } from '@nestjs-cls/transactional';
+import type { MediaType } from '@app/kernel';
 import type { Prisma } from '../../../generated/prisma/client.js';
 import type { PrismaTxHost } from '../../../platform/database/prisma.service.js';
 import {
@@ -168,12 +169,13 @@ export class ListVisibleContentHandler implements IQueryHandler<ListVisibleConte
         id: true,
         name: true,
         path: true,
+        mime: true,
         contentHash: true,
         ...withCourse,
       },
     });
     // the filter leaves only rows with both, which Prisma's types can't tell
-    return rows.flatMap(({ id, name, path, portalCourse, ...row }) => {
+    return rows.flatMap(({ id, name, path, mime, portalCourse, ...row }) => {
       const courseId = courseOf({ portalCourse });
       const hash = contentOf(row);
       return portalCourse && courseId && hash
@@ -184,6 +186,7 @@ export class ListVisibleContentHandler implements IQueryHandler<ListVisibleConte
               portalCourseId: portalCourse.id,
               hash,
               name,
+              mime: mime as MediaType | null,
               path,
             },
           ]

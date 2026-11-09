@@ -7,6 +7,7 @@ import {
 } from '@nestjs/swagger';
 import { CourseSlug } from '../../../catalog/contracts.js';
 import { CurrentUserId } from '../../../identity/contracts.js';
+import { CourseProcessing } from '../../application/course-processing.js';
 import { CourseReader } from '../../application/course-reader.js';
 import {
   courseFilesSchema,
@@ -15,14 +16,22 @@ import {
   type Page,
 } from '../../application/page.js';
 import { Limited } from '../throttle.js';
-import { CourseResponse, FileResponse, ItemResponse } from './responses.js';
+import {
+  CourseProcessingResponse,
+  CourseResponse,
+  FileResponse,
+  ItemResponse,
+} from './responses.js';
 
 @ApiTags('courses')
 @ApiBearerAuth()
 @Controller('courses')
 @Limited('api')
 export class CoursesController {
-  constructor(private readonly reader: CourseReader) {}
+  constructor(
+    private readonly reader: CourseReader,
+    private readonly processing: CourseProcessing,
+  ) {}
 
   @Get()
   @ApiOkResponse({
@@ -31,6 +40,20 @@ export class CoursesController {
   })
   list(@CurrentUserId() userId: string): Promise<CourseResponse[]> {
     return this.reader.courses(userId);
+  }
+
+  @Get(':slug/processing')
+  @ApiOkResponse({
+    type: CourseProcessingResponse,
+    description:
+      "how much of the course's files the processors have read; `waiting` counts contents, by kind",
+  })
+  @ApiNotFoundResponse()
+  progress(
+    @CurrentUserId() userId: string,
+    @Param('slug', { schema: CourseSlug }) slug: CourseSlug,
+  ): Promise<CourseProcessingResponse> {
+    return this.processing.of(userId, slug);
   }
 
   @Get(':slug/items')

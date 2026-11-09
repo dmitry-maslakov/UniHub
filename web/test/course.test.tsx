@@ -69,13 +69,63 @@ const setup = (items: unknown[] = posts, files: unknown[] = [file(1)]) => {
       return HttpResponse.json(files.slice(offset, offset + limit));
     }),
     http.get(api('/me/portals'), () => HttpResponse.json([])),
+    http.get(api('/courses/os/processing'), () =>
+      HttpResponse.json(processing()),
+    ),
   );
 };
+
+const processing = (text = 0, pictures = 0, total = 8, done = 8) => ({
+  total,
+  done,
+  waiting: { text, pictures },
+});
 
 const manyFiles = (n: number) =>
   Array.from({ length: n }, (_, i) => file(i + 1, true, `folder ${i % 3}`));
 
 describe('a course', () => {
+  it('says how far the files are read while any wait, and is quiet when none do', async () => {
+    setup();
+    let answer = processing(2, 3, 8, 5);
+    server.use(
+      http.get(api('/courses/os/processing'), () => HttpResponse.json(answer)),
+    );
+    renderApp('/courses/os');
+
+    expect(
+      await screen.findByText('Still reading this course: 5 of 8 files ready'),
+    ).toBeVisible();
+    expect(screen.getByRole('progressbar')).toBeVisible();
+    // text still waits: nothing to say of the pictures yet
+    expect(screen.queryByText(/pictures are read/)).toBeNull();
+  });
+
+  it('says the text is ready while only pictures wait', async () => {
+    setup();
+    server.use(
+      http.get(api('/courses/os/processing'), () =>
+        HttpResponse.json(processing(0, 3, 8, 5)),
+      ),
+    );
+    renderApp('/courses/os');
+
+    expect(
+      await screen.findByText(
+        'Text is ready; pictures are read in the background.',
+      ),
+    ).toBeVisible();
+  });
+
+  it('shows nothing when nothing waits', async () => {
+    setup();
+    renderApp('/courses/os');
+
+    await screen.findByRole('tab', { name: /^Files/ });
+    expect(screen.queryByText(/Still reading/)).toBeNull();
+    expect(screen.queryByRole('progressbar')).toBeNull();
+  });
+
   it('opens on Files with the folders of a course that has files', async () => {
     setup(posts, [file(1, true, 'Predavanja'), file(2, true, 'Vežbe')]);
     const { router } = renderApp('/courses/os');

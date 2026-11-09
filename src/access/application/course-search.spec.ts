@@ -61,6 +61,7 @@ const files: VisibleContentDto[] = [
     portalCourseId: 'os-pc',
     hash: slides,
     name: 'l1.pdf',
+    mime: null,
     path: 'a',
   },
   {
@@ -69,6 +70,7 @@ const files: VisibleContentDto[] = [
     portalCourseId: 'os-pc',
     hash: notes,
     name: 'n.txt',
+    mime: null,
     path: 'b',
   },
   {
@@ -77,6 +79,7 @@ const files: VisibleContentDto[] = [
     portalCourseId: 'net-pc',
     hash: slides,
     name: 'l1.pdf',
+    mime: null,
     path: 'c',
   },
   {
@@ -85,6 +88,7 @@ const files: VisibleContentDto[] = [
     portalCourseId: 'exam-pc',
     hash: secret,
     name: 'x.pdf',
+    mime: null,
     path: '',
   },
 ];
@@ -96,6 +100,7 @@ const archives: VisibleContentDto[] = [
     portalCourseId: 'os-pc',
     hash: labs,
     name: 'labs.zip',
+    mime: null,
     path: 'b',
   },
   {
@@ -104,6 +109,7 @@ const archives: VisibleContentDto[] = [
     portalCourseId: 'exam-pc',
     hash: sha256('x.zip'),
     name: 'x.zip',
+    mime: null,
     path: '',
   },
 ];
@@ -409,6 +415,7 @@ describe('CourseSearch', () => {
           portalCourseId: 'net-pc',
           hash: copy,
           name: 'c.zip',
+          mime: null,
           path: '',
         },
       ],
