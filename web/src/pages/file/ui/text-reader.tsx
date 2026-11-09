@@ -28,6 +28,7 @@ export function TextReader({
   const { page = 1 } = route.useSearch();
   const navigate = route.useNavigate();
   const part = partNoun(member ? null : file.mime, member ?? file.name);
+  const kind = viewKind(member ? null : file.mime, member ?? file.name);
   const text = api.useQuery('get', '/api/files/{id}/text', {
     params: { path: { id: file.id }, query: { page, processor, member } },
   });
@@ -54,16 +55,22 @@ export function TextReader({
               }}
             />
           </EmptyState>
-          {viewKind(member ? null : file.mime, member ?? file.name) ===
-            'pdf' && <PageOne file={file} member={member} />}
+          {kind === 'pdf' && <PageOne file={file} member={member} />}
         </>
       }
     >
       {(found) => (
         <>
-          <Text size="sm" c="dimmed" component="output" display="block">
-            {t(`position.${part}`, { n: found.page, total: found.pages })}
-          </Text>
+          {!(part === 'section' && found.pages === 1) && (
+            <Text size="sm" c="dimmed" component="output" display="block">
+              {t(`position.${part}`, { n: found.page, total: found.pages })}
+            </Text>
+          )}
+          {found.processor === 'ocr' && !asPage && found.text.trim() && (
+            <Text size="sm" c="dimmed">
+              {t('text.recognized')}
+            </Text>
+          )}
           {asPage ? (
             <ViewImage
               key={`${found.page}/${member}`}

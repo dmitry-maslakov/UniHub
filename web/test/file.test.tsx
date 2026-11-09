@@ -97,10 +97,6 @@ describe('a file', () => {
     expect(screen.getByText('text of part 3')).toBeVisible();
     expect(asked.at(-1)?.get('page')).toBe('3');
     expect(asked.at(-1)?.get('processor')).toBe('office-text');
-    // the text asked for is the one chosen
-    expect(
-      screen.getByRole('radio', { name: 'office-text', checked: true }),
-    ).toBeVisible();
   });
 
   it('shows what the file is: its course, folder, size, date and type', async () => {
@@ -124,7 +120,7 @@ describe('a file', () => {
     const { router } = renderApp('/courses/os/files/f1');
 
     expect(await screen.findByText('Page 1 of 12')).toBeVisible();
-    expect(asked.at(-1)?.get('processor')).toBe('office-text');
+    expect(asked.at(-1)?.has('processor')).toBe(false);
     await userEvent.click(screen.getByRole('button', { name: 'Next part' }));
 
     expect(await screen.findByText('Page 2 of 12')).toBeVisible();
@@ -140,7 +136,7 @@ describe('a file', () => {
     expect(await screen.findByText('Page 1 of 12')).toBeVisible();
   });
 
-  it('shows another text when there are several, from its first part', async () => {
+  it("offers no choice between texts, and leaves the hub to answer with the page's longest", async () => {
     setup({
       file: details({
         texts: [
@@ -149,16 +145,115 @@ describe('a file', () => {
         ],
       }),
     });
-    const { router } = renderApp('/courses/os/files/f1?page=4');
+    renderApp('/courses/os/files/f1?page=4');
 
     expect(await screen.findByText('Page 4 of 12')).toBeVisible();
-    await userEvent.click(screen.getByRole('radio', { name: 'ocr' }));
+    expect(screen.queryByRole('radio', { name: 'ocr' })).toBeNull();
+    expect(screen.queryByRole('radio', { name: 'office-text' })).toBeNull();
+    expect(asked.at(-1)?.has('processor')).toBe(false);
+  });
 
-    await waitFor(() =>
-      expect(router.state.location.search).toEqual({ processor: 'ocr' }),
-    );
-    expect(await screen.findByText('Page 1 of 12')).toBeVisible();
-    expect(asked.at(-1)?.get('processor')).toBe('ocr');
+  it('says a text read off a picture was read by machine, and no other', async () => {
+    setup({
+      file: details({
+        texts: [
+          { processor: 'office-text', version: 1, pages: 12 },
+          { processor: 'ocr', version: 1, pages: 12 },
+        ],
+      }),
+      text: (query) =>
+        HttpResponse.json({
+          processor: query.get('processor') ?? 'ocr',
+          version: 1,
+          pages: 12,
+          page: 1,
+          text: 'a slide',
+        }),
+    });
+    const { router } = renderApp('/courses/os/files/f1');
+    const note = 'Read from the picture by machine, so it can have mistakes.';
+
+    expect(await screen.findByText(note)).toBeVisible();
+
+    await router.navigate({
+      to: '/courses/$slug/files/$fileId',
+      params: { slug: 'os', fileId: 'f1' },
+      search: { processor: 'office-text' },
+    });
+    await waitFor(() => expect(screen.queryByText(note)).toBeNull());
+    expect(await screen.findByText('a slide')).toBeVisible();
+  });
+
+  it('reads the text of an image, with no position', async () => {
+    setup({
+      file: details({
+        name: 'plot.png',
+        mime: 'image/png',
+        texts: [{ processor: 'ocr', version: 1, pages: 1 }],
+      }),
+      text: () =>
+        HttpResponse.json({
+          processor: 'ocr',
+          version: 1,
+          pages: 1,
+          page: 1,
+          text: 'axes and a legend',
+        }),
+    });
+    renderApp('/courses/os/files/f1');
+
+    expect(await screen.findByText('axes and a legend')).toBeVisible();
+    expect(screen.getByText(/by machine/)).toBeVisible();
+    expect(screen.queryByText(/ of 1$/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Next part' })).toBeNull();
+  });
+
+  it('says nothing about machine reading when the text is empty', async () => {
+    setup({
+      file: details({
+        name: 'plot.png',
+        mime: 'image/png',
+        texts: [{ processor: 'ocr', version: 1, pages: 1 }],
+      }),
+      text: () =>
+        HttpResponse.json({
+          processor: 'ocr',
+          version: 1,
+          pages: 1,
+          page: 1,
+          text: '  ',
+        }),
+    });
+    renderApp('/courses/os/files/f1');
+
+    expect(await screen.findByText('No text on this part')).toBeVisible();
+    expect(screen.queryByText(/by machine/)).toBeNull();
+  });
+
+  it('reads the text of a picture inside an archive that has one', async () => {
+    setup({
+      file: details({ name: 'figs.zip', mime: 'application/zip', texts: [] }),
+      members: [
+        member({
+          path: 'fig/a.png',
+          mime: 'image/png',
+          texts: [{ processor: 'ocr', version: 1, pages: 1 }],
+        }),
+      ],
+      text: () =>
+        HttpResponse.json({
+          processor: 'ocr',
+          version: 1,
+          pages: 1,
+          page: 1,
+          text: 'a diagram of a cache',
+        }),
+    });
+    renderApp('/courses/os/files/f1?member=fig%2Fa.png');
+
+    expect(await screen.findByText('a diagram of a cache')).toBeVisible();
+    expect(screen.getByRole('img', { name: 'a.png' })).toBeVisible();
+    expect(asked.at(-1)?.get('member')).toBe('fig/a.png');
   });
 
   it("calls a deck's parts slides", async () => {

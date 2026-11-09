@@ -19,7 +19,7 @@ export default {
   text: {
     title: 'Tekst',
     loading: 'Učitava se tekst',
-    which: 'Koji tekst da se prikaže',
+    recognized: 'Mašinski pročitano sa slike, pa može imati grešaka.',
   },
   view: {
     which: 'U kom prikazu da se čita',

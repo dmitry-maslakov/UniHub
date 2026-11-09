@@ -44,7 +44,7 @@ export const memberSchema = z.object({
 export const textPageSchema = memberSchema.extend({
   page: z.coerce.number().int().min(1).max(FAR).default(1),
   processor: PluginName.optional().describe(
-    'which text, as a search result names it; the first one by default',
+    "which text, as a search result names it; by default the page's longest (read_file: all of them)",
   ),
 });
 export type TextAt = z.output<typeof textPageSchema>;

@@ -55,7 +55,10 @@ describe('MCP', { timeout: 20_000 }, () => {
   };
 
   beforeAll(async () => {
-    app = await bootApp({ mails, imports: [processorsOn('office-text')] });
+    app = await bootApp({
+      mails,
+      imports: [processorsOn('office-text', 'ocr')],
+    });
     const prisma = app.get(PrismaService);
     const commands = app.get(CommandBus);
 
@@ -81,8 +84,19 @@ describe('MCP', { timeout: 20_000 }, () => {
         parts: ['quicksort', 'mergesort'],
       },
     });
+    // read off a picture on the second page, which the pdf has no text of
+    await prisma.representation.create({
+      data: {
+        hash,
+        processor: 'ocr',
+        version: 1,
+        parts: ['', 'merge sort, read off the slide picture'],
+      },
+    });
     // as if it held an archive too, a member of it with a text
     const notes = sha256('heapsort');
+    const blank = sha256('a picture with no text');
+    const scan = sha256('a scan');
     await app.get(UnpackingRepository).save({
       hash,
       unpacker: PluginName.parse('archives'),
@@ -93,6 +107,22 @@ describe('MCP', { timeout: 20_000 }, () => {
           path: 'docs/notes.md',
           hash: notes,
           size: 8,
+          mime: null,
+          leftOut: null,
+        },
+        // a picture that held no text: stored, so it isn't read again
+        {
+          path: 'docs/blank.png',
+          hash: blank,
+          size: 1,
+          mime: null,
+          leftOut: null,
+        },
+        // a scan read on its second page only
+        {
+          path: 'docs/scan.pdf',
+          hash: scan,
+          size: 1,
           mime: null,
           leftOut: null,
         },
@@ -113,6 +143,17 @@ describe('MCP', { timeout: 20_000 }, () => {
         processor: 'office-text',
         version: 1,
         parts: ['heapsort'],
+      },
+    });
+    await prisma.representation.create({
+      data: { hash: blank, processor: 'ocr', version: 1, parts: [] },
+    });
+    await prisma.representation.create({
+      data: {
+        hash: scan,
+        processor: 'ocr',
+        version: 1,
+        parts: ['', 'second page of a scan'],
       },
     });
     fileId = (
@@ -216,9 +257,16 @@ describe('MCP', { timeout: 20_000 }, () => {
       expect.objectContaining({ id: fileId, name: 'sorting.pdf' }),
     ]);
 
+    // every text of the page, under its name, the longest first; one with
+    // nothing in it has no heading
     const page = await call('read_file', { file: fileId, page: 2 });
-    expect(page.content[0].text).toContain('page 2 of 2');
-    expect(page.content[0].text).toContain('mergesort');
+    expect(page.content[0].text).toBe(
+      'page 2 of 2\n\n--- ocr v1 ---\nmerge sort, read off the slide picture\n\n--- office-text v1 ---\nmergesort',
+    );
+    const first = await call('read_file', { file: fileId, page: 1 });
+    expect(first.content[0].text).toBe(
+      'page 1 of 2\n\n--- office-text v1 ---\nquicksort',
+    );
     // a page of the text named, as a search result names it, and none of a
     // processor that's off and made no text of the file
     const named = await call('read_file', {
@@ -226,7 +274,9 @@ describe('MCP', { timeout: 20_000 }, () => {
       page: 1,
       processor: 'office-text',
     });
-    expect(named.content[0].text).toContain('quicksort');
+    expect(named.content[0].text).toBe(
+      'page 1 of 2 (office-text v1)\n\nquicksort',
+    );
     const none = await call('read_file', {
       file: fileId,
       page: 1,
@@ -238,6 +288,9 @@ describe('MCP', { timeout: 20_000 }, () => {
     const members = await call('list_members', { file: fileId });
     expect(JSON.parse(members.content[0].text)).toEqual([
       expect.objectContaining({ path: 'docs/notes.md' }),
+      // its picture's empty text isn't one
+      expect.objectContaining({ path: 'docs/blank.png', texts: [] }),
+      expect.objectContaining({ path: 'docs/scan.pdf' }),
       expect.objectContaining({ path: 'video.mp4', leftOut: 'TOO_LARGE' }),
     ]);
     const member = await call('read_file', {
@@ -245,6 +298,21 @@ describe('MCP', { timeout: 20_000 }, () => {
       member: 'docs/notes.md',
     });
     expect(member.content[0].text).toContain('heapsort');
+    // no text on the page but an empty one: said so, and where to look
+    const empty = await call('read_file', {
+      file: fileId,
+      member: 'docs/scan.pdf',
+    });
+    expect(empty.content[0].text).toBe(
+      'page 1 of 2\n\n(no text on this page: view_file shows it)',
+    );
+    // a picture with no text at all has no page
+    const blank = await call('read_file', {
+      file: fileId,
+      member: 'docs/blank.png',
+    });
+    expect(blank.isError).toBe(true);
+    expect(blank.content[0].text).toContain('page not found');
     // listed, not kept
     const large = await call('read_file', {
       file: fileId,

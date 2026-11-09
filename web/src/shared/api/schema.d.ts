@@ -1086,7 +1086,7 @@ export interface operations {
                 /** @description a file inside it, by its path as list_members or the members route gives it; the file itself by default */
                 member?: string;
                 page?: number;
-                /** @description which text, as a search result names it; the first one by default */
+                /** @description which text, as a search result names it; by default the page's longest (read_file: all of them) */
                 processor?: string;
             };
             header?: never;
