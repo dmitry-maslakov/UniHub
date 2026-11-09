@@ -1,7 +1,7 @@
 import { Pagination, Text } from '@mantine/core';
 import { getRouteApi } from '@tanstack/react-router';
 import { Trans, useTranslation } from 'react-i18next';
-import { partNoun, viewUrl } from '@/entities/file';
+import { partNoun, viewKind, viewUrl } from '@/entities/file';
 import { api, type Schemas } from '@/shared/api';
 import { memberName } from '@/widgets/archive-members';
 import { AnchorLink, EmptyState, QueryState, TextSkeleton } from '@/shared/ui';
@@ -37,22 +37,26 @@ export function TextReader({
       query={text}
       loading={<TextSkeleton lines={12} label={t('text.loading')} />}
       notFound={
-        <EmptyState title={t('noPage.title')}>
-          <Trans
-            t={t}
-            i18nKey="noPage.body"
-            components={{
-              first: (
-                <AnchorLink
-                  to="/courses/$slug/files/$fileId"
-                  params={{ slug, fileId: file.id }}
-                  search={(s) => ({ ...s, page: undefined })}
-                  inherit
-                />
-              ),
-            }}
-          />
-        </EmptyState>
+        <>
+          <EmptyState title={t('noPage.title')}>
+            <Trans
+              t={t}
+              i18nKey="noPage.body"
+              components={{
+                first: (
+                  <AnchorLink
+                    to="/courses/$slug/files/$fileId"
+                    params={{ slug, fileId: file.id }}
+                    search={(s) => ({ ...s, page: undefined })}
+                    inherit
+                  />
+                ),
+              }}
+            />
+          </EmptyState>
+          {viewKind(member ? null : file.mime, member ?? file.name) ===
+            'pdf' && <PageOne file={file} member={member} />}
+        </>
       }
     >
       {(found) => (
@@ -65,6 +69,7 @@ export function TextReader({
               key={`${found.page}/${member}`}
               src={viewUrl(file.id, { page: found.page, member })}
               alt={`${member ? memberName(member) : file.name}, ${t(`at.${part}`, { n: found.page })}`}
+              paged
             />
           ) : found.text.trim() ? (
             <Text className={classes.text}>{found.text}</Text>
@@ -98,5 +103,23 @@ export function TextReader({
         </>
       )}
     </QueryState>
+  );
+}
+
+// what the text lacks, a PDF's first page, drawn by the hub
+export function PageOne({
+  file,
+  member,
+}: {
+  file: Schemas['FileDetailsResponse'];
+  member?: string;
+}) {
+  const { t } = useTranslation('file');
+  return (
+    <ViewImage
+      src={viewUrl(file.id, { page: 1, member })}
+      alt={`${member ? memberName(member) : file.name}, ${t('at.page', { n: 1 })}`}
+      paged
+    />
   );
 }

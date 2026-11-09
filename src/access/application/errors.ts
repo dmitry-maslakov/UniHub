@@ -1,4 +1,9 @@
-import { InvalidError, NotFoundError, UnprocessableError } from '@app/kernel';
+import {
+  InvalidError,
+  NotFoundError,
+  UnavailableError,
+  UnprocessableError,
+} from '@app/kernel';
 
 // what a user asked for and can't read: gone, never there, or not theirs,
 // one answer for all three
@@ -29,5 +34,23 @@ export class NotViewableError extends UnprocessableError {
 
   constructor(why: string, options?: ErrorOptions) {
     super(`not viewable: ${why}`, options);
+  }
+}
+
+// more pictures asked for at once than the hub draws: try again shortly
+export class ViewBusyError extends UnavailableError {
+  readonly reason = 'VIEW_BUSY';
+
+  constructor() {
+    super('too many pictures are being drawn, try again shortly');
+  }
+}
+
+// the renderer failing, not the file: its worker would not start, or died
+export class RenderFailedError extends UnavailableError {
+  readonly reason = 'RENDER_FAILED';
+
+  constructor(options?: ErrorOptions) {
+    super('the picture could not be drawn', options);
   }
 }

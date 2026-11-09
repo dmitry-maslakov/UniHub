@@ -24,8 +24,10 @@ export default {
   view: {
     which: 'U kom prikazu da se čita',
     text: 'Tekst',
-    page: 'Stranica',
+    page: 'Strana',
     failed: 'Slika nije mogla da se učita.',
+    loading: 'Učitava se slika',
+    full: 'Otvori {{name}} u punoj veličini',
   },
   position: {
     page: 'Strana {{n}} od {{total}}',

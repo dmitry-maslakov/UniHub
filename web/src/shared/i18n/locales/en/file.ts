@@ -23,6 +23,8 @@ export default {
     text: 'Text',
     page: 'Page',
     failed: "The picture couldn't be loaded.",
+    loading: 'Loading the picture',
+    full: 'Open {{name}} in full size',
   },
   position: {
     page: 'Page {{n}} of {{total}}',

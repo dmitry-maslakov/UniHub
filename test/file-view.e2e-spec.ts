@@ -166,6 +166,27 @@ describe('File view', { timeout: 30_000 }, () => {
     await view(`${ids.lecture}/view?page=0`).expect(400);
   });
 
+  it('caches only what it answers, never an error', async () => {
+    const found = await view(`${ids.plot}/view`).expect(200);
+    expect(found.headers['cache-control']).toBe('private, max-age=3600');
+    const gone = await view(`${ids.plot}/view`, stranger).expect(404);
+    expect(gone.headers['cache-control']).toBeUndefined();
+    const refused = await view(`${ids.notes}/view`).expect(422);
+    expect(refused.headers['cache-control']).toBeUndefined();
+  });
+
+  it('counts the tool and the route against one limit', async () => {
+    const left = async () =>
+      Number(
+        (await view(`${ids.plot}/view`).expect(200)).headers[
+          'x-ratelimit-remaining-views'
+        ],
+      );
+    const before = await left();
+    await tool({ file: ids.plot });
+    expect(await left()).toBe(before - 2);
+  });
+
   it('gives an agent the picture and a line saying what it is', async () => {
     const image = await tool({ file: ids.plot });
     const [picture, caption] = image.content;

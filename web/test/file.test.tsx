@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { describe, expect, it, vi } from 'vitest';
@@ -485,6 +485,43 @@ describe('a file', () => {
       'src',
       '/api/files/f1/view?member=fig%2Fa%20b.png',
     );
+  });
+
+  it('shows no empty state under the picture of an image inside an archive', async () => {
+    setup({
+      file: details({ name: 'figs.zip', mime: 'application/zip', texts: [] }),
+      members: [member({ path: 'fig/a.png', mime: 'image/png', texts: [] })],
+      text: () => HttpResponse.json({ code: 'NOT_READABLE' }, { status: 404 }),
+    });
+    renderApp('/courses/os/files/f1?member=fig%2Fa.png');
+    await screen.findByRole('img', { name: 'a.png' });
+    expect(screen.queryByText(/This part isn't there/)).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Text' })).toBeNull();
+    expect(asked).toEqual([]);
+  });
+
+  it('says a picture failed, and tries it again', async () => {
+    setup({
+      file: details({ name: 'plot.png', mime: 'image/png', texts: [] }),
+    });
+    renderApp('/courses/os/files/f1');
+    const image = await screen.findByRole('img', { name: 'plot.png' });
+    fireEvent.error(image);
+    expect(await screen.findByRole('alert')).toBeVisible();
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(
+      screen.getByRole('status', { name: 'Loading the picture' }),
+    ).toBeVisible();
+    expect(await screen.findByRole('img', { name: 'plot.png' })).toBeVisible();
+  });
+
+  it('draws the first page of a PDF that has no text', async () => {
+    setup({ file: details({ texts: [] }) });
+    renderApp('/courses/os/files/f1');
+    expect(await screen.findByText('No text in this file')).toBeVisible();
+    expect(
+      screen.getByRole('img', { name: 'Lecture 5.pdf, Page 1' }),
+    ).toHaveAttribute('src', '/api/files/f1/view?page=1');
   });
 
   it('shows no picture of an SVG', async () => {

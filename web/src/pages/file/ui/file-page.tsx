@@ -85,6 +85,7 @@ export function FilePage() {
               viewKind(member ? null : found.mime, member ?? found.name) ===
                 'image' && (
                 <ViewImage
+                  key={viewUrl(fileId, { member })}
                   src={viewUrl(fileId, { member })}
                   alt={member ? memberName(member) : found.name}
                 />

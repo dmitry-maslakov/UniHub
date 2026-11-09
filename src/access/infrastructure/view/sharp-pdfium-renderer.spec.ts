@@ -75,6 +75,28 @@ describe('SharpPdfiumRenderer', () => {
     );
   });
 
+  it('refuses SVG and TIFF by their bytes, whatever the file is called', async () => {
+    const svg = Buffer.from(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10"/></svg>',
+    );
+    await expect(renderer.image(svg)).rejects.toBeInstanceOf(NotViewableError);
+    const tiff = await sharp({
+      create: { width: 4, height: 4, channels: 3, background: '#fff' },
+    })
+      .tiff()
+      .toBuffer();
+    await expect(renderer.image(tiff)).rejects.toBeInstanceOf(NotViewableError);
+  });
+
+  it('refuses an image of more pixels than it decodes', async () => {
+    const wide = await sharp({
+      create: { width: 8100, height: 8100, channels: 3, background: '#fff' },
+    })
+      .png()
+      .toBuffer();
+    await expect(renderer.image(wide)).rejects.toBeInstanceOf(NotViewableError);
+  });
+
   it('draws a page of a PDF, the long side at the size, and counts its pages', async () => {
     const { data, pages } = await renderer.pdf(lecture, 1);
     expect(pages).toBeGreaterThan(0);

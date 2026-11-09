@@ -130,7 +130,6 @@ export class FilesController {
   })
   @ApiUnprocessableEntityResponse()
   @Header('X-Content-Type-Options', 'nosniff')
-  @Header('Cache-Control', 'private, max-age=3600')
   async view(
     @CurrentUserId() userId: string,
     @Param('id', ParseUUIDPipe) id: string,
@@ -138,6 +137,8 @@ export class FilesController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const shown = await this.reader.view(userId, id, at);
+    // set here, not by @Header, which would also stamp the failures
+    res.setHeader('Cache-Control', 'private, max-age=3600');
     if (shown.pages !== null) res.setHeader('X-Page-Count', shown.pages);
     return new StreamableFile(shown.data, {
       type: shown.mime,

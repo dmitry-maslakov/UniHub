@@ -21,5 +21,14 @@ export const toJpeg = (source: Sharp) =>
     .jpeg({ quality: 85 })
     .toBuffer();
 
-export const imageToJpeg = (data: Buffer) =>
-  toJpeg(sharp(data, { limitInputPixels: MAX_PIXELS }));
+// what sharp may decode: it picks the decoder by the bytes, not by the
+// name, so SVG, TIFF or HEIF behind a .png are refused here
+const FORMATS = ['jpeg', 'png', 'gif', 'webp'];
+
+export async function imageToJpeg(data: Buffer) {
+  const image = sharp(data, { limitInputPixels: MAX_PIXELS });
+  const { format } = await image.metadata();
+  if (!format || !FORMATS.includes(format))
+    throw new Error(`${format} is not a viewable image`);
+  return toJpeg(image);
+}

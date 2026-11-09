@@ -69,6 +69,3 @@ export function viewKind(mime: string | null, name: string) {
     (VIEW_BY_EXTENSION as Lookup)[name.slice(dot + 1).toLowerCase()] ?? null
   );
 }
-
-export const viewable = (mime: string | null, name: string) =>
-  viewKind(mime, name) !== null;

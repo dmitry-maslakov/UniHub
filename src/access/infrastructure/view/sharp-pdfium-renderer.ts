@@ -5,19 +5,33 @@ import { firstMessage } from '@app/plugin-sdk';
 import {
   NotReadableError,
   NotViewableError,
+  RenderFailedError,
 } from '../../application/errors.js';
 import { PageRenderer } from '../../application/renderer.js';
 import { imageToJpeg, MAX_SIDE, toJpeg } from './jpeg.js';
 
-// a PDF is untrusted: it is drawn in a thread of its own, held to a heap
-// and a time
+// a PDF is untrusted: it is drawn in a thread of its own, held to a V8 heap
+// and a time. The heap limit does not reach PDFium's WebAssembly memory,
+// which can grow to 2 GiB: how many are drawn at once is CourseReader's
+// (VIEW_SLOTS).
 const HEAP_MB = 512;
 const TIMEOUT_MS = 30_000;
 
-interface Drawn {
-  pages: number;
-  bitmap: { data: Uint8Array; width: number; height: number } | null;
-}
+type Drawn =
+  | { refused: true }
+  | {
+      refused?: undefined;
+      pages: number;
+      bitmap: { data: Uint8Array; width: number; height: number } | null;
+    };
+
+// what a worker that ran out of heap or time says of the file; anything
+// else is the hub failing
+const isTheFiles = (error: unknown) =>
+  error instanceof Error &&
+  ['ERR_WORKER_OUT_OF_MEMORY', 'AbortError', 'TimeoutError'].some(
+    (id) => id === (error as { code?: string }).code || id === error.name,
+  );
 
 // Pictures by sharp (libvips), a PDF's pages by PDFium (WebAssembly, no
 // native code) in a worker thread, then through sharp to the same JPEG.
@@ -42,8 +56,13 @@ export class SharpPdfiumRenderer extends PageRenderer {
         TIMEOUT_MS,
       );
     } catch (error) {
-      throw new NotViewableError('the PDF can not be opened', { cause: error });
+      throw isTheFiles(error)
+        ? new NotViewableError('the PDF is too heavy to draw', {
+            cause: error,
+          })
+        : new RenderFailedError({ cause: error });
     }
+    if (drawn.refused) throw new NotViewableError('the PDF can not be opened');
     const { pages, bitmap } = drawn;
     if (!bitmap) throw new NotReadableError('page');
     const { data: raw, width, height } = bitmap;

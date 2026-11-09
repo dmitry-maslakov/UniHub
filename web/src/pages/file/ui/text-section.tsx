@@ -5,7 +5,7 @@ import { viewKind } from '@/entities/file';
 import type { Schemas } from '@/shared/api';
 import { EmptyState, Section } from '@/shared/ui';
 import { pickText } from '../lib/text-choice';
-import { TextReader } from './text-reader';
+import { PageOne, TextReader } from './text-reader';
 
 const route = getRouteApi('/_app/courses/$slug/files/$fileId');
 
@@ -34,10 +34,17 @@ export function TextSection({
     );
   // a picture has its own section; its text, if it has any, comes after
   const kind = viewKind(member ? null : file.mime, member ?? file.name);
-  if (member === undefined && !file.texts.length)
-    return hasMembers || kind === 'image' ? null : (
-      <EmptyState title={t('noText.title')}>{t('noText.body')}</EmptyState>
+  // no processor reads a picture inside an archive: its section is the picture
+  if (member !== undefined && kind === 'image') return null;
+  if (member === undefined && !file.texts.length) {
+    if (hasMembers || kind === 'image') return null;
+    return (
+      <>
+        <EmptyState title={t('noText.title')}>{t('noText.body')}</EmptyState>
+        {kind === 'pdf' && <PageOne file={file} />}
+      </>
     );
+  }
 
   // a member has no list of texts to choose from: the one asked for, else
   // the hub's first

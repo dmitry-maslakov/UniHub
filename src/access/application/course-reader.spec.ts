@@ -1,3 +1,4 @@
+import { Readable } from 'node:stream';
 import { MediaType, PluginName, PortalId } from '@app/kernel';
 import { FakeBus } from '../../../test/fake-bus.js';
 import { InMemoryBlobs } from '../../../test/in-memory-blobs.js';
@@ -26,8 +27,8 @@ import {
   ListMembersQuery,
   ListTextsQuery,
 } from '../../processing/contracts.js';
-import { CourseReader } from './course-reader.js';
-import { NotReadableError, NotViewableError } from './errors.js';
+import { CourseReader, MAX_WAITING, VIEW_SLOTS } from './course-reader.js';
+import { NotReadableError, NotViewableError, ViewBusyError } from './errors.js';
 import { PageRenderer } from './renderer.js';
 
 const portal = PortalId.parse('canvas');
@@ -128,7 +129,7 @@ const seen =
     shared.courses?.includes(courseId) ?? true;
 
 // catalog has os and net, three files and a text of f1
-function reader() {
+function reader(renderer: PageRenderer = new FakeRenderer()) {
   const queries = new FakeBus([
     [ReadScopeQuery, () => ({ granted: [os.id], ownAccounts: true })],
     [
@@ -208,7 +209,8 @@ function reader() {
   const blobs = new InMemoryBlobs({ holding: [content, code, picture] });
   return {
     queries,
-    reader: new CourseReader(queries.queries, blobs, new FakeRenderer()),
+    blobs,
+    reader: new CourseReader(queries.queries, blobs, renderer),
   };
 }
 
@@ -390,6 +392,55 @@ describe('CourseReader', () => {
     await expect(
       r.view('ana', 'f1', { page: 1, member: main.path }),
     ).rejects.toBeInstanceOf(NotViewableError);
+  });
+
+  it('refuses an image or a PDF past its limit, without reading on', async () => {
+    const { reader: r, blobs } = reader();
+    const chunk = Buffer.alloc(1024 * 1024);
+    let read = 0;
+    const endless = () =>
+      Readable.from(
+        (function* () {
+          for (;;) {
+            read += 1;
+            yield chunk;
+          }
+        })(),
+      );
+    vi.spyOn(blobs, 'get').mockImplementation(async () => endless());
+    await expect(r.view('ana', 'f4', { page: 1 })).rejects.toThrowError(
+      new NotViewableError('too large'),
+    );
+    expect(read).toBeLessThanOrEqual(34);
+    await expect(r.view('ana', 'f1', { page: 1 })).rejects.toThrowError(
+      new NotViewableError('too large'),
+    );
+  });
+
+  it('draws two pictures at once, the rest wait, and a long queue is refused', async () => {
+    let drawing = 0;
+    let most = 0;
+    const gate = Promise.withResolvers<void>();
+    class Slow extends FakeRenderer {
+      override async image(data: Buffer) {
+        drawing += 1;
+        most = Math.max(most, drawing);
+        await gate.promise;
+        drawing -= 1;
+        return super.image(data);
+      }
+    }
+    const { reader: r } = reader(new Slow());
+    const asked = Array.from({ length: VIEW_SLOTS + MAX_WAITING }, () =>
+      r.view('ana', 'f4', { page: 1 }),
+    );
+    await vi.waitFor(() => expect(drawing).toBe(VIEW_SLOTS));
+    await expect(r.view('ana', 'f4', { page: 1 })).rejects.toBeInstanceOf(
+      ViewBusyError,
+    );
+    gate.resolve();
+    await Promise.all(asked);
+    expect(most).toBe(VIEW_SLOTS);
   });
 
   it('pages the members of a file it may read', async () => {

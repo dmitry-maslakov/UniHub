@@ -12,6 +12,7 @@ import {
 } from '../../application/page.js';
 import { McpErrorsFilter } from './mcp-errors.filter.js';
 import { McpUserId } from './mcp-user-id.js';
+import { LimitedTool } from '../throttle.js';
 import { json, jsonWithNote, readOnly } from './tool-results.js';
 
 const inCourse = pageSchema.extend({
@@ -130,10 +131,11 @@ export class CourseTools {
   @Tool({
     name: 'view_file',
     description:
-      "An image file, or one page of a PDF (`page`, from 1), or the same of a file inside an archive (`member`), as a picture. Use it to see an image, a scan, or a diagram or formula that a page's text from read_file doesn't carry. Any other file is not viewable. Counted as any call.",
+      "An image file, or one page of a PDF (`page`, from 1), or the same of a file inside an archive (`member`), as a picture. Use it to see an image, a scan, or a diagram or formula that a page's text from read_file doesn't carry. Any other file is not viewable.",
     parameters: fileView,
     annotations: readOnly,
   })
+  @LimitedTool('views')
   async view(
     @Payload() { file, ...at }: z.output<typeof fileView>,
     @McpUserId() userId: string,
