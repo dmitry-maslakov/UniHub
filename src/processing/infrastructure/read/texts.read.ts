@@ -41,7 +41,11 @@ export class ListTextsHandler implements IQueryHandler<ListTextsQuery> {
   }
 }
 
-type PageRow = Omit<TextPage, 'text'> & { text: string | null };
+type PageRow = Omit<TextPage, 'text'> & {
+  text: string | null;
+  // of the whole text, to tell which is the document's main one
+  size: number;
+};
 
 // The newest version of each processor on (or of the one named) that has
 // parts, with its page `page` (null where it has no such page), the longest
@@ -57,7 +61,8 @@ function pageRows(
     SELECT * FROM (
       SELECT DISTINCT ON (processor)
         processor, version, jsonb_array_length(parts)::int AS pages,
-        ${page}::int AS page, parts ->> ${page - 1}::int AS text
+        ${page}::int AS page, parts ->> ${page - 1}::int AS text,
+        length(parts::text)::int AS size
       FROM "Representation"
       WHERE hash = ${hash}
         AND processor = ANY(${names}::text[])
@@ -68,7 +73,9 @@ function pageRows(
     ORDER BY length(text) DESC NULLS LAST, processor`;
 }
 
-const hasText = (row: PageRow): row is TextPage => row.text !== null;
+// the page as it's read, once it's known to be there
+const asPage = ({ size: _size, text, ...row }: PageRow): TextPage | null =>
+  text === null ? null : { ...row, text };
 
 @QueryHandler(GetTextPageQuery)
 export class GetTextPageHandler implements IQueryHandler<GetTextPageQuery> {
@@ -77,12 +84,12 @@ export class GetTextPageHandler implements IQueryHandler<GetTextPageQuery> {
     private readonly plugins: PluginCatalog,
   ) {}
 
-  // With a processor named, its page. Otherwise the longest text of the page
-  // among the processors that split the document the most: texts that don't
-  // have the same number of pages are of documents split differently (an
-  // html a portal calls text/plain), and page 3 of one isn't page 3 of the
-  // other, so only the one with the most pages answers (null if it has no
-  // such page). Among those, the longest text, ties by processor.
+  // With a processor named, its page. Otherwise the longest text of the page,
+  // when the texts are split alike. Texts with different numbers of pages
+  // are of documents split differently (an html a portal calls text/plain),
+  // and page 3 of one isn't page 3 of the other: then only the largest text
+  // answers, null if it has no such page. By size, not pages: a pdf whose
+  // pages two parsers count differently must still be read by its main text.
   async execute({ hash, page, processor }: GetTextPageQuery) {
     if (!Number.isInteger(page) || page < 1) return null;
     const rows = await pageRows(
@@ -92,9 +99,13 @@ export class GetTextPageHandler implements IQueryHandler<GetTextPageQuery> {
       page,
       processor ?? null,
     );
-    const most = Math.max(0, ...rows.map((row) => row.pages));
-    const [found] = rows.filter((row) => row.pages === most);
-    return found && hasText(found) ? found : null;
+    const alike = new Set(rows.map((row) => row.pages)).size <= 1;
+    const found = alike
+      ? rows[0]
+      : rows.reduce((largest, row) =>
+          row.size > largest.size ? row : largest,
+        );
+    return found ? asPage(found) : null;
   }
 }
 
@@ -114,6 +125,6 @@ export class GetPageTextsHandler implements IQueryHandler<GetPageTextsQuery> {
       page,
       null,
     );
-    return rows.filter(hasText);
+    return rows.flatMap((row) => asPage(row) ?? []);
   }
 }

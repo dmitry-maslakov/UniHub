@@ -56,11 +56,11 @@ describe('texts read from the database', { timeout: 20_000 }, () => {
       'text of a processor that is off',
     ]);
     // one document, split into 3 by one processor and into 2 by another
-    await representation(split, 'office-text', 1, ['a', 'b', 'c']);
-    await representation(split, 'ocr', 1, [
-      'much longer first',
-      'much longer second',
+    await representation(split, 'office-text', 1, [
+      'the main text of the whole document',
+      'b',
     ]);
+    await representation(split, 'ocr', 1, ['', 'longer second', '']);
     // a picture in an archive, one read and one that held no text
     await representation(picture, 'ocr', 1, ['Računarske mreže']);
     await representation(blank, 'ocr', 1, []);
@@ -126,19 +126,16 @@ describe('texts read from the database', { timeout: 20_000 }, () => {
     expect(await queries.execute(new GetTextPageQuery(hash, 3))).toBeNull();
   });
 
-  it('answers from the processor that splits the most when they differ', async () => {
-    // ocr's page 2 is longer, but it is another split of the document
+  it('answers from the largest text when they are split differently', async () => {
+    // ocr has more pages and a longer page 2, but it isn't the main text
     expect(await queries.execute(new GetTextPageQuery(split, 2))).toMatchObject(
-      { processor: 'office-text', pages: 3, text: 'b' },
+      { processor: 'office-text', pages: 2, text: 'b' },
     );
-    expect(await queries.execute(new GetTextPageQuery(split, 3))).toMatchObject(
-      { processor: 'office-text', text: 'c' },
-    );
-    expect(await queries.execute(new GetTextPageQuery(split, 4))).toBeNull();
+    expect(await queries.execute(new GetTextPageQuery(split, 3))).toBeNull();
     // named, each has its own
     expect(
       await queries.execute(new GetTextPageQuery(split, 2, processor('ocr'))),
-    ).toMatchObject({ text: 'much longer second' });
+    ).toMatchObject({ text: 'longer second' });
     // every row that has the page is still every row
     expect(
       (await queries.execute(new GetPageTextsQuery(split, 2))).map(
