@@ -25,7 +25,7 @@ const job = (fields: Partial<Job> = {}) =>
 
 function worker(
   counts: number[] = [0],
-  run: ProcessContent['run'] = async () => 'done',
+  run: () => Promise<unknown> = async () => 'done',
 ) {
   const getJobCounts = vi.fn(async () => ({ waiting: counts.shift() ?? 0 }));
   const metrics = testMeter();
