@@ -180,6 +180,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/files/{id}/view": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["FilesController_view"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/downloads": {
         parameters: {
             query?: never;
@@ -1122,6 +1138,45 @@ export interface operations {
                 content?: never;
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    FilesController_view: {
+        parameters: {
+            query?: {
+                /** @description a file inside it, by its path as list_members or the members route gives it; the file itself by default */
+                member?: string;
+                /** @description the page of a PDF, from 1; an image has one */
+                page?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the file as a picture: a JPEG of an image, or of one page of a PDF (`page`, from 1; `X-Page-Count` says how many it has), at most 1568 pixels on a side. A PDF page past the last is not found; a file that is neither an image nor a PDF, or is too large, is 422 NOT_VIEWABLE */
+            200: {
+                headers: {
+                    /** @description how many pages the PDF has */
+                    "X-Page-Count"?: number;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

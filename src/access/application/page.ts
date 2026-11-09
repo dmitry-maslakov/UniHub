@@ -61,3 +61,15 @@ export const contentSchema = memberSchema.extend({
     ),
 });
 export type ContentAt = z.output<typeof contentSchema>;
+
+// A file as a picture: the image itself, or one page of a PDF (from 1)
+export const viewSchema = memberSchema.extend({
+  page: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(FAR)
+    .default(1)
+    .describe('the page of a PDF, from 1; an image has one'),
+});
+export type ViewAt = z.output<typeof viewSchema>;

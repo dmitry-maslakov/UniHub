@@ -4,6 +4,7 @@ import {
   InvalidValueError,
   NotFoundError,
   UnavailableError,
+  UnprocessableError,
   type DomainError,
 } from '@app/kernel';
 import { DomainErrorFilter } from './domain-error.filter.js';
@@ -13,6 +14,9 @@ class GoneError extends NotFoundError {
 }
 class TakenError extends ConflictError {
   readonly reason = 'TAKEN';
+}
+class NotThatError extends UnprocessableError {
+  readonly reason = 'NOT_THAT';
 }
 class AwayError extends UnavailableError {
   readonly reason = 'AWAY';
@@ -50,6 +54,10 @@ describe('DomainErrorFilter', () => {
     });
     expect(http(new TakenError('taken')).status).toBe(409);
     expect(http(new InvalidValueError('course slug', 'A B')).status).toBe(400);
+    expect(http(new NotThatError('not a picture'))).toMatchObject({
+      status: 422,
+      body: { code: 'NOT_THAT' },
+    });
     expect(http(new AwayError('try again later'))).toMatchObject({
       status: 503,
       body: { code: 'AWAY' },
