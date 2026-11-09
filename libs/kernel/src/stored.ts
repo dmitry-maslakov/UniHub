@@ -24,9 +24,19 @@ const kept = (value: Json): Json => {
   return value;
 };
 
+// the strings and keys themselves: the JSON text escapes a NUL as \u0000,
+// and a string holding those six characters is no NUL
+const hasNul = (value: Json): boolean => {
+  if (typeof value === 'string') return value.includes('\u0000');
+  if (Array.isArray(value)) return value.some(hasNul);
+  if (value !== null && typeof value === 'object')
+    return Object.entries(value).some(([k, v]) => hasNul(k) || hasNul(v));
+  return false;
+};
+
 export const StoredJson = z
   .json()
-  .refine((v) => !JSON.stringify(v).includes('\\u0000'), {
+  .refine((v) => !hasNul(v), {
     message: 'contains a NUL character',
   })
   .overwrite(kept);

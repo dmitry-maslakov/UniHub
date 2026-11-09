@@ -47,8 +47,9 @@ export const poll = (
   instance: PollsPortal = { poll: async () => {} },
   links: AccountLink[] = [],
   instances = false,
+  catalog = false,
 ) => ({
-  spec: pollSpec({ portal, schedule: '0 0 1 1 *', links, instances }),
+  spec: pollSpec({ portal, schedule: '0 0 1 1 *', links, instances, catalog }),
   instance,
 });
 

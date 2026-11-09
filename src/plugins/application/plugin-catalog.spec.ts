@@ -122,6 +122,19 @@ describe('PluginCatalog', () => {
     expect(served.external(portal('elsewhere'))).toBe(false);
   });
 
+  it('tells a portal that sends its catalog from the others', () => {
+    const served = catalogOf(
+      { polls: [poll('moodle'), poll('site', undefined, [], false, true)] },
+      ['catalog'],
+    );
+    const portal = (id: string) => PortalId.parse(id);
+
+    expect(served.publishes(portal('catalog'))).toBe(true);
+    expect(served.publishes(portal('site'))).toBe(true);
+    expect(served.publishes(portal('moodle'))).toBe(false);
+    expect(served.publishes(portal('elsewhere'))).toBe(false);
+  });
+
   it("knows which portals are a site per school, and the site each one's settings read", () => {
     const sited = (url: string | null) => ({
       poll: async () => {},

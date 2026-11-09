@@ -121,11 +121,12 @@ export class PortalAccounts implements OnApplicationBootstrap {
 
   // A mode no connector here takes stops the app at startup, once every
   // module has started: the plugins have been found by then. Public takes
-  // a connector over gRPC, which asks which courses are wanted (Wanted).
+  // a connector over gRPC, which asks which courses are wanted (Wanted), or
+  // a poll connector here that sends its whole catalog (catalog: true).
   onApplicationBootstrap() {
     this.links.checkAgainst((portal, mode) =>
       mode === 'public'
-        ? this.plugins.external(portal)
+        ? this.plugins.publishes(portal)
         : this.plugins.linker(portal, mode) !== null,
     );
   }

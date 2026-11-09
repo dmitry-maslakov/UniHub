@@ -112,6 +112,15 @@ export class PluginCatalog implements OnModuleInit {
     return this.tokens.portals().includes(portal);
   }
 
+  // whether the portal is public, served by either: its connector over
+  // gRPC, or one here that sends its whole catalog (catalog: true)
+  publishes(portal: PortalId) {
+    return (
+      this.external(portal) ||
+      (this.pollConnector(portal)?.spec.catalog ?? false)
+    );
+  }
+
   // whether the portal is a site per school (its connector says so): an
   // account of it is linked with its site's address
   hasInstances(portal: PortalId) {

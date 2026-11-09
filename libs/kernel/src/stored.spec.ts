@@ -21,6 +21,14 @@ describe('StoredJson', () => {
       expect(StoredJson.safeParse(bad).success).toBe(false);
   });
 
+  it('takes a backslash and u0000 written out, which is no NUL', () => {
+    const written = 'a\\u0000b';
+    expect(written).toHaveLength(8);
+    expect(StoredJson.parse({ [written]: [written] })).toEqual({
+      [written]: [written],
+    });
+  });
+
   it('takes strings, keys and -0 as postgres keeps them', () => {
     const parsed = StoredJson.parse({
       'k\udc00': [-0, 'x\ud800', null, { n: 1.5, ok: true }],
