@@ -10,6 +10,7 @@ make run
 ```
 
 > # A quote, not a section
+>
 > of the course book
 
 ## Lab 2: pointers

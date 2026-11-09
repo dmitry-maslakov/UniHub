@@ -119,15 +119,40 @@ Admins set the courses up (`@Roles([ADMIN_ROLE])`):
 `q` is 2 to 500 characters: words, a phrase or a code identifier, in Latin or Cyrillic, with or without diacritics; `limit` is 1 to 50 results, 10 by default. The answer:
 
 ```json
-{ "results": [
-  { "type": "file", "fileId": "3f0c…", "name": "l5.pdf", "path": "Predavanja", "member": null,
-    "course": "os",
-    "pages": [ { "page": 3, "processor": "office-text",
-                 "snippet": { "text": "…", "highlights": [[12, 18]] } } ],
-    "matchedName": null, "sameContentIn": ["9a1e…"] },
-  { "type": "post", "itemId": "77b2…", "kind": "announcement", "title": "Kolokvijum",
-    "url": "https://…", "publishedAt": "2026-10-01T09:00:00.000Z", "course": "os",
-    "snippet": { "text": "Kolokvijum\n\nKolokvijum iz semafora je u petak.", "highlights": [[0, 10]] } } ] }
+{
+  "results": [
+    {
+      "type": "file",
+      "fileId": "3f0c…",
+      "name": "l5.pdf",
+      "path": "Predavanja",
+      "member": null,
+      "course": "os",
+      "pages": [
+        {
+          "page": 3,
+          "processor": "office-text",
+          "snippet": { "text": "…", "highlights": [[12, 18]] }
+        }
+      ],
+      "matchedName": null,
+      "sameContentIn": ["9a1e…"]
+    },
+    {
+      "type": "post",
+      "itemId": "77b2…",
+      "kind": "announcement",
+      "title": "Kolokvijum",
+      "url": "https://…",
+      "publishedAt": "2026-10-01T09:00:00.000Z",
+      "course": "os",
+      "snippet": {
+        "text": "Kolokvijum\n\nKolokvijum iz semafora je u petak.",
+        "highlights": [[0, 10]]
+      }
+    }
+  ]
+}
 ```
 
 - `type` says what a result is: a `file`, a `member` (a file inside an archive the file is) or a `post`. The answer changed with posts and names: every result has a `type`, a post has none of a file's fields (no `fileId`, `pages` or `sameContentIn`), a file found by its name alone has `pages: []`, and `limit` counts posts too; a client that reads files alone skips the results of `type` `post`. A file's and a member's fields are otherwise as they were, `matchedName` added
@@ -287,12 +312,12 @@ The reference above says what the code does; this is what an operator decides. E
 
 #### Link modes
 
-| `PORTAL_LINKS` | Who gets in | Credential |
-|---|---|---|
-| a portal not named, or `canvas=shared` | the one account the operator configures (`CANVAS_TOKEN`); grants decide who reads | the plugin's settings |
-| `canvas=token` | every user may link an account of their own | a token each user pastes on the web app's Sources page, with their school's Canvas address |
-| `canvas=token/admins` | only admins may link; everyone else gets a 404 | the same |
-| `catalog=public` | every user picks courses of the site's catalog; no grant | none: the connector reads a site anyone may read |
+| `PORTAL_LINKS`                         | Who gets in                                                                       | Credential                                                                                 |
+| -------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| a portal not named, or `canvas=shared` | the one account the operator configures (`CANVAS_TOKEN`); grants decide who reads | the plugin's settings                                                                      |
+| `canvas=token`                         | every user may link an account of their own                                       | a token each user pastes on the web app's Sources page, with their school's Canvas address |
+| `canvas=token/admins`                  | only admins may link; everyone else gets a 404                                    | the same                                                                                   |
+| `catalog=public`                       | every user picks courses of the site's catalog; no grant                          | none: the connector reads a site anyone may read                                           |
 
 - A token is write-only: `PUT` replaces it, `DELETE` unlinks, nothing reads it back (no API answer, log, error, job or MCP tool shows it or a hint of it). Linking needs a session signed in within the last day.
 - Tokens are sealed with AES-256-GCM under `PORTAL_CREDENTIALS_SECRETS="2:<key>,1:<key>"`, versioned keys of 32 random bytes in base64 (`openssl rand -base64 32`), apart from `BETTER_AUTH_SECRET`. The app won't start with a `token` portal and no key. Rotating:
@@ -309,13 +334,13 @@ Each account is polled on a grid of its own and sees only what the portal shows 
 - a post or course that two accounts see alike is one record; one they see differently is two, each in the views that list it
 - the listings are not shared: they cost about ten requests per course per account per pass, so `VIEW_MINUTES` is what to raise on a small portal
 
-| Setting | Default | Meaning |
-|---|---|---|
-| `VIEW_MINUTES` | 60 | how often each account passes (5 to a day), at an offset its id gives |
-| `PUBLISH_DELAY_MINUTES` | 10 | what a pass finds shows this long after its slot (an account's first run's as each pass ends); must be under `VIEW_MINUTES` |
-| `HOLD_MINUTES` | 15 | content (bytes, texts, search hits) opens this long after that |
-| `CONNECTOR_CONCURRENCY` | 4 | passes one worker runs at once (1 to 64); each asks its portal one thing at a time |
-| `CONNECTOR_POLL_TIMEOUT_MINUTES` | 60 | a run longer than this is aborted; also how long a file's fetch lease lasts |
+| Setting                          | Default | Meaning                                                                                                                     |
+| -------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `VIEW_MINUTES`                   | 60      | how often each account passes (5 to a day), at an offset its id gives                                                       |
+| `PUBLISH_DELAY_MINUTES`          | 10      | what a pass finds shows this long after its slot (an account's first run's as each pass ends); must be under `VIEW_MINUTES` |
+| `HOLD_MINUTES`                   | 15      | content (bytes, texts, search hits) opens this long after that                                                              |
+| `CONNECTOR_CONCURRENCY`          | 4       | passes one worker runs at once (1 to 64); each asks its portal one thing at a time                                          |
+| `CONNECTOR_POLL_TIMEOUT_MINUTES` | 60      | a run longer than this is aborted; also how long a file's fetch lease lasts                                                 |
 
 An expired or revoked account isn't polled, and a run the portal refuses the token of marks it revoked until it's linked again.
 
@@ -338,10 +363,10 @@ What can't be hidden:
 
 A token a user pastes has no scopes, so the Canvas client only reads (GET and HEAD), and only from the Canvas the user linked it with, over https. Users link it on the web app's Sources page: their school's Canvas address, a link to where Canvas makes tokens there (`/profile/settings`), and the token.
 
-| | Canvas hosted by Instructure | Self-hosted Canvas |
-|---|---|---|
+|                                | Canvas hosted by Instructure                                                                                                                                                                                                                                                                                                                   | Self-hosted Canvas                                                               |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
 | Users pasting their own tokens | Instructure's API policy says an app used by several users must get their tokens by OAuth, and that asking users to make a token and enter it into a third-party app violates it. The hub refuses a token there (422 `TOKENS_NOT_ALLOWED`): a host under `instructure.com`, or one whose DNS CNAMEs lead there, before the token goes anywhere | governed by the institution's own rules: ask its Canvas admins before opening it |
-| OAuth | needs a developer key from the institution; the hub doesn't link by OAuth | the same, if the institution allows it |
+| OAuth                          | needs a developer key from the institution; the hub doesn't link by OAuth                                                                                                                                                                                                                                                                      | the same, if the institution allows it                                           |
 
 - an institution may stop students from making tokens or cap how long one lasts: a student's token can expire, and its account then shows `expired`, or `revoked` once Canvas refuses it, until the user links a new one
 - tell the institution what the hub reads and who reads it, whichever Canvas it is
@@ -405,9 +430,9 @@ Published images: after CI passes on main, `.github/workflows/release.yml` pushe
 
 A processor with `heavy` (Plugins, above) doesn't run in the `plugins` queue, so text extraction never waits for a model: its jobs, the first pass for stored content and the reconcile's alike (both queue through `PluginJobQueue`, which picks the queue by the processor's spec), wait in the `models` queue, same job shape, retries and outage pause as `plugins`'. Nothing reads it in the api, the `worker` or `all`: its jobs wait until a batch run drains them, and a model server can be started for the run and stopped after it.
 
-- `APP_ROLE=models` is that run: the same image and command, with the same settings (`STORAGE_PATH` shared with the worker, `DATABASE_URL`, `REDIS_URL`). It consumes only `models`, one job at a time, and has no scheduler, no outbox relay, no connectors and no HTTP or gRPC server. It exits with code 0, after shutting down as SIGTERM does, once the queue has nothing waiting or active and nothing delayed for less than a minute (a retry's backoff); started with nothing to do, it exits at once. Each job gets its processor's `timeoutMinutes` and is tried again like any other, up to 5 attempts; SIGTERM puts a job being run back to wait, without spending an attempt. What it makes is saved as the worker's processors do; a text it hands to the search index waits in `search-index` for the worker
-- `npm run models:pending` (`node dist/main.js models-pending`) asks whether there's work without starting the app: plain BullMQ on `REDIS_URL`, it prints the count of jobs to do (as the run counts them) and exits 0 when there are some, 3 when there are none, and anything else (1) when it can't tell, so a CronJob starts a model only when there's work
-- the queue shows in the metrics as `unihub_queue_jobs{queue="models"}` like the others, read by the worker. A heavy job's outcomes count in `unihub_plugin_jobs_total` as the rest
+- `APP_ROLE=models` is that run: the same image and command, with the same settings (`STORAGE_PATH` shared with the worker, `DATABASE_URL`, `REDIS_URL`). It consumes only `models`, one job at a time, and has no scheduler, no outbox relay, no connectors and no HTTP or gRPC server. It exits with code 0, after shutting down as SIGTERM does, once the queue has nothing waiting, active or delayed (a retry's backoff); started with nothing to do, it exits at once. Each job gets its processor's `timeoutMinutes` and is tried again like any other, up to 5 attempts; SIGTERM puts a job being run back to wait, without spending an attempt. What it makes is saved as the worker's processors do; a text it hands to the search index waits in `search-index` for the worker
+- `npm run models:pending` (`node dist/main.js models-pending`) asks whether there's work without starting the app: plain BullMQ on `REDIS_URL`, it prints the count of jobs to do (as the run counts them) and exits 0 when there are some, 3 when there are none, and anything else (1) when it can't tell (Redis away included, within a few seconds), so a CronJob starts a model only when there's work. A job already active counts, so the CronJob needs `concurrencyPolicy: Forbid` (or the equivalent in another scheduler), or a second model starts beside a running one
+- the queue shows in the metrics as `unihub_queue_jobs{queue="models"}` like the others, read by the worker. A heavy job's outcomes count in `unihub_plugin_jobs_total` as the rest, but only while the run is up, which exits seconds after the last job, so watch heavy dead letters with `unihub_queue_jobs{queue="models",state="failed"}`, which the worker reads. A processor whose model can't be reached throws `ModelUnavailableError`: the queue pauses and the job waits, no attempt spent
 
 ### Running the API and the worker apart
 
@@ -426,7 +451,7 @@ By default one process runs it all (`APP_ROLE=all`, which leaves the `models` qu
 With `METRICS_PORT` set, each process, the api and the worker alike, serves Prometheus metrics for a scraper at `/metrics` on that port, and on no other: OpenTelemetry's Prometheus exporter on the app's own meter provider, read when a scrape asks, nothing sent anywhere. Unset, nothing is served. It listens on every interface, as the app does, without auth, and the metrics say what the hub runs and how busy it is: keep the port on the private network the scraper is on and never publish it (no `ports:` in compose, nothing in caddy). The app's `PORT` is refused, and a port in use stops the app at start.
 
 - every process: its CPU (`process_cpu_time_total`, `process_cpu_utilization`), memory (`process_memory_usage`, the RSS in bytes, and `v8js_memory_heap_*` by heap space), the event loop's delay since the last scrape (`nodejs_eventloop_delay_p99` and the others, in seconds) and its utilization, and GC (`v8js_gc_duration` by kind)
-- the worker, the queues: `unihub_queue_jobs{queue, state}` of `connectors`, `plugins`, `models` and `search-index` (with search on), `waiting`, `active`, `delayed` (a retry's backoff too) and `failed` (given up for good, kept as long as the queue keeps them, 7 or 14 days). `connectors`' `delayed` is mostly each poll schedule's next tick, so it's never 0 and no backlog. `unihub_queue_rate_limited{queue}` is 1 while one waits out an outage (Search index, above, and the database for `plugins`). Read from Redis by the worker alone, so an api beside it doesn't count them again, within 2 s; `unihub_queue_counts_read` is 0 for a scrape that couldn't read them (Redis away, slow or failing, logged unless it's away), and the counts then hold their last reading
+- the worker, the queues: `unihub_queue_jobs{queue, state}` of `connectors`, `plugins`, `models` and `search-index` (with search on), `waiting`, `active`, `delayed` (a retry's backoff too) and `failed` (given up for good, kept as long as the queue keeps them, 7 or 14 days). `connectors`' `delayed` is mostly each poll schedule's next tick, so it's never 0 and no backlog. `unihub_queue_rate_limited{queue}` is 1 while one waits out an outage (Search index, above, and the database for `plugins` and `models`). Read from Redis by the worker alone, so an api beside it doesn't count them again, within 2 s; `unihub_queue_counts_read` is 0 for a scrape that couldn't read them (Redis away, slow or failing, logged unless it's away), and the counts then hold their last reading
 - the worker, connectors and plugins: `unihub_connector_runs_total{portal, outcome}`, polls `succeeded` or `failed` and push runs `ended` or `failed`; `unihub_connector_last_success_timestamp_seconds{portal}`, when a poll last succeeded in this process (none after a restart until one does); `unihub_plugin_jobs_total{plugin, outcome}`, each attempt `completed` or `failed`, and `unihub_plugin_dead_letters_total{plugin}`, the jobs that gave up for good
 - the api, search: `unihub_search_duration_seconds{outcome}`, a histogram of searches `ok` or `failed`, and `unihub_search_rerank_fallbacks_total{reason}`, those in the index's order as the reranker was `busy`, `away`, past its time (`timeout`) or `failed` otherwise
 

@@ -4,7 +4,6 @@ import type { INestApplication, INestApplicationContext } from '@nestjs/common';
 import { OutboxRelay } from '@nestjs/outbox';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import type { Queue } from 'bullmq';
-import { Redis } from 'ioredis';
 import type { PortalIngest } from '@app/plugin-sdk';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
 import { CONNECTORS_QUEUE } from '../src/plugins/infrastructure/connectors.queue.js';
@@ -68,10 +67,8 @@ describe('models', { timeout: 30_000 }, () => {
   let app: INestApplication | undefined;
   let run: INestApplicationContext | undefined;
   let hub: PortalIngest;
-  let redis: Redis;
 
   beforeAll(async () => {
-    redis = new Redis(testEnv.REDIS_URL);
     app = await bootApp({ imports: [FakePluginsModule] });
     hub = portalIngest(app, 'models-test');
   });
@@ -79,14 +76,13 @@ describe('models', { timeout: 30_000 }, () => {
   afterAll(async () => {
     await app?.close();
     await run?.close();
-    redis.disconnect();
   });
 
   const modelsQueue = (from: INestApplicationContext) =>
     from.get<Queue<PluginJob>>(getQueueToken(MODELS_QUEUE));
 
   it('has no work before a heavy content is stored', async () => {
-    const pending = await pendingJobs(modelsQueue(app!), redis);
+    const pending = await pendingJobs(modelsQueue(app!));
 
     expect([pending, exitCodeFor(pending)]).toEqual([0, 3]);
   });
@@ -114,7 +110,7 @@ describe('models', { timeout: 30_000 }, () => {
     expect(await main.getJobState(jobId(heavy))).toBe('unknown');
     expect(await modelsQueue(app!).getJobState(jobId(heavy))).toBe('waiting');
     expect(app!.get(FakeHeavyProcessor).seen).toEqual([]);
-    const pending = await pendingJobs(modelsQueue(app!), redis);
+    const pending = await pendingJobs(modelsQueue(app!));
     expect([pending, exitCodeFor(pending)]).toEqual([1, 0]);
   });
 
@@ -140,7 +136,7 @@ describe('models', { timeout: 30_000 }, () => {
       where: { hash_processor_version: heavy.key },
     });
     expect(stored?.parts).toEqual([`read: ${content}`]);
-    const pending = await pendingJobs(modelsQueue(run), redis);
+    const pending = await pendingJobs(modelsQueue(run));
     expect([pending, exitCodeFor(pending)]).toEqual([0, 3]);
   });
 });

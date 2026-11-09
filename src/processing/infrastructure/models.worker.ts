@@ -11,10 +11,9 @@ import { PrismaHealthIndicator } from '@nestjs/terminus';
 import type { Counter, Meter } from '@opentelemetry/api';
 import { Worker, type Job, type Queue } from 'bullmq';
 import { PrismaService } from '../../platform/database/prisma.service.js';
-import { REDIS } from '../../platform/redis/redis.module.js';
-import type { Redis } from 'ioredis';
 import { METER } from '../../platform/metrics/metrics.module.js';
 import { roleConfig } from '../../platform/role/role.config.js';
+import { ModelUnavailableError } from '@app/plugin-sdk';
 import { pluginOf, type PluginJob } from '../application/plugin-job.js';
 import { ProcessContent } from '../application/process-content.js';
 import { MODELS_QUEUE } from './models.queue.js';
@@ -42,7 +41,6 @@ export class ModelsWorker
     health: PrismaHealthIndicator,
     prisma: PrismaService,
     @InjectQueue(MODELS_QUEUE) private readonly models: Queue<PluginJob>,
-    @Inject(REDIS) private readonly redis: Redis,
     @Inject(METER) meter: Meter,
     @Inject(roleConfig.KEY)
     private readonly role: ConfigType<typeof roleConfig>,
@@ -67,25 +65,31 @@ export class ModelsWorker
       (job, token) => this.process(job, token),
       { connection: this.models.opts.connection, concurrency: 1, ...PAUSING },
     )
-      .on('completed', (job) =>
-        this.jobs.add(1, { plugin: pluginOf(job.data), outcome: 'completed' }),
-      )
+      .on('completed', (job) => this.countCompleted(job))
       .on('failed', (job, error) => {
         this.failed(job, error);
-        if (!job) return;
-        const plugin = pluginOf(job.data);
-        this.jobs.add(1, { plugin, outcome: 'failed' });
-        if (job.finishedOn) this.deadLetters.add(1, { plugin });
+        this.countFailed(job);
       })
       .on('stalled', (id) => this.stalled(id))
       .on('error', (error) => this.logger.error(error.message, error.stack));
   }
 
-  // resolves once the queue has nothing waiting, active or due soon, or at
+  countCompleted(job: Job<PluginJob>) {
+    this.jobs.add(1, { plugin: pluginOf(job.data), outcome: 'completed' });
+  }
+
+  countFailed(job: Job<PluginJob> | undefined) {
+    if (!job) return;
+    const plugin = pluginOf(job.data);
+    this.jobs.add(1, { plugin, outcome: 'failed' });
+    if (job.finishedOn) this.deadLetters.add(1, { plugin });
+  }
+
+  // resolves once the queue has nothing waiting, active or delayed, or at
   // shutdown
   async drained() {
     while (!this.shutdown.signal.aborted) {
-      if ((await pendingJobs(this.models, this.redis)) === 0) return true;
+      if ((await pendingJobs(this.models)) === 0) return true;
       await sleep(DRAIN_POLL_MS, undefined, {
         signal: this.shutdown.signal,
       }).catch(() => {});
@@ -99,9 +103,14 @@ export class ModelsWorker
     return this.processContent.run(data, signal);
   }
 
+  // a model that can't be reached pauses the queue like the database away
+  protected async away(err: unknown) {
+    return err instanceof ModelUnavailableError || super.away(err);
+  }
+
   protected outage() {
     this.logger.warn(
-      `the database is away, models wait ${OUTAGE_PAUSE_MS / 1000} s`,
+      `the database or a model is away, models wait ${OUTAGE_PAUSE_MS / 1000} s`,
     );
   }
 

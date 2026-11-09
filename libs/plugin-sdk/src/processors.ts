@@ -15,7 +15,9 @@ export interface ContentProcessorOptions {
   // (a process with APP_ROLE=models), one job at a time, and each gets
   // `timeoutMinutes` (a whole number, at least 1) to run: `input.signal`
   // aborts then, and the job fails and is tried again. Without it a
-  // processor runs in the hub's ordinary queue, as it always did.
+  // processor runs in the hub's ordinary queue, as it always did. When the
+  // model can't be reached, throw ModelUnavailableError: the queue then
+  // waits and the job is tried again, with no attempt spent.
   heavy?: { timeoutMinutes: number };
 }
 

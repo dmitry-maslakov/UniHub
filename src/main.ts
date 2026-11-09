@@ -28,12 +28,15 @@ const ADOPT_INSTANCES = 'adopt-instances';
 const MODELS_PENDING = 'models-pending';
 
 async function modelsPending() {
+  // fail fast: only a BullMQ Worker needs endless retries
   const connection = new Redis(redisConfig().url, {
-    maxRetriesPerRequest: null,
+    maxRetriesPerRequest: 1,
+    retryStrategy: () => null,
+    connectTimeout: 3_000,
   });
   const queue = new Queue(MODELS_QUEUE, { connection });
   try {
-    const pending = await pendingJobs(queue, connection);
+    const pending = await pendingJobs(queue);
     console.log(pending);
     process.exitCode = exitCodeFor(pending);
   } finally {
