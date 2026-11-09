@@ -89,6 +89,8 @@ describe('website settings', () => {
       { id: '' },
       { name: '' },
       { sitemap: 'sitemap.xml' },
+      { sitemap: '//elsewhere.example.org/sitemap.xml' },
+      { sitemap: '/\\elsewhere.example.org/sitemap.xml' },
       { revisitDays: 0 },
       { revisitDays: 1.5 },
       { files: 'yes' },

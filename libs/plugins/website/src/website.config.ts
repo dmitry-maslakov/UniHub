@@ -34,8 +34,10 @@ const selector = z
 const Section = z.strictObject({
   id: z.string().regex(/^[a-z0-9-]+$/),
   name: z.string().min(1),
-  // a path on the site: /sitemap.xml
-  sitemap: z.string().regex(/^\/\S*$/, 'a path starting with /'),
+  // a path on the site: /sitemap.xml (a second / or a \ would name another site)
+  sitemap: z
+    .string()
+    .regex(/^\/(?![/\\])\S*$/, 'a path starting with a single /'),
   // both test a page's pathname
   include: regex().optional(),
   exclude: regex().optional(),

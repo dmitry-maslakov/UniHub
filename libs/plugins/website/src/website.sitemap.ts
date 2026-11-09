@@ -17,6 +17,13 @@ const NAMED: Record<string, string> = {
   apos: "'",
 };
 
+// a lastmod with a control character in it is none
+const CONTROL = /\p{Cc}/u;
+const dateOf = (text?: string) => {
+  const date = text ? decodeEntities(text.trim()) : '';
+  return date && !CONTROL.test(date) ? date : null;
+};
+
 // XML's entities, in one pass so &amp;lt; stays &lt;
 export const decodeEntities = (text: string) =>
   text.replace(ENTITY, (whole, hex?: string, dec?: string, name?: string) => {
@@ -39,7 +46,7 @@ export function listed(xml: string, origin: string, section: Section) {
       pages.set(pathname, {
         path: pathname,
         url,
-        lastmod: lastmod ? decodeEntities(lastmod.trim()) : null,
+        lastmod: dateOf(lastmod),
       });
   }
   return [...pages.values()];

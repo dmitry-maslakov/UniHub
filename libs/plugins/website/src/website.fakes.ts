@@ -1,7 +1,8 @@
 import { text } from 'node:stream/consumers';
 import type { Readable } from 'node:stream';
-import { http, HttpResponse } from 'msw';
+import { delay, http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
+import { StoredJson } from '@app/kernel';
 import {
   ContentHash,
   InvalidRecordError,
@@ -20,7 +21,15 @@ const ELSEWHERE = 'https://elsewhere.example.org';
 export type Reply =
   | string
   | number
-  | { status?: number; body?: string; headers?: Record<string, string> };
+  | {
+      status?: number;
+      body?: string;
+      headers?: Record<string, string>;
+      // ms before it answers
+      delay?: number;
+      // the body, then the connection drops, or hangs open
+      end?: 'cut' | 'stall';
+    };
 
 // Answers by pathname; what isn't set is a 404.
 export class FakeSite {
@@ -32,7 +41,7 @@ export class FakeSite {
   // what another origin was asked, which nothing should
   elsewhere: string[] = [];
   readonly server = setupServer(
-    http.get(`${SITE}/*`, ({ request }) => {
+    http.get(`${SITE}/*`, async ({ request }) => {
       const { pathname } = new URL(request.url);
       this.asked.push(pathname);
       this.times.push(Date.now());
@@ -41,7 +50,17 @@ export class FakeSite {
       if (typeof reply === 'number')
         return new HttpResponse(null, { status: reply });
       if (typeof reply === 'string') return new HttpResponse(reply);
-      return new HttpResponse(reply.body ?? null, {
+      if (reply.delay) await delay(reply.delay);
+      const { end } = reply;
+      const body = end
+        ? new ReadableStream({
+            start(stream) {
+              stream.enqueue(new TextEncoder().encode(reply.body ?? ''));
+              if (end === 'cut') stream.error(new Error('cut'));
+            },
+          })
+        : (reply.body ?? null);
+      return new HttpResponse(body, {
         status: reply.status ?? 200,
         headers: reply.headers,
       });
@@ -91,7 +110,8 @@ export const TEXT =
 
 // What the hub would keep of the connector's runs, record by record
 // (a portal read as shared), as it answers: a file's content is wanted until
-// it has some (`wantsContent` off, never).
+// it has some (`wantsContent` off, never). Like the hub's, it refuses a NUL
+// and rejects everything once the run's signal is aborted.
 export class RecordingIngest implements PortalIngest {
   readonly courses_ = new Map<string, CourseRecord>();
   readonly items = new Map<string, ItemRecord>();
@@ -104,18 +124,29 @@ export class RecordingIngest implements PortalIngest {
   tooLarge = new Set<string>();
   saved: Json | null = null;
   saves = 0;
+  signal?: AbortSignal;
+
+  private accept(record: object) {
+    this.signal?.throwIfAborted();
+    // as it travels: dates as their text
+    if (!StoredJson.safeParse(JSON.parse(JSON.stringify(record))).success)
+      throw new InvalidRecordError(['contains a NUL character']);
+  }
 
   async course(record: CourseRecord) {
+    this.accept(record);
     this.courses_.set(record.externalId, record);
     return { changed: true };
   }
 
   async item(record: ItemRecord) {
+    this.accept(record);
     this.items.set(record.externalId, record);
     return { changed: true };
   }
 
   async file(record: FileRecord) {
+    this.accept(record);
     this.files.set(record.externalId, record);
     return {
       changed: true,
@@ -124,6 +155,7 @@ export class RecordingIngest implements PortalIngest {
   }
 
   async content(id: string, content: Readable) {
+    this.signal?.throwIfAborted();
     const body = await text(content);
     if (this.tooLarge.has(id))
       throw new InvalidRecordError(['too large'], 'CONTENT_TOO_LARGE');
@@ -133,11 +165,13 @@ export class RecordingIngest implements PortalIngest {
   }
 
   async removeItem(id: string) {
+    this.signal?.throwIfAborted();
     this.removedItems.push(id);
     return { changed: this.items.delete(id) };
   }
 
   async removeFile(id: string) {
+    this.signal?.throwIfAborted();
     this.removedFiles.push(id);
     this.contents.delete(id);
     return { changed: this.files.delete(id) };
@@ -148,6 +182,7 @@ export class RecordingIngest implements PortalIngest {
   }
 
   async saveState(state: Json) {
+    this.signal?.throwIfAborted();
     this.saves++;
     this.saved = structuredClone(state);
   }

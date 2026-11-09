@@ -1,22 +1,13 @@
-import { posix } from 'node:path';
-import { load } from 'cheerio';
+import { Worker } from 'node:worker_threads';
+import { firstMessage } from '@app/plugin-sdk';
 import type { Section } from './website.config.js';
 
-export const MAX_BODY_CHARS = 200_000;
 // less text than this, and no document, is a page with nothing to read
 export const MIN_TEXT_CHARS = 30;
-
-const REMOVED =
-  'script, style, noscript, svg, button, nav, form, iframe, template';
-const DOCUMENTS = new Map([
-  ['.pdf', 'application/pdf'],
-  [
-    '.docx',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  ],
-]);
-
-type Dom = ReturnType<typeof load>;
+// a text body is cut here before it is parsed
+export const MAX_HTML_CHARS = 2 * 1024 * 1024;
+const PARSE_TIMEOUT_MS = 20_000;
+const HEAP_MB = 256;
 
 export interface Document {
   // its pathname, its id
@@ -31,93 +22,48 @@ export interface Page {
   // the content element cleaned of all but its text, structure and links
   body: string;
   textChars: number;
+  // all it links that the section reads, whoever holds them
   documents: Document[];
 }
 
-// `<title>` up to the first ' – ' or ' | ', else the page's pathname
-function titleOf(text: string, fallback: string) {
-  const cuts = [' – ', ' | ']
-    .map((sep) => text.indexOf(sep))
-    .filter((at) => at >= 0);
-  const title = (cuts.length ? text.slice(0, Math.min(...cuts)) : text).trim();
-  return title || fallback;
+// the page could not be parsed in time and memory: it is a failed page
+export class UnreadablePageError extends Error {
+  constructor(url: URL, why: string) {
+    super(`${url.pathname}: ${why}`);
+    this.name = new.target.name;
+  }
 }
 
-const decoded = (text: string) => {
-  try {
-    return decodeURIComponent(text);
-  } catch {
-    return text;
-  }
-};
-
 // The page's content as the section says where it is, or null when the
-// page has none there. `allowed` says whether robots.txt lets a document be
-// read, `held` whether another page holds it.
-export function readPage(
+// page has none there. Parsed in a worker thread of its own
+// (website.page.worker.ts).
+export async function readPage(
   html: string,
   url: URL,
   section: Section,
-  allowed: (url: URL) => boolean,
-  held: (path: string) => boolean,
-): Page | null {
-  const $ = load(html);
-  const title = titleOf($('title').first().text(), url.pathname);
-  const content = $(section.content).first();
-  if (!content.length) return null;
-
-  content.find(REMOVED).remove();
-  const everything = content.find('*').addBack();
-  everything
-    .contents()
-    .filter((_, node) => node.type === 'comment')
-    .remove();
-  // what a broken template leaves of a comment's end
-  everything.contents().each((_, node) => {
-    if (node.type === 'text') node.data = node.data.replaceAll('-->', '');
-  });
-  everything.each((_, node) => {
-    if ('attribs' in node)
-      node.attribs = node.attribs.href ? { href: node.attribs.href } : {};
-  });
-
-  const documents = section.files ? documentsOf($, content, url, section) : [];
-  return {
-    title,
-    body: (content.html() ?? '').slice(0, MAX_BODY_CHARS),
-    textChars: content.text().replace(/\s/g, '').length,
-    documents: documents.filter(
-      (doc) => allowed(new URL(doc.url)) && !held(doc.path),
-    ),
-  };
-}
-
-function documentsOf(
-  $: Dom,
-  content: ReturnType<Dom>,
-  page: URL,
-  { skipFiles }: Section,
-) {
-  const found = new Map<string, Document>();
-  content.find('a[href]').each((_, a) => {
-    let url: URL;
-    try {
-      url = new URL($(a).attr('href')!, page);
-    } catch {
-      return;
-    }
-    url.hash = '';
-    const mime = DOCUMENTS.get(posix.extname(url.pathname).toLowerCase());
-    if (url.origin !== page.origin || !mime) return;
-    if (skipFiles?.test(url.pathname) || skipFiles?.test($(a).text().trim()))
-      return;
-    if (!found.has(url.pathname))
-      found.set(url.pathname, {
-        path: url.pathname,
+): Promise<Page | null> {
+  const { content, files, skipFiles } = section;
+  // the bundler finds a worker's file only in `new Worker(new URL(...))`
+  const worker = new Worker(
+    new URL('./website.page.worker.ts', import.meta.url),
+    {
+      workerData: {
+        html: html.slice(0, MAX_HTML_CHARS),
         url: url.href,
-        name: decoded(posix.basename(url.pathname)),
-        mime,
-      });
-  });
-  return [...found.values()];
+        content,
+        files,
+        skipFiles: skipFiles && {
+          source: skipFiles.source,
+          flags: skipFiles.flags,
+        },
+      },
+      resourceLimits: { maxOldGenerationSizeMb: HEAP_MB },
+    },
+  );
+  try {
+    return (await firstMessage<{ page: Page | null }>(worker, PARSE_TIMEOUT_MS))
+      .page;
+  } catch (error) {
+    throw new UnreadablePageError(url, (error as Error).message);
+  }
 }

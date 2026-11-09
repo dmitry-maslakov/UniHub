@@ -2,6 +2,7 @@ import { Logger } from '@nestjs/common';
 import robots from 'robots-parser';
 import {
   InvalidRecordError,
+  UnknownReferenceError,
   type Json,
   type PortalIngest,
 } from '@app/plugin-sdk';
@@ -11,9 +12,13 @@ import {
   type SiteClient,
 } from './website.client.js';
 import type { Section } from './website.config.js';
-import { MIN_TEXT_CHARS, readPage } from './website.page.js';
+import {
+  MIN_TEXT_CHARS,
+  readPage,
+  UnreadablePageError,
+} from './website.page.js';
 import { listed, type Listed } from './website.sitemap.js';
-import { stateOf, type State } from './website.state.js';
+import { stateOf, unread, type State } from './website.state.js';
 
 // the package's types say `default`, its code exports the function itself
 const robotsParser = robots as unknown as typeof robots.default;
@@ -23,13 +28,32 @@ const SITEMAP_LIMIT = 16 * MIB;
 const PAGE_LIMIT = 8 * MIB;
 const ROBOTS_LIMIT = MIB;
 const SAVE_EVERY = 100;
+const SAVE_EVERY_MS = 5 * 60_000;
 const FAILURES_IN_A_ROW = 20;
+// a page that looks gone or wrong (not found, its content gone or too short,
+// another page's answer) is removed when a later day says so too
+const DAYS_TO_CONFIRM = 2;
+const WRONG_IN_A_ROW = 5;
+const GONE_IN_A_ROW = 10;
 const MAX_CRAWL_DELAY_MS = 30_000;
 const DAY_MS = 86_400_000;
 
 // the site asks us to stop (429, 503), or keeps failing: the run ends,
 // its state saved, and the next one goes on
 class StopRunError extends Error {}
+// many pages gone at once is the site's doing: none is removed
+class SiteGoneError extends StopRunError {}
+
+// what one page's trouble is, not the run's
+const isPageTrouble = (error: unknown) =>
+  error instanceof InvalidRecordError ||
+  error instanceof UnknownReferenceError ||
+  error instanceof RangeError ||
+  error instanceof UnreadablePageError;
+
+// the same pathname, a trailing slash aside
+const sameApart = (a: URL, b: URL) =>
+  a.pathname.replace(/(?<=.)\/$/, '') === b.pathname.replace(/(?<=.)\/$/, '');
 
 const ok = (status: number) => status >= 200 && status < 300;
 
@@ -49,7 +73,13 @@ export class Crawl {
   private robots = robotsParser('', '');
   private readonly today = Math.floor(Date.now() / DAY_MS);
   private failures = 0;
+  private wrong = 0;
+  private gone = 0;
+  // pages confirmed gone, removed once the run isn't stopped by a streak
+  private confirmed: string[] = [];
+  private readonly claimed = new Set<string>();
   private sinceSave = 0;
+  private savedAt = Date.now();
   private read = 0;
   private stored = 0;
   private removed = 0;
@@ -67,16 +97,20 @@ export class Crawl {
       else if (error instanceof StopRunError)
         this.logger.warn(`${error.message}: the next run goes on`);
       else throw error;
+      if (error instanceof SiteGoneError) this.confirmed = [];
     } finally {
+      await this.removeConfirmed().catch(this.ifAborted);
       // a run the hub let go of can't save: it has been told already
-      await this.save().catch((error: unknown) => {
-        if (!this.o.signal.aborted) throw error;
-      });
+      await this.save().catch(this.ifAborted);
       this.logger.log(
         `read ${this.read} pages, stored ${this.stored} documents, removed ${this.removed}, ${this.left} left due`,
       );
     }
   }
+
+  private readonly ifAborted = (error: unknown) => {
+    if (!this.o.signal.aborted) throw error;
+  };
 
   private async crawl() {
     const { ingest, origin, sections } = this.o;
@@ -104,24 +138,35 @@ export class Crawl {
     this.robots.isAllowed(url.href, this.o.userAgent) !== false;
 
   private async section(section: Section) {
-    const sitemap = await this.sitemap(section);
-    if (!sitemap) return;
+    const all = await this.sitemap(section);
+    if (!all) return;
+    // a path two sections match belongs to the first configured
+    const sitemap = all.filter(({ path }) => !this.claimed.has(path));
+    for (const { path } of sitemap) this.claimed.add(path);
     await this.removeUnlisted(section, sitemap);
     const { pages } = this.state;
+    const readAt = (path: string) =>
+      pages[path]?.s === section.id && pages[path].d
+        ? pages[path].d
+        : -Infinity;
     const due = sitemap
       .filter((page) => this.allowed(page.url) && this.isDue(section, page))
-      .sort((a, b) => {
-        const [x, y] = [pages[a.path], pages[b.path]];
-        return (
-          (x?.s === section.id ? x.d : -Infinity) -
-            (y?.s === section.id ? y.d : -Infinity) ||
-          (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)
-        );
-      });
+      .sort(
+        (a, b) =>
+          // pages that failed last, so that they can't starve the rest
+          Number(pages[a.path]?.a !== undefined) -
+            Number(pages[b.path]?.a !== undefined) ||
+          readAt(a.path) - readAt(b.path) ||
+          (a.path < b.path ? -1 : a.path > b.path ? 1 : 0),
+      );
     this.left += due.length;
     for (const page of due) {
       await this.page(section, page);
-      if (++this.sinceSave >= SAVE_EVERY) await this.save();
+      if (
+        ++this.sinceSave >= SAVE_EVERY ||
+        Date.now() - this.savedAt >= SAVE_EVERY_MS
+      )
+        await this.save();
     }
   }
 
@@ -160,61 +205,81 @@ export class Crawl {
 
   private isDue(section: Section, { path, lastmod }: Listed) {
     const read = this.state.pages[path];
-    if (read?.s !== section.id) return true;
+    if (read?.a === this.today) return false;
+    // never read, or to be read again: it failed, or lost its document's holder
+    if (!read || read.s !== section.id || !read.d || read.a !== undefined)
+      return true;
     // a lastmod that is always today says nothing: the days do
     if (section.revisitDays) return this.today - read.d >= section.revisitDays;
     return lastmod !== null && lastmod !== read.m;
   }
 
   private async page(section: Section, listing: Listed) {
+    try {
+      await this.readOne(section, listing);
+    } catch (error) {
+      if (!isPageTrouble(error)) throw error;
+      this.failed(section, listing.path, (error as Error).message);
+    }
+  }
+
+  private async readOne(section: Section, listing: Listed) {
     const { client, ingest } = this.o;
     const { path, url } = listing;
-    const known = this.state.pages[path];
-    const prior = known?.s === section.id ? known : undefined;
+    const prior = this.state.pages[path];
     let answer;
     try {
       answer = await client.text(url, PAGE_LIMIT);
     } catch (error) {
       if (error instanceof RequestFailedError)
-        return this.failed(error.message);
+        return this.failed(section, path, error.message);
       throw error;
     }
     const { status } = answer;
     if (status === 429 || status === 503)
       throw new StopRunError(`the site answered ${status}`);
     if (status === 404 || status === 410) {
-      this.failures = 0;
       this.left--;
-      return this.removePage(path);
+      if (++this.gone >= GONE_IN_A_ROW)
+        throw new SiteGoneError(`${GONE_IN_A_ROW} pages gone in a row`);
+      return this.suspect(
+        section,
+        listing,
+        `${path}: the site answered ${status}`,
+        true,
+      );
     }
-    if (!ok(status)) return this.failed(`${path}: the site answered ${status}`);
+    if (this.gone) {
+      this.gone = 0;
+      await this.removeConfirmed();
+    }
+    if (!ok(status))
+      return this.failed(section, path, `${path}: the site answered ${status}`);
+    if (!sameApart(answer.url, url))
+      return this.failed(
+        section,
+        path,
+        `${path}: answered as ${answer.url.pathname}`,
+      );
+
+    const page = await readPage(answer.body, answer.url, section);
     this.failures = 0;
     this.read++;
     this.left--;
+    if (!page || (page.textChars < MIN_TEXT_CHARS && !page.documents.length)) {
+      if (!page)
+        this.logger.warn(`${path}: none of ${section.content} on the page`);
+      // a post that was kept is not dropped on one look
+      if (prior?.k)
+        return this.suspect(section, listing, `${path}: nothing to keep in it`);
+      return this.mark(section, listing, [], [], false);
+    }
+    this.wrong = 0;
 
-    const mark = (f: string[]) => {
-      this.state.pages[path] = {
-        s: section.id,
-        m: listing.lastmod,
-        d: this.today,
-        f,
-      };
-    };
-    const page = readPage(answer.body, answer.url, section, this.allowed, (p) =>
-      this.heldElsewhere(p, path),
+    const links = page.documents.filter((doc) =>
+      this.allowed(new URL(doc.url)),
     );
-    if (!page) {
-      this.logger.warn(`${path}: none of ${section.content} on the page`);
-      return mark(prior?.f ?? []);
-    }
-    if (page.textChars < MIN_TEXT_CHARS && !page.documents.length) {
-      if (prior) {
-        await this.count(ingest.removeItem(path));
-        await this.dropFiles(prior.f, [], path);
-      }
-      return mark([]);
-    }
-
+    const mine = links.filter((doc) => !this.heldElsewhere(doc.path, path));
     const stamp = new Date(listing.lastmod ?? NaN);
     const dated =
       !section.revisitDays && !Number.isNaN(stamp.getTime()) ? stamp : null;
@@ -227,7 +292,7 @@ export class Crawl {
       ...(dated && { publishedAt: dated }),
       raw: { body: page.body },
     });
-    for (const doc of page.documents) {
+    for (const doc of mine) {
       const { needsContent } = await ingest.file({
         externalId: doc.path,
         course: section.id,
@@ -240,9 +305,56 @@ export class Crawl {
       this.stored++;
       if (needsContent) await this.download(doc.path, doc.url);
     }
-    const f = page.documents.map(({ path }) => path);
-    await this.dropFiles(prior?.f ?? [], f, path);
-    mark(f);
+    const f = mine.map(({ path }) => path);
+    await this.release(prior?.f ?? [], path, f);
+    this.mark(
+      section,
+      listing,
+      f,
+      links.map(({ path }) => path),
+      true,
+    );
+  }
+
+  private mark(
+    section: Section,
+    { path, lastmod }: Listed,
+    f: string[],
+    l: string[],
+    k: boolean,
+  ) {
+    this.state.pages[path] = {
+      s: section.id,
+      m: lastmod,
+      d: this.today,
+      f,
+      l,
+      k,
+      b: 0,
+    };
+  }
+
+  // The page looks gone or wrong, which one look can't tell from the site
+  // having a bad day: it stays as it is, tried again another day, and goes
+  // when a later day agrees. `gone` is the site's 404 or 410.
+  private async suspect(
+    section: Section,
+    listing: Listed,
+    message: string,
+    gone = false,
+  ) {
+    const { path } = listing;
+    this.logger.warn(message);
+    const known = this.state.pages[path];
+    const next = { ...(known ?? unread(section.id)) };
+    next.b++;
+    next.a = this.today;
+    this.state.pages[path] = next;
+    if (!gone && ++this.wrong >= WRONG_IN_A_ROW)
+      throw new StopRunError(`${WRONG_IN_A_ROW} pages looked wrong in a row`);
+    if (next.b < DAYS_TO_CONFIRM || !(next.k || next.f.length)) return;
+    if (gone) this.confirmed.push(path);
+    else await this.drop(section, listing);
   }
 
   // A document that can't be had is a warning and the page still counts as
@@ -250,17 +362,21 @@ export class Crawl {
   private async download(path: string, href: string) {
     const url = new URL(href);
     try {
-      const { status, body } = await this.o.client.stream(url);
+      const { status, body, url: from, type } = await this.o.client.stream(url);
       try {
         if (status === 429 || status === 503)
           throw new StopRunError(`the site answered ${status}`);
         if (!ok(status))
           return this.logger.warn(`${path}: the site answered ${status}`);
+        // a page in a document's place: a login, an error, another file
+        if (type.includes('text/html') || !sameApart(from, url))
+          return this.logger.warn(`${path}: answered with another page`);
         await this.o.ingest.content(path, body);
       } finally {
         body.destroy();
       }
     } catch (error) {
+      this.o.signal.throwIfAborted();
       if (error instanceof RequestFailedError)
         return this.logger.warn(error.message);
       if (
@@ -272,25 +388,53 @@ export class Crawl {
     }
   }
 
-  private failed(message: string) {
+  // the page stays as it was, and is tried again another day
+  private failed(section: Section, path: string, message: string) {
     this.logger.warn(message);
+    const known = this.state.pages[path] ?? unread(section.id);
+    this.state.pages[path] = { ...known, a: this.today };
     if (++this.failures >= FAILURES_IN_A_ROW)
       throw new StopRunError(`${FAILURES_IN_A_ROW} requests failed in a row`);
+  }
+
+  // the pages 404 or 410 confirmed gone, once no streak says it's the site
+  private async removeConfirmed() {
+    const paths = this.confirmed;
+    this.confirmed = [];
+    for (const path of paths) await this.removePage(path);
+  }
+
+  // a page whose post is gone, and the documents it held
+  private async drop(section: Section, listing: Listed) {
+    const { path } = listing;
+    await this.count(this.o.ingest.removeItem(path));
+    await this.release(this.state.pages[path].f, path);
+    this.mark(section, listing, [], [], false);
   }
 
   private async removePage(path: string) {
     const read = this.state.pages[path];
     if (!read) return;
-    await this.count(this.o.ingest.removeItem(path));
-    await this.dropFiles(read.f, [], path);
+    if (read.k) await this.count(this.o.ingest.removeItem(path));
+    await this.release(read.f, path);
     delete this.state.pages[path];
   }
 
-  // documents `self` held and no longer does, and no other page holds
-  private async dropFiles(before: string[], now: string[], self: string) {
-    for (const file of before)
-      if (!now.includes(file) && !this.heldElsewhere(file, self))
-        await this.count(this.o.ingest.removeFile(file));
+  // Documents `self` held and no longer does. One that another page links is
+  // that page's now, which is made due to take it over; one that none links
+  // is removed.
+  private async release(before: string[], self: string, now: string[] = []) {
+    for (const file of before) {
+      if (now.includes(file) || this.heldElsewhere(file, self)) continue;
+      const takers = Object.entries(this.state.pages).filter(
+        ([path, read]) => path !== self && read.l.includes(file),
+      );
+      for (const [, taker] of takers) {
+        taker.m = null;
+        taker.d = 0;
+      }
+      if (!takers.length) await this.count(this.o.ingest.removeFile(file));
+    }
   }
 
   private async count(removing: Promise<{ changed: boolean }>) {
@@ -305,6 +449,7 @@ export class Crawl {
 
   private async save() {
     this.sinceSave = 0;
+    this.savedAt = Date.now();
     await this.o.ingest.saveState(this.state as unknown as Json);
   }
 }

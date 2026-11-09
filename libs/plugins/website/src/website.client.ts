@@ -1,4 +1,4 @@
-import { addAbortSignal, type Readable } from 'node:stream';
+import { addAbortSignal, Readable } from 'node:stream';
 import { setTimeout } from 'node:timers/promises';
 import axios, { type AxiosInstance } from 'axios';
 import { portalRequests } from '@app/plugin-sdk';
@@ -23,11 +23,18 @@ export class RequestFailedError extends Error {
 
 export interface Answer<B> {
   status: number;
+  // where the answer came from, after any redirects
   url: URL;
+  // its Content-Type, lower-cased ('' when it has none)
+  type: string;
   body: B;
 }
 
 const TIMEOUT_MS = 30_000;
+// a text request, its body too, is over by then
+const DEADLINE_MS = 60_000;
+// a download that sends nothing for this long is cut
+const IDLE_MS = 60_000;
 const MAX_REDIRECTS = 5;
 const REDIRECTS = new Set([301, 302, 303, 307, 308]);
 
@@ -38,6 +45,8 @@ export interface SiteClientOptions {
   delayMs: number;
   maxRequests: number;
   signal: AbortSignal;
+  deadlineMs?: number;
+  idleMs?: number;
 }
 
 // The site's requests, one at a time, through the sdk's guard on what a
@@ -86,19 +95,27 @@ export class SiteClient {
     let url = from;
     for (let hops = 0; ; hops++) {
       await this.turn();
-      let answer: Answer<string | Readable>;
       try {
         const res = await this.http.get<string | Readable>(url.href, {
           responseType,
           maxContentLength: limit,
+          // the whole of a text answer is bound by it; a download by the
+          // watchdog on its data
+          ...(responseType === 'text' && {
+            signal: AbortSignal.any([
+              this.options.signal,
+              AbortSignal.timeout(this.options.deadlineMs ?? DEADLINE_MS),
+            ]),
+          }),
         });
-        answer = { status: res.status, url, body: res.data };
         this.lastAt = Date.now();
         const location = res.headers.location as string | undefined;
         if (!REDIRECTS.has(res.status) || !location) {
-          if (typeof res.data !== 'string')
-            addAbortSignal(this.options.signal, res.data);
-          return answer;
+          const type = String(res.headers['content-type'] ?? '').toLowerCase();
+          const { status, data } = res;
+          const body =
+            typeof data === 'string' ? data : this.guarded(data, url);
+          return { status, url, type, body };
         }
         if (typeof res.data !== 'string') res.data.destroy();
         url = new URL(location, url);
@@ -112,6 +129,40 @@ export class SiteClient {
       if (hops >= MAX_REDIRECTS)
         throw new RequestFailedError(from, 'too many redirects');
     }
+  }
+
+  // A download as it comes, failing as one file when its connection drops or
+  // stalls; the run stopping fails it, read or not (axios ends the stream
+  // quietly then, as if the file were whole).
+  private guarded(data: Readable, url: URL) {
+    const idleMs = this.options.idleMs ?? IDLE_MS;
+    async function* chunks() {
+      let timer: NodeJS.Timeout | undefined;
+      const watch = () => {
+        clearTimeout(timer);
+        timer = globalThis.setTimeout(
+          () => data.destroy(new Error(`no data for ${idleMs / 1000} s`)),
+          idleMs,
+        );
+      };
+      try {
+        watch();
+        for await (const chunk of data) {
+          clearTimeout(timer);
+          yield chunk;
+          watch();
+        }
+      } catch (error) {
+        throw new RequestFailedError(url, (error as Error).message);
+      } finally {
+        clearTimeout(timer);
+        data.destroy();
+      }
+    }
+    return addAbortSignal(
+      this.options.signal,
+      Readable.from(chunks(), { objectMode: false }),
+    );
   }
 
   // wait out the pause since the last request, and take one from the budget
