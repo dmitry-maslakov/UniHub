@@ -2,7 +2,13 @@ import { z } from 'zod';
 import { settings } from '@app/plugin-sdk';
 
 // the llama.cpp (or any OpenAI-compatible) server taking images
-const server = z.url({ protocol: /^https?$/ });
+// with no path: the calls add /v1/... themselves
+const server = z
+  .url({ protocol: /^https?$/ })
+  .refine(
+    (url) => !URL.canParse(url) || ['', '/'].includes(new URL(url).pathname),
+    'no path, as http://host:8081',
+  );
 
 export const readerSettings = z
   .object({ READER_URL: server })

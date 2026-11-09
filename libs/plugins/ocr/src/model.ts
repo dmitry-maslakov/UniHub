@@ -1,9 +1,19 @@
 import { Logger } from '@nestjs/common';
 import { ModelUnavailableError, type ProcessorInput } from '@app/plugin-sdk';
-import { z } from 'zod';
+import { Agent } from 'undici';
+import { z, ZodError } from 'zod';
 
 // one picture gets this long from the model
 export const PICTURE_TIMEOUT_MS = 10 * 60_000;
+
+// The global fetch's own limit for the first byte (5 minutes) would fire
+// before ours and look like a model gone; ours is the only one.
+const dispatcher = new Agent({ headersTimeout: 0, bodyTimeout: 0 });
+
+// the picture's own fault: the server refuses it
+const REFUSED = [400, 413, 415, 422];
+// a server not up (yet), or a proxy in front of one that isn't
+const AWAY = [502, 503, 504];
 
 const answer = z.object({
   choices: z
@@ -20,9 +30,12 @@ export interface Question {
 
 // One picture put to an OpenAI-compatible server (llama.cpp's, say) taking
 // images: the text it answers, trimmed, or '' for nothing. A server that
-// can't be reached or is still loading (5xx) is ModelUnavailableError, so
-// the queue waits; the input's abort is rethrown. The picture's own fault is
-// '' and a warning: it took over 10 minutes or the server refused it (4xx).
+// can't be reached or is still loading (502, 503, 504) is
+// ModelUnavailableError, so the queue waits; the input's abort is rethrown.
+// The picture's own fault is '' and a warning: it took over 10 minutes, the
+// server refused it (400, 413, 415, 422) or answered something unreadable.
+// Any other status is a plain Error: the job spends an attempt and, out of
+// them, dead-letters, so nothing empty is stored for good.
 export async function ask(
   url: string,
   question: Question,
@@ -54,7 +67,8 @@ export async function ask(
         chat_template_kwargs: { enable_thinking: false },
       }),
       signal: AbortSignal.any(signals),
-    });
+      dispatcher,
+    } as RequestInit);
   } catch (error) {
     if (input.signal?.aborted) throw input.signal.reason;
     if (error instanceof Error && error.name === 'TimeoutError') {
@@ -66,12 +80,12 @@ export async function ask(
       cause: error,
     });
   }
-  if (response.status >= 500) {
-    await response.body?.cancel();
-    throw new ModelUnavailableError(`the model answered ${response.status}`);
-  }
   if (!response.ok) {
     await response.body?.cancel();
+    if (AWAY.includes(response.status))
+      throw new ModelUnavailableError(`the model answered ${response.status}`);
+    if (!REFUSED.includes(response.status))
+      throw new Error(`the model answered ${response.status}`);
     logger.warn(
       `${input.name}: the model refused a picture (${response.status})`,
     );
@@ -86,7 +100,14 @@ export async function ask(
       logger.warn(`${input.name}: a picture got no answer in time`);
       return '';
     }
-    logger.warn(`${input.name}: the model's answer can't be read`);
-    return '';
+    // an answer that is not what was asked for is the picture's; a body cut
+    // short is the connection's
+    if (error instanceof SyntaxError || error instanceof ZodError) {
+      logger.warn(`${input.name}: the model's answer can't be read`);
+      return '';
+    }
+    throw new ModelUnavailableError('the model answer was cut short', {
+      cause: error,
+    });
   }
 }

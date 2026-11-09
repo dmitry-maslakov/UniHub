@@ -12,7 +12,7 @@ import { DECK, IMAGES, PDF, PictureWalk } from './picture-walk.js';
 
 // pages or slides of one file a model gets, and the time they get
 export const MODEL_MAX_PAGES = 200;
-export const MODEL_DEADLINE_MS = 170 * 60_000;
+export const MODEL_DEADLINE_MS = 165 * 60_000;
 const TIMEOUT_MINUTES = 180;
 
 const ACCEPTS = [...IMAGES, ...PDF, ...DECK];

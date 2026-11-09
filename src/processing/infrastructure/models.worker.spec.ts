@@ -1,6 +1,6 @@
 import type { ConfigType } from '@nestjs/config';
 import type { PrismaHealthIndicator } from '@nestjs/terminus';
-import type { Job, Queue } from 'bullmq';
+import { RateLimitError, type Job, type Queue } from 'bullmq';
 import { PluginName } from '@app/kernel';
 import { ModelUnavailableError } from '@app/plugin-sdk';
 import { testMeter } from '../../../test/metrics.js';
@@ -23,7 +23,10 @@ const data: PluginJob = {
 const job = (fields: Partial<Job> = {}) =>
   ({ id: 'job-1', data, ...fields }) as Job<PluginJob>;
 
-function worker(counts: number[] = [0]) {
+function worker(
+  counts: number[] = [0],
+  run: ProcessContent['run'] = async () => 'done',
+) {
   const getJobCounts = vi.fn(async () => ({ waiting: counts.shift() ?? 0 }));
   const metrics = testMeter();
   const health = {
@@ -33,7 +36,7 @@ function worker(counts: number[] = [0]) {
   } as unknown as PrismaHealthIndicator;
   const queue = { getJobCounts, rateLimit: vi.fn(async () => {}) };
   const w = new ModelsWorker(
-    { run: async () => 'done' } as unknown as ProcessContent,
+    { run } as unknown as ProcessContent,
     health,
     {} as PrismaService,
     queue as unknown as Queue<PluginJob>,
@@ -69,6 +72,27 @@ describe('ModelsWorker', () => {
     expect(await w['away'](new ModelUnavailableError('whisper is down'))).toBe(
       true,
     );
+  });
+
+  it('fails a job whose model is away ten times running, and counts by job', async () => {
+    const run = vi.fn(async () => {
+      throw new ModelUnavailableError('the model answered 503');
+    });
+    const { w, queue } = worker([0], run);
+    // nine waits, the other job in between starts the count anew
+    for (let i = 0; i < 9; i++)
+      await expect(w.process(job())).rejects.toThrow(RateLimitError);
+    await expect(w.process(job({ id: 'job-2' }))).rejects.toThrow(
+      RateLimitError,
+    );
+    for (let i = 0; i < 9; i++)
+      await expect(w.process(job())).rejects.toThrow(RateLimitError);
+    const failure = await w.process(job()).catch((err: unknown) => err);
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure).not.toBeInstanceOf(ModelUnavailableError);
+    expect(failure).not.toBeInstanceOf(RateLimitError);
+    expect((failure as Error).message).toContain('job-1');
+    expect(queue.rateLimit).toHaveBeenCalledTimes(19);
   });
 
   it('counts a failed job, and a given-up one apart', async () => {

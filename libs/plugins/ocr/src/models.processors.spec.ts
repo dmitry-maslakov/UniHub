@@ -96,6 +96,11 @@ interface Asked {
 // The model server: records what it's asked and answers by `reply`.
 type Reply = (n: number, req: IncomingMessage) => Promise<[number, unknown]>;
 
+// a 200 whose body ends before its length says
+const CUT = Symbol('cut');
+// an answer that never comes
+const never = () => new Promise<never>(() => {});
+
 const says = (text: string): [number, unknown] => [
   200,
   { choices: [{ message: { content: text } }] },
@@ -136,6 +141,12 @@ describe.each([
           body: JSON.parse(Buffer.concat(chunks).toString()),
         });
         void reply(asked.length, req).then(([status, body]) => {
+          if (body === CUT) {
+            res.writeHead(200, { 'content-length': 1000 });
+            res.write('{"choices":[');
+            setTimeout(() => res.destroy(), 20);
+            return;
+          }
           res.writeHead(status, { 'content-type': 'application/json' });
           res.end(JSON.stringify(body));
         });
@@ -275,11 +286,11 @@ describe.each([
       );
     }, 120_000);
 
-    it('stops past the deadline of 170 minutes, checked before each slide', async () => {
+    it('stops past the deadline of 165 minutes, checked before each slide', async () => {
       let now = 1_000_000;
       vi.spyOn(Date, 'now').mockImplementation(() => now);
       reply = async (n) => {
-        if (n === 1) now += 170 * 60_000 + 1;
+        if (n === 1) now += 165 * 60_000 + 1;
         return says(`answer ${n}`);
       };
 
@@ -295,12 +306,32 @@ describe.each([
   });
 
   describe('when the model', () => {
-    it.each([503, 500])('answers %i, the job waits', async (status) => {
+    it.each([502, 503, 504])('answers %i, the job waits', async (status) => {
       reply = async () => [status, { error: 'loading' }];
 
       await expect(
         make(url).process(input('a.png', file('latin.png'))),
       ).rejects.toBeInstanceOf(ModelUnavailableError);
+    });
+
+    it.each([500, 501, 507, 401, 404, 429])(
+      'answers %i, the job fails and spends an attempt',
+      async (status) => {
+        reply = async () => [status, { error: 'no' }];
+
+        const failed = make(url).process(input('a.png', file('latin.png')));
+        await expect(failed).rejects.toThrow(`answered ${status}`);
+        await expect(failed).rejects.not.toBeInstanceOf(ModelUnavailableError);
+      },
+    );
+
+    it('answers 503 after pages were read, the job waits and returns nothing', async () => {
+      reply = async (n) => (n === 2 ? [503, {}] : says(`answer ${n}`));
+
+      await expect(
+        make(url).process(input('d.pptx', await deckOf(3))),
+      ).rejects.toBeInstanceOf(ModelUnavailableError);
+      expect(asked).toHaveLength(2);
     });
 
     it('refuses the connection, the job waits and nothing is stored', async () => {
@@ -317,27 +348,56 @@ describe.each([
       ).rejects.toBeInstanceOf(ModelUnavailableError);
     });
 
-    it('answers 4xx, that picture is empty and the next is read', async () => {
-      reply = async (n) => (n === 1 ? [400, { error: 'bad' }] : says('ok'));
+    it.each([400, 413, 415, 422])(
+      'answers %i, that picture is empty and the next is read',
+      async (status) => {
+        reply = async (n) =>
+          n === 1 ? [status, { error: 'bad' }] : says('ok');
 
-      expect(await make(url).process(input('d.pptx', await deckOf(2)))).toEqual(
-        { parts: ['', 'ok'] },
-      );
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('d.pptx'));
-    });
+        expect(
+          await make(url).process(input('d.pptx', await deckOf(2))),
+        ).toEqual({ parts: ['', 'ok'] });
+        expect(warn).toHaveBeenCalledWith(expect.stringContaining('d.pptx'));
+      },
+    );
 
     it('takes too long over a picture, that one is empty and the next is read', async () => {
       const real = AbortSignal.timeout.bind(AbortSignal);
-      vi.spyOn(AbortSignal, 'timeout').mockImplementation(() => real(1000));
-      reply = async (n) => {
-        if (n === 1) await new Promise((done) => setTimeout(done, 2000));
-        return says('ok');
-      };
+      vi.spyOn(AbortSignal, 'timeout').mockImplementation(() => real(500));
+      reply = (n) => (n === 1 ? never() : Promise.resolve(says('ok')));
 
       expect(await make(url).process(input('d.pptx', await deckOf(2)))).toEqual(
         { parts: ['', 'ok'] },
       );
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('d.pptx'));
+      // our timeout, not a connection error taken for the model being away
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('no answer in time'),
+      );
+    });
+
+    it.each([
+      ['not JSON', [200, 'nope']],
+      ['without choices', [200, { choices: [] }]],
+    ] as [string, [number, unknown]][])(
+      'answers 200 with a body that is %s, that picture is empty',
+      async (_, answer) => {
+        reply = async (n) => (n === 1 ? answer : says('ok'));
+
+        expect(
+          await make(url).process(input('d.pptx', await deckOf(2))),
+        ).toEqual({ parts: ['', 'ok'] });
+        expect(warn).toHaveBeenCalledWith(
+          expect.stringContaining("answer can't be read"),
+        );
+      },
+    );
+
+    it('cuts a 200 short, the job waits', async () => {
+      reply = async () => [200, CUT];
+
+      await expect(
+        make(url).process(input('a.png', file('latin.png'))),
+      ).rejects.toBeInstanceOf(ModelUnavailableError);
     });
   });
 
@@ -355,7 +415,7 @@ describe.each([
       ).rejects.toThrow('shutting down');
     });
 
-    it('stops a file before its next page', async () => {
+    it('asks the model for no further slide once aborted', async () => {
       const controller = new AbortController();
       reply = async (n) => {
         controller.abort(new Error('timed out'));
@@ -381,7 +441,15 @@ describe('the model settings', () => {
     expect(schema.parse({ [key]: 'https://llama.example' }).url).toBe(
       'https://llama.example',
     );
-    for (const bad of [undefined, '', 'llama:8080', 'ftp://llama', 'file:///x'])
+    for (const bad of [
+      undefined,
+      '',
+      'llama:8080',
+      'ftp://llama',
+      'file:///x',
+      'http://llama:8080/v1',
+      'http://llama:8080/a/',
+    ])
       expect(schema.safeParse({ [key]: bad }).success, String(bad)).toBe(false);
   });
 });

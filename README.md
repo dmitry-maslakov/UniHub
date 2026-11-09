@@ -123,15 +123,40 @@ Admins set the courses up (`@Roles([ADMIN_ROLE])`):
 `q` is 2 to 500 characters: words, a phrase or a code identifier, in Latin or Cyrillic, with or without diacritics; `limit` is 1 to 50 results, 10 by default; `type` is `files` (files and archive members) or `posts`, both when absent. The answer:
 
 ```json
-{ "results": [
-  { "type": "file", "fileId": "3f0c…", "name": "l5.pdf", "path": "Predavanja", "member": null,
-    "course": "os",
-    "pages": [ { "page": 3, "processor": "office-text",
-                 "snippet": { "text": "…", "highlights": [[12, 18]] } } ],
-    "matchedName": null, "sameContentIn": ["9a1e…"] },
-  { "type": "post", "itemId": "77b2…", "kind": "announcement", "title": "Kolokvijum",
-    "url": "https://…", "publishedAt": "2026-10-01T09:00:00.000Z", "course": "os",
-    "snippet": { "text": "Kolokvijum\n\nKolokvijum iz semafora je u petak.", "highlights": [[0, 10]] } } ] }
+{
+  "results": [
+    {
+      "type": "file",
+      "fileId": "3f0c…",
+      "name": "l5.pdf",
+      "path": "Predavanja",
+      "member": null,
+      "course": "os",
+      "pages": [
+        {
+          "page": 3,
+          "processor": "office-text",
+          "snippet": { "text": "…", "highlights": [[12, 18]] }
+        }
+      ],
+      "matchedName": null,
+      "sameContentIn": ["9a1e…"]
+    },
+    {
+      "type": "post",
+      "itemId": "77b2…",
+      "kind": "announcement",
+      "title": "Kolokvijum",
+      "url": "https://…",
+      "publishedAt": "2026-10-01T09:00:00.000Z",
+      "course": "os",
+      "snippet": {
+        "text": "Kolokvijum\n\nKolokvijum iz semafora je u petak.",
+        "highlights": [[0, 10]]
+      }
+    }
+  ]
+}
 ```
 
 - `type` says what a result is: a `file`, a `member` (a file inside an archive the file is) or a `post`. The answer changed with posts and names: every result has a `type`, a post has none of a file's fields (no `fileId`, `pages` or `sameContentIn`), a file found by its name alone has `pages: []`, and `limit` counts posts too; a client that reads files alone skips the results of `type` `post`. A file's and a member's fields are otherwise as they were, `matchedName` added
@@ -198,7 +223,7 @@ Nothing read is no parts, stored like any result, so it isn't queued again; so i
 
 Limits: a PDF or deck up to 100 MiB, an image or a deck's picture up to 30 MiB and 100 megapixels, at most 500 pages or slides and 30 minutes a file (the rest stay empty, with a warning), 60 seconds a Tesseract run, and two files at a time, one thread each: two cores at most.
 
-`reader` and `vision` (`PLUGINS`, each on its own) read the same files the same way, but with a model: `reader` reads a page off it, `vision` says in two sentences what a picture shows (formulas as LaTeX). Each takes the address of an OpenAI-compatible server that takes images (llama.cpp's, with its model), `READER_URL` and `VISION_URL`, an http or https URL that is required once the plugin is on. They are heavy processors: their jobs wait in the `models` queue and run only in a `models` batch with the model server beside it (Heavy processors, below), one picture at a time, each fitted inside 1600 pixels and sent as a JPEG. A server that can't be reached or is still loading (5xx) pauses the queue with no attempt spent; a picture the server refuses (4xx) or takes over 10 minutes over is left empty, with a warning. At most 200 pages or slides and 170 minutes a file, 180 minutes a job. Their texts are another text of the file, each under its own name, and the reader shows them as made by a machine.
+`reader` and `vision` (`PLUGINS`, each on its own) read the same files the same way, but with a model: `reader` reads a page off it, `vision` says in two sentences what a picture shows (formulas as LaTeX). Each takes the address of an OpenAI-compatible server that takes images (llama.cpp's, with its model), `READER_URL` and `VISION_URL`, an http or https URL with no path (`http://host:8081`) that is required once the plugin is on. They are heavy processors: their jobs wait in the `models` queue and run only in a `models` batch with the model server beside it (Heavy processors, below), one picture at a time, each fitted inside 1600 pixels and sent as a JPEG. A server that can't be reached or is still loading (502, 503, 504) pauses the queue with no attempt spent (ten times running on one job, and it fails like any other); a picture the server refuses (400, 413, 415, 422) or takes over 10 minutes over is left empty, with a warning; any other answer fails the job. Run `reader` and `vision` in one batch with both model servers up: their jobs interleave in the one queue. At most 200 pages or slides and 165 minutes a file, 180 minutes a job. Their texts are another text of the file, each under its own name, and the reader shows them as made by a machine.
 
 ### Search index
 
@@ -308,12 +333,12 @@ The reference above says what the code does; this is what an operator decides. E
 
 #### Link modes
 
-| `PORTAL_LINKS` | Who gets in | Credential |
-|---|---|---|
-| a portal not named, or `canvas=shared` | the one account the operator configures (`CANVAS_TOKEN`); grants decide who reads | the plugin's settings |
-| `canvas=token` | every user may link an account of their own | a token each user pastes on the web app's Sources page, with their school's Canvas address |
-| `canvas=token/admins` | only admins may link; everyone else gets a 404 | the same |
-| `catalog=public` | every user picks courses of the site's catalog; no grant | none: the connector reads a site anyone may read |
+| `PORTAL_LINKS`                         | Who gets in                                                                       | Credential                                                                                 |
+| -------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| a portal not named, or `canvas=shared` | the one account the operator configures (`CANVAS_TOKEN`); grants decide who reads | the plugin's settings                                                                      |
+| `canvas=token`                         | every user may link an account of their own                                       | a token each user pastes on the web app's Sources page, with their school's Canvas address |
+| `canvas=token/admins`                  | only admins may link; everyone else gets a 404                                    | the same                                                                                   |
+| `catalog=public`                       | every user picks courses of the site's catalog; no grant                          | none: the connector reads a site anyone may read                                           |
 
 - A token is write-only: `PUT` replaces it, `DELETE` unlinks, nothing reads it back (no API answer, log, error, job or MCP tool shows it or a hint of it). Linking needs a session signed in within the last day.
 - Tokens are sealed with AES-256-GCM under `PORTAL_CREDENTIALS_SECRETS="2:<key>,1:<key>"`, versioned keys of 32 random bytes in base64 (`openssl rand -base64 32`), apart from `BETTER_AUTH_SECRET`. The app won't start with a `token` portal and no key. Rotating:
@@ -330,13 +355,13 @@ Each account is polled on a grid of its own and sees only what the portal shows 
 - a post or course that two accounts see alike is one record; one they see differently is two, each in the views that list it
 - the listings are not shared: they cost about ten requests per course per account per pass, so `VIEW_MINUTES` is what to raise on a small portal
 
-| Setting | Default | Meaning |
-|---|---|---|
-| `VIEW_MINUTES` | 60 | how often each account passes (5 to a day), at an offset its id gives |
-| `PUBLISH_DELAY_MINUTES` | 10 | what a pass finds shows this long after its slot (an account's first run's as each pass ends); must be under `VIEW_MINUTES` |
-| `HOLD_MINUTES` | 15 | content (bytes, texts, search hits) opens this long after that |
-| `CONNECTOR_CONCURRENCY` | 4 | passes one worker runs at once (1 to 64); each asks its portal one thing at a time |
-| `CONNECTOR_POLL_TIMEOUT_MINUTES` | 60 | a run longer than this is aborted; also how long a file's fetch lease lasts |
+| Setting                          | Default | Meaning                                                                                                                     |
+| -------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `VIEW_MINUTES`                   | 60      | how often each account passes (5 to a day), at an offset its id gives                                                       |
+| `PUBLISH_DELAY_MINUTES`          | 10      | what a pass finds shows this long after its slot (an account's first run's as each pass ends); must be under `VIEW_MINUTES` |
+| `HOLD_MINUTES`                   | 15      | content (bytes, texts, search hits) opens this long after that                                                              |
+| `CONNECTOR_CONCURRENCY`          | 4       | passes one worker runs at once (1 to 64); each asks its portal one thing at a time                                          |
+| `CONNECTOR_POLL_TIMEOUT_MINUTES` | 60      | a run longer than this is aborted; also how long a file's fetch lease lasts                                                 |
 
 An expired or revoked account isn't polled, and a run the portal refuses the token of marks it revoked until it's linked again.
 
@@ -359,10 +384,10 @@ What can't be hidden:
 
 A token a user pastes has no scopes, so the Canvas client only reads (GET and HEAD), and only from the Canvas the user linked it with, over https. Users link it on the web app's Sources page: their school's Canvas address, a link to where Canvas makes tokens there (`/profile/settings`), and the token.
 
-| | Canvas hosted by Instructure | Self-hosted Canvas |
-|---|---|---|
+|                                | Canvas hosted by Instructure                                                                                                                                                                                                                                                                                                                   | Self-hosted Canvas                                                               |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
 | Users pasting their own tokens | Instructure's API policy says an app used by several users must get their tokens by OAuth, and that asking users to make a token and enter it into a third-party app violates it. The hub refuses a token there (422 `TOKENS_NOT_ALLOWED`): a host under `instructure.com`, or one whose DNS CNAMEs lead there, before the token goes anywhere | governed by the institution's own rules: ask its Canvas admins before opening it |
-| OAuth | needs a developer key from the institution; the hub doesn't link by OAuth | the same, if the institution allows it |
+| OAuth                          | needs a developer key from the institution; the hub doesn't link by OAuth                                                                                                                                                                                                                                                                      | the same, if the institution allows it                                           |
 
 - an institution may stop students from making tokens or cap how long one lasts: a student's token can expire, and its account then shows `expired`, or `revoked` once Canvas refuses it, until the user links a new one
 - tell the institution what the hub reads and who reads it, whichever Canvas it is

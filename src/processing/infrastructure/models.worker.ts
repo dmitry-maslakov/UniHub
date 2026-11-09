@@ -23,6 +23,11 @@ import { OUTAGE_PAUSE_MS, PAUSING, PausingWorker } from './pausing.worker.js';
 // how often a run looks for work left
 export const DRAIN_POLL_MS = 5_000;
 
+// A job whose model is away this many times running is the job's own failure
+// (a picture that crashes the server), not an outage: it fails like any other,
+// so it can't hold the queue for ever.
+export const MAX_UNAVAILABLE = 10;
+
 // The heavy processors' worker, one job at a time (a model takes the memory
 // of one), only in a process with APP_ROLE=models. BullRegistrar registers
 // every @Processor of an app whole, so this one isn't: it makes its own
@@ -35,6 +40,8 @@ export class ModelsWorker
   private consumer?: Worker<PluginJob>;
   private readonly jobs: Counter;
   private readonly deadLetters: Counter;
+  // the job last run, and how many times running its model was away
+  private streak = { id: undefined as string | undefined, count: 0 };
 
   constructor(
     private readonly processContent: ProcessContent,
@@ -97,10 +104,25 @@ export class ModelsWorker
     return false;
   }
 
-  protected work({ data }: Job<PluginJob>, signal: AbortSignal) {
+  protected work(job: Job<PluginJob>, signal: AbortSignal) {
+    const { data } = job;
     if (data.kind !== 'process')
       throw new Error(`a ${data.kind} job in models`);
-    return this.processContent.run(data, signal);
+    return this.counting(job, () => this.processContent.run(data, signal));
+  }
+
+  private async counting(job: Job<PluginJob>, run: () => Promise<unknown>) {
+    if (this.streak.id !== job.id) this.streak = { id: job.id, count: 0 };
+    try {
+      return await run();
+    } catch (err) {
+      if (!(err instanceof ModelUnavailableError)) throw err;
+      if (++this.streak.count < MAX_UNAVAILABLE) throw err;
+      throw new Error(
+        `job ${job.id}: the model was away ${MAX_UNAVAILABLE} times running (${err.message})`,
+        { cause: err },
+      );
+    }
   }
 
   // a model that can't be reached pauses the queue like the database away
@@ -108,9 +130,9 @@ export class ModelsWorker
     return err instanceof ModelUnavailableError || super.away(err);
   }
 
-  protected outage() {
+  protected outage(err: unknown) {
     this.logger.warn(
-      `the database or a model is away, models wait ${OUTAGE_PAUSE_MS / 1000} s`,
+      `the database or a model is away (job ${this.streak.id}: ${err instanceof Error ? err.message : String(err)}), models wait ${OUTAGE_PAUSE_MS / 1000} s`,
     );
   }
 
