@@ -1,4 +1,5 @@
-import sharp from 'sharp';
+import sharp, { type Sharp } from 'sharp';
+import { ofTheFile, Unreadable } from './unreadable.js';
 
 // A picture whose short side is under this isn't read: an icon, a bullet
 export const MIN_SIDE = 48;
@@ -9,14 +10,28 @@ export const MAX_PIXELS = 100_000_000;
 const ENLARGE_BELOW = 1600;
 const FIT_INSIDE = 4000;
 
+// what sharp may hand on: it picks the decoder by the bytes, not by the
+// name, so an SVG behind a .png never reaches librsvg
+const FORMATS = ['jpeg', 'png', 'gif', 'webp', 'tiff'];
+// a picture that takes longer than this is the file's fault
+const TIMEOUT_SECONDS = 60;
+
 // A picture as Tesseract reads best: upright, on white, grey, and big
 // enough. The same for a file that is an image and for a deck's. Null when
-// it's too small to hold text; throws when sharp can't read it.
-export async function preparePicture(data: Buffer) {
-  const image = sharp(data, { limitInputPixels: MAX_PIXELS });
-  const { width, height } = await image.metadata();
-  if (Math.min(width, height) < MIN_SIDE) return null;
+// it's too small to hold text; throws Unreadable when it can't be read.
+export const preparePicture = (data: Buffer) =>
+  ofTheFile(async () => {
+    const image = sharp(data, { limitInputPixels: MAX_PIXELS });
+    const { format, width, height } = await image.metadata();
+    if (!format || !FORMATS.includes(format))
+      throw new Unreadable(`${format} is not a readable picture`);
+    if (Math.min(width, height) < MIN_SIDE) return null;
+    return prepared(image, width, height);
+  });
+
+function prepared(image: Sharp, width: number, height: number) {
   const upright = image
+    .timeout({ seconds: TIMEOUT_SECONDS })
     .rotate() // by EXIF
     .flatten({ background: '#ffffff' })
     .greyscale()
@@ -39,11 +54,13 @@ export async function preparePicture(data: Buffer) {
 }
 
 // A page PDFium drew, RGBA, as it is: no resizing, it was drawn big enough.
-export function pagePicture(raw: Uint8Array, width: number, height: number) {
-  return sharp(raw, { raw: { width, height, channels: 4 } })
-    .flatten({ background: '#ffffff' })
-    .greyscale()
-    .toColourspace('b-w')
-    .png({ compressionLevel: 1 })
-    .toBuffer();
-}
+export const pagePicture = (raw: Uint8Array, width: number, height: number) =>
+  ofTheFile(() =>
+    sharp(raw, { raw: { width, height, channels: 4 } })
+      .timeout({ seconds: TIMEOUT_SECONDS })
+      .flatten({ background: '#ffffff' })
+      .greyscale()
+      .toColourspace('b-w')
+      .png({ compressionLevel: 1 })
+      .toBuffer(),
+  );

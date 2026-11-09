@@ -41,16 +41,19 @@ export class ListTextsHandler implements IQueryHandler<ListTextsQuery> {
   }
 }
 
-// One page of the newest version of each processor's text (or of the one
-// named), for those that have the page, the longest first.
-function pageTexts(
+type PageRow = Omit<TextPage, 'text'> & { text: string | null };
+
+// The newest version of each processor on (or of the one named) that has
+// parts, with its page `page` (null where it has no such page), the longest
+// first and those without last.
+function pageRows(
   txHost: PrismaTxHost,
   names: readonly string[],
   hash: string,
   page: number,
   processor: string | null,
 ) {
-  return txHost.tx.$queryRaw<TextPage[]>`
+  return txHost.tx.$queryRaw<PageRow[]>`
     SELECT * FROM (
       SELECT DISTINCT ON (processor)
         processor, version, jsonb_array_length(parts)::int AS pages,
@@ -61,9 +64,11 @@ function pageTexts(
         AND (${processor}::text IS NULL OR processor = ${processor})
       ORDER BY processor, version DESC
     ) newest
-    WHERE text IS NOT NULL
-    ORDER BY length(text) DESC, processor`;
+    WHERE pages > 0
+    ORDER BY length(text) DESC NULLS LAST, processor`;
 }
+
+const hasText = (row: PageRow): row is TextPage => row.text !== null;
 
 @QueryHandler(GetTextPageQuery)
 export class GetTextPageHandler implements IQueryHandler<GetTextPageQuery> {
@@ -72,16 +77,24 @@ export class GetTextPageHandler implements IQueryHandler<GetTextPageQuery> {
     private readonly plugins: PluginCatalog,
   ) {}
 
+  // With a processor named, its page. Otherwise the longest text of the page
+  // among the processors that split the document the most: texts that don't
+  // have the same number of pages are of documents split differently (an
+  // html a portal calls text/plain), and page 3 of one isn't page 3 of the
+  // other, so only the one with the most pages answers (null if it has no
+  // such page). Among those, the longest text, ties by processor.
   async execute({ hash, page, processor }: GetTextPageQuery) {
     if (!Number.isInteger(page) || page < 1) return null;
-    const [found] = await pageTexts(
+    const rows = await pageRows(
       this.txHost,
       this.plugins.processorNames,
       hash,
       page,
       processor ?? null,
     );
-    return found ?? null;
+    const most = Math.max(0, ...rows.map((row) => row.pages));
+    const [found] = rows.filter((row) => row.pages === most);
+    return found && hasText(found) ? found : null;
   }
 }
 
@@ -94,12 +107,13 @@ export class GetPageTextsHandler implements IQueryHandler<GetPageTextsQuery> {
 
   async execute({ hash, page }: GetPageTextsQuery) {
     if (!Number.isInteger(page) || page < 1) return [];
-    return pageTexts(
+    const rows = await pageRows(
       this.txHost,
       this.plugins.processorNames,
       hash,
       page,
       null,
     );
+    return rows.filter(hasText);
   }
 }

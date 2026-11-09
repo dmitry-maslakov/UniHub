@@ -21,6 +21,7 @@ describe('texts read from the database', { timeout: 20_000 }, () => {
   let app: INestApplication;
   let queries: QueryBus;
   const hash = sha256('texts: a scanned lecture');
+  const split = sha256('texts: a document split differently');
   const picture = sha256('texts: a picture');
   const blank = sha256('texts: a blank picture');
   const processor = (name: string) => PluginName.parse(name);
@@ -53,6 +54,12 @@ describe('texts read from the database', { timeout: 20_000 }, () => {
     await representation(hash, 'zz-empty', 2, []);
     await representation(hash, 'aa-off', 1, [
       'text of a processor that is off',
+    ]);
+    // one document, split into 3 by one processor and into 2 by another
+    await representation(split, 'office-text', 1, ['a', 'b', 'c']);
+    await representation(split, 'ocr', 1, [
+      'much longer first',
+      'much longer second',
     ]);
     // a picture in an archive, one read and one that held no text
     await representation(picture, 'ocr', 1, ['Računarske mreže']);
@@ -117,6 +124,27 @@ describe('texts read from the database', { timeout: 20_000 }, () => {
         ),
       ).toBeNull();
     expect(await queries.execute(new GetTextPageQuery(hash, 3))).toBeNull();
+  });
+
+  it('answers from the processor that splits the most when they differ', async () => {
+    // ocr's page 2 is longer, but it is another split of the document
+    expect(await queries.execute(new GetTextPageQuery(split, 2))).toMatchObject(
+      { processor: 'office-text', pages: 3, text: 'b' },
+    );
+    expect(await queries.execute(new GetTextPageQuery(split, 3))).toMatchObject(
+      { processor: 'office-text', text: 'c' },
+    );
+    expect(await queries.execute(new GetTextPageQuery(split, 4))).toBeNull();
+    // named, each has its own
+    expect(
+      await queries.execute(new GetTextPageQuery(split, 2, processor('ocr'))),
+    ).toMatchObject({ text: 'much longer second' });
+    // every row that has the page is still every row
+    expect(
+      (await queries.execute(new GetPageTextsQuery(split, 2))).map(
+        (t) => t.processor,
+      ),
+    ).toEqual(['ocr', 'office-text']);
   });
 
   it('reads every text of a page, the longest first', async () => {

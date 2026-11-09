@@ -208,6 +208,28 @@ describe('a file', () => {
     expect(screen.queryByRole('button', { name: 'Next part' })).toBeNull();
   });
 
+  it('says nothing about machine reading when the text is empty', async () => {
+    setup({
+      file: details({
+        name: 'plot.png',
+        mime: 'image/png',
+        texts: [{ processor: 'ocr', version: 1, pages: 1 }],
+      }),
+      text: () =>
+        HttpResponse.json({
+          processor: 'ocr',
+          version: 1,
+          pages: 1,
+          page: 1,
+          text: '  ',
+        }),
+    });
+    renderApp('/courses/os/files/f1');
+
+    expect(await screen.findByText('No text on this part')).toBeVisible();
+    expect(screen.queryByText(/by machine/)).toBeNull();
+  });
+
   it('reads the text of a picture inside an archive that has one', async () => {
     setup({
       file: details({ name: 'figs.zip', mime: 'application/zip', texts: [] }),

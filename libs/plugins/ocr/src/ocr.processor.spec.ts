@@ -32,26 +32,36 @@ const file = (name: string) =>
 const fixture = (name: string, matched?: string) =>
   input(name, file(name), matched);
 
-// A deck of `n` slides that are each one picture, with the parts a reader
-// needs; `list` is the order presentation.xml gives, as indexes.
-async function deckOf(n: number, picture = file('blank.png')) {
+const NS =
+  'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+const rels = (body: string) =>
+  `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${body}</Relationships>`;
+const picSlide = (text = '') =>
+  `<p:sld ${NS}><p:cSld><p:spTree>${text && `<a:t>${text}</a:t>`}<p:pic><p:blipFill><a:blip r:embed="rId1"/></p:blipFill></p:pic></p:spTree></p:cSld></p:sld>`;
+const listOf = (ids: string[]) =>
+  `<p:presentation ${NS}><p:sldIdLst>${ids
+    .map((id, i) => `<p:sldId id="${256 + i}" r:id="${id}"/>`)
+    .join('')}</p:sldIdLst></p:presentation>`;
+
+async function zipOf(files: Record<string, string | Buffer>) {
   const zip = new ZipFile();
-  const add = (name: string, data: string | Buffer) =>
+  for (const [name, data] of Object.entries(files))
     zip.addBuffer(Buffer.from(data), name);
-  const NS =
-    'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
-  const rels = (body: string) =>
-    `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${body}</Relationships>`;
+  zip.end();
+  return buffer(zip.outputStream);
+}
+
+// The parts of a deck of `n` slides that are each one picture (`pictures[i]`
+// for slide i + 1, else `picture`): slide list in order, rels, media.
+function deckFiles(
+  n: number,
+  picture = file('blank.png'),
+  pictures: Record<number, Buffer> = {},
+) {
   const slides = Array.from({ length: n }, (_, i) => i + 1);
-  add(
-    'ppt/presentation.xml',
-    `<p:presentation ${NS}><p:sldIdLst>${slides
-      .map((i) => `<p:sldId id="${255 + i}" r:id="rId${i}"/>`)
-      .join('')}</p:sldIdLst></p:presentation>`,
-  );
-  add(
-    'ppt/_rels/presentation.xml.rels',
-    rels(
+  const files: Record<string, string | Buffer> = {
+    'ppt/presentation.xml': listOf(slides.map((i) => `rId${i}`)),
+    'ppt/_rels/presentation.xml.rels': rels(
       slides
         .map(
           (i) =>
@@ -59,23 +69,23 @@ async function deckOf(n: number, picture = file('blank.png')) {
         )
         .join(''),
     ),
-  );
+  };
   for (const i of slides) {
-    add(
-      `ppt/slides/slide${i}.xml`,
-      `<p:sld ${NS}><p:cSld><p:spTree><p:pic><p:blipFill><a:blip r:embed="rId1"/></p:blipFill></p:pic></p:spTree></p:cSld></p:sld>`,
+    files[`ppt/slides/slide${i}.xml`] = picSlide();
+    files[`ppt/slides/_rels/slide${i}.xml.rels`] = rels(
+      `<Relationship Id="rId1" Type="image" Target="../media/image${pictures[i] ? i : 0}.png"/>`,
     );
-    add(
-      `ppt/slides/_rels/slide${i}.xml.rels`,
-      rels(
-        '<Relationship Id="rId1" Type="image" Target="../media/image1.png"/>',
-      ),
-    );
+    if (pictures[i]) files[`ppt/media/image${i}.png`] = pictures[i];
   }
-  zip.addBuffer(picture, 'ppt/media/image1.png');
-  zip.end();
-  return buffer(zip.outputStream);
+  files['ppt/media/image0.png'] = picture;
+  return files;
 }
+
+const deckOf = async (n: number, picture = file('blank.png')) =>
+  zipOf(deckFiles(n, picture));
+
+const ENOENT = () =>
+  Object.assign(new Error('spawn tesseract ENOENT'), { code: 'ENOENT' });
 
 describe('OcrProcessor', () => {
   let tesseract: FakeTesseract;
@@ -148,6 +158,18 @@ describe('OcrProcessor', () => {
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('x.png'));
     });
 
+    it('is not read when it is really an SVG behind a .png', async () => {
+      const svg = Buffer.from(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200"/></svg>',
+      );
+
+      expect(await processor.process(input('x.png', svg))).toEqual({
+        parts: [],
+      });
+      expect(tesseract.calls).toHaveLength(0);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('x.png'));
+    });
+
     it('is a warning, not a failure, when it is past 30 MiB', async () => {
       const chunk = Buffer.alloc(1024 * 1024);
       const huge = () =>
@@ -211,6 +233,14 @@ describe('OcrProcessor', () => {
       });
     });
 
+    it('goes on past a page that throws in the scan, and does not count it', async () => {
+      // page 2 of this file is not a page; page 1 is empty
+      expect(await processor.process(fixture('badpage.pdf'))).toEqual({
+        parts: ['read 1', ''],
+      });
+      expect(tesseract.calls).toHaveLength(1);
+    });
+
     it('is a warning when it is not a pdf', async () => {
       expect(
         await processor.process(input('x.pdf', Buffer.from('not a pdf'))),
@@ -218,15 +248,48 @@ describe('OcrProcessor', () => {
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('x.pdf'));
     });
 
-    it('is a page left empty when its reading fails', async () => {
+    it("fails the job on an error that is not the file's", async () => {
       tesseract.onRead = () => {
         throw new Error('boom');
       };
 
-      expect(await processor.process(fixture('mixed.pdf'))).toEqual({
-        parts: [],
-      });
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('page 2'));
+      await expect(processor.process(fixture('mixed.pdf'))).rejects.toThrow(
+        'boom',
+      );
+    });
+
+    it('fails the job when tesseract is missing on a page', async () => {
+      tesseract.onRead = () => {
+        throw ENOENT();
+      };
+
+      await expect(
+        processor.process(fixture('mixed.pdf')),
+      ).rejects.toThrowError('ENOENT');
+    });
+
+    it('fails the job, reading nothing, when the languages are not there', async () => {
+      tesseract.ready = async () => {
+        throw new Error('tesseract has no data for srp');
+      };
+
+      await expect(
+        processor.process(fixture('mixed.pdf')),
+      ).rejects.toThrowError('srp');
+      expect(tesseract.calls).toHaveLength(0);
+    });
+
+    it('fails the job when the content can not be read', async () => {
+      const broken = () =>
+        new Readable({
+          read() {
+            this.destroy(new Error('blob gone'));
+          },
+        });
+
+      await expect(processor.process(input('x.pdf', broken))).rejects.toThrow(
+        'blob gone',
+      );
     });
   });
 
@@ -296,6 +359,138 @@ describe('OcrProcessor', () => {
       // the .emf is skipped, then six of the seven pngs are read
       expect(tesseract.calls).toHaveLength(6);
       expect(parts).toHaveLength(1);
+    });
+
+    it('leaves only the slide whose picture is unreadable empty', async () => {
+      const deck = await zipOf(
+        deckFiles(3, file('blank.png'), { 1: Buffer.from('not a picture') }),
+      );
+
+      expect(await processor.process(input('bad.pptx', deck))).toEqual({
+        parts: ['', 'read 1', 'read 2'],
+      });
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('slide 1'));
+    });
+
+    it('keeps what was read of a slide when one of its pictures is bad', async () => {
+      const files = deckFiles(1);
+      files['ppt/slides/slide1.xml'] = picSlide().replace(
+        '<p:pic>',
+        '<a:blip r:embed="rId2"/><p:pic>',
+      );
+      files['ppt/slides/_rels/slide1.xml.rels'] = rels(
+        '<Relationship Id="rId1" Target="../media/bad.png"/><Relationship Id="rId2" Target="../media/image0.png"/>',
+      );
+      files['ppt/media/bad.png'] = 'not a picture';
+
+      expect(
+        await processor.process(input('b.pptx', await zipOf(files))),
+      ).toEqual({ parts: ['read 1'] });
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('bad.png'));
+    });
+
+    it('fails the job when tesseract is missing on a picture', async () => {
+      tesseract.onRead = () => {
+        throw ENOENT();
+      };
+
+      await expect(
+        processor.process(fixture('slides.pptx')),
+      ).rejects.toThrowError('ENOENT');
+    });
+
+    it('leaves a picture past 30 MiB, the rest is read', async () => {
+      const huge = Buffer.alloc(31 * 1024 * 1024);
+      const deck = await zipOf(deckFiles(2, file('blank.png'), { 1: huge }));
+
+      expect(await processor.process(input('h.pptx', deck))).toEqual({
+        parts: ['', 'read 1'],
+      });
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('slide 1'));
+    });
+
+    it('is nothing read when its slide list is past 10 MiB', async () => {
+      const files = deckFiles(1);
+      files['ppt/presentation.xml'] =
+        listOf(['rId1']) + ' '.repeat(10 * 1024 * 1024 + 1);
+
+      expect(
+        await processor.process(input('x.pptx', await zipOf(files))),
+      ).toEqual({ parts: [] });
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('x.pptx'));
+      expect(tesseract.calls).toHaveLength(0);
+    });
+
+    it('skips a slide whose XML is past 10 MiB', async () => {
+      const files = deckFiles(2);
+      files['ppt/slides/slide1.xml'] =
+        picSlide() + ' '.repeat(10 * 1024 * 1024 + 1);
+
+      expect(
+        await processor.process(input('x.pptx', await zipOf(files))),
+      ).toEqual({ parts: ['', 'read 1'] });
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('slide 1'));
+    });
+
+    it('is nothing read past 20,000 entries', async () => {
+      const files = deckFiles(1);
+      for (let i = 0; i < 20_000; i++) files[`pad/${i}`] = '';
+
+      expect(
+        await processor.process(input('many.pptx', await zipOf(files))),
+      ).toEqual({ parts: [] });
+      expect(tesseract.calls).toHaveLength(0);
+    }, 60_000);
+
+    it('reads XML that starts with a byte order mark', async () => {
+      const files = deckFiles(2);
+      for (const name of Object.keys(files))
+        if (name.endsWith('.xml') || name.endsWith('.rels'))
+          files[name] = '\uFEFF' + String(files[name]);
+
+      expect(
+        await processor.process(input('bom.pptx', await zipOf(files))),
+      ).toEqual({ parts: ['read 1', 'read 2'] });
+    });
+
+    it('numbers the slides as office-text does when the list is malformed', async () => {
+      // a duplicate, an id with no relationship, an id whose part is not
+      // there, one that is not a slide part: all dropped; the rest in list order
+      const files = deckFiles(3);
+      files['ppt/slides/slide3.xml'] = picSlide('x'.repeat(40));
+      files['ppt/presentation.xml'] = listOf([
+        'rId3',
+        'rId3',
+        'rIdNone',
+        'rIdGone',
+        'rIdMedia',
+        'rId1',
+        'rId2',
+      ]);
+      files['ppt/_rels/presentation.xml.rels'] = rels(
+        [
+          '<Relationship Id="rId1" Target="slides/slide1.xml"/>',
+          '<Relationship Id="rId2" Target="slides/slide2.xml"/>',
+          '<Relationship Id="rId3" Target="slides/slide3.xml"/>',
+          '<Relationship Id="rIdGone" Target="slides/slide9.xml"/>',
+          '<Relationship Id="rIdMedia" Target="media/image0.png"/>',
+        ].join(''),
+      );
+
+      // slide 3 (text) is first, then 1 and 2
+      expect(
+        await processor.process(input('m.pptx', await zipOf(files))),
+      ).toEqual({ parts: ['', 'read 1', 'read 2'] });
+    });
+
+    it('takes every slide part by its number when the list names none', async () => {
+      const files = deckFiles(3);
+      files['ppt/presentation.xml'] = listOf(['rIdNone']);
+      files['ppt/slides/slide2.xml'] = picSlide('x'.repeat(40));
+
+      expect(
+        await processor.process(input('n.pptx', await zipOf(files))),
+      ).toEqual({ parts: ['read 1', '', 'read 2'] });
     });
 
     it('is a warning when there is no slide list', async () => {

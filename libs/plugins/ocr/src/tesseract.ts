@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { execFile, type ExecFileException } from 'node:child_process';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
 import { ocrConfig, type Candidate } from './ocr.config.js';
@@ -8,7 +8,8 @@ const RUN_TIMEOUT_MS = 60_000;
 const MAX_OUTPUT = 20 * 1024 * 1024;
 
 // Runs `tesseract` once on a PNG, for the `-l` value: its words. A run that
-// times out or fails has none; the binary missing (ENOENT) throws.
+// times out or exits with a status has none; the binary missing (ENOENT),
+// no resources, or a kill that isn't ours throw.
 export type Run = (png: Buffer, languages: string) => Promise<Word[]>;
 
 // Which of the candidates reads a picture, and what it reads.
@@ -39,14 +40,70 @@ export async function recognise(
   );
 }
 
+// A run that gave no words by itself: killed by our timeout (or the output
+// limit), or exited with a status. Anything else is not the picture's.
+const noWords = (error: ExecFileException) =>
+  !['ENOENT', 'EAGAIN', 'EMFILE', 'ENOMEM'].includes(String(error.code)) &&
+  (error.killed === true || typeof error.code === 'number');
+
 @Injectable()
 export class Tesseract {
   private readonly logger = new Logger(Tesseract.name);
+
+  // what one run gets, a field so that a spec can shorten it
+  timeoutMs = RUN_TIMEOUT_MS;
+  private checked?: Promise<void>;
 
   constructor(
     @Inject(ocrConfig.KEY)
     private readonly config: ConfigType<typeof ocrConfig>,
   ) {}
+
+  // Once per process: the binary is there and has every language that
+  // OCR_LANGUAGES names. Throws if not, so that jobs fail visibly and store
+  // nothing, and tries again at the next job (a failure isn't kept).
+  ready() {
+    this.checked ??= this.check().catch((error: unknown) => {
+      this.checked = undefined;
+      throw error;
+    });
+    return this.checked;
+  }
+
+  private check() {
+    const wanted = new Set(
+      this.config.languages.flatMap(({ detect, read }) =>
+        `${detect}+${read}`.split('+'),
+      ),
+    );
+    return new Promise<void>((resolve, reject) => {
+      execFile(
+        'tesseract',
+        ['--list-langs'],
+        { timeout: RUN_TIMEOUT_MS, killSignal: 'SIGKILL' },
+        (error, stdout, stderr) => {
+          if (error) return reject(error);
+          // older versions list on stderr
+          const listed = new Set(
+            `${stdout}\n${stderr}`
+              .split('\n')
+              .map((line) => line.trim())
+              .filter((line) => line && !line.startsWith('List of')),
+          );
+          const missing = [...wanted].filter(
+            (language) => !listed.has(language),
+          );
+          if (missing.length > 0)
+            return reject(
+              new Error(
+                `tesseract has no data for ${missing.join(', ')} (OCR_LANGUAGES); install the tesseract-ocr-* package`,
+              ),
+            );
+          resolve();
+        },
+      );
+    });
+  }
 
   read(png: Buffer) {
     return recognise(this.config.languages, (p, l) => this.run(p, l), png);
@@ -59,7 +116,7 @@ export class Tesseract {
         'tesseract',
         ['stdin', 'stdout', '-l', languages, 'tsv'],
         {
-          timeout: RUN_TIMEOUT_MS,
+          timeout: this.timeoutMs,
           killSignal: 'SIGKILL',
           maxBuffer: MAX_OUTPUT,
           // one thread a run: the processor's limit is what bounds the cores
@@ -67,8 +124,9 @@ export class Tesseract {
         },
         (error, stdout) => {
           if (!error) return resolve(parseTsv(stdout));
-          if ((error as NodeJS.ErrnoException).code === 'ENOENT')
-            return reject(error);
+          // ours to fix (no binary, no processes or memory left), or killed
+          // by something that isn't us (the OOM killer): the job fails
+          if (!noWords(error)) return reject(error);
           this.logger.warn(
             `tesseract (${languages}) gave no words: ${error.message}`,
           );

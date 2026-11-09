@@ -28,33 +28,44 @@ try {
       if (scan) {
         const pages = document.getPageCount();
         const textless: number[] = [];
-        for (let n = 1; n <= pages; n++)
-          if (
-            document
-              .getPage(n - 1)
-              .getText()
-              .replace(/\s/g, '').length < MIN_TEXT
-          )
-            textless.push(n);
+        for (let n = 1; n <= pages; n++) {
+          // a page that throws isn't known to be textless: it's left out,
+          // and the scan goes on
+          try {
+            const found = document.getPage(n - 1);
+            try {
+              if (found.getText().replace(/\s/g, '').length < MIN_TEXT)
+                textless.push(n);
+            } finally {
+              found.close();
+            }
+          } catch {
+            continue;
+          }
+        }
         parentPort!.postMessage({ pages, textless });
       } else {
         const found = document.getPage(page! - 1);
-        const { originalWidth, originalHeight } = found.getOriginalSize();
-        const {
-          data: pixels,
-          width,
-          height,
-        } = await found.render({
-          scale: Math.min(
-            SCALE,
-            MAX_SIDE / Math.max(originalWidth, originalHeight),
-          ),
-          render: 'bitmap',
-          colorSpace: 'RGBA',
-        });
-        parentPort!.postMessage({ width, height, data: pixels }, [
-          pixels.buffer as ArrayBuffer,
-        ]);
+        try {
+          const { originalWidth, originalHeight } = found.getOriginalSize();
+          const {
+            data: pixels,
+            width,
+            height,
+          } = await found.render({
+            scale: Math.min(
+              SCALE,
+              MAX_SIDE / Math.max(originalWidth, originalHeight),
+            ),
+            render: 'bitmap',
+            colorSpace: 'RGBA',
+          });
+          parentPort!.postMessage({ width, height, data: pixels }, [
+            pixels.buffer as ArrayBuffer,
+          ]);
+        } finally {
+          found.close();
+        }
       }
     } finally {
       document.destroy();

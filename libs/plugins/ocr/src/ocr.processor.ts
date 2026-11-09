@@ -8,9 +8,10 @@ import {
   type ProcessesContent,
   type ProcessorInput,
 } from '@app/plugin-sdk';
-import { Deck, IMAGE_EXTENSIONS, MAX_PICTURE } from './deck.js';
+import { IMAGE_EXTENSIONS, MAX_PICTURE, Pictures } from './deck.js';
 import { pagePicture, preparePicture } from './picture.js';
 import { Tesseract } from './tesseract.js';
+import { fromWorker, Unreadable } from './unreadable.js';
 
 const IMAGES = [
   ...IMAGE_EXTENSIONS,
@@ -33,6 +34,7 @@ export const MAX_BYTES = 100 * 1024 * 1024;
 export const MAX_PAGES = 500;
 export const DEADLINE_MS = 30 * 60_000;
 const SCAN_TIMEOUT_MS = 2 * 60_000;
+const DECK_TIMEOUT_MS = 2 * 60_000;
 const PAGE_TIMEOUT_MS = 60_000;
 const HEAP_MB = 512;
 
@@ -40,6 +42,12 @@ interface Scan {
   refused?: true;
   pages: number;
   textless: number[];
+}
+interface DeckScan {
+  refused?: true;
+  slides: number;
+  pictures: [number, string[]][];
+  unreadable: number[];
 }
 interface Bitmap {
   width: number;
@@ -55,7 +63,8 @@ interface Bitmap {
 //
 // A file that can't be read is the file's fault, not a failed job (it would
 // be tried again for ever): it's logged and gives what was read, if
-// anything. The one failure is `tesseract` not being installed.
+// anything. What fails the job is ours: `tesseract` or one of its languages
+// not being installed, a blob that can't be read, a worker that can't start.
 @ContentProcessor({
   name: 'ocr',
   version: 1,
@@ -71,75 +80,78 @@ export class OcrProcessor implements ProcessesContent {
 
   process(input: ProcessorInput) {
     return this.limit(async () => {
-      const read = DECK.includes(input.matched)
-        ? this.deck(input)
-        : PDF.includes(input.matched)
-          ? this.pdf(input)
-          : this.image(input);
-      const parts = await read.catch((error: unknown) => {
-        if (isMissing(error)) throw error;
-        this.logger.warn(`${input.name} can't be read: ${message(error)}`);
-        return [];
-      });
+      // before any read: a missing binary or language fails the job
+      await this.tesseract.ready();
+      const isImage =
+        !DECK.includes(input.matched) && !PDF.includes(input.matched);
+      const max = isImage ? MAX_PICTURE : MAX_BYTES;
+      // reading the content is not the file's fault: an error fails the job
+      const data = await readUpTo(await input.content(), max);
+      let parts: string[] = [];
+      try {
+        if (!data) throw new Unreadable(`larger than ${max} bytes`);
+        parts = DECK.includes(input.matched)
+          ? await this.deck(input, data)
+          : PDF.includes(input.matched)
+            ? await this.pdf(input, data)
+            : await this.image(data);
+      } catch (error) {
+        if (!(error instanceof Unreadable)) throw error;
+        this.logger.warn(`${input.name} can't be read: ${error.message}`);
+      }
       return { parts: parts.every((part) => part === '') ? [] : parts };
     });
   }
 
-  private async image(input: ProcessorInput) {
-    const data = await readUpTo(await input.content(), MAX_PICTURE);
-    if (!data) throw new Error(`larger than ${MAX_PICTURE} bytes`);
+  private async image(data: Buffer) {
     const picture = await preparePicture(data);
     return picture ? [await this.tesseract.read(picture)] : [];
   }
 
-  private async pdf(input: ProcessorInput) {
-    const data = await readUpTo(await input.content(), MAX_BYTES);
-    if (!data) throw new Error(`larger than ${MAX_BYTES} bytes`);
-    const scan = await firstMessage<Scan>(
-      this.worker({ data, scan: true }),
-      SCAN_TIMEOUT_MS,
+  private async pdf(input: ProcessorInput, data: Buffer) {
+    const scan = await fromWorker(
+      firstMessage<Scan>(this.pdfWorker({ data, scan: true }), SCAN_TIMEOUT_MS),
     );
-    if (scan.refused) throw new Error('not a PDF that can be opened');
     return this.pages(input, scan.pages, scan.textless, async (page) => {
       // a worker a page: its memory and its failure are the page's own
       const {
         width,
         height,
         data: raw,
-      } = await firstMessage<Bitmap>(
-        this.worker({ data, page }),
-        PAGE_TIMEOUT_MS,
+      } = await fromWorker(
+        firstMessage<Bitmap>(this.pdfWorker({ data, page }), PAGE_TIMEOUT_MS),
       );
       return this.tesseract.read(await pagePicture(raw, width, height));
     });
   }
 
-  private async deck(input: ProcessorInput) {
-    const data = await readUpTo(await input.content(), MAX_BYTES);
-    if (!data) throw new Error(`larger than ${MAX_BYTES} bytes`);
-    const deck = await Deck.open(data);
+  private async deck(input: ProcessorInput, data: Buffer) {
+    const scan = await fromWorker(
+      firstMessage<DeckScan>(this.deckWorker({ data }), DECK_TIMEOUT_MS),
+    );
+    for (const slide of scan.unreadable)
+      this.logger.warn(`${input.name}: slide ${slide} can't be read`);
+    const pictures = new Map(scan.pictures);
+    const deck = await Pictures.open(data);
     try {
-      const slides = await deck.slides();
-      const pictures = new Map<number, string[]>();
-      for (const [i, slide] of slides.entries()) {
-        const found = await deck.pictures(slide).catch((error: unknown) => {
-          this.logger.warn(
-            `${input.name}: slide ${i + 1} can't be read: ${message(error)}`,
-          );
-          return [];
-        });
-        if (found.length > 0) pictures.set(i + 1, found);
-      }
       return await this.pages(
         input,
-        slides.length,
+        scan.slides,
         [...pictures.keys()],
-        async (slide) => {
+        async (slide, expired) => {
           const texts: string[] = [];
           for (const entry of pictures.get(slide)!) {
-            const bytes = await deck.picture(entry);
-            const picture = bytes && (await preparePicture(bytes));
-            if (picture) texts.push(await this.tesseract.read(picture));
+            if (expired()) break;
+            // one bad picture is skipped, the slide keeps what was read
+            try {
+              const picture = await preparePicture(await deck.picture(entry));
+              if (picture) texts.push(await this.tesseract.read(picture));
+            } catch (error) {
+              if (!(error instanceof Unreadable)) throw error;
+              this.logger.warn(
+                `${input.name}: ${entry} on slide ${slide} can't be read: ${error.message}`,
+              );
+            }
           }
           return texts.filter(Boolean).join('\n\n');
         },
@@ -151,43 +163,47 @@ export class OcrProcessor implements ProcessesContent {
 
   // The parts of a file of `total` pages, those in `todo` read one after
   // another by `read`, in the time and the number there are for them. A page
-  // that fails is empty.
+  // that is the file's fault is empty; any other error fails the job.
   private async pages(
     input: ProcessorInput,
     total: number,
     todo: number[],
-    read: (page: number) => Promise<string>,
+    read: (page: number, expired: () => boolean) => Promise<string>,
   ) {
     const parts = Array<string>(total).fill('');
     const deadline = Date.now() + DEADLINE_MS;
+    const expired = () => Date.now() > deadline;
     for (const [done, page] of todo.entries()) {
-      if (done >= MAX_PAGES || Date.now() > deadline) {
+      if (done >= MAX_PAGES || expired()) {
         this.logger.warn(
           `${input.name}: ${todo.length - done} of ${todo.length} pages left unread`,
         );
         break;
       }
       try {
-        parts[page - 1] = await read(page);
+        parts[page - 1] = await read(page, expired);
       } catch (error) {
-        if (isMissing(error)) throw error;
+        if (!(error instanceof Unreadable)) throw error;
         this.logger.warn(
-          `${input.name}: page ${page} can't be read: ${message(error)}`,
+          `${input.name}: page ${page} can't be read: ${error.message}`,
         );
       }
     }
     return parts;
   }
 
-  private worker(workerData: object) {
+  // the bundler finds a worker's file only in `new Worker(new URL(...))`
+  private pdfWorker(workerData: object) {
     return new Worker(new URL('./pdf.worker.ts', import.meta.url), {
       workerData,
       resourceLimits: { maxOldGenerationSizeMb: HEAP_MB },
     });
   }
-}
 
-const isMissing = (error: unknown) =>
-  (error as NodeJS.ErrnoException | null)?.code === 'ENOENT';
-const message = (error: unknown) =>
-  error instanceof Error ? error.message : String(error);
+  private deckWorker(workerData: object) {
+    return new Worker(new URL('./deck.worker.ts', import.meta.url), {
+      workerData,
+      resourceLimits: { maxOldGenerationSizeMb: HEAP_MB },
+    });
+  }
+}

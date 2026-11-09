@@ -61,12 +61,12 @@ export function TextReader({
     >
       {(found) => (
         <>
-          {kind !== 'image' && (
+          {!(part === 'section' && found.pages === 1) && (
             <Text size="sm" c="dimmed" component="output" display="block">
               {t(`position.${part}`, { n: found.page, total: found.pages })}
             </Text>
           )}
-          {found.processor === 'ocr' && !asPage && (
+          {found.processor === 'ocr' && !asPage && found.text.trim() && (
             <Text size="sm" c="dimmed">
               {t('text.recognized')}
             </Text>
