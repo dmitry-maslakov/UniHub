@@ -1,6 +1,7 @@
 import { basename } from 'node:path';
 import { Injectable } from '@nestjs/common';
 import { QueryBus } from '@nestjs/cqrs';
+import pLimit from 'p-limit';
 import {
   ListCourseFilesQuery,
   ListCourseItemsQuery,
@@ -14,11 +15,14 @@ import {
   ListMembersQuery,
   ListTextsQuery,
 } from '../../processing/contracts.js';
+import { readUpTo } from '@app/plugin-sdk';
 import { UserPortalsQuery } from '../../accounts/contracts.js';
 import { BlobStore } from '../../storage/contracts.js';
-import { NotReadableError } from './errors.js';
+import { NotReadableError, NotViewableError, ViewBusyError } from './errors.js';
 import { noCoursesNote } from './no-courses.js';
-import type { FilesAt, Page, TextAt } from './page.js';
+import type { FilesAt, Page, TextAt, ViewAt } from './page.js';
+import { PageRenderer } from './renderer.js';
+import { VIEW_LIMITS, viewKind } from './viewable.js';
 import {
   fileOf,
   readableCourse,
@@ -29,13 +33,21 @@ import {
 import { viewersOfUser } from './viewers.js';
 import { courseView, fileView, itemView } from './views.js';
 
+export const VIEW_SLOTS = 2;
+export const MAX_WAITING = 8;
+
 // What a user reads, for every way in (REST, MCP): each course or file
 // checked as readable.ts says, then read from its owner.
 @Injectable()
 export class CourseReader {
+  // pictures drawn at once: each can hold a PDF's bytes three times over and
+  // up to 2 GiB of WebAssembly memory, so a few, and a short queue behind
+  private readonly slots = pLimit(VIEW_SLOTS);
+
   constructor(
     private readonly queries: QueryBus,
     private readonly blobs: BlobStore,
+    private readonly renderer: PageRenderer,
   ) {}
 
   async courses(userId: string) {
@@ -136,6 +148,44 @@ export class CourseReader {
       fileId,
       member,
     );
+  }
+
+  // the file as a picture, read as content() is: a JPEG of an image, or of a
+  // page of a PDF (`pages` and `page` null for an image). Anything else, or
+  // too large, is not viewable; a page past the last is not found.
+  async view(userId: string, fileId: string, { page, member }: ViewAt) {
+    const { hash, name, mime } = await this.readableContent(
+      await viewersOfUser(this.queries, userId),
+      fileId,
+      member,
+    );
+    const kind = viewKind(mime, name);
+    if (!kind) throw new NotViewableError('neither a picture nor a PDF');
+    // a slot is taken before the blob is read, so those waiting hold nothing
+    if (this.slots.pendingCount >= MAX_WAITING) throw new ViewBusyError();
+    return this.slots(async () => {
+      const source = await readUpTo(
+        await this.blobs.get(hash),
+        VIEW_LIMITS[kind],
+      );
+      if (!source) throw new NotViewableError('too large');
+      if (kind === 'image')
+        return {
+          name,
+          data: await this.renderer.image(source),
+          mime: 'image/jpeg' as const,
+          pages: null,
+          page: null,
+        };
+      const shown = await this.renderer.pdf(source, page);
+      return {
+        name,
+        data: shown.data,
+        mime: 'image/jpeg' as const,
+        pages: shown.pages,
+        page,
+      };
+    });
   }
 
   // What content() would open, without opening it: the name, the folder

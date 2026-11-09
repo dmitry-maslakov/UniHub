@@ -2,7 +2,7 @@ import { Stack } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { getRouteApi } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { fileType } from '@/entities/file';
+import { fileType, viewKind, viewUrl } from '@/entities/file';
 import { api } from '@/shared/api';
 import {
   AnchorLink,
@@ -16,6 +16,7 @@ import { FileActions } from './file-actions';
 import { FileMeta } from './file-meta';
 import { MembersSection } from './members-section';
 import { TextSection } from './text-section';
+import { ViewImage } from './view-image';
 
 const route = getRouteApi('/_app/courses/$slug/files/$fileId');
 
@@ -80,6 +81,15 @@ export function FilePage() {
           <Stack gap="xxl">
             <FileActions file={found} slug={slug} member={member} />
             {archive && <MembersSection fileId={fileId} slug={slug} />}
+            {found.hasContent &&
+              viewKind(member ? null : found.mime, member ?? found.name) ===
+                'image' && (
+                <ViewImage
+                  key={viewUrl(fileId, { member })}
+                  src={viewUrl(fileId, { member })}
+                  alt={member ? memberName(member) : found.name}
+                />
+              )}
             <TextSection file={found} member={member} hasMembers={hasMembers} />
           </Stack>
         </>

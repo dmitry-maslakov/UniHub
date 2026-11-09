@@ -11,6 +11,7 @@ import { StorageModule } from '../storage/contracts.js';
 import { CourseGrants } from './application/course-grants.js';
 import { CourseMatching } from './application/course-matching.js';
 import { CourseReader } from './application/course-reader.js';
+import { PageRenderer } from './application/renderer.js';
 import { Downloads } from './application/downloads.js';
 import { HubCourses } from './application/hub-courses.js';
 import {
@@ -27,6 +28,7 @@ import { ItemsController } from './infrastructure/http/items.controller.js';
 import { CourseTools } from './infrastructure/mcp/course.tools.js';
 import { McpHttpController } from './infrastructure/mcp/mcp-http.controller.js';
 import { McpRequestMiddleware } from './infrastructure/mcp/mcp-request.middleware.js';
+import { SharpPdfiumRenderer } from './infrastructure/view/sharp-pdfium-renderer.js';
 import { RedisDownloadRequests } from './infrastructure/redis-download-requests.js';
 import { throttlerOptions } from './infrastructure/throttle.js';
 import { AccessSearchModule } from './search.module.js';
@@ -63,6 +65,7 @@ import { AccessSearchModule } from './search.module.js';
   ],
   providers: [
     CourseReader,
+    { provide: PageRenderer, useClass: SharpPdfiumRenderer },
     Downloads,
     { provide: DownloadRequests, useClass: RedisDownloadRequests },
     CourseGrants,

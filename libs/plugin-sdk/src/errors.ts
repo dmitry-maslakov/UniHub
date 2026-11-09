@@ -1,4 +1,4 @@
-import { InvalidError, NotFoundError } from '@app/kernel';
+import { InvalidError, NotFoundError, UnavailableError } from '@app/kernel';
 
 // Errors a plugin can get back from the hub. `reason` tells them apart in
 // code, the same reasons a gRPC connector gets.
@@ -44,4 +44,11 @@ export class TokensNotAllowedError extends InvalidError {
   constructor() {
     super("the portal's site takes no pasted tokens");
   }
+}
+
+// A heavy processor's model can't be reached (not up yet, or gone). Throw it
+// then: the hub pauses the models queue and tries the job again later,
+// without spending an attempt.
+export class ModelUnavailableError extends UnavailableError {
+  readonly reason = 'MODEL_UNAVAILABLE';
 }

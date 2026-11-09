@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { describe, expect, it, vi } from 'vitest';
@@ -460,6 +460,130 @@ describe('a file', () => {
     expect(
       screen.getByRole('link', { name: 'Open the original' }),
     ).toBeVisible();
+  });
+
+  it("shows an image as the hub's picture of it, with no empty state", async () => {
+    setup({
+      file: details({ name: 'plot.png', mime: 'image/png', texts: [] }),
+    });
+    renderApp('/courses/os/files/f1');
+
+    const image = await screen.findByRole('img', { name: 'plot.png' });
+    expect(image).toHaveAttribute('src', '/api/files/f1/view');
+    expect(screen.queryByText('No text in this file')).toBeNull();
+    expect(screen.queryByRole('radio', { name: 'Page' })).toBeNull();
+    expect(asked).toEqual([]);
+  });
+
+  it('shows a picture inside an archive by its member, and never an SVG', async () => {
+    setup({
+      file: details({ name: 'figs.zip', mime: 'application/zip', texts: [] }),
+      members: [member({ path: 'fig/a b.png', mime: 'image/png', texts: [] })],
+    });
+    renderApp('/courses/os/files/f1?member=fig%2Fa%20b.png');
+    expect(await screen.findByRole('img', { name: 'a b.png' })).toHaveAttribute(
+      'src',
+      '/api/files/f1/view?member=fig%2Fa%20b.png',
+    );
+  });
+
+  it('shows no empty state under the picture of an image inside an archive', async () => {
+    setup({
+      file: details({ name: 'figs.zip', mime: 'application/zip', texts: [] }),
+      members: [member({ path: 'fig/a.png', mime: 'image/png', texts: [] })],
+      text: () => HttpResponse.json({ code: 'NOT_READABLE' }, { status: 404 }),
+    });
+    renderApp('/courses/os/files/f1?member=fig%2Fa.png');
+    await screen.findByRole('img', { name: 'a.png' });
+    expect(screen.queryByText(/This part isn't there/)).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Text' })).toBeNull();
+    expect(asked).toEqual([]);
+  });
+
+  it('says a picture failed, and tries it again', async () => {
+    setup({
+      file: details({ name: 'plot.png', mime: 'image/png', texts: [] }),
+    });
+    renderApp('/courses/os/files/f1');
+    const image = await screen.findByRole('img', { name: 'plot.png' });
+    fireEvent.error(image);
+    expect(await screen.findByRole('alert')).toBeVisible();
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(
+      screen.getByRole('status', { name: 'Loading the picture' }),
+    ).toBeVisible();
+    expect(await screen.findByRole('img', { name: 'plot.png' })).toBeVisible();
+  });
+
+  it('draws the first page of a PDF that has no text', async () => {
+    setup({ file: details({ texts: [] }) });
+    renderApp('/courses/os/files/f1');
+    expect(await screen.findByText('No text in this file')).toBeVisible();
+    expect(
+      screen.getByRole('img', { name: 'Lecture 5.pdf, Page 1' }),
+    ).toHaveAttribute('src', '/api/files/f1/view?page=1');
+  });
+
+  it('shows no picture of an SVG', async () => {
+    setup({
+      file: details({
+        name: 'logo.svg',
+        mime: 'image/svg+xml',
+        texts: [],
+      }),
+    });
+    renderApp('/courses/os/files/f1');
+    expect(await screen.findByRole('heading', { level: 1 })).toBeVisible();
+    expect(screen.queryByRole('img')).toBeNull();
+  });
+
+  it("switches a PDF between its text and its pages' pictures, kept in the address", async () => {
+    setup();
+    const { router } = renderApp('/courses/os/files/f1?page=2');
+
+    expect(await screen.findByText('text of part 2')).toBeVisible();
+    expect(
+      screen.getByRole('radio', { name: 'Text', checked: true }),
+    ).toBeVisible();
+    expect(screen.queryByRole('img', { name: /Lecture 5/ })).toBeNull();
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Page' }));
+    const image = await screen.findByRole('img', {
+      name: 'Lecture 5.pdf, Page 2',
+    });
+    expect(image).toHaveAttribute('src', '/api/files/f1/view?page=2');
+    expect(router.state.location.search).toEqual({ page: '2', show: 'page' });
+    expect(screen.queryByText('text of part 2')).toBeNull();
+
+    // the same paging control turns the page
+    await userEvent.click(screen.getByRole('button', { name: 'Next part' }));
+    expect(
+      await screen.findByRole('img', { name: 'Lecture 5.pdf, Page 3' }),
+    ).toHaveAttribute('src', '/api/files/f1/view?page=3');
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Text' }));
+    expect(await screen.findByText('text of part 3')).toBeVisible();
+    expect(router.state.location.search).toEqual({ page: '3' });
+  });
+
+  it('opens a PDF on its pages when the address says so, and not any other type', async () => {
+    setup();
+    renderApp('/courses/os/files/f1?show=page');
+    expect(
+      await screen.findByRole('img', { name: 'Lecture 5.pdf, Page 1' }),
+    ).toBeVisible();
+  });
+
+  it('offers no pages for a file that is not a PDF', async () => {
+    setup({
+      file: details({
+        name: 'notes.docx',
+        mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      }),
+    });
+    renderApp('/courses/os/files/f1?show=page');
+    expect(await screen.findByText('text of part 1')).toBeVisible();
+    expect(screen.queryByRole('radio', { name: 'Page' })).toBeNull();
   });
 
   it('says a file without content is not available yet, and asks for no text', async () => {

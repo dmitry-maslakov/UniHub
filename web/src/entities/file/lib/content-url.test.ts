@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { contentUrl, opensInline } from './content-url';
+import { contentUrl, opensInline, viewKind, viewUrl } from './content-url';
 
 describe('contentUrl', () => {
   it('asks for a file inline only when told', () => {
@@ -34,5 +34,35 @@ describe('opensInline', () => {
       expect(opensInline(mime), mime).toBe(true);
     for (const mime of ['text/html', 'image/svg+xml', 'application/zip', null])
       expect(opensInline(mime), String(mime)).toBe(false);
+  });
+});
+
+describe('viewUrl', () => {
+  it('names the page and the member only when given', () => {
+    expect(viewUrl('f1')).toBe('/api/files/f1/view');
+    expect(viewUrl('f1', { page: 3 })).toBe('/api/files/f1/view?page=3');
+    expect(viewUrl('f1', { page: 2, member: 'fig 1/a&b.png' })).toBe(
+      '/api/files/f1/view?page=2&member=fig%201%2Fa%26b.png',
+    );
+  });
+});
+
+describe('viewKind', () => {
+  it('tells an image from a PDF', () => {
+    expect(viewKind('image/webp', 'x')).toBe('image');
+    expect(viewKind(null, 'a.png')).toBe('image');
+    expect(viewKind(null, 'a.PDF')).toBe('pdf');
+    expect(viewKind('text/plain', 'a.txt')).toBeNull();
+  });
+
+  it('takes images and PDFs, by type or by extension, never SVG', () => {
+    expect(viewKind('image/png', 'x')).not.toBeNull();
+    expect(viewKind('application/pdf; charset=binary', 'x')).not.toBeNull();
+    expect(viewKind(null, 'scan.JPEG')).not.toBeNull();
+    expect(viewKind('application/octet-stream', 'a.webp')).not.toBeNull();
+    expect(viewKind('image/svg+xml', 'logo.png')).toBeNull();
+    expect(viewKind(null, 'logo.svg')).toBeNull();
+    expect(viewKind('text/plain', 'a.txt')).toBeNull();
+    expect(viewKind(null, 'png')).toBeNull();
   });
 });

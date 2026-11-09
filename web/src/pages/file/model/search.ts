@@ -1,10 +1,12 @@
 import { z } from 'zod';
 
 // where a file is read, kept in the address: the part (page, slide), which
-// text, a file inside an archive, and the search it was opened from
+// text, whether a PDF shows its text or its pages, a file inside an archive, and the search it was opened from
 export const fileSearch = z.object({
   page: z.coerce.number().int().min(1).optional().catch(undefined),
   processor: z.string().min(1).optional().catch(undefined),
+  // a PDF read as its pages' pictures instead of its text
+  show: z.enum(['page']).optional().catch(undefined),
   member: z.string().min(1).optional().catch(undefined),
   q: z.string().optional().catch(undefined),
   // the course that search was limited to, if it was

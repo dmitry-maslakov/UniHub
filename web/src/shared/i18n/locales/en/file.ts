@@ -18,6 +18,14 @@ export default {
     loading: 'Loading the text',
     which: 'Which text to read',
   },
+  view: {
+    which: 'Which view to read in',
+    text: 'Text',
+    page: 'Page',
+    failed: "The picture couldn't be loaded.",
+    loading: 'Loading the picture',
+    full: 'Open {{name}} in full size',
+  },
   position: {
     page: 'Page {{n}} of {{total}}',
     slide: 'Slide {{n}} of {{total}}',

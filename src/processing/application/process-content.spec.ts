@@ -26,12 +26,15 @@ function run(
   instance: ProcessesContent,
   files: { name: string; hash?: typeof hash }[] = [{ name: 'a.pdf' }],
   version = 1,
+  heavy?: { timeoutMinutes: number },
 ) {
   const blobs = new InMemoryBlobs({ holding: [lecture] });
   const representations = new InMemoryRepresentations();
   const textIndex = new FakeTextIndexQueue();
   const process = new ProcessContent(
-    catalogOf({ processors: [processor('pdf', ['.pdf'], instance, version)] }),
+    catalogOf({
+      processors: [processor('pdf', ['.pdf'], instance, version, heavy)],
+    }),
     holdersOf(
       new FakeFiles(
         new Map(files.map((f, i) => [`f${i}`, { mime, hash, ...f }])),
@@ -194,5 +197,59 @@ describe('ProcessContent', () => {
 
     await expect(content!()).rejects.toThrow('after the run');
     expect(blobs.opened.every((s) => s.destroyed)).toBe(true);
+  });
+
+  describe('a heavy processor', () => {
+    const heavy = { timeoutMinutes: 20 };
+
+    afterEach(() => vi.restoreAllMocks());
+
+    it('gets a signal that aborts at its time limit, an ordinary one none', async () => {
+      const timeout = vi.spyOn(AbortSignal, 'timeout');
+      const seen: (AbortSignal | undefined)[] = [];
+      const instance: ProcessesContent = {
+        process: async ({ signal }) => {
+          seen.push(signal);
+          return { parts: [] };
+        },
+      };
+
+      await run(instance, undefined, 1, heavy).process.run(job());
+      await run(instance).process.run(job());
+
+      expect(timeout).toHaveBeenCalledExactlyOnceWith(20 * 60_000);
+      expect(seen[0]).toBeInstanceOf(AbortSignal);
+      expect(seen[1]).toBeUndefined();
+    });
+
+    it('fails the job past its limit even if the processor ignores the signal', async () => {
+      vi.spyOn(AbortSignal, 'timeout').mockReturnValue(
+        AbortSignal.abort(new DOMException('too slow', 'TimeoutError')),
+      );
+      const { process, saved } = run(
+        { process: () => new Promise(() => {}) },
+        undefined,
+        1,
+        heavy,
+      );
+
+      await expect(process.run(job())).rejects.toThrow('too slow');
+      expect(saved).toEqual([]);
+    });
+
+    it('stops when the process shuts down', async () => {
+      const shutdown = new AbortController();
+      const { process } = run(
+        { process: () => new Promise(() => {}) },
+        undefined,
+        1,
+        heavy,
+      );
+
+      const done = process.run(job(), shutdown.signal);
+      shutdown.abort('the app is shutting down');
+
+      await expect(done).rejects.toBe('the app is shutting down');
+    });
   });
 });

@@ -21,6 +21,7 @@ const KINDS: Record<DomainErrorKind, GrpcStatus> = {
   'not-found': GrpcStatus.NOT_FOUND,
   conflict: GrpcStatus.ALREADY_EXISTS,
   invalid: GrpcStatus.INVALID_ARGUMENT,
+  unprocessable: GrpcStatus.FAILED_PRECONDITION,
   unavailable: GrpcStatus.UNAVAILABLE,
 };
 

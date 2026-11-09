@@ -187,6 +187,7 @@ describe('MCP', { timeout: 20_000 }, () => {
       'read_item',
       // search is on in the tests (search-off.e2e-spec.ts has it off)
       'search',
+      'view_file',
     ]);
     // per user and minute
     expect(res.headers['x-ratelimit-limit-mcp']).toBe('600');

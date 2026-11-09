@@ -6,7 +6,7 @@ import {
   RepresentationRepository,
 } from '../domain/representation.js';
 import { Holders } from './holders.js';
-import { takenName, withStreams } from './plugin-run.js';
+import { takenName, until, withStreams } from './plugin-run.js';
 import type { ProcessJob } from './plugin-job.js';
 import { TextIndexQueue } from './ports.js';
 
@@ -27,7 +27,12 @@ export class ProcessContent {
     @Optional() private readonly textIndex?: TextIndexQueue,
   ) {}
 
-  async run({ key: { hash, processor: name } }: ProcessJob) {
+  // `shutdown` aborts a run that's put back to wait. A heavy processor's is
+  // also given its time limit, which fails the job when it passes.
+  async run(
+    { key: { hash, processor: name } }: ProcessJob,
+    shutdown?: AbortSignal,
+  ) {
     const processor = this.plugins.processor(name);
     // turned off since the job was queued
     if (!processor) return;
@@ -42,8 +47,15 @@ export class ProcessContent {
     // replaced or removed since, or renamed to what the processor doesn't take
     if (!file) return;
 
+    const signal =
+      spec.timeLimitMs === null
+        ? undefined
+        : AbortSignal.any([
+            AbortSignal.timeout(spec.timeLimitMs),
+            ...(shutdown ? [shutdown] : []),
+          ]);
     const { parts } = await withStreams(this.blobs, hash, (content) =>
-      instance.process({ ...file, hash, content }),
+      until(signal, instance.process({ ...file, hash, content, signal })),
     );
     await this.representations.save(representation(key, parts));
     await this.textIndex?.enqueue(key);
