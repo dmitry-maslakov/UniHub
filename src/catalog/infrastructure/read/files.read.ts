@@ -11,6 +11,7 @@ import {
   ListFilesOfContentQuery,
   ListFilesWithContentQuery,
   ListVisibleContentQuery,
+  ListVisibleKeysQuery,
   type FileDto,
   type Viewers,
 } from '../../application/queries.js';
@@ -169,13 +170,12 @@ export class ListVisibleContentHandler implements IQueryHandler<ListVisibleConte
         id: true,
         name: true,
         path: true,
-        mime: true,
         contentHash: true,
         ...withCourse,
       },
     });
     // the filter leaves only rows with both, which Prisma's types can't tell
-    return rows.flatMap(({ id, name, path, mime, portalCourse, ...row }) => {
+    return rows.flatMap(({ id, name, path, portalCourse, ...row }) => {
       const courseId = courseOf({ portalCourse });
       const hash = contentOf(row);
       return portalCourse && courseId && hash
@@ -186,8 +186,41 @@ export class ListVisibleContentHandler implements IQueryHandler<ListVisibleConte
               portalCourseId: portalCourse.id,
               hash,
               name,
-              mime: mime as MediaType | null,
               path,
+            },
+          ]
+        : [];
+    });
+  }
+}
+
+// ListVisibleContentHandler's rows, with only what the counts need and no
+// order
+@QueryHandler(ListVisibleKeysQuery)
+export class ListVisibleKeysHandler implements IQueryHandler<ListVisibleKeysQuery> {
+  constructor(@InjectTransactionHost() private readonly txHost: PrismaTxHost) {}
+
+  async execute({ viewers, portalCourseIds }: ListVisibleKeysQuery) {
+    const now = new Date();
+    const rows = await this.txHost.tx.fileVersion.findMany({
+      where: {
+        AND: [
+          inCourses(portalCourseIds),
+          fileSeen(viewers, now, opens(now)),
+          { contentHash: { not: null } },
+        ],
+      },
+      select: { name: true, mime: true, contentHash: true, ...withCourse },
+    });
+    return rows.flatMap(({ name, mime, portalCourse, ...row }) => {
+      const hash = contentOf(row);
+      return portalCourse && courseOf({ portalCourse }) && hash
+        ? [
+            {
+              hash,
+              name,
+              mime: mime as MediaType | null,
+              portalCourseId: portalCourse.id,
             },
           ]
         : [];

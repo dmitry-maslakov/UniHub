@@ -32,8 +32,15 @@ export default {
       back: 'Nazad na Moje predmete',
     },
     processing: {
-      progress: 'Još se obrađuje: spremno {{done}} od {{total}} fajlova',
-      picturesLater: 'Tekst je spreman; slike se obrađuju u pozadini.',
+      text_one: 'Još se obrađuje: spremno {{done}} od {{count}} fajla',
+      text_few: 'Još se obrađuje: spremno {{done}} od {{count}} fajla',
+      text_other: 'Još se obrađuje: spremno {{done}} od {{count}} fajlova',
+      pictures_one:
+        'Tekst je spreman; slike se obrađuju u pozadini: gotovo {{done}} od {{count}} fajla',
+      pictures_few:
+        'Tekst je spreman; slike se obrađuju u pozadini: gotovo {{done}} od {{count}} fajla',
+      pictures_other:
+        'Tekst je spreman; slike se obrađuju u pozadini: gotovo {{done}} od {{count}} fajlova',
     },
     tabs: {
       files: 'Fajlovi',

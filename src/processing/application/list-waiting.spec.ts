@@ -69,6 +69,13 @@ describe('ListWaiting', () => {
     ]);
   });
 
+  it('asks for the keys of each hash once', async () => {
+    const keysOf = vi.spyOn(InMemoryRepresentations.prototype, 'keysOf');
+    const list = waiting([processor('text', ['.pdf'])]);
+    await ask(list, pdf, { ...pdf, name: 'b.pdf' });
+    expect(keysOf).toHaveBeenCalledExactlyOnceWith([hash]);
+  });
+
   it('counts a content once, waiting if it does for any file of it', async () => {
     const list = waiting([processor('text', ['.pdf'])]);
     const found = await ask(

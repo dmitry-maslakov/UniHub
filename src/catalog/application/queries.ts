@@ -148,7 +148,6 @@ export interface VisibleContentDto {
   portalCourseId: string;
   hash: ContentHash;
   name: string;
-  mime: MediaType | null;
   path: string;
 }
 
@@ -252,6 +251,26 @@ export class GetCourseFileQuery extends Query<CourseFileDto | null> {
 // view opens, of these portal courses or of all, by folder and name: what
 // search may look through
 export class ListVisibleContentQuery extends Query<VisibleContentDto[]> {
+  constructor(
+    public readonly viewers: Viewers,
+    public readonly portalCourseIds: readonly string[] | null,
+  ) {
+    super();
+  }
+}
+
+// A file's content as the counts of what is read need it: what
+// ListVisibleContentQuery lists, in no order and with the name and type only
+export interface VisibleKeyDto {
+  hash: ContentHash;
+  name: string;
+  mime: MediaType | null;
+  portalCourseId: string;
+}
+
+// the same files as ListVisibleContentQuery, narrower and unordered, for
+// counting
+export class ListVisibleKeysQuery extends Query<VisibleKeyDto[]> {
   constructor(
     public readonly viewers: Viewers,
     public readonly portalCourseIds: readonly string[] | null,

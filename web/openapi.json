@@ -1687,17 +1687,12 @@
             "type": "number",
             "description": "distinct contents of the course's files (not archive members)"
           },
-          "done": {
-            "type": "number",
-            "description": "contents no processor is yet to read"
-          },
           "waiting": {
             "$ref": "#/components/schemas/WaitingResponse"
           }
         },
         "required": [
           "total",
-          "done",
           "waiting"
         ]
       },

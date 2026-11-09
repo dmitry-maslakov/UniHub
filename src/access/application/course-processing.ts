@@ -1,10 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { QueryBus } from '@nestjs/cqrs';
 import type { ContentHash } from '@app/kernel';
 import {
-  ListVisibleContentQuery,
+  ListVisibleKeysQuery,
   type CourseSlug,
-  type VisibleContentDto,
+  type VisibleKeyDto,
 } from '../../catalog/contracts.js';
 import {
   ListWaitingQuery,
@@ -21,28 +21,24 @@ export interface Waiting {
 export interface CourseProcessingView {
   // the distinct contents of the course's files, top-level files only
   total: number;
-  // the contents waiting for no processor at all
-  done: number;
   waiting: Waiting;
 }
 
 // how far the processors are with these files' contents: a content is
 // waiting for text, for pictures, or both (WaitingContent)
 export function progressOf(
-  files: readonly Pick<VisibleContentDto, 'hash'>[],
+  files: readonly Pick<VisibleKeyDto, 'hash'>[],
   waiting: ReadonlyMap<ContentHash, WaitingContent>,
 ): CourseProcessingView {
   const hashes = new Set(files.map(({ hash }) => hash));
   const counts = { text: 0, pictures: 0 };
-  let pending = 0;
   for (const hash of hashes) {
     const found = waiting.get(hash);
     if (!found) continue;
-    pending++;
     if (found.text) counts.text++;
     if (found.pictures) counts.pictures++;
   }
-  return { total: hashes.size, done: hashes.size - pending, waiting: counts };
+  return { total: hashes.size, waiting: counts };
 }
 
 // What the processors still have to read of a user's courses, over the
@@ -50,6 +46,8 @@ export function progressOf(
 // aren't counted: only top-level files, as existing queries list them.
 @Injectable()
 export class CourseProcessing {
+  private readonly logger = new Logger(CourseProcessing.name);
+
   constructor(private readonly queries: QueryBus) {}
 
   async of(userId: string, slug: CourseSlug) {
@@ -59,7 +57,7 @@ export class CourseProcessing {
       slug,
     );
     const files = await this.queries.execute(
-      new ListVisibleContentQuery(viewers, portalCourseIds),
+      new ListVisibleKeysQuery(viewers, portalCourseIds),
     );
     return progressOf(files, await this.waiting(files));
   }
@@ -74,12 +72,22 @@ export class CourseProcessing {
     const portalCourseIds = courses.flatMap(({ portalCourses }) =>
       portalCourses.map(({ id }) => id),
     );
-    const files = portalCourseIds.length
-      ? await this.queries.execute(
-          new ListVisibleContentQuery(viewers, portalCourseIds),
-        )
-      : [];
-    const waiting = await this.waiting(files);
+    // the counts never fail the list
+    let counted;
+    try {
+      const files = portalCourseIds.length
+        ? await this.queries.execute(
+            new ListVisibleKeysQuery(viewers, portalCourseIds),
+          )
+        : [];
+      counted = { files, waiting: await this.waiting(files) };
+    } catch (err) {
+      this.logger.warn(
+        `no counts for the course list: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return courses.map(courseView);
+    }
+    const { files, waiting } = counted;
     return courses.map((course) => {
       const ids = new Set(course.portalCourses.map(({ id }) => id));
       const { waiting: counts } = progressOf(
@@ -92,7 +100,7 @@ export class CourseProcessing {
     });
   }
 
-  private async waiting(files: readonly VisibleContentDto[]) {
+  private async waiting(files: readonly VisibleKeyDto[]) {
     if (!files.length) return new Map<ContentHash, WaitingContent>();
     const found = await this.queries.execute(
       new ListWaitingQuery(

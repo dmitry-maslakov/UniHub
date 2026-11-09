@@ -90,8 +90,6 @@ export class CourseProcessingResponse {
       "distinct contents of the course's files (not archive members)",
   })
   total!: number;
-  @ApiProperty({ description: 'contents no processor is yet to read' })
-  done!: number;
   @ApiProperty({ type: WaitingResponse }) waiting!: WaitingResponse;
 }
 

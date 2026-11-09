@@ -16,9 +16,11 @@ export class ListWaiting implements IQueryHandler<ListWaitingQuery> {
 
   async execute({ files }: ListWaitingQuery) {
     const made = new Set(
-      (await this.representations.keysOf(files.map(({ hash }) => hash))).map(
-        keyId,
-      ),
+      (
+        await this.representations.keysOf([
+          ...new Set(files.map(({ hash }) => hash)),
+        ])
+      ).map(keyId),
     );
     const waiting = new Map<ContentHash, WaitingContent>();
     for (const { hash, ...file } of files)

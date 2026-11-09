@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
 import type { PrismaHealthIndicator } from '@nestjs/terminus';
 import { RateLimitError, type Job, type Queue } from 'bullmq';
@@ -27,6 +28,7 @@ function worker(
   counts: number[] = [0],
   run: () => Promise<unknown> = async () => 'done',
 ) {
+  const giveUp = vi.fn(async (_job: PluginJob) => {});
   const getJobCounts = vi.fn(async () => ({ waiting: counts.shift() ?? 0 }));
   const metrics = testMeter();
   const health = {
@@ -36,14 +38,14 @@ function worker(
   } as unknown as PrismaHealthIndicator;
   const queue = { getJobCounts, rateLimit: vi.fn(async () => {}) };
   const w = new ModelsWorker(
-    { run } as unknown as ProcessContent,
+    { run, giveUp } as unknown as ProcessContent,
     health,
     {} as PrismaService,
     queue as unknown as Queue<PluginJob>,
     metrics.meter,
     { models: true } as ConfigType<typeof roleConfig>,
   );
-  return { w, queue, metrics };
+  return { w, queue, metrics, giveUp };
 }
 
 describe('ModelsWorker', () => {
@@ -93,6 +95,31 @@ describe('ModelsWorker', () => {
     expect(failure).not.toBeInstanceOf(RateLimitError);
     expect((failure as Error).message).toContain('job-1');
     expect(queue.rateLimit).toHaveBeenCalledTimes(19);
+  });
+
+  it('has the content of a job given up for good stored as nothing to read', async () => {
+    vi.spyOn(Logger.prototype, 'error').mockReturnValue();
+    const { w, giveUp } = worker();
+    const err = new Error('out of attempts');
+
+    await w.failed(job(), err);
+    expect(giveUp).not.toHaveBeenCalled();
+
+    await w.failed(job({ finishedOn: 1 }), err);
+    expect(giveUp).toHaveBeenCalledExactlyOnceWith(data);
+  });
+
+  it('logs a give-up that fails and carries on', async () => {
+    const error = vi.spyOn(Logger.prototype, 'error').mockReturnValue();
+    error.mockClear();
+    const { w, giveUp } = worker();
+    giveUp.mockRejectedValueOnce(new Error('database away'));
+
+    await expect(
+      w.failed(job({ finishedOn: 1 }), new Error('x')),
+    ).resolves.toBeUndefined();
+
+    expect(error).toHaveBeenCalledTimes(2);
   });
 
   it('counts a failed job, and a given-up one apart', async () => {

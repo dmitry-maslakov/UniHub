@@ -1,8 +1,8 @@
 import { api } from '@/shared/api';
 
-export const PROCESSING_REFRESH = 30_000;
+export const PROCESSING_REFRESH = 60_000;
 
-// How far the hub has read the course's files, asked again every 30 s while
+// How far the hub has read the course's files, asked again every minute while
 // anything waits
 export const courseProcessingQuery = (slug: string) =>
   api.queryOptions(

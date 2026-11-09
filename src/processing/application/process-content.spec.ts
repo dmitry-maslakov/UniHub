@@ -199,6 +199,39 @@ describe('ProcessContent', () => {
     expect(blobs.opened.every((s) => s.destroyed)).toBe(true);
   });
 
+  describe('giving up', () => {
+    it('stores no parts at the version running now, for a content with nothing to read', async () => {
+      const { process, saved } = run(parts('x'), undefined, 2);
+
+      await process.giveUp(job(1));
+
+      expect(saved).toEqual([{ ...job(2).key, parts: [] }]);
+    });
+
+    it('does nothing for a processor that is off', async () => {
+      const representations = new InMemoryRepresentations();
+      const process = new ProcessContent(
+        catalogOf({}),
+        holdersOf(new FakeFiles()),
+        new InMemoryBlobs(),
+        representations,
+      );
+
+      await process.giveUp(job());
+
+      expect(representations.saved).toEqual([]);
+    });
+
+    it('leaves one that exists as it is', async () => {
+      const { process, saved } = run(parts('made'));
+      await process.run(job());
+
+      await process.giveUp(job());
+
+      expect(saved).toEqual([{ ...job().key, parts: ['made'] }]);
+    });
+  });
+
   describe('a heavy processor', () => {
     const heavy = { timeoutMinutes: 20 };
 

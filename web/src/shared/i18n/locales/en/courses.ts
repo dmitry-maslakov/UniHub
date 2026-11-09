@@ -29,8 +29,16 @@ export default {
       back: 'Back to My courses',
     },
     processing: {
-      progress: 'Still reading this course: {{done}} of {{total}} files ready',
-      picturesLater: 'Text is ready; pictures are read in the background.',
+      text_one: 'Still reading this course: {{done}} of {{count}} file ready',
+      text_few: 'Still reading this course: {{done}} of {{count}} files ready',
+      text_other:
+        'Still reading this course: {{done}} of {{count}} files ready',
+      pictures_one:
+        'Text is ready; pictures are read in the background: {{done}} of {{count}} file done',
+      pictures_few:
+        'Text is ready; pictures are read in the background: {{done}} of {{count}} files done',
+      pictures_other:
+        'Text is ready; pictures are read in the background: {{done}} of {{count}} files done',
     },
     tabs: {
       files: 'Files',

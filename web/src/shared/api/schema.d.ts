@@ -466,8 +466,6 @@ export interface components {
         CourseProcessingResponse: {
             /** @description distinct contents of the course's files (not archive members) */
             total: number;
-            /** @description contents no processor is yet to read */
-            done: number;
             waiting: components["schemas"]["WaitingResponse"];
         };
         ItemResponse: {

@@ -63,6 +63,10 @@ export class PluginsWorker
     return pluginOf(job.data);
   }
 
+  protected async gaveUp({ data }: Job<PluginJob>) {
+    if (data.kind === 'process') await this.processContent.giveUp(data);
+  }
+
   // a job paused for an outage or put back at shutdown is neither
   @OnWorkerEvent('completed')
   countCompleted(job: Job<PluginJob>) {

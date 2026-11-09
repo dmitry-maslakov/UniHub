@@ -99,6 +99,9 @@ describe('course admin routes', { timeout: 20_000 }, () => {
     await student.get('/api/admin/queues').expect(403);
     const { body } = await admin.get('/api/admin/queues').expect(200);
     expect(body.map(({ name }: { name: string }) => name)).toContain('plugins');
+    expect(body.map(({ name }: { name: string }) => name)).toEqual(
+      expect.arrayContaining(['plugins', 'models', 'search-index']),
+    );
     expect(body[0]).toEqual({
       name: expect.any(String),
       waiting: expect.any(Number),
