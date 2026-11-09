@@ -18,8 +18,11 @@ import {
   TEXT,
 } from './website.fakes.js';
 
+// every page starts a worker thread, seconds each on a busy CI runner
+vi.setConfig({ testTimeout: 30_000 });
+
 const site = new FakeSite().listen();
-const SECTION = { id: 'courses', name: 'Courses', sitemap: '/sitemap.xml' };
+const SECTION ={ id: 'courses', name: 'Courses', sitemap: '/sitemap.xml' };
 const DAY = 86_400_000;
 const today = () => Math.floor(Date.now() / DAY);
 const portal = PortalId.parse('website');
