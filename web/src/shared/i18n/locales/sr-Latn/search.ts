@@ -18,6 +18,7 @@ export default {
   empty: {
     title: 'Ništa ne odgovara upitu „{{q}}”',
     body: 'Probaj druge reči ili manje njih.',
+    bodyFiltered: 'Probaj druge reči ili pretraži sve.',
   },
   error: {
     rateLimited:

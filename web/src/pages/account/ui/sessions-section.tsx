@@ -44,7 +44,10 @@ export function SessionsSection() {
       await refetch();
     },
     onError: () =>
-      notifications.show({ color: 'red', message: t('sessions.others.failed') }),
+      notifications.show({
+        color: 'red',
+        message: t('sessions.others.failed'),
+      }),
   });
 
   const confirmOthers = () =>

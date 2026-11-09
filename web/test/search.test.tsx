@@ -229,6 +229,18 @@ describe('search', () => {
 });
 
 describe('search by type', () => {
+  it('leads back from a file to the same search', async () => {
+    signedIn();
+    search(() => HttpResponse.json({ results: [fileHit()] }));
+    renderApp('/search?q=stack&course=os&type=files&from=stack%20OS');
+
+    const link = await screen.findByRole('link', { name: /l5\.pdf/ });
+    expect(link).toHaveAttribute(
+      'href',
+      '/courses/os/files/f1?page=3&processor=office-text&q=stack&course=os&type=files&from=stack+OS',
+    );
+  });
+
   it('limits the search to files or posts, kept in the address', async () => {
     signedIn();
     const types: (string | null)[] = [];
@@ -344,6 +356,30 @@ describe("search by a course's initials", () => {
     );
   });
 
+  it('shows the words without the initials once they scope the search, and a second search leaves the address alone', async () => {
+    signedIn();
+    search(() => HttpResponse.json({ results: [] }), courses);
+    const { router } = renderApp('/search?q=stek');
+
+    const field = await screen.findByLabelText('Search your courses');
+    await userEvent.type(field, ' ASP');
+    await userEvent.click(screen.getByRole('button', { name: 'Search' }));
+
+    const scoped = {
+      q: 'stek',
+      course: 'asp',
+      from: 'stek ASP',
+    };
+    await waitFor(() => expect(router.state.location.search).toEqual(scoped));
+    await waitFor(() =>
+      expect(screen.getByLabelText('Search your courses')).toHaveValue('stek'),
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Search' }));
+    await waitFor(() => expect(router.state.location.search).toEqual(scoped));
+    expect(screen.getByLabelText('Search your courses')).toHaveValue('stek');
+  });
+
   it('leaves a link that names a course alone', async () => {
     signedIn();
     search(() => HttpResponse.json({ results: [] }), courses);
@@ -359,6 +395,26 @@ describe("search by a course's initials", () => {
         course: 'asp',
       }),
     );
+  });
+});
+
+describe('an empty search', () => {
+  it('says to try other words, or fewer', async () => {
+    signedIn();
+    search(() => HttpResponse.json({ results: [] }));
+
+    renderApp('/search?q=stack');
+    expect(await screen.findByText('Try other words, or fewer.')).toBeVisible();
+  });
+
+  it('says to search everything once a filter is on', async () => {
+    signedIn();
+    search(() => HttpResponse.json({ results: [] }));
+
+    renderApp('/search?q=stack&type=files');
+    expect(
+      await screen.findByText('Try other words, or search everything.'),
+    ).toBeVisible();
   });
 });
 

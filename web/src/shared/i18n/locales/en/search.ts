@@ -15,6 +15,7 @@ export default {
   empty: {
     title: 'Nothing matches “{{q}}”',
     body: 'Try other words, or fewer.',
+    bodyFiltered: 'Try other words, or search everything.',
   },
   error: {
     rateLimited:

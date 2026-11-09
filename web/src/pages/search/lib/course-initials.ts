@@ -1,7 +1,7 @@
 // A course's initials, which a query can name it by ("ASP" for "Algoritmi i
 // strukture podataka"), and the course a query names that way.
 
-// words that join a name's others, and numbers, give no initial
+// words that join a name's others give no initial
 const CONNECTING = new Set([
   'i',
   'u',
@@ -19,18 +19,37 @@ const CONNECTING = new Set([
   'for',
 ]);
 
-// the first letters of a name's words, upper-cased; none for fewer than 2
+// a letter without its diacritics, to compare initials by
+const fold = (text: string) => text.normalize('NFD').replace(/\p{M}/gu, '');
+
+// a number, Arabic or Roman, or a word in brackets (an acronym the name
+// already gives), gives no initial
+const isNumber = (word: string) =>
+  /^\p{N}+$/u.test(word) || /^[IVX]+$/.test(word);
+const isBracketed = (word: string) => /^[([].*[)\]]$/.test(word);
+
+// the first letters of a name's words (split at spaces and hyphens),
+// upper-cased; none for fewer than 2
 export function initialsOf(name: string) {
   const letters = name
-    .split(/\s+/)
+    .split(/[\s-]+/)
     .filter((word) => !CONNECTING.has(word.toLowerCase()))
     .flatMap((word) =>
-      /^\p{N}+$/u.test(word) ? [] : (word.match(/\p{L}/u) ?? []),
+      isNumber(word) || isBracketed(word) ? [] : (word.match(/\p{L}/u) ?? []),
     )
     .join('')
     .toUpperCase();
   return letters.length >= 2 ? letters : null;
 }
+
+// Whether a word in a query is these initials, diacritics aside. Of 2 letters
+// it must be typed in capitals ("AR", not "ar"), as short words are common;
+// connecting words (lowercase) never are.
+const names = (word: string, initials: string | null) => {
+  if (!initials || CONNECTING.has(word)) return false;
+  const key = fold(word);
+  return (key.length === 2 ? key : key.toUpperCase()) === fold(initials);
+};
 
 // The one course a query names by its initials: it has at least two words,
 // exactly one of them is some course's initials, and only that course's.
@@ -44,8 +63,9 @@ export function scopeOf<C extends { name: string }>(
   const words = query.trim().split(/\s+/);
   if (words.length < 2) return null;
   const named = words.flatMap((word, at) => {
-    const upper = word.toUpperCase();
-    const matching = courses.filter(({ name }) => initialsOf(name) === upper);
+    const matching = courses.filter(({ name }) =>
+      names(word, initialsOf(name)),
+    );
     return matching.length ? [{ at, matching }] : [];
   });
   if (named.length !== 1 || named[0].matching.length !== 1) return null;

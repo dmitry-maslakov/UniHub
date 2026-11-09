@@ -34,7 +34,13 @@ export function SearchPage() {
   return (
     <>
       <PageTitle description={t('description')}>{t('title')}</PageTitle>
-      <SearchForm key={q} q={q} course={course} type={type} />
+      <SearchForm
+        key={`${q}|${course ?? ''}`}
+        q={q}
+        course={course}
+        type={type}
+        from={from}
+      />
       <Box mt="md">
         <SearchType type={type} />
       </Box>
@@ -53,7 +59,7 @@ export function SearchPage() {
         )}
         {results && !results.length && (
           <EmptyState title={t('empty.title', { q })}>
-            {t('empty.body')}
+            {t(type || course ? 'empty.bodyFiltered' : 'empty.body')}
           </EmptyState>
         )}
         {results && results.length > 0 && (
@@ -64,6 +70,8 @@ export function SearchPage() {
                 result={result}
                 q={q}
                 scope={course}
+                type={type}
+                from={from}
               />
             ))}
           </RowList>

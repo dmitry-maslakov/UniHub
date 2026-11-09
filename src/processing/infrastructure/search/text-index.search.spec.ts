@@ -101,7 +101,7 @@ describe('words', () => {
       query: 'algoritmi',
       type: 'most_fields',
       fields: ['text', 'text.sr', 'text.en'],
-      fuzziness: 'AUTO',
+      fuzziness: 'AUTO:4,8',
       prefix_length: 1,
       max_expansions: 20,
     });
@@ -115,6 +115,23 @@ describe('words', () => {
     expect(wordsQuery('getUserName').bool.should[0].multi_match.query).toBe(
       'getUserName',
     );
+  });
+
+  it('leaves out the words of a dotted or slashed identifier, not a sentence-ending period', () => {
+    expect(fuzzy('main.c')).toBeUndefined();
+    expect(fuzzy('src/main.c')).toBeUndefined();
+    expect(fuzzy('algoritmi.')?.query).toBe('algoritmi.');
+  });
+
+  it('has no fuzzy part for more words than a query may hold clauses for', () => {
+    const some = (n: number) =>
+      Array.from(
+        { length: n },
+        (_, i) => `rec${'abcdefghijklmnopqrstu'[i]}`,
+      ).join(' ');
+    expect(fuzzy(some(16))).toBeDefined();
+    expect(fuzzy(some(17))).toBeUndefined();
+    expect(wordsQuery(some(17)).bool.should).toHaveLength(1);
   });
 
   it('does not take a capital or a name for an identifier', () => {

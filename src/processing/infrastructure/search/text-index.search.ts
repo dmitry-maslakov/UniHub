@@ -74,9 +74,17 @@ const collapse: Types.Core_Search.FieldCollapse = {
 // exact forms don't
 const NATURAL = FIELDS.filter((field) => field !== 'text.code');
 
-// a word that reads as code: an underscore, a digit, or a capital after a
-// lowercase letter (camelCase), which is matched exactly or not at all
-const isIdentifier = (word: string) => /[_\p{N}]|\p{Ll}\p{Lu}/u.test(word);
+// a word that reads as code: an underscore, a digit, a capital after a
+// lowercase letter (camelCase), or a dot or slash between letters (main.c),
+// which is matched exactly or not at all; a sentence's trailing period is not
+const isIdentifier = (word: string) =>
+  /[_\p{N}]|\p{Ll}\p{Lu}|\p{L}[./]\p{L}/u.test(word);
+
+// OpenSearch refuses a query of over 1024 clauses, and a fuzzy word makes one
+// per field per expansion, 3 x 20, on top of the exact clauses' 4: 16 words
+// at most, 1024 / (4 + 3 * 20). A typo matters in a short query; a long one
+// has enough exact words.
+const MAX_FUZZY_WORDS = 16;
 
 // The words in every analysis, exactly; and, boosted less, those of them that
 // are not identifiers in the analyses of natural text with a typo or two
@@ -95,14 +103,15 @@ export const words = (text: string) => {
             boost: 2,
           },
         },
-        ...(natural.length
+        ...(natural.length && natural.length <= MAX_FUZZY_WORDS
           ? [
               {
                 multi_match: {
                   query: natural.join(' '),
                   type: 'most_fields' as const,
                   fields: NATURAL,
-                  fuzziness: 'AUTO',
+                  // terms under 4 letters stay exact (TCP is not top)
+                  fuzziness: 'AUTO:4,8',
                   prefix_length: 1,
                   max_expansions: 20,
                 },

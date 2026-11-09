@@ -195,6 +195,19 @@ describe('search', { timeout: 60_000 }, () => {
     expect(await byWords('camelCaseName', [lecture])).not.toEqual([]);
   });
 
+  // a fuzzy clause per word would pass OpenSearch's 1024 clauses for a long
+  // query, which the API accepts up to 500 characters
+  it('answers a paragraph of nearly 500 characters of distinct words', async () => {
+    const paragraph = Array.from(
+      { length: 70 },
+      (_, i) =>
+        `zq${'abcdefghij'[i % 10]}${'klmnopqrst'[Math.floor(i / 10)]}wv`,
+    ).join(' ');
+    expect(paragraph.length).toBeGreaterThan(450);
+    await expect(byWords(paragraph, [lecture])).resolves.toBeInstanceOf(Array);
+    await expect(search(paragraph, [lecture])).resolves.toBeInstanceOf(Array);
+  });
+
   // the hybrid query's raw scores come out far outside 0 to 1, a few huge
   // and negative, without the pipeline that normalizes them
   it('scores contents 0 to 1, through the hybrid pipeline', async () => {

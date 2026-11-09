@@ -9,15 +9,18 @@ import { scopeOf } from '../lib/course-initials';
 // The words to look for; searching puts them in the address, the course
 // the search is limited to kept, and the kind. With no course yet, a word
 // that is one course's initials names it instead (course-initials.ts), and
-// the words as typed go in `from`, to put back.
+// the words as typed go in `from`, to put back, and stay while the words
+// are not changed.
 export function SearchForm({
   q,
   course,
   type,
+  from,
 }: {
   q: string;
   course?: string;
   type?: 'files' | 'posts';
+  from?: string;
 }) {
   const { t } = useTranslation('search');
   const navigate = useNavigate();
@@ -40,7 +43,12 @@ export function SearchForm({
             to: '/search',
             search: scoped
               ? { q: scoped.q, course: scoped.course.slug, type, from: words }
-              : { q: words, course, type },
+              : {
+                  q: words,
+                  course,
+                  type,
+                  from: words === q ? from : undefined,
+                },
           });
         })}
       >

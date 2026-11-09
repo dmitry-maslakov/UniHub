@@ -11,16 +11,20 @@ type Result = Schemas['FileResultResponse'] | Schemas['PostResultResponse'];
 
 // One hit, a link over the whole row: a post opens its page, a file or a
 // member of an archive opens at the part that matched. `q` goes along, so
-// the file's page can lead back; so does `scope`, the course the search was
-// limited to.
+// the file's page can lead back; so do `scope`, the course the search was
+// limited to, `type` and `from`, the kind and the words as typed.
 export function ResultRow({
   result,
   q,
   scope,
+  type,
+  from,
 }: {
   result: Result;
   q: string;
   scope?: string;
+  type?: 'files' | 'posts';
+  from?: string;
 }) {
   const { t } = useTranslation(['search', 'file']);
   const { date } = useFormat();
@@ -58,6 +62,8 @@ export function ResultRow({
           member: result.member ?? undefined,
           q,
           course: scope,
+          type,
+          from,
         }}
       >
         <RowText

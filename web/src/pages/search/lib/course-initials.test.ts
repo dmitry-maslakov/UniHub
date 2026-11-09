@@ -13,6 +13,11 @@ describe('initialsOf', () => {
     ['Objektno orijentisano programiranje 1', 'OOP'],
     ['Theory of Computation', 'TC'],
     ['Šume i ćilimi', 'ŠĆ'],
+    ['Objektno-orijentisano programiranje', 'OOP'],
+    ['Algoritmi i strukture podataka (ASP)', 'ASP'],
+    ['Matematička analiza II', 'MA'],
+    ['Matematička analiza I', 'MA'],
+    ['Analiza II', null],
   ])('takes %s as %s', (name, initials) => {
     expect(initialsOf(name)).toBe(initials);
   });
@@ -33,6 +38,24 @@ describe('scopeOf', () => {
     });
   });
 
+  it('leaves the connecting words and lowercase pairs of letters to be searched', () => {
+    const numerical = { slug: 'na', name: 'Numerička analiza' };
+    const discrete = { slug: 'it', name: 'Information Theory' };
+    expect(scopeOf('zadaci na ispitu', [numerical])).toBeNull();
+    expect(scopeOf('what it does', [discrete])).toBeNull();
+    expect(scopeOf('stek ar', courses)).toBeNull();
+    expect(scopeOf('stek NA', [numerical])).toEqual({
+      course: numerical,
+      q: 'stek',
+    });
+  });
+
+  it('names a course by initials with or without diacritics, and 3 or more letters in any case', () => {
+    const sume = { slug: 'sc', name: 'Šume i ćilimi' };
+    expect(scopeOf('stek SC', [sume])).toEqual({ course: sume, q: 'stek' });
+    expect(scopeOf('stek Asp', courses)).toEqual({ course: asp, q: 'stek' });
+  });
+
   it('leaves a word alone to match file names', () => {
     expect(scopeOf('ASP', courses)).toBeNull();
   });
@@ -47,7 +70,7 @@ describe('scopeOf', () => {
   });
 
   it('scopes nothing when two words are initials', () => {
-    expect(scopeOf('asp ar', courses)).toBeNull();
+    expect(scopeOf('asp AR', courses)).toBeNull();
   });
 
   it('leaves a query under the 2 characters a search needs', () => {
