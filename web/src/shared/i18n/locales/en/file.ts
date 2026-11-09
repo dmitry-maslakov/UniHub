@@ -17,6 +17,7 @@ export default {
     title: 'Text',
     loading: 'Loading the text',
     recognized: 'Read from the picture by machine, so it can have mistakes.',
+    described: 'Described by a machine, so it can be wrong.',
   },
   view: {
     which: 'Which view to read in',
