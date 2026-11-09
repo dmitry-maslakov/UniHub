@@ -55,6 +55,7 @@ import {
   ListFilesOfContentHandler,
   ListFilesWithContentHandler,
   ListVisibleContentHandler,
+  ListVisibleKeysHandler,
 } from './infrastructure/read/files.read.js';
 import {
   GetCourseItemHandler,
@@ -112,6 +113,7 @@ import {
     ListCourseFilesHandler,
     GetCourseFileHandler,
     ListVisibleContentHandler,
+    ListVisibleKeysHandler,
     GetFileHandler,
     FindFileHandler,
     ListFilesOfContentHandler,

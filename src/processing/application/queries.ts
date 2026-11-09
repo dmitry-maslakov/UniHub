@@ -177,3 +177,27 @@ export class GetPostTextQuery extends Query<string> {
     super();
   }
 }
+
+// some content a processor is yet to make a text of, and which kind: `text`
+// for the light processors, `pictures` for the heavy ones (a model)
+export interface WaitingContent {
+  hash: ContentHash;
+  text: boolean;
+  pictures: boolean;
+}
+
+// The contents among these files that wait for a processor: it's on, it
+// takes the file and has no representation of its current version yet.
+// A content that nothing waits for is left out; one in several files waits
+// if it does for any of them.
+export class ListWaitingQuery extends Query<WaitingContent[]> {
+  constructor(
+    public readonly files: readonly {
+      hash: ContentHash;
+      name: string;
+      mime: MediaType | null;
+    }[],
+  ) {
+    super();
+  }
+}

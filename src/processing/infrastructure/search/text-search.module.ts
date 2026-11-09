@@ -103,6 +103,6 @@ const DAY = 24 * 60 * 60;
     ReconcileIndexSchedule,
   ],
   // to ProcessContent and SearchTexts, which do without them when it's off
-  exports: [TextIndex, TextIndexQueue, QueryEmbedder, Reranker],
+  exports: [BullModule, TextIndex, TextIndexQueue, QueryEmbedder, Reranker],
 })
 export class TextSearchModule {}

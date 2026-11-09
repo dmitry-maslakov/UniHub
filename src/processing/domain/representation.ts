@@ -31,6 +31,8 @@ export const representation = (
 
 export abstract class RepresentationRepository {
   abstract exists(key: RepresentationKey): Promise<boolean>;
+  // every (hash, processor, version) there is for these contents
+  abstract keysOf(hashes: readonly ContentHash[]): Promise<RepresentationKey[]>;
   // the newest version a processor made of this content; null if none
   abstract newest(
     hash: ContentHash,

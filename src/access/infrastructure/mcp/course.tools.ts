@@ -4,6 +4,7 @@ import { McpController, Tool } from '@rekog/mcp-nest';
 import { z } from 'zod';
 import { CourseSlug } from '../../../catalog/contracts.js';
 import { HubPages } from '../../../identity/contracts.js';
+import { CourseProcessing } from '../../application/course-processing.js';
 import { CourseReader } from '../../application/course-reader.js';
 import {
   pageSchema,
@@ -32,18 +33,19 @@ const fileMembers = pageSchema.extend({ file });
 export class CourseTools {
   constructor(
     private readonly reader: CourseReader,
+    private readonly processing: CourseProcessing,
     private readonly pages: HubPages,
   ) {}
 
   @Tool({
     name: 'list_courses',
     description:
-      "The user's courses as they see them, each with the portal courses (Canvas, a course site...) it is made of and `sources`, their portals. `via` says how the user reads a portal course: `account`, their own account; `pick`, a public site's course they picked; `link`, a course an admin set up. A pick the user shows with a course of their own is inside that course. When the list is empty, a second text may say why, to tell the user: an account of theirs just linked and still being read for the first time, or no source connected yet and where to connect one.",
+      "The user's courses as they see them, each with the portal courses (Canvas, a course site...) it is made of and `sources`, their portals. `via` says how the user reads a portal course: `account`, their own account; `pick`, a public site's course they picked; `link`, a course an admin set up. A pick the user shows with a course of their own is inside that course. `processing`, when present, counts the course's contents the hub has yet to read (`text`, `pictures`): the course isn't fully read yet. When the list is empty, a second text may say why, to tell the user: an account of theirs just linked and still being read for the first time, or no source connected yet and where to connect one.",
     parameters: z.object({}),
     annotations: readOnly,
   })
   async courses(@McpUserId() userId: string) {
-    const courses = await this.reader.courses(userId);
+    const courses = await this.processing.listing(userId);
     const note = courses.length
       ? null
       : await this.reader.noCourses(userId, this.pages.url('/sources'));

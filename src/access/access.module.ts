@@ -10,6 +10,7 @@ import { whenSearchOn } from '../platform/search/opensearch.config.js';
 import { StorageModule } from '../storage/contracts.js';
 import { CourseGrants } from './application/course-grants.js';
 import { CourseMatching } from './application/course-matching.js';
+import { CourseProcessing } from './application/course-processing.js';
 import { CourseReader } from './application/course-reader.js';
 import { PageRenderer } from './application/renderer.js';
 import { Downloads } from './application/downloads.js';
@@ -65,6 +66,7 @@ import { AccessSearchModule } from './search.module.js';
   ],
   providers: [
     CourseReader,
+    CourseProcessing,
     { provide: PageRenderer, useClass: SharpPdfiumRenderer },
     Downloads,
     { provide: DownloadRequests, useClass: RedisDownloadRequests },

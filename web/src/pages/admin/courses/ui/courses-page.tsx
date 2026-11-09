@@ -14,6 +14,7 @@ import {
 import { AdminHeader } from '@/widgets/admin-header';
 import { hubCoursesQuery } from '../api/hub-courses';
 import { CreateCourseForm } from './create-course-form';
+import { ProcessingSection } from './processing-section';
 
 // The courses admins made, and a form for a new one
 export function CoursesPage() {
@@ -66,6 +67,7 @@ export function CoursesPage() {
             )}
           </QueryState>
         </Section>
+        <ProcessingSection />
       </Stack>
     </>
   );

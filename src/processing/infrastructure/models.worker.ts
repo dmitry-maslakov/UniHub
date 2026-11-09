@@ -73,9 +73,9 @@ export class ModelsWorker
       { connection: this.models.opts.connection, concurrency: 1, ...PAUSING },
     )
       .on('completed', (job) => this.countCompleted(job))
-      .on('failed', (job, error) => {
-        this.failed(job, error);
+      .on('failed', async (job, error) => {
         this.countFailed(job);
+        await this.failed(job, error);
       })
       .on('stalled', (id) => this.stalled(id))
       .on('error', (error) => this.logger.error(error.message, error.stack));
@@ -138,6 +138,10 @@ export class ModelsWorker
 
   protected nameOf(job: Job<PluginJob>) {
     return pluginOf(job.data);
+  }
+
+  protected async gaveUp({ data }: Job<PluginJob>) {
+    if (data.kind === 'process') await this.processContent.giveUp(data);
   }
 
   // a job being run goes back to wait, as the plugins' do

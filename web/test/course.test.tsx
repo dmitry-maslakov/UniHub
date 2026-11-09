@@ -4,6 +4,10 @@ import { http, HttpResponse } from 'msw';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { i18n } from '@/shared/i18n';
 import { leaveTo } from '@/shared/lib';
+import {
+  courseProcessingQuery,
+  PROCESSING_REFRESH,
+} from '@/pages/course/api/processing';
 import { renderApp } from './render';
 import { server, signedIn } from './server';
 
@@ -69,13 +73,82 @@ const setup = (items: unknown[] = posts, files: unknown[] = [file(1)]) => {
       return HttpResponse.json(files.slice(offset, offset + limit));
     }),
     http.get(api('/me/portals'), () => HttpResponse.json([])),
+    http.get(api('/courses/os/processing'), () =>
+      HttpResponse.json(processing()),
+    ),
   );
 };
+
+const processing = (text = 0, pictures = 0, total = 8) => ({
+  total,
+  waiting: { text, pictures },
+});
 
 const manyFiles = (n: number) =>
   Array.from({ length: n }, (_, i) => file(i + 1, true, `folder ${i % 3}`));
 
 describe('a course', () => {
+  it('says how far the text is read while any waits', async () => {
+    setup();
+    server.use(
+      http.get(api('/courses/os/processing'), () =>
+        HttpResponse.json(processing(3, 3, 8)),
+      ),
+    );
+    renderApp('/courses/os');
+
+    expect(
+      await screen.findByText('Still reading this course: 5 of 8 files ready'),
+    ).toBeVisible();
+    expect(screen.getByRole('progressbar')).toBeVisible();
+    expect(screen.queryByText(/pictures are read/)).toBeNull();
+  });
+
+  it('says the text is ready, and how many pictures are read, once only pictures wait', async () => {
+    setup();
+    server.use(
+      http.get(api('/courses/os/processing'), () =>
+        HttpResponse.json(processing(0, 3, 8)),
+      ),
+    );
+    renderApp('/courses/os');
+
+    expect(
+      await screen.findByText(
+        'Text is ready; pictures are read in the background: 5 of 8 files done',
+      ),
+    ).toBeVisible();
+  });
+
+  it('is quiet when none wait', async () => {
+    setup();
+    let asked = false;
+    server.use(
+      http.get(api('/courses/os/processing'), () => {
+        asked = true;
+        return HttpResponse.json(processing());
+      }),
+    );
+    renderApp('/courses/os');
+
+    await screen.findByRole('tab', { name: /^Files/ });
+    await waitFor(() => expect(asked).toBe(true));
+    expect(screen.queryByText(/Still reading/)).toBeNull();
+    expect(screen.queryByText(/pictures are read/)).toBeNull();
+    expect(screen.queryByRole('progressbar')).toBeNull();
+  });
+
+  it('asks again every minute while something waits, and stops when nothing does', () => {
+    const { refetchInterval } = courseProcessingQuery('os') as unknown as {
+      refetchInterval: (q: { state: { data: unknown } }) => number | false;
+    };
+    const every = (data: unknown) => refetchInterval({ state: { data } });
+    expect(every(processing(1, 0))).toBe(PROCESSING_REFRESH);
+    expect(every(processing(0, 1))).toBe(PROCESSING_REFRESH);
+    expect(every(processing())).toBe(false);
+    expect(every(undefined)).toBe(false);
+  });
+
   it('opens on Files with the folders of a course that has files', async () => {
     setup(posts, [file(1, true, 'Predavanja'), file(2, true, 'Vežbe')]);
     const { router } = renderApp('/courses/os');

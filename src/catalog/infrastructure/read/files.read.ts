@@ -1,5 +1,6 @@
 import { QueryHandler, type IQueryHandler } from '@nestjs/cqrs';
 import { InjectTransactionHost } from '@nestjs-cls/transactional';
+import type { MediaType } from '@app/kernel';
 import type { Prisma } from '../../../generated/prisma/client.js';
 import type { PrismaTxHost } from '../../../platform/database/prisma.service.js';
 import {
@@ -10,6 +11,7 @@ import {
   ListFilesOfContentQuery,
   ListFilesWithContentQuery,
   ListVisibleContentQuery,
+  ListVisibleKeysQuery,
   type FileDto,
   type Viewers,
 } from '../../application/queries.js';
@@ -185,6 +187,40 @@ export class ListVisibleContentHandler implements IQueryHandler<ListVisibleConte
               hash,
               name,
               path,
+            },
+          ]
+        : [];
+    });
+  }
+}
+
+// ListVisibleContentHandler's rows, with only what the counts need and no
+// order
+@QueryHandler(ListVisibleKeysQuery)
+export class ListVisibleKeysHandler implements IQueryHandler<ListVisibleKeysQuery> {
+  constructor(@InjectTransactionHost() private readonly txHost: PrismaTxHost) {}
+
+  async execute({ viewers, portalCourseIds }: ListVisibleKeysQuery) {
+    const now = new Date();
+    const rows = await this.txHost.tx.fileVersion.findMany({
+      where: {
+        AND: [
+          inCourses(portalCourseIds),
+          fileSeen(viewers, now, opens(now)),
+          { contentHash: { not: null } },
+        ],
+      },
+      select: { name: true, mime: true, contentHash: true, ...withCourse },
+    });
+    return rows.flatMap(({ name, mime, portalCourse, ...row }) => {
+      const hash = contentOf(row);
+      return portalCourse && courseOf({ portalCourse }) && hash
+        ? [
+            {
+              hash,
+              name,
+              mime: mime as MediaType | null,
+              portalCourseId: portalCourse.id,
             },
           ]
         : [];

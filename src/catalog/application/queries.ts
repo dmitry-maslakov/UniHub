@@ -259,6 +259,26 @@ export class ListVisibleContentQuery extends Query<VisibleContentDto[]> {
   }
 }
 
+// A file's content as the counts of what is read need it: what
+// ListVisibleContentQuery lists, in no order and with the name and type only
+export interface VisibleKeyDto {
+  hash: ContentHash;
+  name: string;
+  mime: MediaType | null;
+  portalCourseId: string;
+}
+
+// the same files as ListVisibleContentQuery, narrower and unordered, for
+// counting
+export class ListVisibleKeysQuery extends Query<VisibleKeyDto[]> {
+  constructor(
+    public readonly viewers: Viewers,
+    public readonly portalCourseIds: readonly string[] | null,
+  ) {
+    super();
+  }
+}
+
 // A post and its course, if the viewers see it, in a portal course. Null
 // otherwise.
 export class GetCourseItemQuery extends Query<CourseItemDto | null> {

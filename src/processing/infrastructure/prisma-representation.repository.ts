@@ -29,6 +29,14 @@ export class PrismaRepresentationRepository extends RepresentationRepository {
     return row !== null;
   }
 
+  async keysOf(hashes: readonly ContentHash[]) {
+    // keys were checked on the way in, they're read back as them
+    return (await this.txHost.tx.representation.findMany({
+      where: { hash: { in: [...hashes] } },
+      select: { hash: true, processor: true, version: true },
+    })) as RepresentationKey[];
+  }
+
   // newest as texts.read.ts reads it: the highest version
   async newest(hash: ContentHash, processor: PluginName) {
     const row = await this.txHost.tx.representation.findFirst({

@@ -75,6 +75,24 @@ export class CourseResponse implements CourseView {
   portalCourses!: PortalCourseResponse[];
 }
 
+export class WaitingResponse {
+  @ApiProperty({ description: 'contents waiting for a text processor' })
+  text!: number;
+  @ApiProperty({
+    description: 'contents waiting for a heavy (model) processor',
+  })
+  pictures!: number;
+}
+
+export class CourseProcessingResponse {
+  @ApiProperty({
+    description:
+      "distinct contents of the course's files (not archive members)",
+  })
+  total!: number;
+  @ApiProperty({ type: WaitingResponse }) waiting!: WaitingResponse;
+}
+
 export class ItemResponse implements ItemView {
   @ApiProperty() id!: string;
   @ApiProperty({ type: String, example: 'canvas' }) portal!: PortalId;

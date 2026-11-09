@@ -4,6 +4,22 @@
  */
 
 export interface paths {
+    "/api/admin/queues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["QueuesController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses": {
         parameters: {
             query?: never;
@@ -44,6 +60,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["SignInMethodsController_methods"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/{slug}/processing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CoursesController_progress"];
         put?: never;
         post?: never;
         delete?: never;
@@ -376,6 +408,13 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        QueueStatusResponse: {
+            /** @example plugins */
+            name: string;
+            waiting: number;
+            active: number;
+            failed: number;
+        };
         CourseCreatedResponse: {
             /** @description the course's id, which the routes of grants name it by */
             id: string;
@@ -417,6 +456,17 @@ export interface components {
             sources: string[];
             /** @description by year, those that span years last; a pick you show with this course after them */
             portalCourses: components["schemas"]["PortalCourseResponse"][];
+        };
+        WaitingResponse: {
+            /** @description contents waiting for a text processor */
+            text: number;
+            /** @description contents waiting for a heavy (model) processor */
+            pictures: number;
+        };
+        CourseProcessingResponse: {
+            /** @description distinct contents of the course's files (not archive members) */
+            total: number;
+            waiting: components["schemas"]["WaitingResponse"];
         };
         ItemResponse: {
             id: string;
@@ -751,6 +801,33 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    QueuesController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the plugins, models and search index queues */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueStatusResponse"][];
+                };
+            };
+            /** @description for admins only */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     CoursesController_list: {
         parameters: {
             query?: never;
@@ -899,6 +976,34 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SignInMethodsResponse"];
                 };
+            };
+        };
+    };
+    CoursesController_progress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description how much of the course's files the processors have read; `waiting` counts contents, by kind */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseProcessingResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

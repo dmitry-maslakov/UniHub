@@ -94,6 +94,24 @@ describe('course admin routes', { timeout: 20_000 }, () => {
       .expect(403);
   });
 
+  it('shows the queues to admins only, and no progress of a course nobody reads', async () => {
+    await http().get('/api/admin/queues').expect(401);
+    await student.get('/api/admin/queues').expect(403);
+    const { body } = await admin.get('/api/admin/queues').expect(200);
+    expect(body.map(({ name }: { name: string }) => name)).toContain('plugins');
+    expect(body.map(({ name }: { name: string }) => name)).toEqual(
+      expect.arrayContaining(['plugins', 'models', 'search-index']),
+    );
+    expect(body[0]).toEqual({
+      name: expect.any(String),
+      waiting: expect.any(Number),
+      active: expect.any(Number),
+      failed: expect.any(Number),
+    });
+
+    await student.get('/api/courses/no-such-course/processing').expect(404);
+  });
+
   it('makes a course, once per slug', async () => {
     const created = await admin
       .post('/api/courses', { slug: 'admin-os', name: ' Operativni sistemi ' })

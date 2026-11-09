@@ -26,10 +26,12 @@ const job = (fields: Partial<Job> = {}) =>
   ({ id: 'job-1', data, ...fields }) as Job<PluginJob>;
 
 function worker(database: 'up' | 'down', unpackContent = {} as UnpackContent) {
+  const giveUp = vi.fn(async (_job: PluginJob) => {});
   const processContent = {
     run: async () => {
       throw new Error('plugin failed');
     },
+    giveUp,
   } as unknown as ProcessContent;
   const health = {
     pingCheck: () => ({
@@ -50,6 +52,7 @@ function worker(database: 'up' | 'down', unpackContent = {} as UnpackContent) {
     ),
     queue,
     metrics,
+    giveUp,
   };
 }
 
@@ -97,17 +100,53 @@ describe('PluginsWorker', () => {
     expect(moveToWait).toHaveBeenCalledWith('token-1');
   });
 
-  it('logs a job that will not run again, whatever failed it', () => {
+  it('logs a job that will not run again, whatever failed it', async () => {
     const error = vi.spyOn(Logger.prototype, 'error').mockReturnValue();
     const { worker: w } = worker('up');
     const stall = new Error('job stalled more than allowable limit');
 
     // retried, then failed by stalling on its first attempt
-    w.failed(job({ attemptsMade: 1 }), stall);
-    w.failed(job({ attemptsMade: 1, finishedOn: 1 }), stall);
+    await w.failed(job({ attemptsMade: 1 }), stall);
+    await w.failed(job({ attemptsMade: 1, finishedOn: 1 }), stall);
 
     expect(error).toHaveBeenCalledTimes(1);
     expect(error).toHaveBeenCalledWith('pdf gave up on job job-1', stall.stack);
+  });
+
+  it('has the content of a job given up for good stored as nothing to read', async () => {
+    vi.spyOn(Logger.prototype, 'error').mockReturnValue();
+    const { worker: w, giveUp } = worker('up');
+    const err = new Error('out of attempts');
+
+    await w.failed(job({ attemptsMade: 1 }), err);
+    expect(giveUp).not.toHaveBeenCalled();
+
+    await w.failed(job({ finishedOn: 1 }), err);
+    expect(giveUp).toHaveBeenCalledExactlyOnceWith(data);
+
+    const others = [
+      { kind: 'handle', aggregator: PluginName.parse('agg') },
+      {
+        kind: 'unpack',
+        key: { ...data.key, unpacker: PluginName.parse('zip') },
+      },
+    ] as unknown as PluginJob[];
+    for (const other of others)
+      await w.failed(job({ finishedOn: 1, data: other }), err);
+    expect(giveUp).toHaveBeenCalledTimes(1);
+  });
+
+  it('logs a give-up that fails and carries on', async () => {
+    const error = vi.spyOn(Logger.prototype, 'error').mockReturnValue();
+    error.mockClear();
+    const { worker: w, giveUp } = worker('up');
+    giveUp.mockRejectedValueOnce(new Error('database away'));
+
+    await expect(
+      w.failed(job({ finishedOn: 1 }), new Error('x')),
+    ).resolves.toBeUndefined();
+
+    expect(error).toHaveBeenCalledTimes(2);
   });
 
   it('counts jobs by plugin as they come out, and those given up for good apart', async () => {

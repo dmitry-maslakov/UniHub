@@ -84,13 +84,24 @@ export abstract class PausingWorker<T> extends WorkerHost {
   // BullMQ sets finishedOn only on a job that won't run again: out of
   // attempts, or failed for good by stalling too often
   @OnWorkerEvent('failed')
-  failed(job: Job<T> | undefined, error: Error) {
-    if (job?.finishedOn)
+  async failed(job: Job<T> | undefined, error: Error) {
+    if (!job?.finishedOn) return;
+    this.logger.error(
+      `${this.nameOf(job)} gave up on job ${job.id}`,
+      error.stack,
+    );
+    try {
+      await this.gaveUp(job);
+    } catch (err) {
       this.logger.error(
-        `${this.nameOf(job)} gave up on job ${job.id}`,
-        error.stack,
+        `${this.nameOf(job)}: giving up on job ${job.id} failed`,
+        err instanceof Error ? err.stack : String(err),
       );
+    }
   }
+
+  // what a job given up for good leaves behind; nothing by default
+  protected async gaveUp(_job: Job<T>): Promise<void> {}
 
   // its worker went away, or held the event loop past the lock; it runs
   // again, or fails if it stalled before

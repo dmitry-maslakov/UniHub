@@ -61,4 +61,18 @@ export class ProcessContent {
     await this.textIndex?.enqueue(key);
     this.logger.log(`${name}: ${file.name}, ${parts.length} parts`);
   }
+
+  // Out of tries, or stalled too often: nothing more comes of this content
+  // until the processor's next version. Stored with no parts, as a content
+  // with nothing to read, so nothing goes on waiting for it.
+  async giveUp({ key: { hash, processor: name } }: ProcessJob) {
+    const processor = this.plugins.processor(name);
+    if (!processor) return;
+    const key = { hash, processor: name, version: processor.spec.version };
+    if (await this.representations.exists(key)) return;
+    await this.representations.save(representation(key, []));
+    this.logger.warn(
+      `${name}: gave up on ${hash}, stored with nothing to read`,
+    );
+  }
 }

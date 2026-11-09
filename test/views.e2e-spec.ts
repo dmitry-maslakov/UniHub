@@ -600,6 +600,17 @@ describe('views of accounts of their own', { timeout: 60_000 }, () => {
         ).toBe(missing.body.code);
   });
 
+  it("counts the files of a course the user's view opens, and answers 404 for one they do not read", async () => {
+    // slides is the one of ana's three files whose content her view opens
+    expect(await body('ana', '/api/courses/views-os/processing')).toEqual({
+      total: 1,
+      waiting: expect.any(Object),
+    });
+    // a user who reads nothing of it
+    as.fay = await signUp('fay@views.test');
+    await get('fay', '/api/courses/views-os/processing').expect(404);
+  });
+
   it("searches each user's own view, what it opens alone", async () => {
     // by meaning, knn has nearest ones to every query: each user's own, and
     // no other's

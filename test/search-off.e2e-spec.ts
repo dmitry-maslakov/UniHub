@@ -62,6 +62,15 @@ describe('search off', { timeout: 20_000 }, () => {
     );
   });
 
+  it('lists no search-index queue to admins', async () => {
+    const admin = await signUp('queues@search.test');
+    await makeAdmin('queues@search.test');
+    const { body } = await get('/api/admin/queues', admin).expect(200);
+    const names = body.map(({ name }: { name: string }) => name);
+    expect(names).toEqual(expect.arrayContaining(['plugins', 'models']));
+    expect(names).not.toContain('search-index');
+  });
+
   // its handler is processing's, there with search off too
   it('tells a search that search is off', async () => {
     await expect(

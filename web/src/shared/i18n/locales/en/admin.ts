@@ -75,6 +75,16 @@ export default {
     },
     failed: "That didn't go through. Try again.",
   },
+  processing: {
+    title: 'Processing',
+    description:
+      'What the background readers have to do: texts, pictures (the models) and the search index.',
+    aria: 'Background queues',
+    queue: 'Queue',
+    waiting: 'Waiting',
+    active: 'Active',
+    failed: 'Failed',
+  },
   courses: {
     new: {
       title: 'New course',
