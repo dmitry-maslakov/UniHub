@@ -48,6 +48,12 @@
       "@app/plugins/canvas/*": [
         "./libs/plugins/canvas/src/*"
       ],
+      "@app/plugins/ocr": [
+        "./libs/plugins/ocr/src/index.ts"
+      ],
+      "@app/plugins/ocr/*": [
+        "./libs/plugins/ocr/src/*"
+      ],
       "@app/plugins/office-text": [
         "./libs/plugins/office-text/src/index.ts"
       ],

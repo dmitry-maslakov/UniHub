@@ -34,6 +34,7 @@ import { PluginsWorker } from './infrastructure/plugins.worker.js';
 import { PrismaRepresentationRepository } from './infrastructure/prisma-representation.repository.js';
 import { PrismaUnpackingRepository } from './infrastructure/prisma-unpacking.repository.js';
 import {
+  GetPageTextsHandler,
   GetTextPageHandler,
   ListTextsHandler,
 } from './infrastructure/read/texts.read.js';
@@ -78,6 +79,7 @@ const JOB_OPTIONS: DefaultJobOptions = {
   ],
   providers: [
     ListTextsHandler,
+    GetPageTextsHandler,
     GetTextPageHandler,
     ListMembersHandler,
     FindMemberHandler,

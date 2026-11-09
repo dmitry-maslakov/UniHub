@@ -10,6 +10,7 @@ import {
 } from '../../catalog/contracts.js';
 import {
   FindMemberQuery,
+  GetPageTextsQuery,
   GetPostTextQuery,
   GetTextPageQuery,
   ListMembersQuery,
@@ -122,8 +123,8 @@ export class CourseReader {
       : [];
   }
 
-  // one page of the file's text, or a member's; the first processor's
-  // unless one is named
+  // one page of the file's text, or a member's; the page's longest text
+  // unless a processor is named
   async text(
     userId: string,
     fileId: string,
@@ -139,6 +140,31 @@ export class CourseReader {
     );
     if (!text) throw new NotReadableError('page');
     return text;
+  }
+
+  // One page of every text there is of the file, or a member's, the longest
+  // first, with how many pages the longest-paged of them has.
+  async texts(
+    userId: string,
+    fileId: string,
+    { page, member }: Omit<TextAt, 'processor'>,
+  ) {
+    const { hash } = await this.readableContent(
+      await viewersOfUser(this.queries, userId),
+      fileId,
+      member,
+    );
+    const found = await this.queries.execute(new GetPageTextsQuery(hash, page));
+    if (found.length === 0) throw new NotReadableError('page');
+    return {
+      page,
+      pages: Math.max(...found.map(({ pages }) => pages)),
+      texts: found.map(({ processor, version, text }) => ({
+        processor,
+        version,
+        text,
+      })),
+    };
   }
 
   // the file's bytes, or a member's, with its name and media type

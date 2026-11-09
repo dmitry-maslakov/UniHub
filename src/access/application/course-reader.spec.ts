@@ -23,6 +23,7 @@ import { ReadScopeQuery } from '../../identity/contracts.js';
 import {
   FindMemberQuery,
   GetPostTextQuery,
+  GetPageTextsQuery,
   GetTextPageQuery,
   ListMembersQuery,
   ListTextsQuery,
@@ -103,6 +104,12 @@ const text = {
   processor: PluginName.parse('office-text'),
   version: 2,
   pages: 3,
+};
+// read off pictures, a page fewer
+const scanned = {
+  processor: PluginName.parse('ocr'),
+  version: 1,
+  pages: 2,
 };
 // f1 holds an archive too, with this member kept
 const code = 'int main;';
@@ -204,6 +211,19 @@ function reader(renderer: PageRenderer = new FakeRenderer()) {
       GetTextPageQuery,
       ({ page }: GetTextPageQuery) =>
         page <= text.pages ? { ...text, page, text: `page ${page}` } : null,
+    ],
+    // the pdf's text, and a longer one read off its pictures, on page 2 only
+    [
+      GetPageTextsQuery,
+      ({ page }: GetPageTextsQuery) =>
+        page <= text.pages
+          ? [
+              ...(page === 2
+                ? [{ ...scanned, page, text: 'read off the picture of page 2' }]
+                : []),
+              { ...text, page, text: `page ${page}` },
+            ]
+          : [],
     ],
   ]);
   const blobs = new InMemoryBlobs({ holding: [content, code, picture] });
@@ -362,6 +382,32 @@ describe('CourseReader', () => {
     const { stream, name } = await r.content('ana', 'f1');
     expect(name).toBe('f1.pdf');
     expect((await stream.toArray()).join('')).toBe(content);
+  });
+
+  it("reads every text of a page, with the largest of their page counts, as its member's too", async () => {
+    const { reader: r, queries } = reader();
+
+    expect(await r.texts('ana', 'f1', { page: 2 })).toEqual({
+      page: 2,
+      pages: 3,
+      texts: [
+        {
+          processor: 'ocr',
+          version: 1,
+          text: 'read off the picture of page 2',
+        },
+        { processor: 'office-text', version: 2, text: 'page 2' },
+      ],
+    });
+    expect((await r.texts('ana', 'f1', { page: 1 })).texts).toHaveLength(1);
+    await r.texts('ana', 'f1', { page: 1, member: 'lab/main.c' });
+    expect(queries.sent).toContainEqual(new GetPageTextsQuery(sha256(code), 1));
+    await expect(r.texts('ana', 'f1', { page: 4 })).rejects.toThrowError(
+      new NotReadableError('page'),
+    );
+    await expect(r.texts('ana', 'f3', { page: 1 })).rejects.toThrowError(
+      new NotReadableError('file'),
+    );
   });
 
   it('shows an image, or a page of a PDF, as a picture, by the access content has', async () => {

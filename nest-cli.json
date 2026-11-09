@@ -25,6 +25,15 @@
         "tsConfigPath": "libs/plugin-sdk/tsconfig.lib.json"
       }
     },
+    "plugins/ocr": {
+      "type": "library",
+      "root": "libs/plugins/ocr",
+      "entryFile": "index",
+      "sourceRoot": "libs/plugins/ocr/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/plugins/ocr/tsconfig.lib.json"
+      }
+    },
     "plugins/office-text": {
       "type": "library",
       "root": "libs/plugins/office-text",

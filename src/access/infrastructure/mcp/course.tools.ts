@@ -13,7 +13,7 @@ import {
 import { McpErrorsFilter } from './mcp-errors.filter.js';
 import { McpUserId } from './mcp-user-id.js';
 import { LimitedTool } from '../throttle.js';
-import { json, jsonWithNote, readOnly } from './tool-results.js';
+import { json, jsonWithNote, prose, readOnly } from './tool-results.js';
 
 const inCourse = pageSchema.extend({
   course: CourseSlug.describe('course slug'),
@@ -109,7 +109,7 @@ export class CourseTools {
   @Tool({
     name: 'read_file',
     description:
-      "One page (slide, section) of the text made from a file, or from a file inside an archive (`member`, its path from list_members or search), with how many pages there are. Read the next page with page + 1. An image has no text, and a page's text leaves out its diagrams and formulas: view_file shows them. A file can have a text per processor, each paged on its own: read a page from search with the processor it names.",
+      "One page (slide, section) of the text made from a file, or from a file inside an archive (`member`, its path from list_members or search), with how many pages there are. Read the next page with page + 1. With no `processor` it gives every text there is of the page, each under its name, and `ocr` is read by machine off a picture and can have mistakes; diagrams and formulas aren't in the text, view_file shows them. A file can have a text per processor, each paged on its own: read a page from search with the processor it names.",
     parameters: fileText,
     annotations: readOnly,
   })
@@ -117,15 +117,26 @@ export class CourseTools {
     @Payload() { file, ...at }: z.output<typeof fileText>,
     @McpUserId() userId: string,
   ) {
-    const text = await this.reader.text(userId, file, at);
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `page ${text.page} of ${text.pages} (${text.processor} v${text.version})\n\n${text.text}`,
-        },
-      ],
-    };
+    if (at.processor !== undefined) {
+      const text = await this.reader.text(userId, file, at);
+      return prose(
+        `page ${text.page} of ${text.pages} (${text.processor} v${text.version})\n\n${text.text}`,
+      );
+    }
+    const { page, pages, texts } = await this.reader.texts(userId, file, at);
+    // longest first; one with nothing in it isn't worth a heading
+    const shown = texts.filter(({ text }) => text.trim() !== '');
+    return prose(
+      `page ${page} of ${pages}\n\n` +
+        (shown.length === 0
+          ? '(no text on this page: view_file shows it)'
+          : shown
+              .map(
+                ({ processor, version, text }) =>
+                  `--- ${processor} v${version} ---\n${text}`,
+              )
+              .join('\n\n')),
+    );
   }
 
   @Tool({

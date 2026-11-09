@@ -26,6 +26,8 @@ COPY --from=build /app/web/dist ./web/dist
 # gRPC loads it from the working directory
 COPY proto ./proto
 RUN mkdir -p data/blobs && chown -R node:node data
+# the ocr plugin runs it (README, OCR); a language is one more tesseract-ocr-*
+RUN apt-get update && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng tesseract-ocr-srp tesseract-ocr-srp-latn && rm -rf /var/lib/apt/lists/*
 USER node
 EXPOSE 3000 50051
 CMD ["node", "dist/main.js"]

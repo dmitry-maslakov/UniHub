@@ -18,8 +18,9 @@ export interface TextPage extends TextInfo {
   text: string;
 }
 
-// what the processors on made of some content: the newest version of each,
-// with its number of pages (slides, sections), without the text
+// what the processors on made of some content: the newest version of each
+// that has any parts, with its number of pages (slides, sections), without
+// the text, the largest text first: the first is the content's main one
 export class ListTextsQuery extends Query<TextInfo[]> {
   constructor(public readonly hash: ContentHash) {
     super();
@@ -27,13 +28,24 @@ export class ListTextsQuery extends Query<TextInfo[]> {
 }
 
 // one page (from 1) of the newest text made of some content, by the
-// processor named or else the first one on. null if there's no such page,
-// or its processor is off
+// processor named or else the page's longest text. null if there's no such
+// page, or its processor is off
 export class GetTextPageQuery extends Query<TextPage | null> {
   constructor(
     public readonly hash: ContentHash,
     public readonly page: number,
     public readonly processor?: PluginName,
+  ) {
+    super();
+  }
+}
+
+// one page (from 1) of every text made of some content, the newest of each
+// processor on that has the page, the longest first
+export class GetPageTextsQuery extends Query<TextPage[]> {
+  constructor(
+    public readonly hash: ContentHash,
+    public readonly page: number,
   ) {
     super();
   }
@@ -51,7 +63,7 @@ export interface MemberInfo {
 }
 
 // a page of the tree of some content, in the order its container lists
-// them; none if it has no tree
+// them; none if it has no tree. A member's texts are those with parts
 export class ListMembersQuery extends Query<MemberInfo[]> {
   constructor(
     public readonly hash: ContentHash,

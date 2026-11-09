@@ -16,7 +16,7 @@ export default {
   text: {
     title: 'Text',
     loading: 'Loading the text',
-    which: 'Which text to read',
+    recognized: 'Read from the picture by machine, so it can have mistakes.',
   },
   view: {
     which: 'Which view to read in',

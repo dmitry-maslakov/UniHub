@@ -40,6 +40,7 @@ export class ListMembersHandler implements IQueryHandler<ListMembersQuery> {
             AND processor = ANY(${this.plugins.processorNames}::text[])
           ORDER BY processor, version DESC
         ) newest
+        WHERE newest.pages > 0
       ) t ON true
       WHERE m.hash = ${hash}
       ORDER BY m.position
@@ -84,6 +85,7 @@ export class ListContainedHandler implements IQueryHandler<ListContainedQuery> {
           SELECT FROM "Representation" r
           WHERE r.hash = m.content
             AND r.processor = ANY(${this.plugins.processorNames}::text[])
+            AND jsonb_array_length(r.parts) > 0
         )
       ORDER BY m.hash, m.position`;
   }
