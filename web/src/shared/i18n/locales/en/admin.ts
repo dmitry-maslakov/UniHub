@@ -126,7 +126,7 @@ export default {
     links: {
       title: 'Portal courses',
       description:
-        "What this course gathers. Its readers read the shared portals' courses here; a public site's course shows here for whoever picked it, and a course read through users' own accounts for whoever's account sees it.",
+        "What this course gathers. Its readers read the shared portals' courses here; a public site's course is read here by everyone, and shows among the courses of whoever picked it, and a course read through users' own accounts for whoever's account sees it.",
       aria: 'Linked portal courses',
       year: '{{from}}/{{to}}',
       anyYear: 'Every year',
@@ -160,9 +160,9 @@ export default {
         action: 'Link',
         moves: 'A portal course linked to another course moves here.',
         picks:
-          "A public site's course linked here shows here for everyone who picked it, whatever they chose to show it with.",
+          "A public site's course linked here is read here by everyone, and shows here for everyone who picked it, whatever they chose to show it with.",
       },
-      picked: 'Shown to whoever picked it',
+      picked: 'Read by everyone, shown to whoever picked it',
     },
     readers: {
       title: 'Readers',

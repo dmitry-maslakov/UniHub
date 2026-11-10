@@ -21,8 +21,8 @@ export interface GroupedCourse extends CourseRef {
   // portal's course they didn't pick
   listed: boolean;
   // none of its portal courses is shown: the user hid them (README, Hidden
-  // courses), or they're a public portal's and not picked. Read as any
-  // other; an empty course is never hidden
+  // courses), or it isn't theirs. Read as any other; an empty course is
+  // never hidden
   hidden: boolean;
 }
 
@@ -113,7 +113,10 @@ export function regroup(
         ...(guests.get(course.slug) ?? []).flatMap((g) => g.portalCourses),
       ];
       const sources = [...new Set(portalCourses.map(({ portal }) => portal))];
-      const theirs = portalCourses.filter((pc) => isTheirs(pc, showing));
+      // what a course granted holds is the user's, picked or not
+      const theirs = granted(course)
+        ? portalCourses
+        : portalCourses.filter((pc) => isTheirs(pc, showing));
       return {
         ...course,
         sources: sources.sort(),

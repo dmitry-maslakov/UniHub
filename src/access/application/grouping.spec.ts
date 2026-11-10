@@ -158,7 +158,7 @@ describe('regroup, what the user shows', () => {
     ).toEqual({ listed: true, hidden: true });
   });
 
-  it("counts a public portal's course not picked for nothing in a course of the user's", () => {
+  it("hides no course while a portal course of the user's in it is shown", () => {
     const into = new Map([['pc-db', 'pc-m1']]);
     const m1 = regroup(courses, viewers, into, hiding('pc-m1')).find(
       (c) => c.slug === 'moodle~m1',
@@ -167,7 +167,7 @@ describe('regroup, what the user shows', () => {
     expect(m1).toMatchObject({ listed: true, hidden: false });
     const unpicked = { picked: new Set<string>(), hidden: new Set(['pc-m0']) };
     const [os] = regroup(courses, viewers, new Map(), unpicked);
-    // pc-os is shown, the net course in it not picked
+    // granted: pc-os and the net course in it, not picked, are shown still
     expect(os).toMatchObject({ slug: 'os', listed: true, hidden: false });
   });
 
@@ -181,8 +181,9 @@ describe('regroup, what the user shows', () => {
       listed: true,
       hidden: false,
     });
+    // what it holds is theirs, picked or not
     expect(regroup([publicOnly], viewers, new Map(), showing)[0]).toMatchObject(
-      { listed: true, hidden: true },
+      { listed: true, hidden: false },
     );
     // an admin is granted every course an admin made, and no portal course
     const admin = { ...viewers, shared: { ...viewers.shared, courses: null } };
@@ -199,7 +200,7 @@ describe('regroup, what the user shows', () => {
         ),
       ),
     ).toEqual({
-      x: { listed: true, hidden: true },
+      x: { listed: true, hidden: false },
       'catalog~ml': { listed: false, hidden: true },
     });
   });

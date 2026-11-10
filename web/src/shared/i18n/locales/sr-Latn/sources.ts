@@ -4,7 +4,7 @@ import type { Messages } from '../../messages';
 export default {
   title: 'Izvori',
   description:
-    'Odakle UniHub čita tvoje predmete. Poveži svoj nalog, i UniHub čita predmete koje tamo pratiš, onako kako ih ti vidiš; na javnom sajtu izaberi predmete koje pratiš.',
+    'Odakle UniHub čita tvoje predmete. Poveži svoj nalog, i UniHub čita predmete koje tamo pratiš, onako kako ih ti vidiš; javni sajt se čita ceo, a ti biraš koje njegove predmete da prikažeš u Mojim predmetima.',
   list: {
     aria: 'Izvori',
   },
@@ -86,7 +86,7 @@ export default {
     picked_other: '{{count}} izabranih',
     nonePicked: 'Nijedan nije izabran',
     description:
-      'Javni sajt koji svako može da čita. Izaberi predmete koje pratiš: pojaviće se u Mojim predmetima, a njihove objave i fajlovi kad UniHub sledeći put pročita sajt. Prikaži neki uz svoj predmet da ih čitaš na jednom mestu.',
+      'Javni sajt koji svako može da čita. UniHub ga čita celog, kao i tvoje AI aplikacije. Izaberi predmete koje pratiš, i pojaviće se u Mojim predmetima. Prikaži neki uz svoj predmet da ih čitaš na jednom mestu.',
     search: {
       label: 'Pronađi predmet',
       placeholder: 'Deo naziva',
@@ -109,8 +109,6 @@ export default {
     failed: 'Biranje predmeta nije uspelo. Pokušaj ponovo.',
     unpickFailed: 'Poništavanje izbora nije uspelo. Pokušaj ponovo.',
     gone: 'Tog predmeta više nema u katalogu.',
-    tooMany:
-      'Možeš da izabereš najviše {{max}} predmeta. Prvo poništi jedan izbor.',
     tooFast:
       'Previše izmena za kratko vreme. Sačekaj minut, pa pokušaj ponovo.',
   },

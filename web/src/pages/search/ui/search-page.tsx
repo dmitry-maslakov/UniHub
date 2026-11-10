@@ -1,4 +1,4 @@
-import { Alert, Box } from '@mantine/core';
+import { Alert, Box, Group } from '@mantine/core';
 import { getRouteApi } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { api } from '@/shared/api';
@@ -6,21 +6,23 @@ import { EmptyState, ListSkeleton, PageTitle, RowList } from '@/shared/ui';
 import { resultKey } from '../lib/result-key';
 import { searchErrorKey } from '../lib/search-error';
 import { ResultRow } from './result-row';
+import { SearchEverything } from './search-everything';
 import { SearchForm } from './search-form';
 import { SearchScope } from './search-scope';
 import { SearchType } from './search-type';
 
 const route = getRouteApi('/_app/search');
 
-// Words searched across the user's courses: posts, files and what's inside
-// archives
+// Words searched across the courses in My courses: posts, files and what's
+// inside archives; everything the user reads, the hidden courses and the
+// public sites' too, when asked
 export function SearchPage() {
   const { t } = useTranslation('search');
-  const { q = '', course, type, from } = route.useSearch();
+  const { q = '', course, type, all, from } = route.useSearch();
   const search = api.useQuery(
     'get',
     '/api/search',
-    { params: { query: { q, course, type } } },
+    { params: { query: { q, course, type, shown: all ? undefined : 'true' } } },
     // a refused search is refused again, and a limit is waited out
     {
       enabled: q.length >= 2,
@@ -39,11 +41,13 @@ export function SearchPage() {
         q={q}
         course={course}
         type={type}
+        all={all}
         from={from}
       />
-      <Box mt="md">
+      <Group mt="md" gap="lg">
         <SearchType type={type} />
-      </Box>
+        {!course && <SearchEverything all={all} />}
+      </Group>
       {course && (
         <Box mt="md">
           <SearchScope course={course} from={from} />
@@ -59,7 +63,13 @@ export function SearchPage() {
         )}
         {results && !results.length && (
           <EmptyState title={t('empty.title', { q })}>
-            {t(type || course ? 'empty.bodyFiltered' : 'empty.body')}
+            {t(
+              type || course
+                ? 'empty.bodyFiltered'
+                : all
+                  ? 'empty.body'
+                  : 'empty.bodyShown',
+            )}
           </EmptyState>
         )}
         {results && results.length > 0 && (
@@ -71,6 +81,7 @@ export function SearchPage() {
                 q={q}
                 scope={course}
                 type={type}
+                all={all}
                 from={from}
               />
             ))}

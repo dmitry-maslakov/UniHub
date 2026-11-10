@@ -141,6 +141,7 @@ describe('course admin routes', { timeout: 20_000 }, () => {
           via: 'link',
         },
       ],
+      hidden: false,
     });
 
     await admin.delete(link).expect(204);

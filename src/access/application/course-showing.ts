@@ -5,7 +5,6 @@ import {
   ShowCoursesCommand,
 } from '../../accounts/contracts.js';
 import type { CourseSlug } from '../../catalog/contracts.js';
-import { isTheirs } from './grouping.js';
 import { readableCourse } from './readable.js';
 
 // A course hidden from the user's courses and shown among them again
@@ -29,19 +28,15 @@ export class CourseShowing {
     );
   }
 
-  // A course with nothing of the user's in it, only public portals'
-  // courses they didn't pick, is shown by picking those.
+  // A course that isn't the user's, only public portals' courses they
+  // didn't pick, is shown by picking those.
   async show(userId: string, slug: CourseSlug) {
-    const { course, portalCourseIds, showing } = await this.course(
-      userId,
-      slug,
-    );
-    const theirs = course.portalCourses.some((pc) => isTheirs(pc, showing));
+    const { course, portalCourseIds } = await this.course(userId, slug);
     await this.commands.execute(
       new ShowCoursesCommand(
         userId,
         portalCourseIds,
-        theirs
+        course.listed
           ? []
           : course.portalCourses.map(({ portal, externalId }) => ({
               portal,

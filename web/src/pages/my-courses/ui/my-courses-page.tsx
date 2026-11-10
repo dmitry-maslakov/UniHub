@@ -2,12 +2,15 @@ import { Stack, Text } from '@mantine/core';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SourceBadge } from '@/entities/source';
+import { HideCourseButton } from '@/features/hide-course';
+import type { Schemas } from '@/shared/api';
 import {
   AnchorLink,
   EmptyState,
   ListSkeleton,
   PageTitle,
   QueryState,
+  RowAction,
   RowLink,
   RowList,
   Row,
@@ -20,14 +23,56 @@ import { FirstSyncState } from './first-sync-state';
 
 const byName = new Intl.Collator('und', { numeric: true });
 
+type Course = Schemas['CourseResponse'];
+const sorted = (courses: Course[]) =>
+  courses.toSorted((a, b) => byName.compare(a.name, b.name));
+// the courses in the list, and the ones the user hides, each by name
+const shownOf = (courses: Course[]) =>
+  sorted(courses.filter(({ hidden }) => !hidden));
+const hiddenOf = (courses: Course[]) =>
+  sorted(courses.filter(({ hidden }) => hidden));
+
 // the years a course's portal courses are for, oldest first
 const yearsOf = (portalCourses: { year: number | null }[]) =>
   [...new Set(portalCourses.flatMap(({ year }) => year ?? []))]
     .sort((a, b) => a - b)
     .join(' · ');
 
+// one course of a list: a link to it, and the button that hides it or
+// shows it again; none for a course with nothing in it yet, which has
+// nothing to hide
+function CourseRow({ course }: { course: Schemas['CourseResponse'] }) {
+  const { t } = useTranslation('courses');
+  return (
+    <Row>
+      <RowLink to="/courses/$slug" params={{ slug: course.slug }}>
+        <RowText
+          title={course.name}
+          badges={course.sources.map((portal) => (
+            <SourceBadge key={portal} portal={portal} />
+          ))}
+          meta={[
+            yearsOf(course.portalCourses) || null,
+            !course.sources.length && t('list.noSource'),
+          ]}
+        />
+      </RowLink>
+      {course.portalCourses.length > 0 && (
+        <RowAction>
+          <HideCourseButton
+            slug={course.slug}
+            name={course.name}
+            hidden={course.hidden}
+          />
+        </RowAction>
+      )}
+    </Row>
+  );
+}
+
 // The courses the user reads, one list by name whatever they come from,
-// each with its sources. A first visit with none shows where to add some,
+// each with its sources; the ones they hide in a list of their own under
+// it, to show again. A first visit with none shows where to add some,
 // and keeps showing it as the first ones come in; with none while an
 // account just linked is read for the first time, that it is, in their
 // place; with some, a note above them. The sources stay while it is, so
@@ -85,32 +130,32 @@ export function MyCoursesPage() {
                   {t('list.firstSync.title', { label: syncing.label })}
                 </Text>
               )}
-              <RowList label={t('list.aria')}>
-                {data
-                  .toSorted((a, b) => byName.compare(a.name, b.name))
-                  .map((course) => (
-                    <Row key={course.slug}>
-                      <RowLink
-                        to="/courses/$slug"
-                        params={{ slug: course.slug }}
-                      >
-                        <RowText
-                          title={course.name}
-                          badges={course.sources.map((portal) => (
-                            <SourceBadge key={portal} portal={portal} />
-                          ))}
-                          meta={[
-                            yearsOf(course.portalCourses) || null,
-                            !course.sources.length && t('list.noSource'),
-                          ]}
-                        />
-                      </RowLink>
-                    </Row>
+              {shownOf(data).length > 0 ? (
+                <RowList label={t('list.aria')}>
+                  {shownOf(data).map((course) => (
+                    <CourseRow key={course.slug} course={course} />
                   ))}
-              </RowList>
+                </RowList>
+              ) : (
+                <Text size="sm" c="dimmed">
+                  {t('list.allHidden')}
+                </Text>
+              )}
             </>
           )}
         </QueryState>
+        {hiddenOf(courses.data ?? []).length > 0 && (
+          <Section
+            title={t('hidden.title')}
+            description={t('hidden.description')}
+          >
+            <RowList label={t('hidden.aria')}>
+              {hiddenOf(courses.data ?? []).map((course) => (
+                <CourseRow key={course.slug} course={course} />
+              ))}
+            </RowList>
+          </Section>
+        )}
         {firstVisit && (
           <Section title={t('list.addSource.title')}>
             <SourceCards order={3} />

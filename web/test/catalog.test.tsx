@@ -181,10 +181,7 @@ describe('a public portal’s catalog', () => {
     hub();
     server.use(
       http.put(api('/me/picks/catalog/:id'), () =>
-        HttpResponse.json(
-          { statusCode: 422, code: 'TOO_MANY_PICKS' },
-          { status: 422 },
-        ),
+        HttpResponse.json({ statusCode: 429 }, { status: 429 }),
       ),
     );
     renderApp('/sources');
@@ -193,7 +190,7 @@ describe('a public portal’s catalog', () => {
       name: 'Računarske mreže',
     });
     await userEvent.click(box);
-    expect(await screen.findByText(/up to 100 courses/)).toBeVisible();
+    expect(await screen.findByText(/Too many changes/)).toBeVisible();
     expect(box).not.toBeChecked();
   });
 

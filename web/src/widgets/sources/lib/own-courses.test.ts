@@ -20,6 +20,7 @@ const course = (
     year: null,
     via: v,
   })),
+  hidden: false,
 });
 
 // the course with catalog's os in it too
@@ -33,7 +34,7 @@ const holding = (held: Schemas['CourseResponse']) => ({
       name: 'OS',
       url: null,
       year: null,
-      via: 'pick' as Via,
+      via: 'public' as Via,
     },
   ],
 });
@@ -42,7 +43,7 @@ describe('ownCourses', () => {
   it('keeps the courses read through an account of their own, by name', () => {
     const courses = [
       course('net', 'Mreže 10', 'account'),
-      course('pick', 'Picked', 'pick'),
+      course('pick', 'Picked', 'public'),
       course('os', 'Mreže 2', 'link', 'account'),
       course('admin', 'Admin', 'link'),
     ];

@@ -11,8 +11,10 @@ export const fileSearch = z.object({
   q: z.string().optional().catch(undefined),
   // the course that search was limited to, if it was
   course: z.string().min(1).optional().catch(undefined),
-  // and the kind it was limited to, and the words as typed when the course
-  // was named by its initials
+  // and the kind it was limited to, whether it looked past the courses in
+  // My courses, and the words as typed when the course was named by its
+  // initials
   type: z.enum(['files', 'posts']).optional().catch(undefined),
+  all: z.enum(['1']).optional().catch(undefined),
   from: z.string().min(1).optional().catch(undefined),
 });

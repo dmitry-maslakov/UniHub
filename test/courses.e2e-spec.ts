@@ -60,7 +60,7 @@ describe('courses', () => {
         new ListCoursesQuery({
           accounts: [],
           shared: { courses: null, except: [] },
-          picks: { portals: [], courses: [] },
+          open: [],
         }),
       )
     ).find((c) => c.slug === slug);

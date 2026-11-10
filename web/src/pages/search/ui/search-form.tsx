@@ -15,11 +15,13 @@ export function SearchForm({
   q,
   course,
   type,
+  all,
   from,
 }: {
   q: string;
   course?: string;
   type?: 'files' | 'posts';
+  all?: '1';
   from?: string;
 }) {
   const { t } = useTranslation('search');
@@ -42,11 +44,18 @@ export function SearchForm({
           return navigate({
             to: '/search',
             search: scoped
-              ? { q: scoped.q, course: scoped.course.slug, type, from: words }
+              ? {
+                  q: scoped.q,
+                  course: scoped.course.slug,
+                  type,
+                  all,
+                  from: words,
+                }
               : {
                   q: words,
                   course,
                   type,
+                  all,
                   from: words === q ? from : undefined,
                 },
           });

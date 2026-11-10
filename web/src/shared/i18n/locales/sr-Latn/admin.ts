@@ -129,7 +129,7 @@ export default {
     links: {
       title: 'Predmeti sa portala',
       description:
-        'Šta ovaj predmet okuplja. Korisnici s pristupom ovde čitaju predmete deljenih portala; predmet javnog sajta ovde vide oni koji su ga izabrali, a predmet koji se čita preko korisničkih naloga oni čiji ga nalog vidi.',
+        'Šta ovaj predmet okuplja. Korisnici s pristupom ovde čitaju predmete deljenih portala; predmet javnog sajta ovde čitaju svi, a među svojim predmetima ga vide oni koji su ga izabrali, a predmet koji se čita preko korisničkih naloga oni čiji ga nalog vidi.',
       aria: 'Povezani predmeti sa portala',
       year: '{{from}}/{{to}}',
       anyYear: 'Sve godine',
@@ -164,9 +164,9 @@ export default {
         moves:
           'Predmet sa portala povezan s drugim predmetom premešta se ovde.',
         picks:
-          'Predmet javnog sajta povezan ovde prikazuje se ovde svima koji su ga izabrali, bez obzira na to uz šta su ga prikazivali.',
+          'Predmet javnog sajta povezan ovde svi čitaju ovde, a prikazuje se ovde svima koji su ga izabrali, bez obzira na to uz šta su ga prikazivali.',
       },
-      picked: 'Vide ga oni koji su ga izabrali',
+      picked: 'Čitaju ga svi, vide oni koji su ga izabrali',
     },
     readers: {
       title: 'Korisnici s pristupom',

@@ -263,7 +263,7 @@ describe('admin, courses', () => {
       );
     });
 
-    it("says a public site's course shows only to whoever picked it", async () => {
+    it("says everyone reads a public site's course, shown to whoever picked it", async () => {
       open();
 
       const list = await screen.findByRole('list', {
@@ -271,12 +271,12 @@ describe('admin, courses', () => {
       });
       expect(
         within(within(list).getAllByRole('listitem')[2]!).getByText(
-          /Shown to whoever picked it/,
+          /Read by everyone, shown to whoever picked it/,
         ),
       ).toBeVisible();
       expect(
         screen.getByText(
-          /A public site's course linked here shows here for everyone who picked it/,
+          /A public site's course linked here is read here by everyone, and shows here for everyone who picked it/,
         ),
       ).toBeVisible();
     });

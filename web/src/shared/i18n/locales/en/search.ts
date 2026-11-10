@@ -1,7 +1,7 @@
 export default {
   title: 'Search',
   description:
-    'Find a word in the posts and files of your courses, including the text inside slides, documents and archives.',
+    'Find a word in the posts and files of the courses in My courses, including the text inside slides, documents and archives.',
   field: {
     aria: 'Search your courses',
     placeholder: 'A word, a phrase or a function name',
@@ -16,6 +16,8 @@ export default {
     title: 'Nothing matches “{{q}}”',
     body: 'Try other words, or fewer.',
     bodyFiltered: 'Try other words, or search everything.',
+    bodyShown:
+      'Try other words, or search your hidden courses and the public sources too.',
   },
   error: {
     rateLimited:
@@ -34,6 +36,7 @@ export default {
     files: 'Files',
     posts: 'Posts',
   },
+  everything: 'Hidden courses and public sources too',
   scope: {
     course: 'In {{name}}',
     remove: 'Search all courses',

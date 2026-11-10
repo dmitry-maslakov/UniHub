@@ -7,9 +7,6 @@ const t = i18n.getFixedT('en', 'sources');
 
 describe('pickErrorText', () => {
   it('says what to do for each refusal', () => {
-    expect(
-      pickErrorText(t, new ApiError(422, { code: 'TOO_MANY_PICKS' }), true),
-    ).toMatch(/up to 100/);
     expect(pickErrorText(t, new ApiError(429, null), true)).toMatch(
       /Wait a minute/,
     );

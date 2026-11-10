@@ -68,6 +68,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/courses/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CoursesController_course"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/{slug}/hidden": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["CoursesController_hide"];
+        post?: never;
+        delete: operations["CoursesController_show"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses/{slug}/processing": {
         parameters: {
             query?: never;
@@ -437,10 +469,10 @@ export interface components {
             /** @example 2026 */
             year: number | null;
             /**
-             * @description how you read it: account, through your own account of its portal; pick, a public portal's course you picked; link, through the hub's account, in a course an admin made
+             * @description how you read it: account, through your own account of its portal; public, a public portal's course, as everyone does; link, through the hub's account, in a course an admin made
              * @enum {string}
              */
-            via: "account" | "pick" | "link";
+            via: "account" | "public" | "link";
         };
         CourseResponse: {
             /** @example os */
@@ -456,6 +488,8 @@ export interface components {
             sources: string[];
             /** @description by year, those that span years last; a pick you show with this course after them */
             portalCourses: components["schemas"]["PortalCourseResponse"][];
+            /** @description not shown among your courses: you hid it, or it's a public portal's you didn't pick. Read as any other */
+            hidden: boolean;
         };
         WaitingResponse: {
             /** @description contents waiting for a text processor */
@@ -703,6 +737,8 @@ export interface components {
              * @example os
              */
             course: string;
+            /** @example Operativni sistemi */
+            courseName: string;
             /** @description its best pages first, at most 3; none when only its name matched */
             pages: components["schemas"]["SearchPageResponse"][];
             /** @description its name (a member's path) where the words matched, null when only its text did */
@@ -729,6 +765,8 @@ export interface components {
              * @example os
              */
             course: string;
+            /** @example Operativni sistemi */
+            courseName: string;
             /** @description its best fragment, of its title and what the portal gave as plain text */
             snippet: components["schemas"]["SnippetResponse"];
         };
@@ -745,7 +783,7 @@ export interface components {
              */
             label: string;
             /**
-             * @description how it is read: shared, by the one account the hub reads with; token, by your own; public, the courses you pick of its catalog
+             * @description how it is read: shared, by the one account the hub reads with; token, by your own; public, a catalog everyone reads, of which you pick the courses to show among yours
              * @enum {string}
              */
             mode: "shared" | "token" | "public";
@@ -777,7 +815,7 @@ export interface components {
             name: string;
             /** @description the course on its portal */
             url: string | null;
-            /** @description you picked it: you read it here */
+            /** @description you picked it: it shows among your courses */
             picked: boolean;
             /** @description the hub first saw it within 14 days */
             isNew: boolean;
@@ -837,7 +875,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description courses you may read */
+            /** @description your courses, those you hide too (`hidden`). You read every public portal's course as well, by its slug and by search: one is here once you pick it */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -976,6 +1014,86 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SignInMethodsResponse"];
                 };
+            };
+        };
+    };
+    CoursesController_course: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description one course you read, yours or not: a public portal's you didn't pick too */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CoursesController_hide: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description hidden: left out of your courses, and read as before by every route, search and MCP */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CoursesController_show: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description shown among your courses: one you hid, or a public portal's you didn't pick, which picks it */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -1540,6 +1658,8 @@ export interface operations {
                 type?: "files" | "posts";
                 /** @description results, at most */
                 limit?: number;
+                /** @description true: only the courses you show among yours, none you hide nor a public portal's you didn't pick; ignored with `course` */
+                shown?: string;
             };
             header?: never;
             path?: never;
@@ -1547,7 +1667,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description files of your courses whose text matches, best first; with search by meaning on, up to `limit` even when none has the words, the nearest by meaning */
+            /** @description files and posts of the courses you read whose text matches, best first; with search by meaning on, up to `limit` even when none has the words, the nearest by meaning */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1736,7 +1856,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description picked, with no body or {}: you read it from now on, shown with the course `into` names if it does */
+            /** @description picked, with no body or {}: it shows among your courses from now on, with the course `into` names if it does */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -1750,7 +1870,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description TOO_MANY_PICKS: you picked 100 already; NOT_YOUR_COURSE: `into` is no course you read through your own account */
+            /** @description NOT_YOUR_COURSE: `into` is no course you read through your own account */
             422: {
                 headers: {
                     [name: string]: unknown;

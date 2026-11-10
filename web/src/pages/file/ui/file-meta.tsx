@@ -1,6 +1,6 @@
 import { Fragment } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useCourseNames } from '@/entities/course';
+import { useCourseName } from '@/entities/course';
 import { fileType } from '@/entities/file';
 import type { Schemas } from '@/shared/api';
 import { useFormat } from '@/shared/i18n';
@@ -19,14 +19,14 @@ export function FileMeta({
   member?: string;
 }) {
   const { t } = useTranslation('file');
-  const courseName = useCourseNames();
+  const courseName = useCourseName(slug);
   const { size, date } = useFormat();
   const type = member
     ? fileType(null, memberName(member))
     : fileType(file.mime, file.name);
   const parts = [
     <AnchorLink key="course" to="/courses/$slug" params={{ slug }} inherit>
-      {courseName(slug)}
+      {courseName}
     </AnchorLink>,
     member ? t('meta.inArchive', { archive: file.name }) : file.path || null,
     member ? null : size(file.size),
