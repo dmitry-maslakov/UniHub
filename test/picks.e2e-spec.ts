@@ -27,6 +27,7 @@ const CATALOG = 'catalog';
 const TOKEN = 'catalog-test-token-0001';
 const SHARED = 'grpc-test';
 const index = indexName(testEnv.OPENSEARCH_INDEX_PREFIX, testVectors);
+const byText = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
 // the connector, over gRPC, as one outside the hub asks
 function connector() {
@@ -257,12 +258,12 @@ describe('public portals and picks', { timeout: 60_000 }, () => {
           courseName: string;
         }[]
       )
-        .map((r) => [r.itemId, r.courseName])
-        .sort();
+        .map((r) => `${r.courseName}: ${r.itemId}`)
+        .sort(byText);
     const both = [
-      [posts['os-exam'], 'Operativni sistemi'],
-      [posts['net-exam'], 'Računarske mreže'],
-    ].sort();
+      `Operativni sistemi: ${posts['os-exam']}`,
+      `Računarske mreže: ${posts['net-exam']}`,
+    ];
     expect(await found('ana')).toEqual(both);
     expect(await found('ana', '&shown=true')).toEqual([]);
 
@@ -274,9 +275,7 @@ describe('public portals and picks', { timeout: 60_000 }, () => {
       ),
     ).toMatchObject({ hidden: false, portalCourses: [{ via: 'public' }] });
     expect(await found('ana')).toEqual(both);
-    expect(await found('ana', '&shown=true')).toEqual([
-      [posts['os-exam'], 'Operativni sistemi'],
-    ]);
+    expect(await found('ana', '&shown=true')).toEqual([both[0]]);
 
     // and MCP, as an agent of hers reads: her courses listed, all searched
     const key = (

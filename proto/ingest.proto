@@ -29,12 +29,12 @@ service Ingest {
   rpc GetState (Empty) returns (State);
   // "null" saves null: GetState answers as if none was ever saved
   rpc SaveState (State) returns (Empty);
-  // The courses of the portal's catalog its users want synced: picked now,
-  // or within 14 days of their last pick going. Of a portal the hub reads
-  // as public, whose connector sends its whole catalog as courses, and
-  // items and files of these alone; none of another portal. Nothing of who
-  // picked them, or how many. A course no longer wanted is kept as it was,
-  // not removed, its state too, so a pick later goes on from there
+  // The courses of the portal's catalog to sync: all of it, as the hub has
+  // it, since everyone reads a public portal whole. Of a portal the hub
+  // reads as public, whose connector sends its whole catalog as courses,
+  // and items and files of these; none of another portal. A course no
+  // longer wanted (gone from the catalog) is kept as it was, not removed,
+  // its state too
   rpc Wanted (Empty) returns (WantedCourses);
 }
 

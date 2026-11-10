@@ -13,15 +13,18 @@ const CHANGED = [
   '/api/portals/{portal}/catalog',
 ];
 
-// Hides a course from My courses, or shows a hidden one there again
+// Hides a course from My courses, or shows a hidden one there again; `long`
+// says where it shows it, for a place that isn't My courses
 export function HideCourseButton({
   slug,
   name,
   hidden,
+  long = false,
 }: {
   slug: string;
   name: string;
   hidden: boolean;
+  long?: boolean;
 }) {
   const { t } = useTranslation('courses');
   const queryClient = useQueryClient();
@@ -49,7 +52,7 @@ export function HideCourseButton({
       onClick={() => change.mutate()}
       aria-label={t(hidden ? 'hide.showAria' : 'hide.aria', { name })}
     >
-      {t(hidden ? 'hide.show' : 'hide.action')}
+      {t(hidden ? (long ? 'hide.showLong' : 'hide.show') : 'hide.action')}
     </Button>
   );
 }

@@ -30,7 +30,7 @@ import {
 } from './proto.mapper.js';
 
 // IngestService for connectors running as separate services, and which
-// courses of a public portal they're asked for (accounts' picks)
+// courses of a public portal they're asked for (accounts': all of them)
 @Controller()
 @UseGuards(ConnectorGuard)
 @UseFilters(IngestErrorsFilter)

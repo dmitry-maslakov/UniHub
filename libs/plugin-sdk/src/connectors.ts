@@ -24,9 +24,9 @@ interface ConnectorOptions<L extends AccountLink, I extends boolean> {
   // records apart. A connector that says so implements HasInstances.
   instances?: I;
   // The portal is a public site with a directory of courses, which the
-  // connector sends whole, every run, as its one (shared) account: users
-  // pick from it (link mode public) and no course is asked for (Wanted, as
-  // a gRPC connector's is). Of a poll connector.
+  // connector sends whole, every run, as its one (shared) account:
+  // everyone reads it and picks from it (link mode public), and no course
+  // is asked for (Wanted, as a gRPC connector's is). Of a poll connector.
   catalog?: boolean;
 }
 

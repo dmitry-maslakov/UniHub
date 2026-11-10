@@ -34,7 +34,8 @@ export default {
   hide: {
     action: 'Sakrij',
     aria: 'Sakrij {{name}} iz Mojih predmeta',
-    show: 'Prikaži u Mojim predmetima',
+    show: 'Prikaži',
+    showLong: 'Prikaži u Mojim predmetima',
     showAria: 'Prikaži {{name}} u Mojim predmetima',
     note: 'Nije u Mojim predmetima.',
     failed: 'Sakrivanje predmeta nije uspelo. Pokušaj ponovo.',

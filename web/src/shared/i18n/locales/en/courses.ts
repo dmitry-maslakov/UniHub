@@ -31,7 +31,8 @@ export default {
   hide: {
     action: 'Hide',
     aria: 'Hide {{name}} from My courses',
-    show: 'Show in My courses',
+    show: 'Show',
+    showLong: 'Show in My courses',
     showAria: 'Show {{name}} in My courses',
     note: 'Not in My courses.',
     failed: "Couldn't hide the course. Try again.",

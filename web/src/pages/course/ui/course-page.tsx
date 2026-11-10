@@ -78,6 +78,7 @@ export function CoursePage() {
                   slug={slug}
                   name={course.name}
                   hidden={course.hidden}
+                  long
                 />
               </Group>
             )}
