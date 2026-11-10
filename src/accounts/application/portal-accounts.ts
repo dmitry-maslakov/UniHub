@@ -40,6 +40,8 @@ import {
   TokenRefusedError,
   TokensNotAllowedError,
 } from './errors.js';
+import type { Switched } from '../domain/course-switches.js';
+import { CourseSwitches } from './course-switches.js';
 import { PortalPicks, type Picks } from './portal-picks.js';
 
 // how long linking waits for the portal to say whose a token is
@@ -73,11 +75,13 @@ const portalUser = z.object({
 
 // Whose views a user reads in the portals not read as shared: those read
 // with users' own accounts, and the user's accounts in them that read now;
-// the public ones, and the courses the user picked
+// the public ones, and the courses the user picked; and of all they read,
+// the portal courses they hide or turned off
 export interface Viewing {
   portals: PortalId[];
   accounts: string[];
   picks: Picks;
+  switched: Switched;
 }
 
 // a portal as one user sees their own link to it, or their picks of it
@@ -115,6 +119,7 @@ export class PortalAccounts implements OnApplicationBootstrap {
     private readonly vault: CredentialVault,
     private readonly plugins: PluginCatalog,
     private readonly picks: PortalPicks,
+    private readonly switches: CourseSwitches,
     private readonly queries: QueryBus,
     private readonly commands: CommandBus,
   ) {}
@@ -181,16 +186,22 @@ export class PortalAccounts implements OnApplicationBootstrap {
   // picks.
   async viewing(userId: string, now = new Date()): Promise<Viewing> {
     const portals = this.links.readWithAccounts();
-    const [accounts, picks] = await Promise.all([
+    const [accounts, picks, switched] = await Promise.all([
       // none read with accounts: no account of the user's is asked for
       portals.length ? this.accounts.ofUser(userId) : [],
       this.picks.of(userId),
+      this.switches.of(userId),
     ]);
     const reading = accounts.filter(
       (account) =>
         portals.includes(account.portal) && account.statusAt(now) === 'linked',
     );
-    return { portals, accounts: reading.map(({ id }) => id), picks };
+    return {
+      portals,
+      accounts: reading.map(({ id }) => id),
+      picks,
+      switched,
+    };
   }
 
   // whose views the portal's runs are: those of its users' own accounts
@@ -262,9 +273,11 @@ export class PortalAccounts implements OnApplicationBootstrap {
     if (gone) await this.changed(portal, { gone: [gone] });
   }
 
-  // a deleted user's, all of them, and their picks
+  // a deleted user's, all of them, their picks, and what they hid or
+  // turned off
   async removeAllOf(userId: string) {
     await this.picks.removeAllOf(userId);
+    await this.switches.removeAllOf(userId);
     for (const { id, portal } of await this.accounts.removeAllOf(userId))
       await this.changed(portal, { gone: [id] });
   }

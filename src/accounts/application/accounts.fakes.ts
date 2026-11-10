@@ -16,6 +16,10 @@ import {
   type SealedCredential,
   type SealedFor,
 } from '../domain/credential-vault.js';
+import {
+  CourseSwitchRepository,
+  type CourseState,
+} from '../domain/course-switches.js';
 import { UnreadableCredentialError } from '../domain/errors.js';
 import { PickRepository } from '../domain/picks.js';
 import {
@@ -28,6 +32,7 @@ import {
   WantedCourse,
   WantedCourseRepository,
 } from '../domain/wanted-course.js';
+import { CourseSwitches } from './course-switches.js';
 import { PortalPicks } from './portal-picks.js';
 
 // In-memory ports for the application's unit tests.
@@ -201,6 +206,37 @@ export class InMemoryPicks extends PickRepository {
   }
 }
 
+// each user's hidden and turned off courses, by "user:portal course"
+export class InMemorySwitches extends CourseSwitchRepository {
+  readonly rows = new Map<string, Exclude<CourseState, 'shown'>>();
+
+  async ofUser(userId: string) {
+    const of = (state: CourseState) =>
+      [...this.rows]
+        .filter(([key, s]) => key.startsWith(`${userId}:`) && s === state)
+        .map(([key]) => key.slice(userId.length + 1))
+        .sort();
+    return { hidden: of('hidden'), off: of('off') };
+  }
+
+  async set(
+    userId: string,
+    portalCourseIds: readonly string[],
+    state: Exclude<CourseState, 'shown'>,
+  ) {
+    for (const id of portalCourseIds) this.rows.set(`${userId}:${id}`, state);
+  }
+
+  async clear(userId: string, portalCourseIds: readonly string[]) {
+    for (const id of portalCourseIds) this.rows.delete(`${userId}:${id}`);
+  }
+
+  async removeAllOf(userId: string) {
+    for (const key of this.rows.keys())
+      if (key.startsWith(`${userId}:`)) this.rows.delete(key);
+  }
+}
+
 const sameTime = (a: Date | null, b: Date | null) =>
   (a?.getTime() ?? null) === (b?.getTime() ?? null);
 
@@ -256,13 +292,20 @@ export const noTransactions = () =>
     ],
   });
 
-// PortalPicks on these fakes; @Transactional() runs, without a database
+// PortalPicks and CourseSwitches on these fakes; @Transactional() runs,
+// without a database
 export async function picksOnFakes(links: PortalLinks, queries: FakeBus) {
-  const fakes = { picks: new InMemoryPicks(), wanted: new InMemoryWanted() };
+  const fakes = {
+    picks: new InMemoryPicks(),
+    wanted: new InMemoryWanted(),
+    switches: new InMemorySwitches(),
+  };
   const module = await Test.createTestingModule({
     imports: [noTransactions()],
     providers: [
       PortalPicks,
+      CourseSwitches,
+      { provide: CourseSwitchRepository, useValue: fakes.switches },
       { provide: PortalLinks, useValue: links },
       { provide: PickRepository, useValue: fakes.picks },
       { provide: WantedCourseRepository, useValue: fakes.wanted },
@@ -270,5 +313,9 @@ export async function picksOnFakes(links: PortalLinks, queries: FakeBus) {
     ],
   }).compile();
   await module.init();
-  return { service: module.get(PortalPicks), ...fakes };
+  return {
+    service: module.get(PortalPicks),
+    courseSwitches: module.get(CourseSwitches),
+    ...fakes,
+  };
 }

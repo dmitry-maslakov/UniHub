@@ -7,6 +7,7 @@ const viewing = {
   portals: [moodle],
   accounts: ['ana-moodle'],
   picks: { portals: [catalog], courses: ['os-picked'], into: new Map() },
+  switched: { hidden: [], off: [] },
 };
 const scope = (granted: string[] | null, ownAccounts = true) =>
   ({ granted, ownAccounts }) as ReadScope;

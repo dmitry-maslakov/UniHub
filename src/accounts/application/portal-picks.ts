@@ -16,6 +16,7 @@ import {
   type Browse,
   type CatalogEntry,
 } from '../domain/catalog-page.js';
+import { CourseSwitchRepository } from '../domain/course-switches.js';
 import {
   checkRoom,
   PickRepository,
@@ -64,6 +65,7 @@ export class PortalPicks {
     private readonly links: PortalLinks,
     private readonly picks: PickRepository,
     private readonly wanted: WantedCourseRepository,
+    private readonly switches: CourseSwitchRepository,
     private readonly queries: QueryBus,
   ) {}
 
@@ -136,10 +138,28 @@ export class PortalPicks {
     now = new Date(),
   ) {
     const [course] = await this.catalogOf(portal, externalId);
-    if (!course) return;
-    const left = await this.picks.remove(userId, course.id);
-    if (left === 0)
-      await this.wanted.save(new WantedCourse(course.id).picked(false, now));
+    if (course) await this.drop(userId, [course.id], now);
+  }
+
+  // The user's picks of these portal courses gone, as unpick() takes one,
+  // and which of them were picks. A pick's hiding goes with it: picked
+  // again, the course is shown.
+  @Transactional()
+  async drop(
+    userId: string,
+    portalCourseIds: readonly string[],
+    now = new Date(),
+  ) {
+    const dropped: string[] = [];
+    for (const id of portalCourseIds) {
+      const left = await this.picks.remove(userId, id);
+      if (left === null) continue;
+      dropped.push(id);
+      if (left === 0)
+        await this.wanted.save(new WantedCourse(id).picked(false, now));
+    }
+    await this.switches.clear(userId, dropped);
+    return dropped;
   }
 
   // the public portals and the user's picks, all of them: what the user

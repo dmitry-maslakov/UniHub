@@ -8,13 +8,16 @@ import {
   AdoptAccountsHandler,
   PortalReadersHandler,
 } from './application/plugin-ports.handlers.js';
+import { CourseSwitches } from './application/course-switches.js';
 import { PortalAccounts } from './application/portal-accounts.js';
 import { PortalPicks } from './application/portal-picks.js';
 import { PortalLinksHandler } from './application/portal-links.handler.js';
+import { SetCourseStateHandler } from './application/set-course-state.handler.js';
 import { UserDeletedHandler } from './application/user-deleted.handler.js';
 import { UserPortalsHandler } from './application/user-portals.handler.js';
 import { ViewingAccountsHandler } from './application/viewing-accounts.handler.js';
 import { WantedCoursesHandler } from './application/wanted-courses.handler.js';
+import { CourseSwitchRepository } from './domain/course-switches.js';
 import { CredentialVault } from './domain/credential-vault.js';
 import { PickRepository } from './domain/picks.js';
 import { PortalAccountRepository } from './domain/portal-account.js';
@@ -24,6 +27,7 @@ import { AesGcmVault } from './infrastructure/aes-gcm.vault.js';
 import { PicksController } from './infrastructure/http/picks.controller.js';
 import { PortalAccountsController } from './infrastructure/http/portal-accounts.controller.js';
 import { PortalCatalogController } from './infrastructure/http/portal-catalog.controller.js';
+import { PrismaCourseSwitchRepository } from './infrastructure/prisma-course-switch.repository.js';
 import { PrismaPickRepository } from './infrastructure/prisma-pick.repository.js';
 import { PrismaPortalAccountRepository } from './infrastructure/prisma-portal-account.repository.js';
 import { PrismaWantedCourseRepository } from './infrastructure/prisma-wanted-course.repository.js';
@@ -44,6 +48,9 @@ import { ReconcileWantedSchedule } from './infrastructure/reconcile-wanted.sched
 // deleted user's accounts when it says so. Asks access which course of the
 // user's own a pick goes with, and which it may (OwnPortalCourseQuery,
 // PickMatchesQuery).
+// Of all a user reads, the portal courses they hide or turned off
+// (CourseSwitches), which access sets (SetCourseStateCommand) and reads
+// with the rest.
 @Module({
   imports: [ConfigModule.forFeature(accountsConfig), PluginsModule],
   controllers: [
@@ -65,8 +72,11 @@ import { ReconcileWantedSchedule } from './infrastructure/reconcile-wanted.sched
     },
     { provide: PickRepository, useClass: PrismaPickRepository },
     { provide: WantedCourseRepository, useClass: PrismaWantedCourseRepository },
+    { provide: CourseSwitchRepository, useClass: PrismaCourseSwitchRepository },
     PortalAccounts,
     PortalPicks,
+    CourseSwitches,
+    SetCourseStateHandler,
     UserDeletedHandler,
     ViewingAccountsHandler,
     UserPortalsHandler,

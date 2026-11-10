@@ -55,3 +55,18 @@ model WantedCourse {
   portalCourseId String    @id
   until          DateTime?
 }
+
+// A portal course its user hides or turned off (README, Hidden and off):
+// hidden, it's read as before and marked for the web app to leave out;
+// off, the user reads none of it, by any route. No row is a course shown.
+// A public portal's course is turned off by its pick going, so it has a
+// row only while hidden. userId is identity's and portalCourseId
+// catalog's, not foreign keys (Pick): a user's delete takes theirs
+model CourseSwitch {
+  userId         String
+  portalCourseId String
+  // hidden or off
+  state          String
+
+  @@id([userId, portalCourseId])
+}
