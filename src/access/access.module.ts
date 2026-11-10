@@ -12,6 +12,7 @@ import { CourseGrants } from './application/course-grants.js';
 import { CourseMatching } from './application/course-matching.js';
 import { CourseProcessing } from './application/course-processing.js';
 import { CourseReader } from './application/course-reader.js';
+import { CourseShowing } from './application/course-showing.js';
 import { PageRenderer } from './application/renderer.js';
 import { Downloads } from './application/downloads.js';
 import { HubCourses } from './application/hub-courses.js';
@@ -38,7 +39,8 @@ import { AccessSearchModule } from './search.module.js';
 // which course. Over catalog, identity and accounts: every read goes
 // through CourseReader, every search through CourseSearch, both cut to the
 // user's viewers and their courses grouped as they see them, every grant
-// through CourseGrants. Answers accounts which course of a user's own a
+// through CourseGrants. A user hides a course and shows it again through
+// CourseShowing, which accounts keeps. Answers accounts which course of a user's own a
 // pick goes with (CourseMatching).
 @Module({
   imports: [
@@ -66,6 +68,7 @@ import { AccessSearchModule } from './search.module.js';
   ],
   providers: [
     CourseReader,
+    CourseShowing,
     CourseProcessing,
     { provide: PageRenderer, useClass: SharpPdfiumRenderer },
     Downloads,

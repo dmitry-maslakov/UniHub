@@ -1,6 +1,16 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import {
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Put,
+  Query,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiNoContentResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiTags,
@@ -9,6 +19,7 @@ import { CourseSlug } from '../../../catalog/contracts.js';
 import { CurrentUserId } from '../../../identity/contracts.js';
 import { CourseProcessing } from '../../application/course-processing.js';
 import { CourseReader } from '../../application/course-reader.js';
+import { CourseShowing } from '../../application/course-showing.js';
 import {
   courseFilesSchema,
   pageSchema,
@@ -31,15 +42,59 @@ export class CoursesController {
   constructor(
     private readonly reader: CourseReader,
     private readonly processing: CourseProcessing,
+    private readonly showing: CourseShowing,
   ) {}
 
   @Get()
   @ApiOkResponse({
     type: [CourseResponse],
-    description: 'courses you may read',
+    description:
+      "your courses, those you hide too (`hidden`). You read every public portal's course as well, by its slug and by search: one is here once you pick it",
   })
   list(@CurrentUserId() userId: string): Promise<CourseResponse[]> {
     return this.reader.courses(userId);
+  }
+
+  @Get(':slug')
+  @ApiOkResponse({
+    type: CourseResponse,
+    description:
+      "one course you read, yours or not: a public portal's you didn't pick too",
+  })
+  @ApiNotFoundResponse()
+  course(
+    @CurrentUserId() userId: string,
+    @Param('slug', { schema: CourseSlug }) slug: CourseSlug,
+  ): Promise<CourseResponse> {
+    return this.reader.course(userId, slug);
+  }
+
+  @Put(':slug/hidden')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiNoContentResponse({
+    description:
+      'hidden: left out of your courses, and read as before by every route, search and MCP',
+  })
+  @ApiNotFoundResponse()
+  async hide(
+    @CurrentUserId() userId: string,
+    @Param('slug', { schema: CourseSlug }) slug: CourseSlug,
+  ) {
+    await this.showing.hide(userId, slug);
+  }
+
+  @Delete(':slug/hidden')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiNoContentResponse({
+    description:
+      "shown among your courses: one you hid, or a public portal's you didn't pick, which picks it",
+  })
+  @ApiNotFoundResponse()
+  async show(
+    @CurrentUserId() userId: string,
+    @Param('slug', { schema: CourseSlug }) slug: CourseSlug,
+  ) {
+    await this.showing.show(userId, slug);
   }
 
   @Get(':slug/processing')

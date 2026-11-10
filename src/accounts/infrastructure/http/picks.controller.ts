@@ -28,8 +28,8 @@ import { externalId, pickRequest } from './requests.js';
 const portalParam = { schema: PortalId };
 const courseParam = { schema: externalId };
 
-// A signed-in user's picks of public portals' courses: what they read of
-// those portals. Nothing here says anything of other users.
+// A signed-in user's picks of public portals' courses: the ones they show
+// among their own. Nothing here says anything of other users.
 @ApiTags('portals')
 @ApiBearerAuth()
 @Controller('me/picks')
@@ -45,14 +45,14 @@ export class PicksController {
   @ApiBody({ required: false })
   @ApiNoContentResponse({
     description:
-      'picked, with no body or {}: you read it from now on, shown with the course `into` names if it does',
+      'picked, with no body or {}: it shows among your courses from now on, with the course `into` names if it does',
   })
   @ApiNotFoundResponse({
     description: 'the portal is no public one, or has no such course',
   })
   @ApiUnprocessableEntityResponse({
     description:
-      'TOO_MANY_PICKS: you picked 100 already; NOT_YOUR_COURSE: `into` is no course you read through your own account',
+      'NOT_YOUR_COURSE: `into` is no course you read through your own account',
   })
   async pick(
     @CurrentUserId() userId: string,

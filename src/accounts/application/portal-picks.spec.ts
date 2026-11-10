@@ -4,10 +4,8 @@ import {
   PickMatchesQuery,
 } from '../../access/contracts.js';
 import { CourseSlug, ListPortalCatalogQuery } from '../../catalog/contracts.js';
-import { NotPickableError, TooManyPicksError } from '../domain/errors.js';
-import { MAX_PICKS } from '../domain/picks.js';
+import { NotPickableError } from '../domain/errors.js';
 import { PortalLinks } from '../domain/portal-links.js';
-import { GRACE_DAYS } from '../domain/wanted-course.js';
 import { catalogBus, picksOnFakes } from './accounts.fakes.js';
 import { NotInCatalogError, NotYourCourseError } from './errors.js';
 
@@ -149,15 +147,15 @@ describe('PortalPicks', () => {
     expect(rows.rows).toEqual([]);
   });
 
-  it("picks a course of the catalog, wanted for good from then on, under the user's lock", async () => {
-    const { service, picks: rows, wanted, bus } = await picks();
+  it('picks a course of the catalog once, and shows one the user hid', async () => {
+    const { service, picks: rows, hidden, bus } = await picks();
+    await hidden.hide('ana', ['pc-os', 'pc-net']);
     await service.pick('ana', CATALOG, 'os');
     await service.pick('ana', CATALOG, 'os');
 
     expect(rows.rows).toEqual([{ userId: 'ana', portalCourseId: 'pc-os' }]);
-    expect(rows.locked).toEqual(['ana', 'ana']);
-    expect([...wanted.rows]).toEqual([['pc-os', null]]);
-    expect(bus.sent).toContainEqual(new ListPortalCatalogQuery(CATALOG));
+    expect(await hidden.ofUser('ana')).toEqual(['pc-net']);
+    expect(bus.sent).toContainEqual(new ListPortalCatalogQuery(CATALOG, 'os'));
   });
 
   it('refuses a course the catalog has not, and a portal that is not public', async () => {
@@ -171,89 +169,40 @@ describe('PortalPicks', () => {
     expect(rows.rows).toEqual([]);
   });
 
-  it(`refuses a pick past ${MAX_PICKS} of those it counts, but not one picked already`, async () => {
-    const more = Array.from({ length: MAX_PICKS - 1 }, (_, i) =>
-      course(`more-${i}`),
-    );
-    const { service, picks: rows } = await picks([
-      ...catalogs.catalog,
-      ...more,
-    ]);
-    for (const { id } of more)
-      rows.rows.push({ userId: 'ana', portalCourseId: id });
-    await service.pick('ana', CATALOG, 'os');
-
-    await expect(service.pick('ana', CATALOG, 'net')).rejects.toThrow(
-      new TooManyPicksError(MAX_PICKS),
-    );
-    await expect(service.pick('ana', CATALOG, 'os')).resolves.toBeUndefined();
-    expect(await service.counts('ana')).toEqual(
-      new Map([[CATALOG, MAX_PICKS]]),
-    );
-    // someone else's are theirs
-    await service.pick('bo', CATALOG, 'net');
-  });
-
-  it('leaves out of the limit, as out of the count, a pick of a portal no longer public or of a course gone from its catalog', async () => {
-    const more = Array.from({ length: MAX_PICKS - 1 }, (_, i) =>
-      course(`more-${i}`),
-    );
-    const { service, picks: rows } = await picks([
-      ...catalogs.catalog,
-      ...more,
-    ]);
-    for (const { id } of more)
-      rows.rows.push({ userId: 'ana', portalCourseId: id });
-    rows.rows.push(
-      { userId: 'ana', portalCourseId: 'pc-lms-1' },
-      { userId: 'ana', portalCourseId: 'pc-gone' },
-    );
-
-    await service.pick('ana', CATALOG, 'os');
-    expect(await service.counts('ana')).toEqual(
-      new Map([[CATALOG, MAX_PICKS]]),
-    );
-    await expect(service.pick('ana', CATALOG, 'net')).rejects.toThrow(
-      new TooManyPicksError(MAX_PICKS),
-    );
-  });
-
-  it(`keeps a course wanted ${GRACE_DAYS} days past its last pick, not past one of several`, async () => {
-    const { service, wanted } = await picks();
+  it("unpicks the user's pick alone, and its hiding with it", async () => {
+    const { service, picks: rows, hidden } = await picks();
     await service.pick('ana', CATALOG, 'os');
     await service.pick('bo', CATALOG, 'os');
+    await hidden.hide('ana', ['pc-os']);
+    await hidden.hide('bo', ['pc-os']);
 
-    await service.unpick('ana', CATALOG, 'os', now);
-    expect(wanted.rows.get('pc-os')).toBeNull();
-    await service.unpick('bo', CATALOG, 'os', now);
-    expect(wanted.rows.get('pc-os')).toEqual(at(GRACE_DAYS));
+    await service.unpick('ana', CATALOG, 'os');
+    expect(rows.rows).toEqual([{ userId: 'bo', portalCourseId: 'pc-os' }]);
+    expect([...hidden.rows]).toEqual(['bo:pc-os']);
   });
 
-  it("removes a deleted user's picks, nobody else's, and starts the grace of each course no one picks now", async () => {
-    const { service, picks: rows, wanted } = await picks();
+  it("removes a deleted user's picks, nobody else's", async () => {
+    const { service, picks: rows } = await picks();
     await service.pick('ana', CATALOG, 'os');
     await service.pick('ana', CATALOG, 'net');
     await service.pick('bo', CATALOG, 'net');
 
-    await service.removeAllOf('ana', now);
+    await service.removeAllOf('ana');
     expect(rows.rows).toEqual([{ userId: 'bo', portalCourseId: 'pc-net' }]);
-    expect(Object.fromEntries(wanted.rows)).toEqual({
-      'pc-os': at(GRACE_DAYS),
-      'pc-net': null,
-    });
   });
 
   it("changes nothing for a pick the user hasn't, or a course the catalog hasn't", async () => {
-    const { service, wanted } = await picks();
-    await service.unpick('ana', CATALOG, 'net', now);
-    await service.unpick('ana', CATALOG, 'gone', now);
-    expect(wanted.rows.size).toBe(0);
+    const { service, picks: rows } = await picks();
+    await service.pick('bo', CATALOG, 'net');
+    await service.unpick('ana', CATALOG, 'net');
+    await service.unpick('ana', CATALOG, 'gone');
+    expect(rows.rows).toEqual([{ userId: 'bo', portalCourseId: 'pc-net' }]);
   });
 
   it('unpicks whatever the portal is now', async () => {
     const { service, picks: rows } = await picks();
     rows.rows.push({ userId: 'ana', portalCourseId: 'pc-lms-1' });
-    await service.unpick('ana', LMS, 'lms-1', now);
+    await service.unpick('ana', LMS, 'lms-1');
     expect(rows.rows).toEqual([]);
   });
 
@@ -291,52 +240,11 @@ describe('PortalPicks', () => {
     expect(bus.sent).toEqual([]);
   });
 
-  it("answers a public portal's wanted courses, picked or in their grace, by its ids", async () => {
-    const { service, wanted } = await picks();
+  it("asks a public portal's connector for its whole catalog, picked or not, and no other portal's for anything", async () => {
+    const { service } = await picks();
     await service.pick('ana', CATALOG, 'os');
-    wanted.rows.set('pc-net', at(1));
-    wanted.rows.set('pc-lms-1', null);
 
-    expect(await service.wantedOf(CATALOG, now)).toEqual(['os', 'net']);
-    // past its grace, before the reconcile drops it
-    expect(await service.wantedOf(CATALOG, at(2))).toEqual(['os']);
-    expect(await service.wantedOf(LMS, now)).toEqual([]);
-  });
-
-  it('reconciles each course wanted with its picks: grace for none, for good for some, gone past it', async () => {
-    const { service, picks: rows, wanted } = await picks();
-    // a picker deleted: the course picked by none, wanted for good still
-    wanted.rows.set('pc-os', null);
-    // picked within its grace, one by a race
-    rows.rows.push({ userId: 'ana', portalCourseId: 'pc-net' });
-    wanted.rows.set('pc-net', at(3));
-    // past its grace, and one in it
-    wanted.rows.set('pc-old', at(-1));
-    wanted.rows.set('pc-left', at(2));
-    // picked, and wanted by no row
-    rows.rows.push({ userId: 'bo', portalCourseId: 'pc-new' });
-
-    await service.reconcile(now);
-    expect(Object.fromEntries(wanted.rows)).toEqual({
-      'pc-os': at(GRACE_DAYS),
-      'pc-net': null,
-      'pc-left': at(2),
-      'pc-new': null,
-    });
-  });
-
-  it('lets a pick made meanwhile win over the reconcile', async () => {
-    const { service, wanted } = await picks();
-    wanted.rows.set('pc-os', at(-1));
-    const all = wanted.all.bind(wanted);
-    vi.spyOn(wanted, 'all').mockImplementation(async () => {
-      const found = await all();
-      // picked after the reconcile looked
-      await service.pick('ana', CATALOG, 'os');
-      return found;
-    });
-
-    await service.reconcile(now);
-    expect(wanted.rows.get('pc-os')).toBeNull();
+    expect(await service.wantedOf(CATALOG)).toEqual(['os', 'net']);
+    expect(await service.wantedOf(LMS)).toEqual([]);
   });
 });

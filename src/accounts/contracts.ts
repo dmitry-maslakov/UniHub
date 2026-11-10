@@ -8,12 +8,10 @@ export {
   ViewingAccountsQuery,
   WantedCoursesQuery,
 } from './application/queries.js';
-export { SetCourseStateCommand } from './application/commands.js';
 export {
-  COURSE_STATES,
-  type CourseState,
-  type Switched,
-} from './domain/course-switches.js';
+  HideCoursesCommand,
+  ShowCoursesCommand,
+} from './application/commands.js';
 export type { PortalView, Viewing } from './application/portal-accounts.js';
 // how a name is matched against words, as the catalog does, for lists that
 // search names

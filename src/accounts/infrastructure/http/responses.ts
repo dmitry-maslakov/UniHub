@@ -20,7 +20,7 @@ export class PortalResponse implements PortalView {
   @ApiProperty({
     enum: ['shared', 'token', 'public'],
     description:
-      'how it is read: shared, by the one account the hub reads with; token, by your own; public, the courses you pick of its catalog',
+      'how it is read: shared, by the one account the hub reads with; token, by your own; public, a catalog everyone reads, of which you pick the courses to show among yours',
   })
   mode!: LinkMode;
   @ApiProperty({
@@ -71,7 +71,7 @@ export class CatalogCourseResponse implements CatalogCourseView {
     description: 'the course on its portal',
   })
   url!: string | null;
-  @ApiProperty({ description: 'you picked it: you read it here' })
+  @ApiProperty({ description: 'you picked it: it shows among your courses' })
   picked!: boolean;
   @ApiProperty({ description: 'the hub first saw it within 14 days' })
   isNew!: boolean;

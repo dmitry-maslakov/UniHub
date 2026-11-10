@@ -16,10 +16,7 @@ import {
   type SealedCredential,
   type SealedFor,
 } from '../domain/credential-vault.js';
-import {
-  CourseSwitchRepository,
-  type CourseState,
-} from '../domain/course-switches.js';
+import { HiddenCourseRepository } from '../domain/hidden-courses.js';
 import { UnreadableCredentialError } from '../domain/errors.js';
 import { PickRepository } from '../domain/picks.js';
 import {
@@ -28,11 +25,7 @@ import {
   type PortalAccountState,
 } from '../domain/portal-account.js';
 import { PortalLinks } from '../domain/portal-links.js';
-import {
-  WantedCourse,
-  WantedCourseRepository,
-} from '../domain/wanted-course.js';
-import { CourseSwitches } from './course-switches.js';
+import { HiddenCourses } from './hidden-courses.js';
 import { PortalPicks } from './portal-picks.js';
 
 // In-memory ports for the application's unit tests.
@@ -140,8 +133,6 @@ export class FakeVault extends CredentialVault {
 export class InMemoryPicks extends PickRepository {
   readonly rows: { userId: string; portalCourseId: string; into?: string }[] =
     [];
-  // whose picks were locked, in order
-  readonly locked: string[] = [];
 
   async ofUser(userId: string) {
     return this.rows
@@ -161,11 +152,6 @@ export class InMemoryPicks extends PickRepository {
     };
   }
 
-  async lockOf(userId: string) {
-    this.locked.push(userId);
-    return this.ofUser(userId);
-  }
-
   async add(userId: string, portalCourseId: string) {
     if (!(await this.ofUser(userId)).includes(portalCourseId))
       this.rows.push({ userId, portalCourseId });
@@ -181,86 +167,42 @@ export class InMemoryPicks extends PickRepository {
   }
 
   async remove(userId: string, portalCourseId: string) {
-    const at = this.rows.findIndex(
-      (row) => row.userId === userId && row.portalCourseId === portalCourseId,
+    this.keep(
+      (row) => row.userId !== userId || row.portalCourseId !== portalCourseId,
     );
-    if (at < 0) return null;
-    this.rows.splice(at, 1);
-    return this.rows.filter((row) => row.portalCourseId === portalCourseId)
-      .length;
   }
 
   async removeAllOf(userId: string) {
-    const theirs = await this.ofUser(userId);
-    this.rows.splice(
-      0,
-      this.rows.length,
-      ...this.rows.filter((row) => row.userId !== userId),
-    );
-    const picked = await this.picked();
-    return theirs.filter((id) => !picked.includes(id));
+    this.keep((row) => row.userId !== userId);
   }
 
-  async picked() {
-    return [...new Set(this.rows.map(({ portalCourseId }) => portalCourseId))];
+  private keep(kept: (row: InMemoryPicks['rows'][number]) => boolean) {
+    this.rows.splice(0, this.rows.length, ...this.rows.filter(kept));
   }
 }
 
-// each user's hidden and turned off courses, by "user:portal course"
-export class InMemorySwitches extends CourseSwitchRepository {
-  readonly rows = new Map<string, Exclude<CourseState, 'shown'>>();
+// each user's hidden courses, as "user:portal course"
+export class InMemoryHidden extends HiddenCourseRepository {
+  readonly rows = new Set<string>();
 
   async ofUser(userId: string) {
-    const of = (state: CourseState) =>
-      [...this.rows]
-        .filter(([key, s]) => key.startsWith(`${userId}:`) && s === state)
-        .map(([key]) => key.slice(userId.length + 1))
-        .sort();
-    return { hidden: of('hidden'), off: of('off') };
+    return [...this.rows]
+      .filter((key) => key.startsWith(`${userId}:`))
+      .map((key) => key.slice(userId.length + 1))
+      .sort();
   }
 
-  async set(
-    userId: string,
-    portalCourseIds: readonly string[],
-    state: Exclude<CourseState, 'shown'>,
-  ) {
-    for (const id of portalCourseIds) this.rows.set(`${userId}:${id}`, state);
+  async hide(userId: string, portalCourseIds: readonly string[]) {
+    for (const id of portalCourseIds) this.rows.add(`${userId}:${id}`);
   }
 
-  async clear(userId: string, portalCourseIds: readonly string[]) {
+  async show(userId: string, portalCourseIds: readonly string[]) {
     for (const id of portalCourseIds) this.rows.delete(`${userId}:${id}`);
   }
 
   async removeAllOf(userId: string) {
-    for (const key of this.rows.keys())
+    for (const key of this.rows)
       if (key.startsWith(`${userId}:`)) this.rows.delete(key);
-  }
-}
-
-const sameTime = (a: Date | null, b: Date | null) =>
-  (a?.getTime() ?? null) === (b?.getTime() ?? null);
-
-// the courses wanted, each until when
-export class InMemoryWanted extends WantedCourseRepository {
-  readonly rows = new Map<string, Date | null>();
-
-  async all() {
-    return [...this.rows].map(([id, until]) => new WantedCourse(id, until));
-  }
-
-  async save({ portalCourseId, until }: WantedCourse) {
-    this.rows.set(portalCourseId, until);
-  }
-
-  async replace(was: WantedCourse, course: WantedCourse | null) {
-    const { portalCourseId } = was;
-    if (
-      !this.rows.has(portalCourseId) ||
-      !sameTime(this.rows.get(portalCourseId)!, was.until)
-    )
-      return;
-    if (course) this.rows.set(portalCourseId, course.until);
-    else this.rows.delete(portalCourseId);
   }
 }
 
@@ -292,30 +234,25 @@ export const noTransactions = () =>
     ],
   });
 
-// PortalPicks and CourseSwitches on these fakes; @Transactional() runs,
+// PortalPicks and HiddenCourses on these fakes; @Transactional() runs,
 // without a database
 export async function picksOnFakes(links: PortalLinks, queries: FakeBus) {
-  const fakes = {
-    picks: new InMemoryPicks(),
-    wanted: new InMemoryWanted(),
-    switches: new InMemorySwitches(),
-  };
+  const fakes = { picks: new InMemoryPicks(), hidden: new InMemoryHidden() };
   const module = await Test.createTestingModule({
     imports: [noTransactions()],
     providers: [
       PortalPicks,
-      CourseSwitches,
-      { provide: CourseSwitchRepository, useValue: fakes.switches },
+      HiddenCourses,
       { provide: PortalLinks, useValue: links },
       { provide: PickRepository, useValue: fakes.picks },
-      { provide: WantedCourseRepository, useValue: fakes.wanted },
+      { provide: HiddenCourseRepository, useValue: fakes.hidden },
       { provide: QueryBus, useValue: queries.queries },
     ],
   }).compile();
   await module.init();
   return {
     service: module.get(PortalPicks),
-    courseSwitches: module.get(CourseSwitches),
+    hiddenCourses: module.get(HiddenCourses),
     ...fakes,
   };
 }

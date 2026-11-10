@@ -24,18 +24,28 @@ import { placesOf, searchResults, type SearchView } from './views.js';
 // of those that are archives, the files' names, those archives' members'
 // paths and the posts' texts, each by the version the user's view has. So
 // a grant taken back, an account unlinked, or a file or a post removed,
-// counts from the next search on.
+// counts from the next search on. Every course the user reads is looked
+// through, theirs or not, hidden or not; `shown` cuts a search of all
+// courses to those they show among theirs (the web app's).
 @Injectable()
 export class CourseSearch {
   constructor(private readonly queries: QueryBus) {}
 
   async search(
     userId: string,
-    { q, course, type, limit }: SearchRequest,
+    {
+      q,
+      course,
+      type,
+      limit,
+      shown = false,
+    }: SearchRequest & {
+      shown?: boolean;
+    },
   ): Promise<SearchView> {
     const read = course
       ? await this.inCourse(userId, course)
-      : await this.everywhere(userId);
+      : await this.everywhere(userId, shown);
     // only these kinds: the other's ids aren't given to the index
     const { courses } = read;
     const files = type === 'posts' ? [] : read.files;
@@ -78,14 +88,29 @@ export class CourseSearch {
 
   // the courses, to name a result's as the user sees them, asked for
   // alongside
-  private async everywhere(userId: string) {
-    const { viewers, into } = await readingOf(this.queries, userId);
+  private async everywhere(userId: string, shown: boolean) {
+    const { viewers, into, showing } = await readingOf(this.queries, userId);
     if (readNothing(viewers)) return { courses: [], files: [], posts: [] };
-    const [courses, [files, posts]] = await Promise.all([
-      this.queries.execute(new ListCoursesQuery(viewers)),
-      this.visible(viewers, null),
-    ]);
-    return { courses: regroup(courses, viewers, into), files, posts };
+    const listing = this.queries.execute(new ListCoursesQuery(viewers));
+    if (!shown) {
+      const [courses, [files, posts]] = await Promise.all([
+        listing,
+        this.visible(viewers, null),
+      ]);
+      return {
+        courses: regroup(courses, viewers, into, showing),
+        files,
+        posts,
+      };
+    }
+    const courses = regroup(await listing, viewers, into, showing).filter(
+      ({ hidden }) => !hidden,
+    );
+    const [files, posts] = await this.visible(
+      viewers,
+      courses.flatMap(({ portalCourses }) => portalCourses.map(({ id }) => id)),
+    );
+    return { courses, files, posts };
   }
 
   // what the viewers' views open, of these portal courses or of all

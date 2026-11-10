@@ -17,12 +17,25 @@ import { readingOf, viewersOfUser } from './viewers.js';
 // NotReadableError, so a caller can't tell "not yours" from "doesn't
 // exist".
 
-// the courses the user reads, as they see them (grouping.ts), each with
-// its portal courses in their view
+// The courses the user reads, as they see them (grouping.ts), each with
+// its portal courses in their view: their own (`listed`), and the public
+// portals' they didn't pick
 export async function readableCourses(queries: QueryBus, userId: string) {
-  const { viewers, into } = await readingOf(queries, userId);
+  const { viewers, into, showing } = await readingOf(queries, userId);
   const courses = await queries.execute(new ListCoursesQuery(viewers));
-  return { viewers, into, courses: regroup(courses, viewers, into) };
+  return {
+    viewers,
+    into,
+    showing,
+    courses: regroup(courses, viewers, into, showing),
+  };
+}
+
+// the user's own courses of them: what a list of their courses shows,
+// those they hide too
+export async function listedCourses(queries: QueryBus, userId: string) {
+  const { courses, ...reading } = await readableCourses(queries, userId);
+  return { ...reading, courses: courses.filter(({ listed }) => listed) };
 }
 
 // One of them by its slug. A pick shown with another course moves out of
@@ -33,14 +46,17 @@ export async function readableCourse(
   userId: string,
   slug: CourseSlug,
 ) {
-  const { viewers, into } = await readingOf(queries, userId);
+  const { viewers, into, showing } = await readingOf(queries, userId);
   const courses = await queries.execute(
     new ListCoursesQuery(viewers, into.size ? undefined : slug),
   );
-  const course = regroup(courses, viewers, into).find((c) => c.slug === slug);
+  const course = regroup(courses, viewers, into, showing).find(
+    (c) => c.slug === slug,
+  );
   if (!course) throw new NotReadableError('course');
   return {
     viewers,
+    showing,
     course,
     portalCourseIds: course.portalCourses.map(({ id }) => id),
   };

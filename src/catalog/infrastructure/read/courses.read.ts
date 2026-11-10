@@ -32,7 +32,7 @@ export class ListCoursesHandler implements IQueryHandler<ListCoursesQuery> {
   async execute({ viewers, slug }: ListCoursesQuery): Promise<CourseDto[]> {
     const { tx } = this.txHost;
     const now = new Date();
-    const { accounts, shared, picks } = viewers;
+    const { accounts, shared, open } = viewers;
     const own = slug === undefined ? undefined : slugOfPortalCourse(slug);
     // a portal course with each its name as the viewers see it
     const portalCourse = {
@@ -59,13 +59,12 @@ export class ListCoursesHandler implements IQueryHandler<ListCoursesQuery> {
       },
     };
     const ownPart = { portalCourse: seenBy({ in: [...accounts] }) };
-    // or through the shared account in a public portal, picked
-    const pickedCourse = {
-      id: { in: [...picks.courses] },
-      portal: { in: [...picks.portals] },
+    // or through the shared account in a public portal
+    const openCourse = {
+      portal: { in: [...open] },
       ...seenBy(SHARED_ACCOUNT),
     };
-    const pickedPart = { portalCourse: pickedCourse };
+    const openPart = { portalCourse: openCourse };
     const [courses, unlinked] = await Promise.all([
       own
         ? []
@@ -77,7 +76,7 @@ export class ListCoursesHandler implements IQueryHandler<ListCoursesQuery> {
                 OR: [
                   { id: { in: [...shared.courses] } },
                   { links: { some: ownPart } },
-                  { links: { some: pickedPart } },
+                  { links: { some: openPart } },
                 ],
               }),
             },
@@ -87,7 +86,7 @@ export class ListCoursesHandler implements IQueryHandler<ListCoursesQuery> {
               slug: true,
               name: true,
               links: {
-                where: { OR: [sharedPart, ownPart, pickedPart] },
+                where: { OR: [sharedPart, ownPart, openPart] },
                 // postgres puts nulls last: the portal courses that span
                 // years
                 orderBy: [{ year: 'asc' }, { portalCourseId: 'asc' }],
@@ -95,12 +94,12 @@ export class ListCoursesHandler implements IQueryHandler<ListCoursesQuery> {
               },
             },
           }),
-      (accounts.length || picks.courses.length) && own !== null
+      (accounts.length || open.length) && own !== null
         ? tx.portalCourse.findMany({
             where: {
               link: null,
               ...own,
-              OR: [seenBy({ in: [...accounts] }), pickedCourse],
+              OR: [seenBy({ in: [...accounts] }), openCourse],
             },
             ...portalCourse,
           })

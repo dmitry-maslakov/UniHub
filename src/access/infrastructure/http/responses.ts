@@ -51,9 +51,9 @@ export class PortalCourseResponse implements PortalCourseView {
   @ApiProperty({ type: Number, nullable: true, example: 2026 })
   year!: number | null;
   @ApiProperty({
-    enum: ['account', 'pick', 'link'],
+    enum: ['account', 'public', 'link'],
     description:
-      "how you read it: account, through your own account of its portal; pick, a public portal's course you picked; link, through the hub's account, in a course an admin made",
+      "how you read it: account, through your own account of its portal; public, a public portal's course, as everyone does; link, through the hub's account, in a course an admin made",
   })
   via!: Via;
 }
@@ -73,6 +73,11 @@ export class CourseResponse implements CourseView {
       'by year, those that span years last; a pick you show with this course after them',
   })
   portalCourses!: PortalCourseResponse[];
+  @ApiProperty({
+    description:
+      "not shown among your courses: you hid it, or it's a public portal's you didn't pick. Read as any other",
+  })
+  hidden!: boolean;
 }
 
 export class WaitingResponse {
@@ -236,6 +241,7 @@ export class FileResultResponse implements FileResultView {
   member!: string | null;
   @ApiProperty({ example: 'os', description: "the course's slug" })
   course!: string;
+  @ApiProperty({ example: 'Operativni sistemi' }) courseName!: string;
   @ApiProperty({
     type: [SearchPageResponse],
     description:
@@ -265,6 +271,7 @@ export class PostResultResponse implements PostResultView {
   @ApiProperty({ type: Date, nullable: true }) publishedAt!: Date | null;
   @ApiProperty({ example: 'os', description: "the course's slug" })
   course!: string;
+  @ApiProperty({ example: 'Operativni sistemi' }) courseName!: string;
   @ApiProperty({
     description:
       'its best fragment, of its title and what the portal gave as plain text',

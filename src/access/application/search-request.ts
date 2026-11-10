@@ -26,3 +26,15 @@ export const searchRequest = z.object({
     .describe('results, at most'),
 });
 export type SearchRequest = z.output<typeof searchRequest>;
+
+// The REST route's own: a list of the user's courses can leave out the
+// ones they don't show, which MCP never does
+export const restSearchRequest = searchRequest.extend({
+  shown: z
+    .stringbool()
+    .default(false)
+    .describe(
+      "true: only the courses you show among yours, none you hide nor a public portal's you didn't pick; ignored with `course`",
+    ),
+});
+export type RestSearchRequest = z.output<typeof restSearchRequest>;
