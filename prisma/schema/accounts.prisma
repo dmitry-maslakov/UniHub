@@ -45,6 +45,14 @@ model Pick {
   @@id([userId, portalCourseId])
 }
 
+// From before public portals were read whole (README, Public portals): nothing
+// reads or writes it now. Kept while an app from before may still run beside a
+// migration (README, Updating); a later migration drops it (CLAUDE.md, Put off)
+model WantedCourse {
+  portalCourseId String    @id
+  until          DateTime?
+}
+
 // A portal course its user hides (README, Hidden courses): read as before
 // by every route, and left out of the user's list of courses. No row is a
 // course shown. userId is identity's and portalCourseId catalog's, not

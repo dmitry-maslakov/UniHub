@@ -1069,6 +1069,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description 30 a minute, with the picks */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     CoursesController_show: {
@@ -1090,6 +1097,13 @@ export interface operations {
                 content?: never;
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 30 a minute, with the picks */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

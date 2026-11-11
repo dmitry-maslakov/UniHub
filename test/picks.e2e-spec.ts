@@ -137,10 +137,20 @@ describe('public portals and picks', { timeout: 60_000 }, () => {
     }
     await site.file({ externalId: 'os-slides', course: 'os', name: 'l1.pdf' });
     // a course of a shared portal
-    await portalIngest(app, SHARED).course({
-      externalId: 'shared-c1',
-      name: 'Shared',
+    const sharedSite = portalIngest(app, SHARED);
+    await sharedSite.course({ externalId: 'shared-c1', name: 'Shared' });
+    await sharedSite.item({
+      externalId: 'shared-secret',
+      course: 'shared-c1',
+      kind: 'announcement',
+      title: 'Kolokvijum tajni',
+      raw: { message: 'Kolokvijum tajni' },
     });
+    posts['shared-secret'] = (
+      await prisma.item.findFirstOrThrow({
+        where: { portal: SHARED, externalId: 'shared-secret' },
+      })
+    ).id;
 
     for (const who of ['ana', 'bo', 'ed', 'cy', 'di'])
       as[who] = await signUp(`${who}@picks.test`);
@@ -397,6 +407,53 @@ describe('public portals and picks', { timeout: 60_000 }, () => {
     expect(await slugs('cy')).toEqual(['networks']);
     expect(await netPosts('cy')).toEqual([posts['net-exam']]);
     await unpick('bo', 'net').expect(204);
+  });
+
+  it("keeps a shared portal's post in a course from a user with no grant to it", async () => {
+    const link = (method: 'put' | 'delete') =>
+      http()
+        [method](`/api/portal-courses/${SHARED}/shared-c1/course`)
+        .set('cookie', as.ed)
+        .send(method === 'put' ? { course: 'networks' } : undefined)
+        .expect(204);
+    const found = async (who: string) =>
+      (
+        (await body(who, '/api/search?q=tajni')).results as {
+          itemId: string;
+        }[]
+      ).map((r) => r.itemId);
+    const netPosts = async (who: string) =>
+      (await body(who, '/api/courses/networks/items')).map(
+        (i: { id: string }) => i.id,
+      );
+
+    // beside the catalog's course, in a course of an admin's
+    await link('put');
+    // no grant: the public post alone, whatever the course holds
+    expect(await netPosts('di')).toEqual([posts['net-exam']]);
+    await get('di', `/api/items/${posts['shared-secret']}`).expect(404);
+    const course = await body('di', '/api/courses/networks');
+    expect(
+      course.portalCourses.map((p: { portal: string }) => p.portal),
+    ).toEqual([CATALOG]);
+    // granted, the user reads both
+    expect((await netPosts('cy')).sort()).toEqual(
+      [posts['net-exam'], posts['shared-secret']].sort(),
+    );
+    await vi.waitFor(
+      async () => expect(await found('cy')).toContain(posts['shared-secret']),
+      { timeout: 20_000, interval: 200 },
+    );
+    expect(await found('di')).not.toContain(posts['shared-secret']);
+    await link('delete');
+  });
+
+  it('counts hiding and showing a course with the picks', async () => {
+    const res = await hide('di', `${CATALOG}~os`).expect(204);
+    expect(res.headers['x-ratelimit-limit-picks']).toBe('30');
+    expect(res.headers['x-ratelimit-limit-api']).toBeUndefined();
+    await show('di', `${CATALOG}~os`).expect(204);
+    await unpick('di', 'os').expect(204);
   });
 
   it('asks the connector for its whole catalog, picked or not, and nothing of another portal', async () => {

@@ -267,7 +267,7 @@ describe('a public portal’s catalog', () => {
               name: 'Operativni sistemi',
               url: null,
               year: null,
-              via: 'pick',
+              via: 'public',
             },
           ],
         },

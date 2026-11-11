@@ -305,6 +305,9 @@
           },
           "404": {
             "description": ""
+          },
+          "429": {
+            "description": "30 a minute, with the picks"
           }
         },
         "security": [
@@ -335,6 +338,9 @@
           },
           "404": {
             "description": ""
+          },
+          "429": {
+            "description": "30 a minute, with the picks"
           }
         },
         "security": [

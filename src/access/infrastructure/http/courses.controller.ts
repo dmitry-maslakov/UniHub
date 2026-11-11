@@ -13,6 +13,7 @@ import {
   ApiNoContentResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
+  ApiTooManyRequestsResponse,
   ApiTags,
 } from '@nestjs/swagger';
 import { CourseSlug } from '../../../catalog/contracts.js';
@@ -37,7 +38,6 @@ import {
 @ApiTags('courses')
 @ApiBearerAuth()
 @Controller('courses')
-@Limited('api')
 export class CoursesController {
   constructor(
     private readonly reader: CourseReader,
@@ -46,6 +46,7 @@ export class CoursesController {
   ) {}
 
   @Get()
+  @Limited('api')
   @ApiOkResponse({
     type: [CourseResponse],
     description:
@@ -56,6 +57,7 @@ export class CoursesController {
   }
 
   @Get(':slug')
+  @Limited('api')
   @ApiOkResponse({
     type: CourseResponse,
     description:
@@ -70,6 +72,8 @@ export class CoursesController {
   }
 
   @Put(':slug/hidden')
+  @Limited('picks')
+  @ApiTooManyRequestsResponse({ description: '30 a minute, with the picks' })
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiNoContentResponse({
     description:
@@ -84,6 +88,8 @@ export class CoursesController {
   }
 
   @Delete(':slug/hidden')
+  @Limited('picks')
+  @ApiTooManyRequestsResponse({ description: '30 a minute, with the picks' })
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiNoContentResponse({
     description:
@@ -98,6 +104,7 @@ export class CoursesController {
   }
 
   @Get(':slug/processing')
+  @Limited('api')
   @ApiOkResponse({
     type: CourseProcessingResponse,
     description:
@@ -112,6 +119,7 @@ export class CoursesController {
   }
 
   @Get(':slug/items')
+  @Limited('api')
   @ApiOkResponse({ type: [ItemResponse], description: 'newest first' })
   @ApiNotFoundResponse()
   items(
@@ -123,6 +131,7 @@ export class CoursesController {
   }
 
   @Get(':slug/files')
+  @Limited('api')
   @ApiOkResponse({
     type: [FileResponse],
     description:
