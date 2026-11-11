@@ -20,7 +20,7 @@ import {
   FakeVault,
   InMemoryAccounts,
   InMemoryPicks,
-  InMemoryWanted,
+  InMemoryHidden,
   noTransactions,
 } from './accounts.fakes.js';
 import {
@@ -30,6 +30,7 @@ import {
   TokenRefusedError,
   TokensNotAllowedError,
 } from './errors.js';
+import { HiddenCourses } from './hidden-courses.js';
 import { PortalAccounts } from './portal-accounts.js';
 import { PortalPicks } from './portal-picks.js';
 
@@ -112,17 +113,20 @@ function accounts({
     new Map([[CANVAS, 'Canvas']]),
   );
   const picks = new InMemoryPicks();
+  const hidden = new InMemoryHidden();
+  const portalPicks = new PortalPicks(
+    policy,
+    picks,
+    hidden,
+    catalogBus({ catalog: [course('os'), course('net')] }).queries,
+  );
   const service = new PortalAccounts(
     policy,
     store,
     vault,
     plugins,
-    new PortalPicks(
-      policy,
-      picks,
-      new InMemoryWanted(),
-      catalogBus({ catalog: [course('os'), course('net')] }).queries,
-    ),
+    portalPicks,
+    new HiddenCourses(hidden, portalPicks),
     queries.queries,
     commands.commands,
   );
@@ -138,6 +142,7 @@ function accounts({
     store,
     vault,
     picks,
+    hidden,
     asked,
     setToken,
     shown,
@@ -528,6 +533,7 @@ describe('PortalAccounts', () => {
       portals: [CANVAS, MOODLE],
       accounts: [moodle.account.id],
       picks: { portals: [], courses: [], into: new Map() },
+      hidden: [],
     });
     // nobody else's, nor one past its expiry
     expect((await service.viewing('cy', before)).accounts).toEqual([]);
@@ -550,6 +556,7 @@ describe('PortalAccounts', () => {
       portals: [],
       accounts: [],
       picks: { portals: [], courses: [], into: new Map() },
+      hidden: [],
     });
     expect(ofUser).not.toHaveBeenCalled();
   });
@@ -567,6 +574,7 @@ describe('PortalAccounts', () => {
         courses: ['pc-os'],
         into: new Map([['pc-os', 'pc-c1']]),
       },
+      hidden: [],
     });
     expect(ofUser).not.toHaveBeenCalled();
   });
@@ -583,8 +591,18 @@ describe('PortalAccounts', () => {
     expect(told).toEqual([new AccountsChangedCommand(MOODLE, { gone: [id] })]);
   });
 
-  it("removes a deleted user's accounts and picks, nobody else's, and plugins forget each account", async () => {
-    const { service, store, picks, setToken, told } = accounts();
+  it('reads with what the user hides', async () => {
+    const { service, hidden } = accounts({ links: {} });
+    await hidden.hide('ana', ['pc-old']);
+    await hidden.hide('bo', ['pc-os']);
+
+    expect((await service.viewing('ana')).hidden).toEqual(['pc-old']);
+  });
+
+  it("removes a deleted user's accounts, picks and hidden courses, nobody else's, and plugins forget each account", async () => {
+    const { service, store, picks, hidden, setToken, told } = accounts();
+    await hidden.hide('ana', ['pc-old']);
+    await hidden.hide('bo', ['pc-old']);
     await setToken('ana', MOODLE);
     await setToken('bo', CANVAS);
     picks.rows.push(
@@ -597,6 +615,7 @@ describe('PortalAccounts', () => {
 
     expect([...store.rows.keys()]).toEqual(['bo:canvas']);
     expect(picks.rows).toEqual([{ userId: 'bo', portalCourseId: 'pc-net' }]);
+    expect([...hidden.rows]).toEqual(['bo:pc-old']);
     expect(told).toEqual([new AccountsChangedCommand(MOODLE, { gone: [id] })]);
   });
 

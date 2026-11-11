@@ -10,7 +10,7 @@ import {
   ListWaitingQuery,
   type WaitingContent,
 } from '../../processing/contracts.js';
-import { readableCourse, readableCourses } from './readable.js';
+import { listedCourses, readableCourse } from './readable.js';
 import { courseView, type CourseView } from './views.js';
 
 export interface Waiting {
@@ -68,7 +68,7 @@ export class CourseProcessing {
   async listing(
     userId: string,
   ): Promise<(CourseView & { processing?: Waiting })[]> {
-    const { viewers, courses } = await readableCourses(this.queries, userId);
+    const { viewers, courses } = await listedCourses(this.queries, userId);
     const portalCourseIds = courses.flatMap(({ portalCourses }) =>
       portalCourses.map(({ id }) => id),
     );

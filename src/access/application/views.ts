@@ -37,6 +37,9 @@ export interface CourseView {
   name: string;
   sources: PortalId[];
   portalCourses: PortalCourseView[];
+  // not shown among the user's courses: they hid it, or it's a public
+  // portal's they didn't pick. Read as any other
+  hidden: boolean;
 }
 
 export interface ItemView {
@@ -88,8 +91,9 @@ export interface FileResultView {
   path: string;
   // the member's path in the file, null for the file itself
   member: string | null;
-  // the course's slug
+  // the course's slug, and its name
   course: string;
+  courseName: string;
   pages: SearchPageView[];
   // the file's name, or the member's path, where the words matched; null
   // when only the text did
@@ -107,8 +111,9 @@ export interface PostResultView {
   title: string | null;
   url: string | null;
   publishedAt: Date | null;
-  // the course's slug
+  // the course's slug, and its name
   course: string;
+  courseName: string;
   snippet: Snippet;
 }
 
@@ -123,10 +128,12 @@ export const courseView = ({
   name,
   sources,
   portalCourses,
+  hidden,
 }: GroupedCourse): CourseView => ({
   slug,
   name,
   sources,
+  hidden,
   portalCourses: portalCourses.map(
     ({ portal, externalId, name, url, year, via }) => ({
       portal,
@@ -225,6 +232,12 @@ export function searchResults(
   { places, files, posts, courses }: Findable,
 ): SearchResultView[] {
   const slugs = slugsOf(courses);
+  const names = new Map(courses.map(({ slug, name }) => [slug, name]));
+  // the course a record shows in, as the user sees it
+  const shownIn = (courseId: string) => {
+    const course = slugs.get(courseId)!;
+    return { course, courseName: names.get(course)! };
+  };
   const holding = Map.groupBy<string, VisibleContentDto>(
     files,
     ({ hash }) => hash,
@@ -256,7 +269,7 @@ export function searchResults(
             name: place.name,
             path: place.path,
             member: place.member,
-            course: slugs.get(place.courseId)!,
+            ...shownIn(place.courseId),
             pages: pages.map(({ page, processor, snippet }) => ({
               page,
               processor,
@@ -279,7 +292,7 @@ export function searchResults(
       found.push({
         type: 'post',
         ...view,
-        course: slugs.get(courseId)!,
+        ...shownIn(courseId),
         snippet,
       });
     }

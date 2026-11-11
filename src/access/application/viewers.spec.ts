@@ -7,39 +7,40 @@ const viewing = {
   portals: [moodle],
   accounts: ['ana-moodle'],
   picks: { portals: [catalog], courses: ['os-picked'], into: new Map() },
+  hidden: ['pc-old'],
 };
 const scope = (granted: string[] | null, ownAccounts = true) =>
   ({ granted, ownAccounts }) as ReadScope;
 
 describe('viewersOf', () => {
-  it('reads the shared account in the courses granted, the picks in the public portals, and the own accounts whole', () => {
+  it('reads the shared account in the courses granted, the public portals whole, and the own accounts whole', () => {
     expect(viewersOf(scope(['os']), viewing)).toEqual({
       accounts: ['ana-moodle'],
       shared: { courses: ['os'], except: [moodle, catalog] },
-      picks: { portals: [catalog], courses: ['os-picked'] },
+      open: [catalog],
     });
   });
 
-  it("reads every course through the shared account for an admin, the admin's own accounts and picks alone in the others", () => {
+  it("reads every course through the shared account for an admin, the admin's own accounts alone in the others", () => {
     expect(viewersOf(scope(null), viewing)).toEqual({
       accounts: ['ana-moodle'],
       shared: { courses: null, except: [moodle, catalog] },
-      picks: { portals: [catalog], courses: ['os-picked'] },
+      open: [catalog],
     });
   });
 
-  it('reads nothing for a ban, not even through their own accounts or picks', () => {
+  it('reads nothing for a ban, not even through their own accounts or of a public portal', () => {
     const banned = viewersOf(scope([], false), viewing);
     expect(banned).toEqual({
       accounts: [],
       shared: { courses: [], except: [moodle, catalog] },
-      picks: { portals: [catalog], courses: [] },
+      open: [],
     });
     expect(readNothing(banned)).toBe(true);
   });
 
-  it('has something to read with a pick alone', () => {
-    const picker = viewersOf(scope([]), { ...viewing, accounts: [] });
-    expect(readNothing(picker)).toBe(false);
+  it('has something to read with a public portal alone', () => {
+    const anyone = viewersOf(scope([]), { ...viewing, accounts: [] });
+    expect(readNothing(anyone)).toBe(false);
   });
 });

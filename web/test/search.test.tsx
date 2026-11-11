@@ -10,6 +10,7 @@ const course = (slug: string, name: string) => ({
   name,
   sources: [],
   portalCourses: [],
+  hidden: false,
 });
 
 const search = (
@@ -30,6 +31,7 @@ const fileHit = (over: object = {}) => ({
   path: 'lectures',
   member: null,
   course: 'os',
+  courseName: 'Operating systems',
   pages: [
     {
       page: 3,
@@ -133,6 +135,7 @@ describe('search', () => {
             url: null,
             publishedAt: '2026-11-01T10:00:00.000Z',
             course: 'os',
+            courseName: 'Operating systems',
             snippet: { text: 'the exam is on Monday', highlights: [[4, 8]] },
           },
         ],
@@ -398,12 +401,58 @@ describe("search by a course's initials", () => {
   });
 });
 
+describe('what a search looks through', () => {
+  it('looks through the courses in My courses, and through everything she reads once she says so', async () => {
+    signedIn();
+    const asked: (string | null)[] = [];
+    search(({ request }) => {
+      asked.push(new URL(request.url).searchParams.get('shown'));
+      return HttpResponse.json({ results: [fileHit()] });
+    });
+    renderApp('/search?q=stack');
+
+    const everything = await screen.findByRole('checkbox', {
+      name: 'Hidden courses and public sources too',
+    });
+    await screen.findByRole('list', { name: 'Results' });
+    expect(everything).not.toBeChecked();
+    await userEvent.click(everything);
+    await waitFor(() => expect(asked).toEqual(['true', null]));
+    expect(everything).toBeChecked();
+    // the file's page leads back to the same search
+    expect(
+      within(screen.getByRole('list', { name: 'Results' })).getByRole('link'),
+    ).toHaveAttribute('href', expect.stringContaining('all=1'));
+  });
+
+  it('offers no such choice in a search of one course', async () => {
+    signedIn();
+    search(() => HttpResponse.json({ results: [fileHit()] }));
+    renderApp('/search?q=stack&course=os');
+
+    await screen.findByRole('list', { name: 'Results' });
+    expect(screen.queryByRole('checkbox')).toBeNull();
+  });
+});
+
 describe('an empty search', () => {
-  it('says to try other words, or fewer', async () => {
+  it('says to try other words, or the hidden courses and the public sources too', async () => {
     signedIn();
     search(() => HttpResponse.json({ results: [] }));
 
     renderApp('/search?q=stack');
+    expect(
+      await screen.findByText(
+        'Try other words, or search your hidden courses and the public sources too.',
+      ),
+    ).toBeVisible();
+  });
+
+  it('says to try other words, or fewer, once everything was searched', async () => {
+    signedIn();
+    search(() => HttpResponse.json({ results: [] }));
+
+    renderApp('/search?q=stack&all=1');
     expect(await screen.findByText('Try other words, or fewer.')).toBeVisible();
   });
 

@@ -30,12 +30,12 @@ model PortalCredential {
 }
 
 // A user's pick of a public portal's course (README, Public portals): the
-// user reads it with no grant, and its connector is asked to sync it
-// (WantedCourse). userId is identity's and portalCourseId catalog's, not
-// foreign keys (PortalAccount): a user's delete takes their picks
-// (UserDeletedEvent). `into` is the portal course of the user's own account
-// it's shown with (README, Matching), catalog's id as portalCourseId is;
-// null on its own
+// user shows it among their courses. Everyone reads a public portal's
+// courses, picked or not, so a pick gives nothing to read. userId is
+// identity's and portalCourseId catalog's, not foreign keys
+// (PortalAccount): a user's delete takes their picks (UserDeletedEvent).
+// `into` is the portal course of the user's own account it's shown with
+// (README, Matching), catalog's id as portalCourseId is; null on its own
 model Pick {
   userId         String
   portalCourseId String
@@ -43,15 +43,23 @@ model Pick {
   createdAt      DateTime @default(now())
 
   @@id([userId, portalCourseId])
-  // who picks a course
-  @@index([portalCourseId])
 }
 
-// A public portal's course its connector is asked to sync (Wanted): while
-// someone picks it (until is null), then for a grace once no one does,
-// past which the hourly reconcile drops it. portalCourseId is catalog's,
-// not a foreign key (Pick)
+// From before public portals were read whole (README, Public portals): nothing
+// reads or writes it now. Kept while an app from before may still run beside a
+// migration (README, Updating); a later migration drops it (CLAUDE.md, Put off)
 model WantedCourse {
   portalCourseId String    @id
   until          DateTime?
+}
+
+// A portal course its user hides (README, Hidden courses): read as before
+// by every route, and left out of the user's list of courses. No row is a
+// course shown. userId is identity's and portalCourseId catalog's, not
+// foreign keys (Pick): a user's delete takes theirs
+model HiddenCourse {
+  userId         String
+  portalCourseId String
+
+  @@id([userId, portalCourseId])
 }

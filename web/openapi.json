@@ -93,7 +93,7 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": "courses you may read",
+            "description": "your courses, those you hide too (`hidden`). You read every public portal's course as well, by its slug and by search: one is here once you pick it",
             "content": {
               "application/json": {
                 "schema": {
@@ -243,6 +243,113 @@
         },
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/courses/{slug}": {
+      "get": {
+        "operationId": "CoursesController_course",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "pattern": "^(?:[a-z0-9]+(?:-[a-z0-9]+)*|[a-z0-9-]+~(?:~[A-Za-z0-9_-]{22}|[A-Za-z0-9._-]+))$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "one course you read, yours or not: a public portal's you didn't pick too",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CourseResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "courses"
+        ]
+      }
+    },
+    "/api/courses/{slug}/hidden": {
+      "put": {
+        "operationId": "CoursesController_hide",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "pattern": "^(?:[a-z0-9]+(?:-[a-z0-9]+)*|[a-z0-9-]+~(?:~[A-Za-z0-9_-]{22}|[A-Za-z0-9._-]+))$"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "hidden: left out of your courses, and read as before by every route, search and MCP"
+          },
+          "404": {
+            "description": ""
+          },
+          "429": {
+            "description": "30 a minute, with the picks"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "courses"
+        ]
+      },
+      "delete": {
+        "operationId": "CoursesController_show",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "pattern": "^(?:[a-z0-9]+(?:-[a-z0-9]+)*|[a-z0-9-]+~(?:~[A-Za-z0-9_-]{22}|[A-Za-z0-9._-]+))$"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "shown among your courses: one you hid, or a public portal's you didn't pick, which picks it"
+          },
+          "404": {
+            "description": ""
+          },
+          "429": {
+            "description": "30 a minute, with the picks"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "courses"
         ]
       }
     },
@@ -1182,11 +1289,21 @@
               "minimum": 1,
               "maximum": 50
             }
+          },
+          {
+            "name": "shown",
+            "required": false,
+            "in": "query",
+            "description": "true: only the courses you show among yours, none you hide nor a public portal's you didn't pick; ignored with `course`",
+            "schema": {
+              "description": "true: only the courses you show among yours, none you hide nor a public portal's you didn't pick; ignored with `course`",
+              "type": "string"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "files of your courses whose text matches, best first; with search by meaning on, up to `limit` even when none has the words, the nearest by meaning",
+            "description": "files and posts of the courses you read whose text matches, best first; with search by meaning on, up to `limit` even when none has the words, the nearest by meaning",
             "content": {
               "application/json": {
                 "schema": {
@@ -1456,13 +1573,13 @@
         },
         "responses": {
           "204": {
-            "description": "picked, with no body or {}: you read it from now on, shown with the course `into` names if it does"
+            "description": "picked, with no body or {}: it shows among your courses from now on, with the course `into` names if it does"
           },
           "404": {
             "description": "the portal is no public one, or has no such course"
           },
           "422": {
-            "description": "TOO_MANY_PICKS: you picked 100 already; NOT_YOUR_COURSE: `into` is no course you read through your own account"
+            "description": "NOT_YOUR_COURSE: `into` is no course you read through your own account"
           },
           "429": {
             "description": "30 a minute"
@@ -1612,10 +1729,10 @@
             "type": "string",
             "enum": [
               "account",
-              "pick",
+              "public",
               "link"
             ],
-            "description": "how you read it: account, through your own account of its portal; pick, a public portal's course you picked; link, through the hub's account, in a course an admin made"
+            "description": "how you read it: account, through your own account of its portal; public, a public portal's course, as everyone does; link, through the hub's account, in a course an admin made"
           }
         },
         "required": [
@@ -1654,13 +1771,18 @@
             "items": {
               "$ref": "#/components/schemas/PortalCourseResponse"
             }
+          },
+          "hidden": {
+            "type": "boolean",
+            "description": "not shown among your courses: you hid it, or it's a public portal's you didn't pick. Read as any other"
           }
         },
         "required": [
           "slug",
           "name",
           "sources",
-          "portalCourses"
+          "portalCourses",
+          "hidden"
         ]
       },
       "WaitingResponse": {
@@ -2291,6 +2413,10 @@
             "example": "os",
             "description": "the course's slug"
           },
+          "courseName": {
+            "type": "string",
+            "example": "Operativni sistemi"
+          },
           "pages": {
             "description": "its best pages first, at most 3; none when only its name matched",
             "type": "array",
@@ -2323,6 +2449,7 @@
           "path",
           "member",
           "course",
+          "courseName",
           "pages",
           "matchedName",
           "sameContentIn"
@@ -2363,6 +2490,10 @@
             "example": "os",
             "description": "the course's slug"
           },
+          "courseName": {
+            "type": "string",
+            "example": "Operativni sistemi"
+          },
           "snippet": {
             "description": "its best fragment, of its title and what the portal gave as plain text",
             "allOf": [
@@ -2380,6 +2511,7 @@
           "url",
           "publishedAt",
           "course",
+          "courseName",
           "snippet"
         ]
       },
@@ -2432,7 +2564,7 @@
               "token",
               "public"
             ],
-            "description": "how it is read: shared, by the one account the hub reads with; token, by your own; public, the courses you pick of its catalog"
+            "description": "how it is read: shared, by the one account the hub reads with; token, by your own; public, a catalog everyone reads, of which you pick the courses to show among yours"
           },
           "linked": {
             "type": "boolean",
@@ -2499,7 +2631,7 @@
           },
           "picked": {
             "type": "boolean",
-            "description": "you picked it: you read it here"
+            "description": "you picked it: it shows among your courses"
           },
           "isNew": {
             "type": "boolean",

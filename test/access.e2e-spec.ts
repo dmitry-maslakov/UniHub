@@ -208,6 +208,7 @@ describe('REST API', { timeout: 20_000 }, () => {
             via: 'link',
           },
         ],
+        hidden: false,
       },
     ]);
 

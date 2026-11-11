@@ -5,11 +5,12 @@ export default {
   list: {
     title: 'Moji predmeti',
     description:
-      'Predmeti koje ovde čitaš, isti oni koje tvoje AI aplikacije čitaju za tebe.',
+      'Predmeti koje pratiš. Tvoje AI aplikacije čitaju njih, one koje sakriješ i sve javne izvore.',
     descriptionEmpty:
       'Još nema šta da se čita. Poveži svoj nalog na portalu ili izaberi predmete sa javnog sajta, i pojaviće se ovde.',
     aria: 'Tvoji predmeti',
     noSource: 'Još nema izvora',
+    allHidden: 'Svi tvoji predmeti su sakriveni. Prikaži neki sa liste ispod.',
     loading: 'Učitavaju se tvoji predmeti',
     empty: {
       title: 'Još nema predmeta',
@@ -23,6 +24,22 @@ export default {
       title: 'Prvi put čitamo tvoj {{label}}',
       body: 'Tvoji predmeti će se pojaviti ovde za nekoliko minuta. Možeš da ostaviš ovu stranicu otvorenu.',
     },
+  },
+  hidden: {
+    title: 'Sakriveni',
+    description:
+      'Predmeti koje ne držiš na listi iznad. I dalje ih čitaš, pretraga može da gleda u njih, a tvoje AI aplikacije ih čitaju kao i pre.',
+    aria: 'Sakriveni predmeti',
+  },
+  hide: {
+    action: 'Sakrij',
+    aria: 'Sakrij {{name}} iz Mojih predmeta',
+    show: 'Prikaži',
+    showLong: 'Prikaži u Mojim predmetima',
+    showAria: 'Prikaži {{name}} u Mojim predmetima',
+    note: 'Nije u Mojim predmetima.',
+    failed: 'Sakrivanje predmeta nije uspelo. Pokušaj ponovo.',
+    showFailed: 'Prikazivanje predmeta nije uspelo. Pokušaj ponovo.',
   },
   course: {
     head: 'Predmet',
@@ -57,7 +74,7 @@ export default {
     withYear: '{{name}} ({{year}})',
     via: {
       account: 'preko tvog naloga',
-      pick: 'tvoj izbor',
+      public: 'javni izvor',
       link: 'dodao administrator',
     },
   },

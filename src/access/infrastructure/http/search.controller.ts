@@ -9,8 +9,8 @@ import {
 import { CurrentUserId } from '../../../identity/contracts.js';
 import { CourseSearch } from '../../application/course-search.js';
 import {
-  searchRequest,
-  type SearchRequest,
+  restSearchRequest,
+  type RestSearchRequest,
 } from '../../application/search-request.js';
 import { Limited } from '../throttle.js';
 import { SearchResponse } from './responses.js';
@@ -26,13 +26,13 @@ export class SearchController {
   @ApiOkResponse({
     type: SearchResponse,
     description:
-      'files of your courses whose text matches, best first; with search by meaning on, up to `limit` even when none has the words, the nearest by meaning',
+      'files and posts of the courses you read whose text matches, best first; with search by meaning on, up to `limit` even when none has the words, the nearest by meaning',
   })
   @ApiNotFoundResponse({ description: 'no course of yours by that slug' })
   @ApiServiceUnavailableResponse({ description: 'try again later' })
   search(
     @CurrentUserId() userId: string,
-    @Query({ schema: searchRequest }) request: SearchRequest,
+    @Query({ schema: restSearchRequest }) request: RestSearchRequest,
   ): Promise<SearchResponse> {
     return this.courses.search(userId, request);
   }

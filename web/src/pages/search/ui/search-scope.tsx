@@ -1,7 +1,7 @@
 import { Pill } from '@mantine/core';
 import { getRouteApi } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { useCourseNames } from '@/entities/course';
+import { useCourseName } from '@/entities/course';
 
 const route = getRouteApi('/_app/search');
 
@@ -15,7 +15,7 @@ export function SearchScope({
   from?: string;
 }) {
   const { t } = useTranslation('search');
-  const courseName = useCourseNames();
+  const courseName = useCourseName(course);
   const navigate = route.useNavigate();
   return (
     <Pill
@@ -40,7 +40,7 @@ export function SearchScope({
         })
       }
     >
-      {t('scope.course', { name: courseName(course) })}
+      {t('scope.course', { name: courseName })}
     </Pill>
   );
 }

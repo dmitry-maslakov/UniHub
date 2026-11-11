@@ -26,7 +26,7 @@ const route = getRouteApi('/_app/courses/$slug/files/$fileId');
 export function FilePage() {
   const { t } = useTranslation('file');
   const { slug, fileId } = route.useParams();
-  const { member, q, course, type, from } = route.useSearch();
+  const { member, q, course, type, all, from } = route.useSearch();
   const file = api.useQuery('get', '/api/files/{id}', {
     params: { path: { id: fileId } },
   });
@@ -70,7 +70,7 @@ export function FilePage() {
           {q && (
             <AnchorLink
               to="/search"
-              search={{ q, course, type, from }}
+              search={{ q, course, type, all, from }}
               size="sm"
               display="block"
               mb="lg"

@@ -22,18 +22,9 @@ export class NotPickableError extends NotFoundError {
   }
 }
 
-// A user picks at most so many courses (MAX_PICKS): one more is refused
-export class TooManyPicksError extends InvalidError {
-  readonly reason = 'TOO_MANY_PICKS';
-
-  constructor(readonly max: number) {
-    super(`at most ${max} courses picked: unpick one first`);
-  }
-}
-
 // PORTAL_LINKS names a mode the portal's connector doesn't take (or there's
 // no connector of the portal here): the app doesn't start. Public takes a
-// connector over gRPC, which asks which courses are wanted
+// connector over gRPC, or a built-in one that sends its whole catalog
 export class UnsupportedLinkError extends InvalidError {
   readonly reason = 'UNSUPPORTED_LINK';
 

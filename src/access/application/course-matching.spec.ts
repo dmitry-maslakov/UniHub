@@ -23,7 +23,7 @@ const [h1, h2, h3] = ['h1', 'h2', 'h3'].map(sha256);
 const viewers: Viewers = {
   accounts: ['ana-moodle'],
   shared: { courses: ['net-id'], except: [moodle, catalog] },
-  picks: { portals: [catalog], courses: ['pc-os', 'pc-db'] },
+  open: [catalog],
 };
 const ofItsOwn = (id: string, portal: PortalId): CourseDto => ({
   id,
@@ -77,7 +77,12 @@ function matching(listed = courses, seen = contents) {
       () => ({
         portals: [moodle],
         accounts: viewers.accounts,
-        picks: { ...viewers.picks, into: new Map([['pc-db', 'pc-m1']]) },
+        picks: {
+          portals: viewers.open,
+          courses: ['pc-os', 'pc-db'],
+          into: new Map([['pc-db', 'pc-m1']]),
+        },
+        hidden: [],
       }),
     ],
     [ListCoursesQuery, () => listed],

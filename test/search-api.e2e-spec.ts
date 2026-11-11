@@ -281,6 +281,7 @@ describe('search API', { timeout: 60_000 }, () => {
       url: null,
       publishedAt: null,
       course: 'ours',
+      courseName: 'ours',
       snippet: expect.objectContaining({
         text: 'Obaveštenje\n\nKolokvijum iz niti je u petak.',
       }),

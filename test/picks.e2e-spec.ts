@@ -2,8 +2,6 @@ import type { INestApplication } from '@nestjs/common';
 import * as grpc from '@grpc/grpc-js';
 import * as loader from '@grpc/proto-loader';
 import type { Client as OpenSearch } from '@opensearch-project/opensearch';
-import { PortalPicks } from '../src/accounts/application/portal-picks.js';
-import { WantedCourseRepository } from '../src/accounts/domain/wanted-course.js';
 import type { Mail } from '../src/identity/domain/mailer.js';
 import { PrismaService } from '../src/platform/database/prisma.service.js';
 import { OPENSEARCH } from '../src/platform/search/opensearch.module.js';
@@ -14,20 +12,22 @@ import { testEnv, testVectors } from './env.js';
 import { portalIngest } from './ingest.js';
 
 // A public portal as the whole app reads it: its connector's courses are a
-// catalog each user picks from, a pick reads its course by every route, by
-// search and by MCP with no grant, and asks the connector for it over gRPC
-// (Wanted) through its grace. Which courses a page of the catalog shows,
-// the limit of picks, when a course stops being wanted and whose views a
-// user reads are checked on fakes (catalog-page.spec.ts, picks.spec.ts,
-// wanted-course.spec.ts, portal-picks.spec.ts, viewers.spec.ts); here,
-// what the queries find, the routes, the limits, the locks, and a deleted
-// user's picks going by identity's event.
+// catalog everyone reads, by every route, by search and by MCP, with no
+// grant and no pick, and its connector is asked for all of it over gRPC
+// (Wanted). A pick shows a course among the user's own, and any course of
+// theirs is hidden and shown again, read all the while. Which courses a
+// page of the catalog shows, which are the user's and which hidden, and
+// whose views a user reads are checked on fakes (catalog-page.spec.ts,
+// portal-picks.spec.ts, hidden-courses.spec.ts, grouping.spec.ts,
+// course-showing.spec.ts, viewers.spec.ts); here, what the queries find,
+// the routes, the limit, and a deleted user's picks and hidden courses
+// going by identity's event.
 
 const CATALOG = 'catalog';
 const TOKEN = 'catalog-test-token-0001';
 const SHARED = 'grpc-test';
 const index = indexName(testEnv.OPENSEARCH_INDEX_PREFIX, testVectors);
-const DAY = 24 * 60 * 60 * 1000;
+const byText = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
 // the connector, over gRPC, as one outside the hub asks
 function connector() {
@@ -76,7 +76,11 @@ describe('public portals and picks', { timeout: 60_000 }, () => {
     http().put(`/api/me/picks/${portal}/${course}`).set('cookie', as[who]);
   const unpick = (who: string, course: string, portal = CATALOG) =>
     http().delete(`/api/me/picks/${portal}/${course}`).set('cookie', as[who]);
-  // the slugs of the catalog's courses a user reads
+  const hide = (who: string, slug: string) =>
+    http().put(`/api/courses/${slug}/hidden`).set('cookie', as[who]);
+  const show = (who: string, slug: string) =>
+    http().delete(`/api/courses/${slug}/hidden`).set('cookie', as[who]);
+  // the slugs of the catalog's courses among a user's own
   const slugs = async (who: string) =>
     ((await body(who, '/api/courses')) as { slug: string }[])
       .map(({ slug }) => slug)
@@ -133,10 +137,20 @@ describe('public portals and picks', { timeout: 60_000 }, () => {
     }
     await site.file({ externalId: 'os-slides', course: 'os', name: 'l1.pdf' });
     // a course of a shared portal
-    await portalIngest(app, SHARED).course({
-      externalId: 'shared-c1',
-      name: 'Shared',
+    const sharedSite = portalIngest(app, SHARED);
+    await sharedSite.course({ externalId: 'shared-c1', name: 'Shared' });
+    await sharedSite.item({
+      externalId: 'shared-secret',
+      course: 'shared-c1',
+      kind: 'announcement',
+      title: 'Kolokvijum tajni',
+      raw: { message: 'Kolokvijum tajni' },
     });
+    posts['shared-secret'] = (
+      await prisma.item.findFirstOrThrow({
+        where: { portal: SHARED, externalId: 'shared-secret' },
+      })
+    ).id;
 
     for (const who of ['ana', 'bo', 'ed', 'cy', 'di'])
       as[who] = await signUp(`${who}@picks.test`);
@@ -200,16 +214,12 @@ describe('public portals and picks', { timeout: 60_000 }, () => {
     expect((await body('ana', '/api/me/portals'))[0].picked).toBe(0);
   });
 
-  it('reads a picked course by every route and search, with no grant, and nothing unpicked', async () => {
-    await pick('ana', 'os').expect(204);
-    expect(await slugs('ana')).toEqual([`${CATALOG}~os`]);
-    const [os] = (await body('ana', '/api/courses')) as {
-      slug: string;
-      name: string;
-      portalCourses: object[];
-    }[];
-    expect(os).toEqual({
-      slug: `${CATALOG}~os`,
+  it("reads the catalog's courses by every route and search, with no grant and no pick, and lists the ones picked", async () => {
+    const os = `${CATALOG}~os`;
+    // nothing picked: none among her courses, all hers to read
+    expect(await slugs('ana')).toEqual([]);
+    expect(await body('ana', `/api/courses/${os}`)).toEqual({
+      slug: os,
       name: 'Operativni sistemi',
       sources: [CATALOG],
       portalCourses: [
@@ -219,23 +229,24 @@ describe('public portals and picks', { timeout: 60_000 }, () => {
           name: 'Operativni sistemi',
           url: 'https://courses.example.edu/os',
           year: null,
-          via: 'pick',
+          via: 'public',
         },
       ],
+      hidden: true,
     });
-    const items = await body('ana', `/api/courses/${CATALOG}~os/items`);
+    const items = await body('ana', `/api/courses/${os}/items`);
     expect(items.map((i: { id: string }) => i.id)).toEqual([posts['os-exam']]);
     expect(items[0].raw).toEqual({ message: 'Kolokvijum iz semafora' });
     expect(
-      (await body('ana', `/api/courses/${CATALOG}~os/files`)).map(
+      (await body('ana', `/api/courses/${os}/files`)).map(
         (f: { name: string }) => f.name,
       ),
     ).toEqual(['l1.pdf']);
-    await get('ana', `/api/items/${posts['os-exam']}`).expect(200);
-    await get('ana', `/api/items/${posts['net-exam']}`).expect(404);
-    await get('ana', `/api/courses/${CATALOG}~net/items`).expect(404);
+    await get('ana', `/api/items/${posts['net-exam']}`).expect(200);
+    await get('ana', `/api/courses/${CATALOG}~gone`).expect(404);
 
-    // search finds the picked course's post alone
+    // search finds every course's post, and with `shown` those of the
+    // courses among hers alone
     for (const id of Object.values(posts))
       await vi.waitFor(
         async () =>
@@ -250,45 +261,121 @@ describe('public portals and picks', { timeout: 60_000 }, () => {
           ).toBe(true),
         { timeout: 20_000, interval: 200 },
       );
-    const found = async (who: string) =>
+    const found = async (who: string, more = '') =>
       (
-        (await body(who, '/api/search?q=kolokvijum')).results as {
+        (await body(who, `/api/search?q=kolokvijum${more}`)).results as {
           itemId: string;
+          courseName: string;
         }[]
-      ).map((r) => r.itemId);
-    expect(await found('ana')).toEqual([posts['os-exam']]);
-    expect(await found('bo')).toEqual([]);
+      )
+        .map((r) => `${r.courseName}: ${r.itemId}`)
+        .sort(byText);
+    const both = [
+      `Operativni sistemi: ${posts['os-exam']}`,
+      `Računarske mreže: ${posts['net-exam']}`,
+    ];
+    expect(await found('ana')).toEqual(both);
+    expect(await found('ana', '&shown=true')).toEqual([]);
 
-    // and MCP, as an agent of hers reads
+    await pick('ana', 'os').expect(204);
+    expect(await slugs('ana')).toEqual([os]);
+    expect(
+      ((await body('ana', '/api/courses')) as { slug: string }[]).find(
+        (c) => c.slug === os,
+      ),
+    ).toMatchObject({ hidden: false, portalCourses: [{ via: 'public' }] });
+    expect(await found('ana')).toEqual(both);
+    expect(await found('ana', '&shown=true')).toEqual([both[0]]);
+
+    // and MCP, as an agent of hers reads: her courses listed, all searched
     const key = (
       await post('/api-key/create', { name: 'agent' }, as.ana).expect(200)
     ).body.key as string;
-    const listed = await http()
-      .post('/api/mcp')
-      .set('accept', 'application/json, text/event-stream')
-      .set('x-api-key', key)
-      .send({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'tools/call',
-        params: { name: 'list_courses', arguments: {} },
-      })
-      .expect(200);
-    expect(listed.body.result.content[0].text).toContain(`${CATALOG}~os`);
+    const call = async (name: string, args: object) =>
+      (
+        await http()
+          .post('/api/mcp')
+          .set('accept', 'application/json, text/event-stream')
+          .set('x-api-key', key)
+          .send({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'tools/call',
+            params: { name, arguments: args },
+          })
+          .expect(200)
+      ).body.result.content[0].text as string;
+    const listed = await call('list_courses', {});
+    expect(listed).toContain(os);
+    expect(listed).not.toContain(`${CATALOG}~net`);
+    const searched = await call('search', { q: 'kolokvijum' });
+    expect(searched).toContain(posts['net-exam']);
+    expect(await call('list_items', { course: `${CATALOG}~net` })).toContain(
+      posts['net-exam'],
+    );
 
-    // no pick, nothing: an admin's too
-    expect(await slugs('bo')).toEqual([]);
+    // an admin as anyone
     expect(await slugs('ed')).toEqual([]);
-    await get('ed', `/api/courses/${CATALOG}~os/items`).expect(404);
-    // banned, nothing of her picks either
+    await get('ed', `/api/courses/${os}/items`).expect(200);
+    // banned, nothing
     await ban('ana@picks.test');
     expect(await slugs('ana')).toEqual([]);
     await get('ana', `/api/items/${posts['os-exam']}`).expect(404);
+    await get('ana', `/api/courses/${os}`).expect(404);
     await ban('ana@picks.test', false);
     await unpick('ana', 'os').expect(204);
   });
 
-  it('reads a picked course inside the course an admin linked it to, and a grant gives nothing of it', async () => {
+  it('hides a course and shows it again, read all the while, and shows one not picked by picking it', async () => {
+    const os = `${CATALOG}~os`;
+    const hidden = async (who: string) =>
+      Object.fromEntries(
+        ((await body(who, '/api/courses')) as CourseState[])
+          .filter(({ slug }) => slug.startsWith(`${CATALOG}~`))
+          .map(({ slug, hidden }) => [slug, hidden]),
+      );
+    type CourseState = { slug: string; hidden: boolean };
+    await pick('bo', 'os').expect(204);
+    await hide('bo', os).expect(204);
+    await hide('bo', os).expect(204);
+    // among his courses still, and picked
+    expect(await hidden('bo')).toEqual({ [os]: true });
+    expect((await body('bo', '/api/me/portals'))[0].picked).toBe(1);
+    await get('bo', `/api/courses/${os}/items`).expect(200);
+    await get('bo', `/api/items/${posts['os-exam']}`).expect(200);
+    expect(
+      (await body('bo', '/api/search?q=kolokvijum&shown=true')).results,
+    ).toEqual([]);
+    expect(
+      (await body('bo', `/api/search?q=kolokvijum&shown=true&course=${os}`))
+        .results,
+    ).toHaveLength(1);
+    // nobody else's
+    await pick('ana', 'os').expect(204);
+    expect(await hidden('ana')).toEqual({ [os]: false });
+
+    await show('bo', os).expect(204);
+    expect(await hidden('bo')).toEqual({ [os]: false });
+    // one not picked is hidden as it is, and shown by its pick
+    const net = `${CATALOG}~net`;
+    await hide('bo', net).expect(204);
+    expect(await hidden('bo')).toEqual({ [os]: false });
+    await show('bo', net).expect(204);
+    expect(await hidden('bo')).toEqual({ [os]: false, [net]: false });
+    expect((await body('bo', '/api/me/portals'))[0].picked).toBe(2);
+    // picked again in the catalog, a hidden course is shown
+    await hide('bo', net).expect(204);
+    await pick('bo', 'net').expect(204);
+    expect(await hidden('bo')).toMatchObject({ [net]: false });
+
+    await hide('bo', `${CATALOG}~gone`).expect(404);
+    await show('bo', `${CATALOG}~gone`).expect(404);
+    await hide('bo', 'Not A Slug').expect(400);
+    for (const course of ['os', 'net']) await unpick('bo', course).expect(204);
+    await unpick('ana', 'os').expect(204);
+  });
+
+  it('reads a course of the catalog inside the course an admin linked it to, among the courses of who picked it or was granted it', async () => {
     const created = await http()
       .post('/api/courses')
       .set('cookie', as.ed)
@@ -305,102 +392,93 @@ describe('public portals and picks', { timeout: 60_000 }, () => {
       )
       .set('cookie', as.ed)
       .expect(204);
+    const netPosts = async (who: string) =>
+      (await body(who, '/api/courses/networks/items')).map(
+        (i: { id: string }) => i.id,
+      );
 
+    // everyone reads it there, its own slug no course's now
+    expect(await netPosts('di')).toEqual([posts['net-exam']]);
+    await get('di', `/api/courses/${CATALOG}~net`).expect(404);
+    expect(await slugs('di')).toEqual([]);
     await pick('bo', 'net').expect(204);
     expect(await slugs('bo')).toEqual(['networks']);
-    expect(
-      (await body('bo', '/api/courses/networks/items')).map(
-        (i: { id: string }) => i.id,
-      ),
-    ).toEqual([posts['net-exam']]);
     // granted, not picked
-    expect(await body('cy', '/api/courses/networks/items')).toEqual([]);
+    expect(await slugs('cy')).toEqual(['networks']);
+    expect(await netPosts('cy')).toEqual([posts['net-exam']]);
     await unpick('bo', 'net').expect(204);
   });
 
-  it('answers the connector what its users want, through the grace, and nothing of another portal', async () => {
-    await pick('ana', 'os').expect(204);
-    await pick('bo', 'net').expect(204);
+  it("keeps a shared portal's post in a course from a user with no grant to it", async () => {
+    const link = (method: 'put' | 'delete') =>
+      http()
+        [method](`/api/portal-courses/${SHARED}/shared-c1/course`)
+        .set('cookie', as.ed)
+        .send(method === 'put' ? { course: 'networks' } : undefined)
+        .expect(204);
+    const found = async (who: string) =>
+      (
+        (await body(who, '/api/search?q=tajni')).results as {
+          itemId: string;
+        }[]
+      ).map((r) => r.itemId);
+    const netPosts = async (who: string) =>
+      (await body(who, '/api/courses/networks/items')).map(
+        (i: { id: string }) => i.id,
+      );
+
+    // beside the catalog's course, in a course of an admin's
+    await link('put');
+    // no grant: the public post alone, whatever the course holds
+    expect(await netPosts('di')).toEqual([posts['net-exam']]);
+    await get('di', `/api/items/${posts['shared-secret']}`).expect(404);
+    const course = await body('di', '/api/courses/networks');
+    expect(
+      course.portalCourses.map((p: { portal: string }) => p.portal),
+    ).toEqual([CATALOG]);
+    // granted, the user reads both
+    expect((await netPosts('cy')).sort()).toEqual(
+      [posts['net-exam'], posts['shared-secret']].sort(),
+    );
+    await vi.waitFor(
+      async () => expect(await found('cy')).toContain(posts['shared-secret']),
+      { timeout: 20_000, interval: 200 },
+    );
+    expect(await found('di')).not.toContain(posts['shared-secret']);
+    await link('delete');
+  });
+
+  it('counts hiding and showing a course with the picks', async () => {
+    const res = await hide('di', `${CATALOG}~os`).expect(204);
+    expect(res.headers['x-ratelimit-limit-picks']).toBe('30');
+    expect(res.headers['x-ratelimit-limit-api']).toBeUndefined();
+    await show('di', `${CATALOG}~os`).expect(204);
+    await unpick('di', 'os').expect(204);
+  });
+
+  it('asks the connector for its whole catalog, picked or not, and nothing of another portal', async () => {
     expect(await wanted()).toEqual(['net', 'os']);
     expect(await wanted('good-test-token-0001')).toEqual([]);
+  });
 
-    // bo's last pick of net gone: wanted through its grace, then no more
-    await unpick('bo', 'net').expect(204);
-    expect(await wanted()).toEqual(['net', 'os']);
-    await app.get(PortalPicks).reconcile(new Date(Date.now() + 15 * DAY));
-    expect(await wanted()).toEqual(['os']);
-
-    // ana deleted by an admin, her picks with her, and os's grace starts
+  it("removes a deleted user's picks and hidden courses with them", async () => {
+    await pick('ana', 'os').expect(204);
+    await hide('ana', `${CATALOG}~os`).expect(204);
+    await pick('bo', 'os').expect(204);
     await post(
       '/admin/remove-user',
       { userId: await userId('ana@picks.test') },
       as.ed,
     ).expect(200);
     await vi.waitFor(async () => {
-      expect(await prisma.pick.count()).toBe(0);
-      const [os] = await prisma.wantedCourse.findMany();
-      expect(os.until!.getTime()).toBeGreaterThan(Date.now() + 13 * DAY);
+      expect(await prisma.pick.count()).toBe(1);
+      expect(await prisma.hiddenCourse.count()).toBe(0);
     });
-    expect(await wanted()).toEqual(['os']);
-  });
-
-  it('lets a pick made while the reconcile looks win over it', async () => {
-    const os = await prisma.portalCourse.findFirstOrThrow({
-      where: { portal: CATALOG, externalId: 'os' },
-    });
-    await prisma.wantedCourse.update({
-      where: { portalCourseId: os.id },
-      data: { until: new Date(Date.now() - DAY) },
-    });
-    const repository = app.get(WantedCourseRepository);
-    const all = repository.all.bind(repository);
-    vi.spyOn(repository, 'all').mockImplementationOnce(async () => {
-      const found = await all();
-      await pick('bo', 'os').expect(204);
-      return found;
-    });
-
-    await app.get(PortalPicks).reconcile();
-    expect(
-      await prisma.wantedCourse.findUnique({
-        where: { portalCourseId: os.id },
-      }),
-    ).toEqual({ portalCourseId: os.id, until: null });
     await unpick('bo', 'os').expect(204);
   });
 
-  it('refuses a pick past 100 with its code, of two at once too, and more than 30 a minute', async () => {
-    // a hundred more courses in the catalog, picked by cy, and all but one
-    // by di
-    const site = portalIngest(app, CATALOG);
-    const many = Array.from({ length: 100 }, (_, i) => `many-${i}`);
-    for (const externalId of many)
-      await site.course({ externalId, name: `Kurs ${externalId}` });
-    const ids = await prisma.portalCourse.findMany({
-      where: { portal: CATALOG, externalId: { in: many } },
-      select: { id: true },
-    });
-    const [cy, di] = await Promise.all(
-      ['cy', 'di'].map((who) => userId(`${who}@picks.test`)),
-    );
-    await prisma.pick.createMany({
-      data: [
-        ...ids.map(({ id }) => ({ userId: cy, portalCourseId: id })),
-        ...ids.slice(1).map(({ id }) => ({ userId: di, portalCourseId: id })),
-      ],
-    });
-    const refused = await pick('cy', 'os').expect(422);
-    expect(refused.body).toMatchObject({ code: 'TOO_MANY_PICKS' });
-    // di's two at once: the user's lock lets one find room, not both
-    const both = await Promise.all([pick('di', 'os'), pick('di', 'net')]);
-    expect(both.map(({ status }) => status).sort((a, b) => a - b)).toEqual([
-      204, 422,
-    ]);
-    expect(await prisma.pick.count({ where: { userId: di } })).toBe(100);
-    await prisma.pick.deleteMany({ where: { userId: cy } });
-
-    // the refused pick counted too: 28 more, and the 30th
-    for (let i = 0; i < 28; i++) await unpick('cy', 'os').expect(204);
+  it('takes no more than 30 picks and unpicks a minute', async () => {
+    for (let i = 0; i < 29; i++) await unpick('cy', 'os').expect(204);
     const last = await unpick('cy', 'os').expect(204);
     expect(last.headers['x-ratelimit-remaining-picks']).toBe('0');
     await pick('cy', 'os').expect(429);

@@ -1,7 +1,7 @@
 export default {
   title: 'Sources',
   description:
-    'Where UniHub reads your courses from. Link your own account, and UniHub reads the courses you follow there, as you see them; on a public site, pick the courses you follow.',
+    'Where UniHub reads your courses from. Link your own account, and UniHub reads the courses you follow there, as you see them; a public site is read whole, and you pick the courses of it to show in My courses.',
   list: {
     aria: 'Sources',
   },
@@ -80,7 +80,7 @@ export default {
     picked_other: '{{count}} picked',
     nonePicked: 'None picked',
     description:
-      'A public site anyone can read. Pick the courses you follow: they show up under My courses, and their posts and files once UniHub next reads the site. Show one with a course of your own to read the two in one place.',
+      'A public site anyone can read. UniHub reads all of it, and so do your AI apps. Pick the courses you follow, and they show up under My courses. Show one with a course of your own to read the two in one place.',
     search: {
       label: 'Find a course',
       placeholder: 'Part of its name',
@@ -103,7 +103,6 @@ export default {
     failed: "Couldn't pick the course. Try again.",
     unpickFailed: "Couldn't unpick the course. Try again.",
     gone: 'That course is no longer in the catalog.',
-    tooMany: 'You can pick up to {{max}} courses. Unpick one first.',
     tooFast: 'Too many changes in a short time. Wait a minute, then try again.',
   },
   showWith: {

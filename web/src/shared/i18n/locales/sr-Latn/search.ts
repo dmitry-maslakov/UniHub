@@ -4,7 +4,7 @@ import type { Messages } from '../../messages';
 export default {
   title: 'Pretraga',
   description:
-    'Pronađi reč u objavama i fajlovima svojih predmeta, i u tekstu unutar slajdova, dokumenata i arhiva.',
+    'Pronađi reč u objavama i fajlovima predmeta iz Mojih predmeta, i u tekstu unutar slajdova, dokumenata i arhiva.',
   field: {
     aria: 'Pretraži svoje predmete',
     placeholder: 'Reč, izraz ili ime funkcije',
@@ -19,6 +19,8 @@ export default {
     title: 'Ništa ne odgovara upitu „{{q}}”',
     body: 'Probaj druge reči ili manje njih.',
     bodyFiltered: 'Probaj druge reči ili pretraži sve.',
+    bodyShown:
+      'Probaj druge reči, ili pretraži i sakrivene predmete i javne izvore.',
   },
   error: {
     rateLimited:
@@ -37,6 +39,7 @@ export default {
     files: 'Fajlovi',
     posts: 'Objave',
   },
+  everything: 'I sakriveni predmeti i javni izvori',
   scope: {
     course: 'U predmetu {{name}}',
     remove: 'Pretraži sve predmete',

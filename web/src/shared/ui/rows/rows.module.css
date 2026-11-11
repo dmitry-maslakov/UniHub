@@ -22,6 +22,16 @@
     padding-block: 0;
   }
 
+  /* a link row with an action: the link leaves it room beside it */
+  &:has(> .rowLink + *) {
+    flex-wrap: nowrap;
+
+    & > .rowLink {
+      flex: 1 1 0;
+      min-width: 0;
+    }
+  }
+
   /* where a link to one row lands (a search hit) */
   &:target {
     background: var(--mantine-primary-color-light);

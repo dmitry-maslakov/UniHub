@@ -26,6 +26,7 @@ import { PageRenderer } from './renderer.js';
 import { VIEW_LIMITS, viewKind } from './viewable.js';
 import {
   fileOf,
+  listedCourses,
   readableCourse,
   readableCourses,
   readableFile,
@@ -51,9 +52,17 @@ export class CourseReader {
     private readonly renderer: PageRenderer,
   ) {}
 
+  // the user's courses, those they hide too
   async courses(userId: string) {
-    const { courses } = await readableCourses(this.queries, userId);
+    const { courses } = await listedCourses(this.queries, userId);
     return courses.map(courseView);
+  }
+
+  // one course the user reads, theirs or not: a public portal's they
+  // didn't pick too
+  async course(userId: string, slug: CourseSlug) {
+    const { course } = await readableCourse(this.queries, userId, slug);
+    return courseView(course);
   }
 
   // why the user reads no course, for an agent to tell them, by how their
@@ -237,9 +246,9 @@ export class CourseReader {
     };
   }
 
-  // Each course the user reads as they see it (a pick shown with a course
-  // of theirs is in it), by catalog's id of the course and of each portal
-  // course in it, which a file's `course` may be.
+  // Each course the user reads as they see it, theirs or not (a pick shown
+  // with a course of theirs is in it), by catalog's id of the course and
+  // of each portal course in it, which a file's `course` may be.
   async courseNames(userId: string) {
     const { courses } = await readableCourses(this.queries, userId);
     return new Map(

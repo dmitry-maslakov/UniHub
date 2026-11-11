@@ -1,9 +1,6 @@
 import type { TFunction } from 'i18next';
 import { ApiError, errorCode } from '@/shared/api';
 
-// the most courses a user may pick (the hub's limit)
-export const MAX_PICKS = 100;
-
 // What a refused pick says, and what to do next
 export function pickErrorText(
   t: TFunction<'sources'>,
@@ -12,8 +9,6 @@ export function pickErrorText(
 ) {
   const status = error instanceof ApiError ? error.status : undefined;
   if (status === 404) return t('pick.gone');
-  if (errorCode(error) === 'TOO_MANY_PICKS')
-    return t('pick.tooMany', { max: MAX_PICKS });
   if (status === 429) return t('pick.tooFast');
   return pick ? t('pick.failed') : t('pick.unpickFailed');
 }

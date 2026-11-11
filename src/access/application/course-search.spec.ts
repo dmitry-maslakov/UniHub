@@ -42,7 +42,7 @@ const courses = ['os', 'net', 'exam', 'empty'].map((slug) => ({
 const viewersReading = (reads: string[]): Viewers => ({
   accounts: [],
   shared: { courses: reads, except: [] },
-  picks: { portals: [], courses: [] },
+  open: [],
 });
 // catalog's cut, as the fakes make it: the courses the viewers read, and
 // of those the portal courses asked for
@@ -168,6 +168,7 @@ function searching(
   withArchives: VisibleContentDto[] = [],
   members = contained,
   found?: TextHit[],
+  hidden: string[] = [],
 ) {
   const visible = [...files, ...withArchives];
   const queries = new FakeBus([
@@ -178,6 +179,7 @@ function searching(
         portals: [],
         accounts: [],
         picks: { portals: [], courses: [], into: new Map() },
+        hidden,
       }),
     ],
     [
@@ -246,6 +248,38 @@ describe('CourseSearch', () => {
     ]);
   });
 
+  it('looks through the courses the user hides too, and with `shown` through the others alone', async () => {
+    const { queries, search } = searching(undefined, [], contained, undefined, [
+      'net-pc',
+    ]);
+    const viewers = viewersReading(['os-id', 'net-id']);
+
+    await search.search('ana', request({ q: 'semafor' }));
+    expect(sentOf(queries, ListVisibleContentQuery)).toEqual([
+      new ListVisibleContentQuery(viewers, null),
+    ]);
+
+    const { results } = await search.search('ana', {
+      ...request({ q: 'semafor' }),
+      shown: true,
+    });
+    expect(sentOf(queries, ListVisibleContentQuery)[1]).toEqual(
+      new ListVisibleContentQuery(viewers, ['os-pc']),
+    );
+    expect(sentOf(queries, ListVisibleItemsQuery)[1]).toEqual(
+      new ListVisibleItemsQuery(viewers, ['os-pc']),
+    );
+    expect(results.map((r) => r.course)).toEqual(['os', 'os']);
+    // the course named is searched, hidden or not
+    const inNet = await search.search('ana', {
+      ...request({ q: 'semafor', course: 'net' }),
+      shown: true,
+    });
+    expect(inNet.results).toEqual([
+      expect.objectContaining({ fileId: 'f3', course: 'net' }),
+    ]);
+  });
+
   it('gives the index only the kind asked for', async () => {
     const { queries, search } = searching();
 
@@ -281,6 +315,7 @@ describe('CourseSearch', () => {
           path: 'b',
           member: null,
           course: 'os',
+          courseName: 'os',
           pages: [
             {
               page: 4,
@@ -445,6 +480,7 @@ describe('CourseSearch', () => {
           url: 'https://portal.example/p1',
           publishedAt: new Date('2026-10-01T09:00:00Z'),
           course: 'os',
+          courseName: 'os',
           snippet: snippet('p1'),
         },
       ],

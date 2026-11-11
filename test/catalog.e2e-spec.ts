@@ -395,7 +395,7 @@ describe('catalog', { timeout: 20_000 }, () => {
     const reading = (courses: string[]) => ({
       accounts: [],
       shared: { courses, except: [] },
-      picks: { portals: [], courses: [] },
+      open: [],
     });
     const listed = await app
       .get(QueryBus)

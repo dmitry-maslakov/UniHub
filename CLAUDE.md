@@ -20,9 +20,12 @@ Declined:
 - connector token mapping to (portal, account): env tokens get replaced by API keys (#33), not extended
 - `actorId` in course access commands: the admin check is `@Roles([ADMIN_ROLE])` on the routes that send them (access's `CourseAccessController`)
 - a `source` column on course access (manual vs. from a portal): when per-user accounts come
-- portal courses not linked to a course, of a portal read as shared: nobody reads them through the API, admins included. A portal read with users' own accounts shows its own to whoever's account sees them, and a public one each course to whoever picked it (its content is public, the pick the user's own), as courses of their own (README, Portal accounts, Public portals)
+- portal courses not linked to a course, of a portal read as shared: nobody reads them through the API, admins included. A portal read with users' own accounts shows its own to whoever's account sees them, and a public one each course to everyone (its content is public), as courses of their own (README, Portal accounts, Public portals)
 - tests of Better Auth's own device flow cases (deny, expiry, reuse)
 - file-level access: files inherit their course's
+- a course turned off, read by no route till it's turned on: a user hides a course (README, Hidden courses), which is a convenience and cuts no read. Keeping a course from one agent is that agent's scope, not the user's reads
+- a hidden course left out of MCP or of a search that doesn't say `shown`: hiding is never access, so an agent reads what the user reads; the web app asks for `shown`
+- unpicking a public portal's course to hide it: a hidden pick stays picked, so what it's shown with (`into`) comes back with it
 - an app-wide limit per address: a campus behind NAT shares one address, so one script would lock everyone out. Better Auth limits `/api/auth` itself, MCP is limited per user
 - env checked once in `ConfigModule.forRoot({ validationSchema })`: each module's `registerAs` factory checks and shapes its own settings (lists, maps, booleans), which a root check can't hand back to the namespaces
 - `NODE_ENV` in `appConfig`: each namespace is checked on its own, so the rules that hold only in production read it there
@@ -36,6 +39,7 @@ Declined:
 Put off:
 
 - failed API key attempts limited per address, counting only failures: each costs a database lookup (caddy has no rate limits without a plugin). Not a limit on all calls per address. The named limits are access's, a route counted against one by `@Limited(name)` while the others skip it (`skipIf`); this one would join them with a tracker of its own
+- dropping `WantedCourse` in a migration of its own, once no app from before #200 can still run beside the new one (README, Updating)
 - Better Auth's rate limits in Redis (`secondaryStorage`): in memory is right for the one instance there is; with a second one, they'd need sharing
 - Better Auth reads the client's address from `X-Forwarded-For` regardless of `TRUST_PROXY`: right behind caddy, which overwrites it; in production the app runs only behind it. Behind a proxy with a header of its own, `CLIENT_IP_HEADERS` names it (README, Deploy)
 - monitoring: traces, errors and logs go to NestJS Observe (see AGENTS.md), on OpenTelemetry's global providers; the metrics stay on the app's own `MeterProvider`, served only to a scraper on `METRICS_PORT` (README, Metrics), so neither gets the other's. Alerts on them (downtime, dead letters, a connector's last success) are the scraper's to set; disk space isn't among them
@@ -45,11 +49,11 @@ Put off:
 - MCP tools answer JSON as text, not `structuredContent` with an `outputSchema`
 - device sign-in: shorter device sessions (the approval screen is the web app's `/device`)
 - helmet's `Cross-Origin-Resource-Policy: same-origin` stops another origin embedding file content (`<img>`, `<iframe>`); `same-site` if the web portal lives on a sibling subdomain
-- grants and picks of a deleted course: when catalog can delete courses (an event for identity and accounts). Picks and wanted courses name catalog's portal courses with no foreign key, as accounts name identity's users: modules keep their own tables
+- grants and picks of a deleted course: when catalog can delete courses (an event for identity and accounts). Picks and hidden courses name catalog's portal courses with no foreign key, as accounts name identity's users: modules keep their own tables
 - a read alias for the search index, moved to a new one (another generation or model) once the reconcile has filled it: until then searches answer from the new one, partly filled (README, Search index)
 - a floor for the meaning part of a search (knn's `min_score`, a radial search): it needs a value measured per model; until then, with an embedder, a search answers up to `limit` files even when none has the words (README, Search)
 - OpenSearch's security plugin, with TLS certificates and users of its own (`OPENSEARCH_USERNAME`, `OPENSEARCH_PASSWORD`): needed once anything past the one compose network reaches it, a second host; until then it's off and its port isn't published (README, Deploying search)
-- searches through more than 65,536 contents (`index.max_terms_count`, an admin's the first to get there): contents numbered, so `terms` can take them as a bitmap, or the ones not to find left out (`must_not`) instead; neither tried. The members of archives with a text count among them, and bring it closer; posts, files and archives are ids of their own, a filter each with its own count
+- searches through more than 65,536 contents (`index.max_terms_count`, an admin's the first to get there, and every user's nearer since a public portal is read whole): contents numbered, so `terms` can take them as a bitmap, or the ones not to find left out (`must_not`) instead; neither tried. The members of archives with a text count among them, and bring it closer; posts, files and archives are ids of their own, a filter each with its own count
 - OpenSearch 3.10's fusion mode for the hybrid query
 - vectors as `half_float` should memory run short: a new generation
 - a file renamed is found by its new name from the next hourly reconcile on: catalog records no event for a rename or a move (`FILE_CONTENT_CHANGED` is content's), and one for plugins would be another sdk topic
@@ -71,8 +75,9 @@ Put off:
 - `CONNECTOR_CONCURRENCY` is per worker process and for every portal at once, not per portal
 - OAuth as a link mode, for a school that issues a developer key: built on branch `feat/135-oauth-mode` and kept there (openid-client with PKCE, the consent's state single-use in Redis, renewal, revoke on unlink); `shared`, `token` and `public` until then
 - the `connector` mode: a user's own connector, with #33's keys bound to the user's account, accounts over gRPC
-- a deleted user's accounts and picks go by an event Better Auth's delete hook sends once the delete has committed, on the in-process bus: a crash in between leaves them, unreachable (no session is the user's), and their courses wanted; a sweep against identity's users, once something reads with accounts
-- a banned user's picks keep their courses wanted, so the connector syncs them (up to 100 a user): bans are Better Auth's, and nothing tells accounts of one to start a grace; a ban reads none of it meanwhile
+- a deleted user's accounts and picks go by an event Better Auth's delete hook sends once the delete has committed, on the in-process bus: a crash in between leaves them, unreachable (no session is the user's); a sweep against identity's users, once something reads with accounts
+- a public portal's catalog is synced whole and read by everyone, picked or not (README, Public portals): right for a directory of dozens of courses. One of thousands would want syncing by what's picked again (`Wanted` answering the picks, with a grace), and reads cut to match
+- an agent kept to some of the user's courses (a key's or an app's scope): MCP reads all the user does, the hidden ones and the public portals' too
 - a public portal's catalog is matched and paged in memory, the whole of it read per request (Intl's collator ignores case and diacritics, đ as d too, which postgres' `unaccent` would need an extension for and `lower` a locale for): a directory of hundreds of courses; a portal of many thousands would want it in the database
 - a malformed JSON body's 400 quotes a few characters of it (V8's `JSON.parse` message, which Nest answers with): a token sent so shows a part of itself to its own sender, and isn't logged
 

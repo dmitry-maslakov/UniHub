@@ -55,6 +55,7 @@ const setup = (items: unknown[] = posts, files: unknown[] = [file(1)]) => {
           name: 'Operating systems',
           sources: [],
           portalCourses: [],
+          hidden: false,
         },
       ]),
     ),
@@ -791,9 +792,10 @@ describe('a course', () => {
                 name: 'Operativni sistemi',
                 url: 'javascript:alert(1)',
                 year: null,
-                via: 'pick',
+                via: 'public',
               },
             ],
+            hidden: false,
           },
         ]),
       ),
@@ -824,7 +826,7 @@ describe('a course', () => {
     // that isn't a web one is no link
     expect(within(picked).getByText('catalog')).toBeVisible();
     expect(within(picked).queryByRole('link')).toBeNull();
-    expect(within(picked).getByText(/picked by you/)).toBeVisible();
+    expect(within(picked).getByText(/public source/)).toBeVisible();
   });
 
   it('searches the course from its page', async () => {
@@ -854,8 +856,63 @@ describe('a course', () => {
     expect(router.state.location.search).toEqual({ q: 'stack', course: 'os' });
   });
 
-  it('says the course is not found when it is not in the list', async () => {
+  it("reads a public site's course she didn't pick by its address, and shows it in My courses from there", async () => {
     setup();
+    let picked = false;
+    const net = () => ({
+      slug: 'catalog~net',
+      name: 'Računarske mreže',
+      sources: ['catalog'],
+      portalCourses: [
+        {
+          portal: 'catalog',
+          externalId: 'net',
+          name: 'Računarske mreže',
+          url: null,
+          year: null,
+          via: 'public',
+        },
+      ],
+      hidden: !picked,
+    });
+    server.use(
+      http.get(api('/courses/catalog~net'), () => HttpResponse.json(net())),
+      http.get(api('/courses/catalog~net/items'), () => HttpResponse.json([])),
+      http.get(api('/courses/catalog~net/files'), () => HttpResponse.json([])),
+      http.get(api('/courses/catalog~net/processing'), () =>
+        HttpResponse.json(processing()),
+      ),
+      http.delete(api('/courses/catalog~net/hidden'), () => {
+        picked = true;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    renderApp('/courses/catalog~net');
+
+    expect(
+      await screen.findByRole('heading', { name: 'Računarske mreže' }),
+    ).toBeVisible();
+    expect(screen.getByText('Not in My courses.')).toBeVisible();
+    await userEvent.click(
+      screen.getByRole('button', {
+        name: 'Show Računarske mreže in My courses',
+      }),
+    );
+    expect(
+      await screen.findByRole('button', {
+        name: 'Hide Računarske mreže from My courses',
+      }),
+    ).toBeVisible();
+    expect(screen.queryByText('Not in My courses.')).toBeNull();
+  });
+
+  it('says the course is not found when it is neither in the list nor hers to read', async () => {
+    setup();
+    server.use(
+      http.get(api('/courses/other'), () =>
+        HttpResponse.json({ statusCode: 404 }, { status: 404 }),
+      ),
+    );
     renderApp('/courses/other');
 
     expect(

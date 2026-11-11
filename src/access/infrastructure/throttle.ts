@@ -24,7 +24,7 @@ const LIMITS = {
   // whose it is, so the hub mustn't become a way to try tokens out
   link: 10,
   // picking a public portal's course or unpicking it, per user (accounts):
-  // each one may have its connector sync another course
+  // each one writes
   picks: 30,
   // a file shown as a picture, per user, REST and MCP together: each one renders an image or
   // a PDF page, a PDF in a thread of its own

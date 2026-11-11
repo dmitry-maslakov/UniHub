@@ -128,6 +128,9 @@ describe('states', () => {
     signedIn();
     server.use(
       http.get(api('/courses'), () => HttpResponse.json([])),
+      http.get(api('/courses/gone'), () =>
+        HttpResponse.json({ statusCode: 404 }, { status: 404 }),
+      ),
       http.get(api('/me/portals'), () => HttpResponse.json([])),
     );
     renderApp('/courses/gone');

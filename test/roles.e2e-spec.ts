@@ -92,12 +92,7 @@ describe('roles', () => {
       expect(await workers(worker!)).toEqual([1, 1, 1]),
     );
     expect(scheduled(worker)).toEqual({
-      crons: [
-        'outbox-retention',
-        'reconcile',
-        'reconcile-index',
-        'reconcile-wanted',
-      ],
+      crons: ['outbox-retention', 'reconcile', 'reconcile-index'],
       timeouts: [
         'adopt-instances',
         'poll-schedule',

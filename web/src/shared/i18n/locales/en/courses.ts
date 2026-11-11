@@ -2,11 +2,12 @@ export default {
   list: {
     title: 'My courses',
     description:
-      'The courses you read here, the same ones your AI apps read for you.',
+      'The courses you follow. Your AI apps read these, the ones you hide, and every public source.',
     descriptionEmpty:
       'Nothing to read yet. Link your own account of a portal, or pick courses from a public site, and they show up here.',
     aria: 'Your courses',
     noSource: 'No source yet',
+    allHidden: 'You hide all of your courses. Show one from the list below.',
     loading: 'Loading your courses',
     empty: {
       title: 'No courses yet',
@@ -20,6 +21,22 @@ export default {
       title: 'Reading your {{label}} for the first time',
       body: 'Your courses show up here in a few minutes. You can leave this page open.',
     },
+  },
+  hidden: {
+    title: 'Hidden',
+    description:
+      'Courses you keep out of the list above. You still read them, search can look in them, and your AI apps read them as before.',
+    aria: 'Hidden courses',
+  },
+  hide: {
+    action: 'Hide',
+    aria: 'Hide {{name}} from My courses',
+    show: 'Show',
+    showLong: 'Show in My courses',
+    showAria: 'Show {{name}} in My courses',
+    note: 'Not in My courses.',
+    failed: "Couldn't hide the course. Try again.",
+    showFailed: "Couldn't show the course. Try again.",
   },
   course: {
     head: 'Course',
@@ -55,7 +72,7 @@ export default {
     withYear: '{{name}} ({{year}})',
     via: {
       account: 'through your account',
-      pick: 'picked by you',
+      public: 'public source',
       link: 'added by an admin',
     },
   },

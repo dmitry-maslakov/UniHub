@@ -127,7 +127,7 @@ const main = {
 const viewers: Viewers = {
   accounts: ['ana-moodle'],
   shared: { courses: [os.id], except: [PortalId.parse('moodle')] },
-  picks: { portals: [], courses: [] },
+  open: [],
 };
 // catalog's cut, as the fake makes it: the courses granted
 const seen =
@@ -144,7 +144,8 @@ function reader(renderer: PageRenderer = new FakeRenderer()) {
       () => ({
         portals: viewers.shared.except,
         accounts: viewers.accounts,
-        picks: { ...viewers.picks, into: new Map() },
+        picks: { portals: [], courses: [], into: new Map() },
+        hidden: [],
       }),
     ],
     [
@@ -252,6 +253,7 @@ describe('CourseReader', () => {
             via: 'link',
           },
         ],
+        hidden: false,
       },
     ]);
     expect(queries.sent).toContainEqual(new ListCoursesQuery(viewers));
@@ -612,7 +614,7 @@ describe('CourseReader', () => {
     const picker: Viewers = {
       accounts: ['ana-moodle'],
       shared: { courses: [], except: [moodle, catalog] },
-      picks: { portals: [catalog], courses: ['pc-os'] },
+      open: [catalog],
     };
     const own = (id: string, portal: PortalId, externalId: string) => ({
       id,
@@ -629,7 +631,12 @@ describe('CourseReader', () => {
         () => ({
           portals: [moodle],
           accounts: picker.accounts,
-          picks: { ...picker.picks, into: new Map([['pc-os', 'pc-m1']]) },
+          picks: {
+            portals: picker.open,
+            courses: ['pc-os'],
+            into: new Map([['pc-os', 'pc-m1']]),
+          },
+          hidden: [],
         }),
       ],
       [
@@ -651,8 +658,9 @@ describe('CourseReader', () => {
         sources: [catalog, moodle],
         portalCourses: [
           expect.objectContaining({ portal: moodle, via: 'account' }),
-          expect.objectContaining({ portal: catalog, via: 'pick' }),
+          expect.objectContaining({ portal: catalog, via: 'public' }),
         ],
+        hidden: false,
       },
     ]);
     const page = { offset: 0, limit: 5 };
@@ -676,5 +684,82 @@ describe('CourseReader', () => {
         ),
       ),
     );
+  });
+
+  // ana reads moodle~m1 through her account, and hides it; of the public
+  // catalog she picked os, not db
+  it("lists the user's courses, those they hide too, and not a public portal's they didn't pick, which is read by its slug", async () => {
+    const [moodle, catalog] = ['moodle', 'catalog'].map((p) =>
+      PortalId.parse(p),
+    );
+    const anyone: Viewers = {
+      accounts: ['ana-moodle'],
+      shared: { courses: [], except: [moodle, catalog] },
+      open: [catalog],
+    };
+    const own = (id: string, portal: PortalId, externalId: string) => ({
+      id,
+      slug: `${portal}~${externalId}`,
+      name: externalId,
+      portalCourses: [
+        { id, portal, externalId, name: externalId, url: null, year: null },
+      ],
+    });
+    const all = [
+      own('pc-db', catalog, 'db'),
+      own('pc-os', catalog, 'os'),
+      own('pc-m1', moodle, 'm1'),
+    ];
+    const queries = new FakeBus([
+      [ReadScopeQuery, () => ({ granted: [], ownAccounts: true })],
+      [
+        ViewingAccountsQuery,
+        () => ({
+          portals: [moodle],
+          accounts: anyone.accounts,
+          picks: { portals: anyone.open, courses: ['pc-os'], into: new Map() },
+          hidden: ['pc-m1'],
+        }),
+      ],
+      [
+        ListCoursesQuery,
+        ({ slug }: ListCoursesQuery) =>
+          all.filter((c) => slug === undefined || c.slug === slug),
+      ],
+      [ListCourseItemsQuery, () => []],
+    ]);
+    const r = new CourseReader(
+      queries.queries,
+      new InMemoryBlobs(),
+      new FakeRenderer(),
+    );
+
+    expect(
+      (await r.courses('ana')).map(({ slug, hidden }) => [slug, hidden]),
+    ).toEqual([
+      ['catalog~os', false],
+      ['moodle~m1', true],
+    ]);
+    const db = CourseSlug.parse('catalog~db');
+    expect(await r.course('ana', db)).toMatchObject({
+      slug: 'catalog~db',
+      hidden: true,
+      portalCourses: [{ via: 'public' }],
+    });
+    await r.items('ana', db, { offset: 0, limit: 5 });
+    expect(queries.sent).toContainEqual(
+      new ListCourseItemsQuery(anyone, ['pc-db'], 0, 5),
+    );
+    // a hidden course is read as any other
+    await r.items('ana', CourseSlug.parse('moodle~m1'), {
+      offset: 0,
+      limit: 5,
+    });
+    expect(queries.sent).toContainEqual(
+      new ListCourseItemsQuery(anyone, ['pc-m1'], 0, 5),
+    );
+    await expect(
+      r.course('ana', CourseSlug.parse('catalog~gone')),
+    ).rejects.toThrowError(new NotReadableError('course'));
   });
 });

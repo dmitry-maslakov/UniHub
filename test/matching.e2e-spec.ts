@@ -214,10 +214,8 @@ describe('picks shown with courses of their own', { timeout: 60_000 }, () => {
   }, 60_000);
 
   afterAll(async () => {
-    // the picks, the courses they keep wanted and the accounts, which other
-    // specs count
+    // the picks and the accounts, which other specs count
     await prisma.pick.deleteMany();
-    await prisma.wantedCourse.deleteMany();
     for (const who of ['ana', 'bo'])
       await http()
         .delete(`/api/me/portals/${LMS}/token`)
@@ -273,9 +271,9 @@ describe('picks shown with courses of their own', { timeout: 60_000 }, () => {
       {
         slug: own,
         sources: [LMS, SITE],
-        via: [`${LMS} account`, `${SITE} pick`],
+        via: [`${LMS} account`, `${SITE} public`],
       },
-      { slug: `${SITE}~net`, sources: [SITE], via: [`${SITE} pick`] },
+      { slug: `${SITE}~net`, sources: [SITE], via: [`${SITE} public`] },
     ]);
     expect((await catalog('ana'))[0]).toEqual({
       externalId: 'os',

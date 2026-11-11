@@ -3,9 +3,9 @@ import type { LinkMode, PortalId } from '@app/kernel';
 import type { PortalView, Viewing } from './portal-accounts.js';
 
 // The portals read with users' own accounts, and the user's own accounts in
-// them that read now; the public portals, and the user's picks
-// (PortalAccounts.viewing): what access cuts a user's reads of those
-// portals to
+// them that read now; the public portals, and the user's picks; and the
+// portal courses the user hides (PortalAccounts.viewing): what access
+// cuts a user's reads of those portals to, and lists as theirs
 export class ViewingAccountsQuery extends Query<Viewing> {
   constructor(public readonly userId: string) {
     super();
@@ -22,8 +22,7 @@ export class UserPortalsQuery extends Query<PortalView[]> {
 }
 
 // The external ids of the portal's courses its connector is asked to sync
-// (PortalPicks.wantedOf): what its users picked, or did within the grace.
-// Nothing of who, or how many.
+// (PortalPicks.wantedOf): a public portal's whole catalog.
 export class WantedCoursesQuery extends Query<string[]> {
   constructor(public readonly portal: PortalId) {
     super();

@@ -1,5 +1,5 @@
 import { Fragment } from 'react';
-import { useCourseNames, useKindLabel } from '@/entities/course';
+import { useCourseName, useKindLabel } from '@/entities/course';
 import { usePortalLabel } from '@/entities/source';
 import type { Schemas } from '@/shared/api';
 import { useFormat } from '@/shared/i18n';
@@ -14,13 +14,13 @@ export function PostMeta({
   item: Schemas['ItemResponse'];
   slug: string;
 }) {
-  const courseName = useCourseNames();
+  const courseName = useCourseName(slug);
   const kind = useKindLabel();
   const portal = usePortalLabel();
   const { dateTime } = useFormat();
   const parts = [
     <AnchorLink key="course" to="/courses/$slug" params={{ slug }} inherit>
-      {courseName(slug)}
+      {courseName}
     </AnchorLink>,
     kind(item.kind),
     dateTime(item.publishedAt),
