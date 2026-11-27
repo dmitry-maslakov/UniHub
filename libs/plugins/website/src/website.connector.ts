@@ -2,10 +2,10 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
 import {
   PollConnector,
+  SiteClient,
   type ConnectorContext,
   type PollsPortal,
 } from '@app/plugin-sdk';
-import { SiteClient } from './website.client.js';
 import { websiteConfig } from './website.config.js';
 import { Crawl } from './website.crawl.js';
 

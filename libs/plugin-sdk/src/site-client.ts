@@ -1,7 +1,7 @@
 import { addAbortSignal, Readable } from 'node:stream';
 import { setTimeout } from 'node:timers/promises';
 import axios, { type AxiosInstance } from 'axios';
-import { portalRequests } from '@app/plugin-sdk';
+import { portalRequests } from './http.js';
 
 // the run has spent its requests
 export class OutOfBudgetError extends Error {
@@ -49,8 +49,9 @@ export interface SiteClientOptions {
   idleMs?: number;
 }
 
-// The site's requests, one at a time, through the sdk's guard on what a
-// portal's requests reach: GET only, the User-Agent and nothing else that
+// For a plugin that reads a public website, with no account: the site's
+// requests, one at a time, through the sdk's guard on what a portal's
+// requests reach: GET only, the User-Agent and nothing else that
 // identifies, a pause between any two, a budget every request is taken from
 // (a redirect's hop too), and no leaving the site: a redirect to another
 // origin is a failure.

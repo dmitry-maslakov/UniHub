@@ -1,4 +1,3 @@
-import { text } from 'node:stream/consumers';
 import { Logger } from '@nestjs/common';
 import type { MockInstance } from 'vitest';
 import {
@@ -7,7 +6,6 @@ import {
   UnknownReferenceError,
 } from '@app/plugin-sdk';
 import { websiteSettings } from './website.config.js';
-import { SiteClient } from './website.client.js';
 import { WebsiteConnector } from './website.connector.js';
 import {
   FakeSite,
@@ -22,7 +20,7 @@ import {
 vi.setConfig({ testTimeout: 30_000 });
 
 const site = new FakeSite().listen();
-const SECTION ={ id: 'courses', name: 'Courses', sitemap: '/sitemap.xml' };
+const SECTION = { id: 'courses', name: 'Courses', sitemap: '/sitemap.xml' };
 const DAY = 86_400_000;
 const today = () => Math.floor(Date.now() / DAY);
 const portal = PortalId.parse('website');
@@ -997,33 +995,6 @@ describe('WebsiteConnector', () => {
     expect(ingest.items.get('/p/a')?.course).toBe('courses');
     expect(ingest.items.get('/p/n')?.course).toBe('news');
     expect(site.asked.filter((p) => p === '/p/a')).toHaveLength(1);
-  });
-
-  describe('the client', () => {
-    const client = (options: object = {}) =>
-      new SiteClient({
-        origin: SITE,
-        userAgent: 'reader',
-        delayMs: 0,
-        maxRequests: 10,
-        signal: new AbortController().signal,
-        ...options,
-      });
-
-    it('gives up on a text request, its body too, past its deadline', async () => {
-      site.set('/slow', { body: 'late', delay: 500 });
-      await expect(
-        client({ deadlineMs: 100 }).text(new URL(`${SITE}/slow`), 1024),
-      ).rejects.toThrow('/slow');
-    });
-
-    it('cuts a download that sends nothing for too long, as one failed file', async () => {
-      site.set('/d/hang.pdf', { body: 'ab', end: 'stall' });
-      const { body } = await client({ idleMs: 200 }).stream(
-        new URL(`${SITE}/d/hang.pdf`),
-      );
-      await expect(text(body)).rejects.toThrow('no data for');
-    });
   });
 
   it('counts a state of a shape it does not know as none', async () => {
