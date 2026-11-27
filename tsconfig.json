@@ -66,6 +66,12 @@
       "@app/plugins/plain-text/*": [
         "./libs/plugins/plain-text/src/*"
       ],
+      "@app/plugins/pmwiki": [
+        "./libs/plugins/pmwiki/src/index.ts"
+      ],
+      "@app/plugins/pmwiki/*": [
+        "./libs/plugins/pmwiki/src/*"
+      ],
       "@app/plugins/website": [
         "./libs/plugins/website/src/index.ts"
       ],

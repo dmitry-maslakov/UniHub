@@ -4,6 +4,7 @@ import { CanvasModule } from '@app/plugins/canvas';
 import { OcrModule, ReaderModule, VisionModule } from '@app/plugins/ocr';
 import { OfficeTextModule } from '@app/plugins/office-text';
 import { PlainTextModule } from '@app/plugins/plain-text';
+import { PmwikiModule } from '@app/plugins/pmwiki';
 import { WebsiteModule } from '@app/plugins/website';
 import { pluginsConfig } from './plugins.config.js';
 
@@ -26,6 +27,7 @@ export const plugins = [
   plugin('ocr', OcrModule),
   plugin('office-text', OfficeTextModule),
   plugin('plain-text', PlainTextModule),
+  plugin('pmwiki', PmwikiModule),
   plugin('website', WebsiteModule),
   plugin('reader', ReaderModule),
   plugin('vision', VisionModule),

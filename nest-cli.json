@@ -70,6 +70,15 @@
         "tsConfigPath": "libs/plugins/canvas/tsconfig.lib.json"
       }
     },
+    "plugins/pmwiki": {
+      "type": "library",
+      "root": "libs/plugins/pmwiki",
+      "entryFile": "index",
+      "sourceRoot": "libs/plugins/pmwiki/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/plugins/pmwiki/tsconfig.lib.json"
+      }
+    },
     "plugins/website": {
       "type": "library",
       "root": "libs/plugins/website",
