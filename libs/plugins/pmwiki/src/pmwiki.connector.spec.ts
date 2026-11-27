@@ -238,9 +238,10 @@ describe('PmwikiConnector', () => {
       );
     });
 
-    it('drops a course its index no longer links, and finds a new one', async () => {
+    it('drops a course no index links any longer, and finds a new one', async () => {
       await run();
       stamps[COURSES] = '2026-11-25 09:00 UTC+1';
+      stamps[TEACHING] = '2026-11-25 09:00 UTC+1';
       site.set(
         COURSES,
         wikiPage(
@@ -250,18 +251,46 @@ describe('PmwikiConnector', () => {
         ),
       );
       site.set(
+        TEACHING,
+        wikiPage(
+          'Ana Anić',
+          TEACHING,
+          `<ul><li><a class='wikilink' href='/ana/Calculus'>Calculus</a>, Mechanics, I year</li></ul>`,
+        ),
+      );
+      site.set(
         `${DEPT}Courses/Logic`,
         wikiPage('Department', `${DEPT}Courses/Logic`, '<p>Logic</p>'),
       );
       farmChanges();
       await run();
-      const urls = ingest.catalog.map((c) => c.url);
-      expect(urls).toContain(`${DEPT}Courses/Logic`);
-      // Ana's index still lists Statistics
-      expect(urls).toContain(STATISTICS);
-      expect(ingest.catalog.find((c) => c.url === STATISTICS)!.name).toBe(
-        'Statistics, Traffic, II year (Department)',
+      expect(ingest.catalog.map((c) => c.url)).toEqual([
+        CALCULUS,
+        `${DEPT}Courses/Logic`,
+      ]);
+    });
+
+    it('asks again of a link the site says is not there only at a revisit', async () => {
+      site.set(
+        TEACHING,
+        wikiPage(
+          'Ana Anić',
+          TEACHING,
+          `<ul><li><a href='/ana/Gone'>Gone</a>, I year</li><li><a href='/ana/Calculus'>Calculus</a></li></ul>`,
+        ),
       );
+      const asks = () => site.requests.filter((r) => r === 'GET /ana/Gone');
+      await run();
+      expect(asks()).toHaveLength(1);
+      stamps[TEACHING] = '2026-11-25 09:00 UTC+1';
+      farmChanges();
+      await run();
+      // the index read again, the link known to be none
+      expect(pagesRead()).toContain('GET /ana/Teaching');
+      expect(asks()).toHaveLength(0);
+      later(7 * DAY);
+      await run();
+      expect(asks()).toHaveLength(1);
     });
   });
 
@@ -400,12 +429,54 @@ describe('PmwikiConnector', () => {
     it('takes no page in a file’s place outside the uploads', async () => {
       site.set('/books/theory.pdf', '<html>log in</html>');
       await run();
-      expect(ingest.contents.has(file(ALGEBRA, '/books/theory.pdf'))).toBe(
-        false,
-      );
+      expect(ingest.files.has(file(ALGEBRA, '/books/theory.pdf'))).toBe(false);
       expect(warn).toHaveBeenCalledWith(
-        '/books/theory.pdf: answered with another page',
+        '/books/theory.pdf: answered with a page',
       );
+    });
+
+    it('answered as another page is tried again another day, its files kept', async () => {
+      await run();
+      stamps[ALGEBRA] = '2026-11-26 09:00 UTC+1';
+      farmChanges();
+      site.set(
+        ALGEBRA,
+        wikiPage('Ana Anić', `${ANA}Site/Login`, '<p>Log in to read this</p>'),
+      );
+      await run();
+      expect(ingest.gone).toEqual([]);
+      expect(ingest.views.get(id(ALGEBRA))?.size).toBe(3);
+      expect(warn).toHaveBeenCalledWith(
+        `/ana/Algebra/Html: answered as ${ANA}Site/Login`,
+      );
+    });
+
+    it('keeps its downloads due when the run stops after its pass', async () => {
+      await run();
+      stamps[CALCULUS] = '2026-11-26 09:00 UTC+1';
+      stamps[STATISTICS] = '2026-11-26 09:00 UTC+1';
+      farmChanges();
+      site.set(
+        CALCULUS,
+        wikiPage(
+          'Ana Anić',
+          CALCULUS,
+          `<p>Limits.</p><a href='/ana/uploads/Main/limits.pdf'>Limits</a><a href='/ana/uploads/Main/series.pdf'>Series</a>`,
+        ),
+      );
+      site.file('/ana/uploads/Main/series.pdf', 'SERIES');
+      site.set(STATISTICS, 503);
+      await run();
+      const series = file(CALCULUS, '/ana/uploads/Main/series.pdf');
+      expect(ingest.files.has(series)).toBe(true);
+      expect(ingest.contents.has(series)).toBe(false);
+
+      site.set(
+        STATISTICS,
+        wikiPage('Department', STATISTICS, '<p>Exam in room B2.</p>'),
+      );
+      await run();
+      expect(ingest.contents.get(series)?.body).toBe('SERIES');
     });
 
     it('that fails is tried again another day, the others read', async () => {
@@ -444,14 +515,61 @@ describe('PmwikiConnector', () => {
       expect(site.requests).toHaveLength(2);
     });
 
-    it('stops on 429 or 503, its state saved', async () => {
+    it('stops on 429 or 503, in the catalog or a course, its state saved', async () => {
       site.set(CALCULUS, 503);
       await run();
       expect(warn).toHaveBeenCalledWith(
         'the site answered 503: the next run goes on',
       );
       expect(ingest.saved).toMatchObject({ v: 1 });
+
+      site.set(CALCULUS, wikiPage('Ana Anić', CALCULUS, '<p>Limits.</p>'));
+      later(DAY);
+      await run();
+      stamps[ALGEBRA] = '2026-11-26 09:00 UTC+1';
+      farmChanges();
+      site.set('/ana/uploads/Algebra/tasks.pdf', 429);
+      await run();
+      expect(warn).toHaveBeenCalledWith(
+        'the site answered 429: the next run goes on',
+      );
+      // what it held stays
+      expect(ingest.gone).toEqual([]);
     });
+
+    it("leaves a site's wikis as they were when its robots.txt can't be read, and stops on its 503", async () => {
+      await run();
+      site.set('/robots.txt', 500);
+      later(7 * DAY);
+      await run();
+      expect(ingest.catalog).toHaveLength(4);
+      expect(warn).toHaveBeenCalledWith(
+        `${ANA}: robots.txt: the site answered 500`,
+      );
+      site.set('/robots.txt', 503);
+      await run();
+      expect(warn).toHaveBeenCalledWith(
+        'the site answered 503: the next run goes on',
+      );
+    });
+
+    it(
+      'gets many courses in over runs of few requests, never past them nor eating their downloads',
+      { timeout: 120_000 },
+      async () => {
+        const wiki = many(8);
+        const asked: number[] = [];
+        for (let runs = 0; runs < 25 && ingest.contents.size < 16; runs++) {
+          await run({ PMWIKI_WIKIS: wiki, PMWIKI_MAX_REQUESTS: '8' });
+          asked.push(site.asked.length);
+        }
+        expect(Math.max(...asked)).toBeLessThanOrEqual(8);
+        expect(ingest.catalog).toHaveLength(8);
+        expect(ingest.items.size).toBe(8);
+        expect(ingest.contents.size).toBe(16);
+        expect(ingest.gone).toEqual([]);
+      },
+    );
 
     it('leaves alone what robots.txt disallows', async () => {
       site.set('/robots.txt', 'User-agent: *\nDisallow: /books/');
@@ -462,9 +580,9 @@ describe('PmwikiConnector', () => {
 
     it('stops on the signal, and saves nothing once the hub let go of it', async () => {
       const stop = new AbortController();
-      const running = run({}, stop.signal);
       stop.abort(new Error('time is up'));
-      await expect(running).rejects.toThrow();
+      await expect(run({}, stop.signal)).rejects.toThrow('time is up');
+      expect(ingest.saves).toBe(0);
     });
 
     it('counts a state of a shape it does not know as none', async () => {
@@ -488,4 +606,43 @@ function farmChanges() {
     );
   site.set(changesAt(ANA), list(ANA, 'Ana Anić'));
   site.set(changesAt(DEPT), list(DEPT, 'Department'));
+}
+
+// A wiki of `count` courses on its Teaching page, each a page with two
+// files
+function many(count: number) {
+  const wiki = `${SITE}/many/`;
+  const courses = Array.from({ length: count }, (_, i) => `${wiki}C${i}`);
+  const time = '2026-11-20 10:00 UTC+1';
+  site.set(
+    changesAt(wiki),
+    changes(
+      'Many',
+      wiki,
+      ['Main.Teaching', `${wiki}Teaching`, time],
+      ...courses.map((c) => [`Main.${c.replace(wiki, '')}`, c, time] as const),
+    ),
+  );
+  site.set(pagesAt(wiki), pages('Many', wiki, ['Main', ['Teaching']]));
+  site.set(
+    `${wiki}Teaching`,
+    wikiPage(
+      'Many',
+      `${wiki}Teaching`,
+      `<ul>${courses.map((c, i) => `<li><a href='${c}'>Course ${i}</a></li>`).join('')}</ul>`,
+    ),
+  );
+  for (const [i, c] of courses.entries()) {
+    site.set(
+      c,
+      wikiPage(
+        'Many',
+        c,
+        `<p>Course ${i}</p><a href='/many/uploads/C${i}/a.pdf'>a</a><a href='/many/uploads/C${i}/b.pdf'>b</a>`,
+      ),
+    );
+    site.file(`/many/uploads/C${i}/a.pdf`, `A${i}`);
+    site.file(`/many/uploads/C${i}/b.pdf`, `B${i}`);
+  }
+  return wiki;
 }

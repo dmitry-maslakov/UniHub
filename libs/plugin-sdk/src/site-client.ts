@@ -25,6 +25,19 @@ export class RequestFailedError extends Error {
   }
 }
 
+// robots.txt couldn't be read: the site answered with another status
+// (`status`), or not at all (null). A site that can't say what it allows
+// is left alone.
+export class RobotsUnreadableError extends Error {
+  constructor(
+    message: string,
+    readonly status: number | null,
+  ) {
+    super(message);
+    this.name = new.target.name;
+  }
+}
+
 export interface Answer<B> {
   status: number;
   // where the answer came from, after any redirects
@@ -125,17 +138,21 @@ export class SiteClient {
 
   // The site's robots.txt for the client's agent, asked for once: none (a
   // 404) allows everything, and a Crawl-delay longer than the client's pause
-  // replaces it from then on, up to 30 s. Any other answer, or none, is an
-  // error: a site that can't say what it allows is left alone.
+  // replaces it from then on, up to 30 s. Any other answer, or none, is a
+  // RobotsUnreadableError.
   async robots(): Promise<SiteRobots> {
     const url = new URL('/robots.txt', this.origin);
     const answer = await this.text(url, ROBOTS_LIMIT).catch((e) => {
-      if (e instanceof RequestFailedError) throw new Error(e.message);
+      if (e instanceof RequestFailedError)
+        throw new RobotsUnreadableError(e.message, null);
       throw e;
     });
     const ok = answer.status >= 200 && answer.status < 300;
     if (answer.status !== 404 && !ok)
-      throw new Error(`robots.txt: the site answered ${answer.status}`);
+      throw new RobotsUnreadableError(
+        `robots.txt: the site answered ${answer.status}`,
+        answer.status,
+      );
     const parsed = robotsParser(url.href, ok ? answer.body : '');
     const { userAgent } = this.options;
     const wait = (parsed.getCrawlDelay(userAgent) ?? 0) * 1000;

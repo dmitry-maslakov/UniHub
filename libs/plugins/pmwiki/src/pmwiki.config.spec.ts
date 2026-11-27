@@ -7,13 +7,15 @@ describe('pmwikiSettings', () => {
     expect(
       parse({
         PMWIKI_WIKIS:
-          'https://faculty.example.edu/ana, https://faculty.example.edu/dept/\nhttps://wiki.example.org',
+          'https://faculty.example.edu/ana, https://faculty.example.edu/dept/\nhttps://wiki.example.org https://faculty.example.edu/old/pmwiki.php',
       }).data,
     ).toEqual({
       wikis: [
         'https://faculty.example.edu/ana/',
         'https://faculty.example.edu/dept/',
         'https://wiki.example.org/',
+        // the script that serves it, as it is
+        'https://faculty.example.edu/old/pmwiki.php',
       ],
       userAgent: 'course-sync',
       delayMs: 1000,

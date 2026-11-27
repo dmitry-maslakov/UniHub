@@ -16,7 +16,9 @@ const WikiState = z.object({
   // again the next day
   a: z.number().int().optional(),
   // what the index links: the course page each is (its own address), or
-  // null for one that's no page of the listed wikis
+  // null for one that's no page of the listed wikis, or that the site says
+  // isn't there to read (404, 410, robots.txt); kept as each is told, so a
+  // run that stops partway goes on from there
   links: z.record(z.string(), z.string().nullable()),
   // the courses it lists: each page's address, and what it says of it
   courses: z.record(z.string(), z.string()),
@@ -25,13 +27,14 @@ export type WikiState = z.infer<typeof WikiState>;
 
 const CourseState = z.object({
   // what its page's last change said when it was read, and the day; 0 for
-  // not yet, or due again (a download left for the next run)
+  // not yet, or due again (files or downloads left for the next run)
   m: z.string().nullable(),
   d: z.number().int(),
   // the day it last failed: not tried again that day
   a: z.number().int().optional(),
-  // the files its view holds, by their ids
-  f: z.array(z.string()),
+  // the files its view holds, by their ids, each with the day the site was
+  // last asked of it
+  f: z.record(z.string(), z.number().int()),
 });
 export type CourseState = z.infer<typeof CourseState>;
 

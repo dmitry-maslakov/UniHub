@@ -66,6 +66,17 @@ export function canonicalOf(page: SitePage, hosts: ReadonlySet<string>) {
   return best;
 }
 
+// A page's own address: as its action links say, or, for a skin that shows
+// none, the address it answered at; null for one on no listed site.
+export function ownAddress(
+  page: SitePage,
+  at: URL,
+  hosts: ReadonlySet<string>,
+) {
+  const answered = onSites(at.href, hosts);
+  return canonicalOf(page, hosts) ?? (answered && pageAt(answered).href);
+}
+
 // the listed wiki a page is of, by its address: the longest that starts it
 export function wikiOf(page: string, wikis: readonly string[]) {
   let owner: string | null = null;
@@ -143,28 +154,53 @@ export interface CourseLink {
 }
 
 // The pages an index links on the listed sites, each once, in its order:
-// neither an action's link nor a file's.
+// neither an action's link nor a file's. Each is named by the line it's
+// on, or, where that line links several, by its part of it, from its link
+// to the next.
 export function courseLinks(
   index: SitePage,
   wikis: readonly string[],
   hosts: ReadonlySet<string>,
 ): CourseLink[] {
-  const found = new Map<string, CourseLink>();
+  const candidates: { at: string; link: PageLink }[] = [];
   for (const link of index.links) {
     const url = onSites(link.url, hosts);
     if (!url || url.searchParams.has('action')) continue;
     const wiki = wikiOf(url.href, wikis);
     if (isDocument(url, wiki && uploadsOf(wiki))) continue;
-    const at = pageAt(url).href;
-    if (!found.has(at)) found.set(at, { url: at, name: nameOf(link) });
+    candidates.push({ at: pageAt(url).href, link });
   }
+  const found = new Map<string, CourseLink>();
+  candidates.forEach(({ at, link }, i) => {
+    const next = candidates[i + 1]?.link;
+    const shared = candidates.filter((c) => c.link.line === link.line);
+    const name =
+      shared.length > 1
+        ? partOf(link, next?.line === link.line ? next : null)
+        : nameOf(link);
+    if (!found.has(at)) found.set(at, { url: at, name });
+  });
   return [...found.values()];
 }
 
 function nameOf(link: PageLink) {
   const name = link.line.length <= NAME_CHARS ? link.line : link.text;
-  return name.replace(/\s*:$/, '') || link.text;
+  return trimmed(name) || link.text;
 }
+
+// a link's part of a line it shares: from its text to the next link's
+function partOf(link: PageLink, next: PageLink | null) {
+  const from = link.text ? link.line.indexOf(link.text) : -1;
+  if (from < 0) return link.text;
+  const to = next?.text
+    ? link.line.indexOf(next.text, from + link.text.length)
+    : -1;
+  const part = link.line.slice(from, to < 0 ? undefined : to);
+  return trimmed(part.length <= NAME_CHARS ? part : link.text) || link.text;
+}
+
+// without what ends a list's item or a label: a colon, a comma, a dash
+const trimmed = (name: string) => name.replace(/[\s,;:–-]+$/, '').trim();
 
 // A wiki's home page (PmWiki's Main.HomePage, its group's home Main.Main,
 // or the wiki's own address), which an index links as its way back, and
@@ -192,10 +228,14 @@ export const courseName = (name: string, wikiTitle: string) =>
   wikiTitle ? `${name} (${wikiTitle})` : name;
 
 export interface Document {
-  // its pathname, how its file is told apart within the course
+  // its pathname (and the upload's name, for one PmWiki serves itself), how
+  // its file is told apart within the course
   path: string;
   url: string;
   name: string;
+  // a file as it was uploaded to the wiki, whatever its type (an .htm of
+  // results is one), not a page the site makes
+  upload: boolean;
 }
 
 const decoded = (text: string) => {
@@ -207,8 +247,9 @@ const decoded = (text: string) => {
 };
 
 // The files a wiki's page links, each once: whatever it links in the
-// wiki's uploads, and the documents it links elsewhere on the wiki's site
-// (.pdf, .docx, .pptx, .zip…).
+// wiki's uploads (or PmWiki serves, ?action=download&upname=, where it
+// keeps them from being linked straight), and the documents it links
+// elsewhere on the wiki's site (.pdf, .docx, .pptx, .zip…).
 export function documentsIn(
   page: SitePage,
   wiki: string,
@@ -217,21 +258,32 @@ export function documentsIn(
   const host = new URL(wiki).host;
   const uploads = uploadsOf(wiki);
   const found = new Map<string, Document>();
+  const add = (doc: Document) => {
+    if (!found.has(doc.path)) found.set(doc.path, doc);
+  };
   for (const link of page.links) {
     const url = onSites(link.url, hosts);
-    if (!url || url.host !== host || url.search) continue;
-    if (!isDocument(url, uploads) || url.pathname.endsWith('/')) continue;
-    if (!found.has(url.pathname))
-      found.set(url.pathname, {
-        path: url.pathname,
-        url: url.href,
-        name: decoded(posix.basename(url.pathname)).replace(/\p{Cc}/gu, ''),
-      });
+    if (!url || url.host !== host) continue;
+    const upname = url.searchParams.get('upname');
+    if (url.searchParams.get('action') === 'download' && upname) {
+      const name = posix.basename(upname).replace(/\p{Cc}/gu, '');
+      if (name)
+        add({
+          path: `${url.pathname}?upname=${encodeURIComponent(upname)}`,
+          url: url.href,
+          name,
+          upload: true,
+        });
+      continue;
+    }
+    if (url.search || url.pathname.endsWith('/')) continue;
+    if (!isDocument(url, uploads)) continue;
+    add({
+      path: url.pathname,
+      url: url.href,
+      name: decoded(posix.basename(url.pathname)).replace(/\p{Cc}/gu, ''),
+      upload: url.pathname.startsWith(uploads),
+    });
   }
   return [...found.values()];
 }
-
-// whether a document is in the wiki's uploads, a file served as it was
-// uploaded (an .htm of results is one), not a page the site makes
-export const isUpload = (path: string, wiki: string) =>
-  path.startsWith(uploadsOf(wiki));

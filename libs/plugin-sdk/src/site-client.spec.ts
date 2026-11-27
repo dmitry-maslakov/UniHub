@@ -4,6 +4,7 @@ import { setupServer } from 'msw/node';
 import {
   OutOfBudgetError,
   RequestFailedError,
+  RobotsUnreadableError,
   SiteClient,
 } from './site-client.js';
 
@@ -211,11 +212,12 @@ describe('SiteClient', () => {
       expect(rules.allowed(at('/anything'))).toBe(true);
     });
 
-    it('fails on any other answer', async () => {
-      robots = 500;
+    it('fails on any other answer, saying which', async () => {
+      robots = 503;
       await expect(client().robots()).rejects.toThrow(
-        'robots.txt: the site answered 500',
+        new RobotsUnreadableError('robots.txt: the site answered 503', 503),
       );
+      await expect(client().robots()).rejects.toMatchObject({ status: 503 });
     });
 
     it("waits as long as the site's crawl-delay asks, when it is more than its own, up to 30 s", async () => {

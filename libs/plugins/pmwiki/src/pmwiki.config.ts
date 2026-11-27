@@ -5,7 +5,9 @@ const unset = (v: unknown) => (v === '' ? undefined : v);
 
 // A wiki's address, as its pages' addresses start: https, a DNS name, no
 // port, user, query or fragment, ending in a slash
-// (https://faculty.example.edu/wiki/).
+// (https://faculty.example.edu/wiki/), or in the script that serves it,
+// left as it is (https://faculty.example.edu/wiki/pmwiki.php, its pages
+// ?n=Group.Name of it).
 const Wiki = z
   .url({ protocol: /^https$/, hostname: z.regexes.domain })
   .transform((value, ctx) => {
@@ -18,7 +20,7 @@ const Wiki = z
       });
       return z.NEVER;
     }
-    if (!url.pathname.endsWith('/')) url.pathname += '/';
+    if (!/(?:\/|\.php)$/.test(url.pathname)) url.pathname += '/';
     return url.href;
   });
 

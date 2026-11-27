@@ -4,6 +4,7 @@ import {
   OutOfBudgetError,
   readPage,
   RequestFailedError,
+  RobotsUnreadableError,
   UnreadablePageError,
   type CoursePass,
   type FileRecord,
@@ -14,9 +15,8 @@ import {
   type SitePage,
   type SiteRobots,
 } from '@app/plugin-sdk';
-import { stateOf, type CourseState, type State } from './pmwiki.state.js';
+import { stateOf, type State } from './pmwiki.state.js';
 import {
-  canonicalOf,
   changesIn,
   changesOf,
   CONTENT,
@@ -25,7 +25,7 @@ import {
   documentsIn,
   indexIn,
   isHome,
-  isUpload,
+  ownAddress,
   pageName,
   pagesOf,
   timeOf,
@@ -40,8 +40,18 @@ const DAY_MS = 86_400_000;
 // the site asks us to stop (429, 503): the run ends, its state saved, and
 // the next one goes on
 class StopRunError extends Error {}
-// what one page's trouble is, not the run's
-class PageFailedError extends Error {}
+
+// What one page's trouble is, not the run's. Lasting: the site says it
+// isn't there, or isn't to be read (404, 410, robots.txt), which another
+// look soon won't change.
+class PageFailedError extends Error {
+  constructor(
+    message: string,
+    readonly lasting = false,
+  ) {
+    super(message);
+  }
+}
 
 const ok = (status: number) => status >= 200 && status < 300;
 const where = (url: URL) => url.pathname + url.search;
@@ -72,10 +82,15 @@ interface Course {
   wiki: string;
 }
 
+// a page as read, and where it was answered from
+interface Read {
+  page: SitePage;
+  at: URL;
+}
+
 interface Found {
   record: FileRecord;
   url: URL;
-  // in the wiki's uploads: a file as it was uploaded, its type whatever
   upload: boolean;
 }
 
@@ -83,6 +98,8 @@ interface Passed {
   course: Course;
   pass: CoursePass;
   fetch: Found[];
+  // every file it links that the hub lacks was in the pass
+  whole: boolean;
 }
 
 // One run over the listed wikis (README, PmWiki): their catalog of courses,
@@ -97,6 +114,8 @@ export class Sync {
   private readonly changes = new Map<string, string>();
   // course pages read this run as their links were looked into
   private readonly pages = new Map<string, SitePage>();
+  // per site, the requests the downloads of the passes so far may take
+  private readonly reserved = new Map<string, number>();
   private read = 0;
   private stored = 0;
   private left = 0;
@@ -126,15 +145,20 @@ export class Sync {
     }
   }
 
-  // Every wiki's courses, sent as the catalog: a wiki that fails this run
-  // lists what it did before. A course is named by the wiki its page is of,
-  // when that one lists it, else by the first that does.
+  // Every wiki's courses, sent as the catalog: a wiki that fails this run,
+  // or runs out of its site's requests, lists what it did before. A course
+  // is named by the wiki its page is of, when that one lists it, else by
+  // the first that does.
   private async catalog() {
     for (const wiki of this.o.wikis)
       try {
         await this.wiki(wiki);
       } catch (error) {
-        if (!(error instanceof PageFailedError)) throw error;
+        if (
+          !(error instanceof PageFailedError) &&
+          !(error instanceof OutOfBudgetError)
+        )
+          throw error;
         this.logger.warn(`${wiki}: ${error.message}`);
       }
     const named = new Map<string, Course>();
@@ -166,8 +190,10 @@ export class Sync {
     return courses.filter((course) => !skipped.has(course.id));
   }
 
-  // A wiki's recent changes, then its index, read again when it changed or
-  // is due, and the courses it links.
+  // A wiki's recent changes, then its index, read again when it changed,
+  // is due, or wasn't got through, and the courses it links. What its links
+  // are is kept as each is told, so a run that stops partway goes on from
+  // there; at a revisit, those that were none are looked at again.
   private async wiki(wiki: string) {
     const ws = (this.state.wikis[wiki] ??= {
       title: '',
@@ -178,13 +204,13 @@ export class Sync {
     });
     const changes = await this.page(changesOf(wiki));
     if (!changes) throw new PageFailedError('its recent changes are no page');
-    for (const [page, change] of changesIn(changes, this.hosts))
+    for (const [page, change] of changesIn(changes.page, this.hosts))
       this.changes.set(page, change);
-    ws.title = titleOf(changes);
+    ws.title = titleOf(changes.page);
 
     if (ws.index === undefined || (ws.index === null && this.revisit(ws.d))) {
       const list = await this.page(pagesOf(wiki));
-      ws.index = list && indexIn(list, this.hosts);
+      ws.index = list && indexIn(list.page, this.hosts);
       if (!ws.index) {
         this.logger.warn(`${wiki}: no Teaching page, nor a Courses group`);
         Object.assign(ws, { index: null, d: this.today, courses: {} });
@@ -193,8 +219,9 @@ export class Sync {
     }
     if (!ws.index) return;
     const change = this.changes.get(ws.index) ?? null;
+    const revisit = this.revisit(ws.d);
     const retry = ws.a !== undefined && ws.a !== this.today;
-    if (ws.d && change === ws.m && !this.revisit(ws.d) && !retry) return;
+    if (ws.d && change === ws.m && !revisit && !retry) return;
 
     const at = ws.index;
     let index;
@@ -205,17 +232,25 @@ export class Sync {
       if (!index) ws.index = undefined;
     }
     if (!index) throw new PageFailedError(`${at}: no wiki page`);
-    const own = canonicalOf(index, this.hosts) ?? at;
-    const links: Record<string, string | null> = {};
+    const own = ownAddress(index.page, index.at, this.hosts) ?? at;
+    const linked = new Set<string>();
     const courses: Record<string, string> = {};
     let untold = false;
-    for (const { url, name } of courseLinks(index, this.o.wikis, this.hosts)) {
-      const course = url in ws.links ? ws.links[url] : await this.courseAt(url);
-      if (course === undefined) {
-        untold = true;
-        continue;
+    for (const { url, name } of courseLinks(
+      index.page,
+      this.o.wikis,
+      this.hosts,
+    )) {
+      linked.add(url);
+      if (!(url in ws.links) || (revisit && ws.links[url] === null)) {
+        const told = await this.courseAt(url);
+        if (told === undefined) {
+          untold = true;
+          continue;
+        }
+        ws.links[url] = told;
       }
-      links[url] = course;
+      const course = ws.links[url];
       if (
         course &&
         course !== own &&
@@ -223,39 +258,42 @@ export class Sync {
       )
         courses[course] ??= name;
     }
+    for (const url of Object.keys(ws.links))
+      if (!linked.has(url)) delete ws.links[url];
     // an index that holds documents of its own is a course of them
-    if (documentsIn(index, wiki, this.hosts).length) {
+    if (documentsIn(index.page, wiki, this.hosts).length) {
       courses[own] ??= pageName(own);
-      this.pages.set(own, index);
+      this.pages.set(own, index.page);
     }
-    Object.assign(ws, { m: change, d: this.today, links, courses });
+    Object.assign(ws, { m: change, d: this.today, courses });
     if (untold) ws.a = this.today;
     else delete ws.a;
   }
 
   // The course page a link is: its own address, when it's a page of one of
-  // the wikis; null when it's none; undefined when it can't be told now.
+  // the wikis; null when it's none, or the site says it isn't there to
+  // read; undefined when it can't be told now.
   private async courseAt(url: string) {
     // read already this run, by another index's link
     if (this.pages.has(url)) return url;
-    let page;
+    let read;
     try {
-      page = await this.page(new URL(url));
+      read = await this.page(new URL(url));
     } catch (error) {
       if (!(error instanceof PageFailedError)) throw error;
       this.logger.warn(error.message);
-      return undefined;
+      return error.lasting ? null : undefined;
     }
-    const own = page && canonicalOf(page, this.hosts);
-    if (!page || !own || !wikiOf(own, this.o.wikis)) return null;
-    this.pages.set(own, page);
+    const own = read && ownAddress(read.page, read.at, this.hosts);
+    if (!read || !own || !wikiOf(own, this.o.wikis)) return null;
+    this.pages.set(own, read.page);
     return own;
   }
 
   // a wiki's page, null when it's no wiki's (it has no #wikitext)
-  private async page(url: URL) {
+  private async page(url: URL): Promise<Read | null> {
     if (!(await this.robotsOf(url.origin)).allowed(url))
-      throw new PageFailedError(`${where(url)}: robots.txt disallows it`);
+      throw new PageFailedError(`${where(url)}: robots.txt disallows it`, true);
     let answer;
     try {
       answer = await this.o.client(url.origin).text(url, PAGE_LIMIT);
@@ -268,23 +306,34 @@ export class Sync {
     if (!ok(answer.status))
       throw new PageFailedError(
         `${where(url)}: the site answered ${answer.status}`,
+        answer.status === 404 || answer.status === 410,
       );
+    let page;
     try {
-      return await readPage(answer.body, answer.url, { content: CONTENT });
+      page = await readPage(answer.body, answer.url, { content: CONTENT });
     } catch (error) {
       if (error instanceof UnreadablePageError)
         throw new PageFailedError(error.message);
       throw error;
     }
+    return page && { page, at: answer.url };
   }
 
-  private robotsOf(origin: string) {
+  // A site's robots.txt, asked once a run: one it can't read leaves that
+  // site's wikis as they were this run, and a 429 or 503 stops the run.
+  private async robotsOf(origin: string) {
     let robots = this.robots.get(origin);
     if (!robots) {
       robots = this.o.client(origin).robots();
       this.robots.set(origin, robots);
     }
-    return robots;
+    try {
+      return await robots;
+    } catch (error) {
+      if (!(error instanceof RobotsUnreadableError)) throw error;
+      if (error.status !== null) this.stopOn(error.status);
+      throw new PageFailedError(error.message);
+    }
   }
 
   private stopOn(status: number) {
@@ -305,12 +354,18 @@ export class Sync {
     return (change !== undefined && change !== cs.m) || this.revisit(cs.d);
   }
 
+  // what a site's requests leave, besides the downloads already to come
+  private spare(origin: string) {
+    const spent = this.o.client(origin).requests;
+    return this.o.maxRequests - spent - (this.reserved.get(origin) ?? 0);
+  }
+
   // The courses due, those never read first, then those read longest ago,
-  // each with as many of its files as fit in the site's requests left
-  // besides the downloads already to come: a file the hub has costs its
-  // HEAD, one it hasn't its download too. A course passed with some of its
-  // files has the others next run, those the hub hasn't first. Then the
-  // downloads.
+  // each with as many of its files as fit in what its site's requests
+  // leave: those the hub lacks first (their HEAD and their download), then
+  // those it has, asked of longest ago first (their HEAD). A course passed
+  // without some of those the hub lacks has them next run. A course whose
+  // page doesn't fit, or none of whose files do, waits. Then the downloads.
   private async sync(courses: Course[]) {
     const due = courses
       .filter((course) => this.isDue(course))
@@ -323,53 +378,59 @@ export class Sync {
       .map(({ course }) => course);
     this.left = due.length;
     const passed: Passed[] = [];
-    // per site, the downloads the passes so far may bring
-    const downloads = new Map<string, number>();
     for (const course of due) {
       const url = new URL(course.url);
-      const client = this.o.client(url.origin);
-      if (client.requests >= this.o.maxRequests) break;
-      let page;
+      const cached = this.pages.get(course.url);
+      if (this.spare(url.origin) < (cached ? 0 : 1)) continue;
+      let read, robots;
       try {
-        page = this.pages.get(course.url) ?? (await this.page(url));
+        read = cached ? { page: cached, at: url } : await this.page(url);
+        robots = await this.robotsOf(url.origin);
       } catch (error) {
         if (!(error instanceof PageFailedError)) throw error;
         this.failed(course, error.message);
         continue;
       }
-      if (!page) {
+      if (!read) {
         this.failed(course, `${where(url)}: no wiki page`);
         continue;
       }
-      const robots = await this.robotsOf(url.origin);
-      const held = new Set(this.state.courses[course.id]?.f ?? []);
-      const linked = documentsIn(page, course.wiki, this.hosts)
+      // another page in its place (a redirect, a login): its own is away
+      const own = ownAddress(read.page, read.at, this.hosts);
+      if (own !== course.url) {
+        this.failed(course, `${where(url)}: answered as ${own}`);
+        continue;
+      }
+      const held = this.state.courses[course.id]?.f ?? {};
+      const linked = documentsIn(read.page, course.wiki, this.hosts)
         .filter((doc) => robots.allowed(new URL(doc.url)))
         .map((doc) => ({ doc, id: `${course.id}|${doc.path}` }));
-      let left =
-        this.o.maxRequests - client.requests - (downloads.get(url.origin) ?? 0);
+      const lacked = linked.filter(({ id }) => !(id in held));
+      const had = linked
+        .filter(({ id }) => id in held)
+        .sort((a, b) => held[a.id] - held[b.id]);
+      let left = this.spare(url.origin);
       const asked = new Set<string>();
-      for (const { id } of [
-        ...linked.filter(({ id }) => !held.has(id)),
-        ...linked.filter(({ id }) => held.has(id)),
-      ]) {
-        const cost = held.has(id) ? 1 : 2;
+      for (const { id } of [...lacked, ...had]) {
+        const cost = id in held ? 1 : 2;
         if (cost > left) break;
         asked.add(id);
         left -= cost;
       }
+      if (linked.length && !asked.size) continue;
       if (asked.size < linked.length)
         this.logger.warn(
           `${where(url)}: ${linked.length - asked.size} of its ${linked.length} files wait for the next run's requests`,
         );
-      const sent = await this.pass(course, page, linked, asked);
+      const whole = lacked.every(({ id }) => asked.has(id));
+      const sent = await this.pass(course, read.page, linked, asked, whole);
       passed.push(sent);
-      downloads.set(
+      this.reserved.set(
         url.origin,
-        (downloads.get(url.origin) ?? 0) + sent.fetch.length,
+        (this.reserved.get(url.origin) ?? 0) + sent.fetch.length,
       );
       this.read++;
-      if (asked.size === linked.length) this.left--;
+      if (whole) this.left--;
     }
     await this.download(passed);
   }
@@ -377,33 +438,34 @@ export class Sync {
   // The course's page and the files asked of its links, as one pass. A
   // file not asked this run, or one the site fails to say anything of,
   // stays as it was; one its page no longer links, or the site answers 404
-  // or 410 to, is gone. A course passed with only some of its files is due
-  // again.
+  // or 410 to, is gone. The course is read once it's whole and its
+  // downloads are through; till then it's due again.
   private async pass(
     course: Course,
     page: SitePage,
     linked: { doc: Document; id: string }[],
     asked: ReadonlySet<string>,
-  ) {
+    whole: boolean,
+  ): Promise<Passed> {
     const before = this.state.courses[course.id];
-    const held = new Set(before?.f ?? []);
+    const held = before?.f ?? {};
     const found: Found[] = [];
     // still in its view, as they were
-    const kept = linked
-      .filter(({ id }) => !asked.has(id) && held.has(id))
-      .map(({ id }) => id);
+    const kept: Record<string, number> = {};
+    for (const { id } of linked)
+      if (!asked.has(id) && id in held) kept[id] = held[id];
     for (const { doc, id } of linked) {
       if (!asked.has(id)) continue;
       const head = await this.headOf(doc);
       if (head === 'gone') continue;
       if (head === null) {
-        if (held.has(id)) kept.push(id);
+        if (id in held) kept[id] = held[id];
         continue;
       }
       const mime = head.type.split(';')[0].trim();
       found.push({
         url: new URL(doc.url),
-        upload: isUpload(doc.path, course.wiki),
+        upload: doc.upload,
         record: {
           externalId: id,
           course: course.id,
@@ -432,40 +494,35 @@ export class Sync {
       }),
     );
     const fetch: Found[] = [];
-    const now = [...kept];
+    const now = { ...kept };
     for (const file of found)
       await this.skipRefused(`file ${file.record.externalId}`, async () => {
         if ((await pass.file(file.record)).fetch) fetch.push(file);
-        now.push(file.record.externalId);
+        now[file.record.externalId] = this.today;
       });
 
-    const gone = [...held].filter((id) => !now.includes(id));
+    const gone = Object.keys(held).filter((id) => !(id in now));
     // till the end goes through, its view holds what's gone too: an end
     // that fails leaves that for the next run to name
-    this.state.courses[course.id] = this.ended(before, {
-      f: [...new Set([...held, ...now])],
-    });
+    this.state.courses[course.id] = {
+      m: before?.m ?? null,
+      d: before?.d ?? 0,
+      f: { ...held, ...now },
+    };
     await this.save();
     await pass.end({ files: gone });
-    const whole = linked.every(({ id }) => asked.has(id));
     this.state.courses[course.id] = {
       m: change,
-      d: whole ? this.today : 0,
+      d: whole && !fetch.length ? this.today : 0,
       f: now,
     };
     await this.save();
-    return { course, pass, fetch };
+    return { course, pass, fetch, whole };
   }
 
-  private ended(
-    before: CourseState | undefined,
-    { f }: Pick<CourseState, 'f'>,
-  ): CourseState {
-    return { m: before?.m ?? null, d: before?.d ?? 0, f };
-  }
-
-  // What the site says of a file: null when it says nothing (a failure, an
-  // answer of another page), 'gone' for a 404 or a 410.
+  // What the site says of a file: null when it says nothing it can be
+  // taken by (a failure, another page's address, a page in a document's
+  // place outside the uploads), 'gone' for a 404 or a 410.
   private async headOf(doc: Document): Promise<Head | 'gone' | null> {
     const url = new URL(doc.url);
     try {
@@ -480,6 +537,10 @@ export class Sync {
         this.logger.warn(`${doc.path}: answered as ${head.url.pathname}`);
         return null;
       }
+      if (head.type.includes('text/html') && !doc.upload) {
+        this.logger.warn(`${doc.path}: answered with a page`);
+        return null;
+      }
       return head;
     } catch (error) {
       if (!(error instanceof RequestFailedError)) throw error;
@@ -488,20 +549,17 @@ export class Sync {
     }
   }
 
-  // Once every pass has ended, the files the hub asked for. A course whose
-  // downloads the run doesn't get through is read again next run, when the
-  // hub asks for what it still lacks.
+  // Once every pass has ended, the files the hub asked for; a course is
+  // read once its downloads are through. One the run doesn't get through
+  // is read again next run, when the hub asks for what it still lacks.
   private async download(passed: Passed[]) {
-    const unfinished = new Set(
-      passed.filter((p) => p.fetch.length).map((p) => p.course.id),
-    );
-    try {
-      for (const { course, pass, fetch } of passed) {
-        for (const file of fetch) await this.fetch(pass, file);
-        unfinished.delete(course.id);
+    for (const { course, pass, fetch, whole } of passed) {
+      if (!fetch.length) continue;
+      for (const file of fetch) await this.fetch(pass, file);
+      if (whole) {
+        this.state.courses[course.id].d = this.today;
+        await this.save();
       }
-    } finally {
-      for (const id of unfinished) this.state.courses[id].d = 0;
     }
   }
 
@@ -545,7 +603,7 @@ export class Sync {
   // the course stays as it was, and is tried again another day
   private failed(course: Course, message: string) {
     this.logger.warn(message);
-    const cs = this.state.courses[course.id] ?? { m: null, d: 0, f: [] };
+    const cs = this.state.courses[course.id] ?? { m: null, d: 0, f: {} };
     this.state.courses[course.id] = { ...cs, a: this.today };
   }
 

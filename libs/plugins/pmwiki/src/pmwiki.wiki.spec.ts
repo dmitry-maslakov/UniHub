@@ -1,6 +1,7 @@
 import type { PageLink, SitePage } from '@app/plugin-sdk';
 import {
   canonicalOf,
+  ownAddress,
   changesIn,
   courseLinks,
   documentsIn,
@@ -75,6 +76,21 @@ describe('canonicalOf', () => {
 
   it('is null for a page with no actions, which is no wiki’s', () => {
     expect(canonicalOf(page([], [`${SITE}/about`]), hosts)).toBeNull();
+  });
+});
+
+describe('ownAddress', () => {
+  it('is the canonical address, or where a page with no actions answered', () => {
+    const at = new URL(
+      `http://faculty.example.edu/ana/Algebra/Html?action=browse`,
+    );
+    expect(
+      ownAddress(page([], [`${ANA}Algebra/Html?action=print`]), at, hosts),
+    ).toBe(`${ANA}Algebra/Html`);
+    expect(ownAddress(page(), at, hosts)).toBe(`${ANA}Algebra/Html`);
+    expect(
+      ownAddress(page(), new URL('https://elsewhere.example.org/x'), hosts),
+    ).toBeNull();
   });
 });
 
@@ -193,6 +209,21 @@ describe('courseLinks', () => {
   });
 });
 
+describe('courseLinks of one line', () => {
+  it('names each by its part of a line that links several', () => {
+    const line = 'Spring: Algebra (I), Calculus (II)';
+    const links = courseLinks(
+      page([
+        { url: `${ANA}Algebra`, text: 'Algebra', line },
+        { url: `${ANA}Calculus`, text: 'Calculus', line },
+      ]),
+      [ANA],
+      hosts,
+    );
+    expect(links.map((l) => l.name)).toEqual(['Algebra (I)', 'Calculus (II)']);
+  });
+});
+
 describe('documentsIn', () => {
   it("are what a page links in its wiki's uploads, and the documents it links elsewhere on the site", () => {
     const docs = documentsIn(
@@ -207,6 +238,8 @@ describe('documentsIn', () => {
         { url: `${DEPT}uploads/Courses/exam.pdf` },
         { url: 'https://elsewhere.example.org/x.pdf' },
         { url: `${ANA}uploads/Algebra/bad%E0%A4%A.pdf` },
+        // an upload PmWiki serves itself
+        { url: `${ANA}Algebra/Html?action=download&upname=Tasks%201.pdf` },
       ]),
       ANA,
       hosts,
@@ -218,6 +251,15 @@ describe('documentsIn', () => {
       // a document elsewhere on the site, wherever it's from
       ['/dept/uploads/Courses/exam.pdf', 'exam.pdf'],
       ['/ana/uploads/Algebra/bad%E0%A4%A.pdf', 'bad%E0%A4%A.pdf'],
+      ['/ana/Algebra/Html?upname=Tasks%201.pdf', 'Tasks 1.pdf'],
+    ]);
+    expect(docs.map((d) => d.upload)).toEqual([
+      true,
+      true,
+      false,
+      false,
+      true,
+      true,
     ]);
   });
 });
