@@ -37,9 +37,46 @@ describe('readPage', () => {
         '<a href="b.pdf#p2"> Room\n   204 </a><nav><a href="/gone">in a menu</a></nav><a href="https://x.example.org/c">Elsewhere</a><a href="http://[">bad</a><a href="mailto:a@example.edu">mail</a><a href="javascript:void(0)">js</a><a href="">here</a><a>none</a>',
       ),
     );
-    expect(page!.links).toEqual([
+    expect(page!.links.map(({ url, text }) => ({ url, text }))).toEqual([
       { url: 'https://faculty.example.edu/courses/b.pdf', text: 'Room 204' },
       { url: 'https://x.example.org/c', text: 'Elsewhere' },
+    ]);
+  });
+
+  it('gives each link the line of the content’s text it starts on', async () => {
+    const page = await read(
+      `<main><h2>Exams</h2><p>First  test:
+         <a href="/t1">Saturday</a>, room A1</p><ul><li><a href="/alg">Algebra</a>, <b>SIIT</b>, I godina</li><li>Room 204</li></ul><table><tr><td><a href="/r">1</a></td><td>Ana</td></tr></table>line<br><a href="/b">break</a> here<a href="/e"></a><details><summary>Sum</summary><a href="/d">Body</a></details><pre>one\n<a href="/p">two</a> lines</pre></main>`,
+    );
+    expect(page!.links.map(({ text, line }) => [text, line])).toEqual([
+      ['Saturday', 'First test: Saturday, room A1'],
+      ['Algebra', 'Algebra, SIIT, I godina'],
+      ['1', '1'],
+      ['break', 'break here'],
+      ['', 'break here'],
+      ['Body', 'Body'],
+      ['two', 'two lines'],
+    ]);
+  });
+
+  it('cuts a link’s line at 1,000 characters', async () => {
+    const page = await read(
+      `<main><p>${'word '.repeat(400)}<a href="/x">x</a></p></main>`,
+    );
+    expect(page!.links[0].line).toHaveLength(1_000);
+  });
+
+  it('has the addresses the rest of the page links, in its order', async () => {
+    const page = await read(
+      html('<a href="/in">in</a>').replace(
+        '<footer>',
+        '<footer><a href="?action=print#top">Print</a><a href="mailto:x@example.edu">mail</a>',
+      ),
+    );
+    expect(page!.otherLinks).toEqual([
+      'https://faculty.example.edu/menu',
+      'https://faculty.example.edu/courses/a?action=print',
+      'https://faculty.example.edu/about',
     ]);
   });
 

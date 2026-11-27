@@ -1,6 +1,6 @@
 import { addAbortSignal, Readable } from 'node:stream';
 import { setTimeout } from 'node:timers/promises';
-import axios, { type AxiosInstance } from 'axios';
+import axios, { type AxiosInstance, type RawAxiosResponseHeaders } from 'axios';
 import robots from 'robots-parser';
 import { portalRequests } from './http.js';
 
@@ -44,6 +44,13 @@ const REDIRECTS = new Set([301, 302, 303, 307, 308]);
 const ROBOTS_LIMIT = 1024 * 1024;
 const MAX_CRAWL_DELAY_MS = 30_000;
 
+// what the site says of an address without its body
+export interface Head extends Answer<null> {
+  // its Content-Length and Last-Modified, null where it says none
+  size: number | null;
+  modified: Date | null;
+}
+
 export interface SiteRobots {
   // false for a page robots.txt disallows to the client's agent
   allowed(url: URL): boolean;
@@ -63,7 +70,8 @@ export interface SiteClientOptions {
 
 // For a plugin that reads a public website, with no account: the site's
 // requests, each awaited before the next, through the sdk's guard on what a
-// portal's requests reach: GET only, the User-Agent and nothing else that
+// portal's requests reach: GET and HEAD only, the User-Agent and nothing
+// else that
 // identifies, a pause between any two, a budget every request is taken from
 // (a redirect's hop too), and no leaving the site: an address or a
 // redirect on another origin is a failure.
@@ -102,6 +110,19 @@ export class SiteClient {
     return this.get(url, 'stream', -1) as Promise<Answer<Readable>>;
   }
 
+  // the address's status, type, size and date, its body left
+  async head(url: URL): Promise<Head> {
+    const { headers, ...answer } = await this.get(url, 'head', 0);
+    const size = Number(headers['content-length'] ?? NaN);
+    const modified = new Date(String(headers['last-modified'] ?? NaN));
+    return {
+      ...answer,
+      body: null,
+      size: Number.isSafeInteger(size) && size >= 0 ? size : null,
+      modified: Number.isNaN(modified.getTime()) ? null : modified,
+    };
+  }
+
   // The site's robots.txt for the client's agent, asked for once: none (a
   // 404) allows everything, and a Crawl-delay longer than the client's pause
   // replaces it from then on, up to 30 s. Any other answer, or none, is an
@@ -126,21 +147,23 @@ export class SiteClient {
 
   private async get(
     from: URL,
-    responseType: 'text' | 'stream',
+    kind: 'text' | 'stream' | 'head',
     limit: number,
-  ): Promise<Answer<string | Readable>> {
+  ): Promise<Answer<string | Readable> & { headers: RawAxiosResponseHeaders }> {
     if (from.origin !== this.origin)
       throw new RequestFailedError(from, 'on another site');
     let url = from;
     for (let hops = 0; ; hops++) {
       await this.turn();
       try {
-        const res = await this.http.get<string | Readable>(url.href, {
-          responseType,
+        const res = await this.http.request<string | Readable>({
+          url: url.href,
+          method: kind === 'head' ? 'HEAD' : 'GET',
+          responseType: kind === 'stream' ? 'stream' : 'text',
           maxContentLength: limit,
           // the whole of a text answer is bound by it; a download by the
           // watchdog on its data
-          ...(responseType === 'text' && {
+          ...(kind !== 'stream' && {
             signal: AbortSignal.any([
               this.options.signal,
               AbortSignal.timeout(this.options.deadlineMs ?? DEADLINE_MS),
@@ -154,7 +177,8 @@ export class SiteClient {
           const { status, data } = res;
           const body =
             typeof data === 'string' ? data : this.guarded(data, url);
-          return { status, url, type, body };
+          const headers = res.headers as RawAxiosResponseHeaders;
+          return { status, url, type, body, headers };
         }
         if (typeof res.data !== 'string') res.data.destroy();
         url = new URL(location, url);

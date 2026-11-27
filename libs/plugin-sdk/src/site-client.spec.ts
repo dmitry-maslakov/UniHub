@@ -54,6 +54,23 @@ const server = setupServer(
       headers: { 'content-type': 'Text/HTML; charset=utf-8' },
     });
   }),
+  http.head(`${SITE}/*`, ({ request }) => {
+    const { pathname } = new URL(request.url);
+    asked.push({ path: `HEAD ${pathname}`, at: Date.now(), agent: null });
+    if (pathname === '/moved.pdf')
+      return new HttpResponse(null, {
+        status: 301,
+        headers: { location: '/notes.pdf' },
+      });
+    if (pathname === '/bare') return new HttpResponse(null);
+    return new HttpResponse(null, {
+      headers: {
+        'content-type': 'application/pdf',
+        'content-length': '24241',
+        'last-modified': 'Tue, 25 Jan 2022 11:34:03 GMT',
+      },
+    });
+  }),
   http.get(`${ELSEWHERE}/*`, ({ request }) => {
     elsewhere.push(new URL(request.url).pathname);
     return new HttpResponse('elsewhere');
@@ -129,6 +146,28 @@ describe('SiteClient', () => {
     await expect(client().text(at('/hop/9'), 1024)).rejects.toThrow(
       'too many redirects',
     );
+  });
+
+  it('asks for an address’s size and date without its body, redirects followed', async () => {
+    const site = client();
+    expect(await site.head(at('/moved.pdf'))).toEqual({
+      status: 200,
+      url: at('/notes.pdf'),
+      type: 'application/pdf',
+      body: null,
+      size: 24241,
+      modified: new Date('2022-01-25T11:34:03Z'),
+    });
+    expect(site.requests).toBe(2);
+    expect(asked.map((a) => a.path)).toEqual([
+      'HEAD /moved.pdf',
+      'HEAD /notes.pdf',
+    ]);
+    // one that says neither
+    expect(await site.head(at('/bare'))).toMatchObject({
+      size: null,
+      modified: null,
+    });
   });
 
   it('fails a text answer past its limit', async () => {

@@ -11,6 +11,11 @@ export interface PageLink {
   url: string;
   // as the page shows it, its spaces each one, trimmed
   text: string;
+  // the line of the content's text it starts on, up to 1,000 characters: a
+  // line per block (an item of a list, a paragraph, a cell, a <pre>'s own
+  // line), its spaces each one. A link's context: what a list says of it,
+  // an entry of a log
+  line: string;
 }
 
 export interface SitePage {
@@ -23,6 +28,9 @@ export interface SitePage {
   textChars: number;
   // its links, in the page's order, but those `skip` matches
   links: PageLink[];
+  // what the rest of the page links (its menus, its footer, the page's own
+  // actions), http(s) addresses as `links` has them
+  otherLinks: string[];
 }
 
 // the page could not be parsed in time and memory: it is a failed page
