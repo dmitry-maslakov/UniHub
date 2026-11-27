@@ -1,6 +1,6 @@
 import { text } from 'node:stream/consumers';
 import type { Readable } from 'node:stream';
-import { delay, http, HttpResponse } from 'msw';
+import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import {
   ContentHash,
@@ -24,10 +24,8 @@ export type Reply =
       status?: number;
       body?: string;
       headers?: Record<string, string>;
-      // ms before it answers
-      delay?: number;
-      // the body, then the connection drops, or hangs open
-      end?: 'cut' | 'stall';
+      // the body, then the connection drops
+      end?: 'cut';
     };
 
 // Answers by pathname; what isn't set is a 404.
@@ -49,13 +47,11 @@ export class FakeSite {
       if (typeof reply === 'number')
         return new HttpResponse(null, { status: reply });
       if (typeof reply === 'string') return new HttpResponse(reply);
-      if (reply.delay) await delay(reply.delay);
-      const { end } = reply;
-      const body = end
+      const body = reply.end
         ? new ReadableStream({
             start(stream) {
               stream.enqueue(new TextEncoder().encode(reply.body ?? ''));
-              if (end === 'cut') stream.error(new Error('cut'));
+              stream.error(new Error('cut'));
             },
           })
         : (reply.body ?? null);

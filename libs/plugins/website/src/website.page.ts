@@ -1,13 +1,17 @@
-import { Worker } from 'node:worker_threads';
-import { firstMessage } from '@app/plugin-sdk';
+import { posix } from 'node:path';
+import { readPage as readSitePage } from '@app/plugin-sdk';
 import type { Section } from './website.config.js';
 
 // less text than this, and no document, is a page with nothing to read
 export const MIN_TEXT_CHARS = 30;
-// a text body is cut here before it is parsed
-export const MAX_HTML_CHARS = 2 * 1024 * 1024;
-const PARSE_TIMEOUT_MS = 20_000;
-const HEAP_MB = 256;
+
+const DOCUMENTS = new Map([
+  ['.pdf', 'application/pdf'],
+  [
+    '.docx',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  ],
+]);
 
 export interface Document {
   // its pathname, its id
@@ -26,44 +30,50 @@ export interface Page {
   documents: Document[];
 }
 
-// the page could not be parsed in time and memory: it is a failed page
-export class UnreadablePageError extends Error {
-  constructor(url: URL, why: string) {
-    super(`${url.pathname}: ${why}`);
-    this.name = new.target.name;
+// `<title>` up to the first ' – ' or ' | ' (one it starts with too, a
+// template's empty name), else the page's pathname
+const titleOf = (text: string, fallback: string) =>
+  text.split(/(?:^|\s)[–|](?:\s|$)/)[0].trim() || fallback;
+
+const decoded = (text: string) => {
+  try {
+    return decodeURIComponent(text);
+  } catch {
+    return text;
   }
-}
+};
 
 // The page's content as the section says where it is, or null when the
-// page has none there. Parsed in a worker thread of its own
-// (website.page.worker.ts).
+// page has none there; its documents are the same-origin .pdf and .docx it
+// links there, when the section reads files, but those skipFiles names.
 export async function readPage(
   html: string,
   url: URL,
   section: Section,
 ): Promise<Page | null> {
   const { content, files, skipFiles } = section;
-  // the bundler finds a worker's file only in `new Worker(new URL(...))`
-  const worker = new Worker(
-    new URL('./website.page.worker.ts', import.meta.url),
-    {
-      workerData: {
-        html: html.slice(0, MAX_HTML_CHARS),
-        url: url.href,
-        content,
-        files,
-        skipFiles: skipFiles && {
-          source: skipFiles.source,
-          flags: skipFiles.flags,
-        },
-      },
-      resourceLimits: { maxOldGenerationSizeMb: HEAP_MB },
-    },
-  );
-  try {
-    return (await firstMessage<{ page: Page | null }>(worker, PARSE_TIMEOUT_MS))
-      .page;
-  } catch (error) {
-    throw new UnreadablePageError(url, (error as Error).message);
+  const page = await readSitePage(html, url, {
+    content,
+    skip: files ? skipFiles : undefined,
+  });
+  if (!page) return null;
+  const found = new Map<string, Document>();
+  for (const link of files ? page.links : []) {
+    const href = new URL(link.url);
+    const mime = DOCUMENTS.get(posix.extname(href.pathname).toLowerCase());
+    if (href.origin !== url.origin || !mime) continue;
+    if (!found.has(href.pathname))
+      found.set(href.pathname, {
+        path: href.pathname,
+        url: href.href,
+        name: decoded(posix.basename(href.pathname)).replace(/\p{Cc}/gu, ''),
+        mime,
+      });
   }
+  return {
+    title: titleOf(page.title, url.pathname),
+    body: page.body,
+    textChars: page.textChars,
+    documents: [...found.values()],
+  };
 }

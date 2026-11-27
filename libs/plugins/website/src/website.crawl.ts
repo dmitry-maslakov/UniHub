@@ -1,32 +1,23 @@
 import { Logger } from '@nestjs/common';
-import robots from 'robots-parser';
 import {
   InvalidRecordError,
-  UnknownReferenceError,
-  type Json,
-  type PortalIngest,
-} from '@app/plugin-sdk';
-import {
   OutOfBudgetError,
   RequestFailedError,
-  type SiteClient,
-} from './website.client.js';
-import type { Section } from './website.config.js';
-import {
-  MIN_TEXT_CHARS,
-  readPage,
+  UnknownReferenceError,
   UnreadablePageError,
-} from './website.page.js';
+  type Json,
+  type PortalIngest,
+  type SiteClient,
+  type SiteRobots,
+} from '@app/plugin-sdk';
+import type { Section } from './website.config.js';
+import { MIN_TEXT_CHARS, readPage } from './website.page.js';
 import { listed, type Listed } from './website.sitemap.js';
 import { stateOf, unread, type State } from './website.state.js';
-
-// the package's types say `default`, its code exports the function itself
-const robotsParser = robots as unknown as typeof robots.default;
 
 const MIB = 1024 * 1024;
 const SITEMAP_LIMIT = 16 * MIB;
 const PAGE_LIMIT = 8 * MIB;
-const ROBOTS_LIMIT = MIB;
 const SAVE_EVERY = 100;
 const SAVE_EVERY_MS = 5 * 60_000;
 const FAILURES_IN_A_ROW = 20;
@@ -35,7 +26,6 @@ const FAILURES_IN_A_ROW = 20;
 const DAYS_TO_CONFIRM = 2;
 const WRONG_IN_A_ROW = 5;
 const GONE_IN_A_ROW = 10;
-const MAX_CRAWL_DELAY_MS = 30_000;
 const DAY_MS = 86_400_000;
 
 // the site asks us to stop (429, 503), or keeps failing: the run ends,
@@ -59,7 +49,6 @@ const ok = (status: number) => status >= 200 && status < 300;
 
 export interface CrawlOptions {
   origin: string;
-  userAgent: string;
   sections: Section[];
   ingest: PortalIngest;
   client: SiteClient;
@@ -70,7 +59,7 @@ export interface CrawlOptions {
 export class Crawl {
   private readonly logger = new Logger('WebsiteConnector');
   private state: State = { v: 1, pages: {} };
-  private robots = robotsParser('', '');
+  private robots: SiteRobots = { allowed: () => true };
   private readonly today = Math.floor(Date.now() / DAY_MS);
   private failures = 0;
   private wrong = 0;
@@ -113,29 +102,14 @@ export class Crawl {
   };
 
   private async crawl() {
-    const { ingest, origin, sections } = this.o;
-    await this.loadRobots();
+    const { ingest, origin, sections, client } = this.o;
+    this.robots = await client.robots();
     for (const { id, name } of sections)
       await ingest.course({ externalId: id, name, url: origin });
     for (const section of sections) await this.section(section);
   }
 
-  private async loadRobots() {
-    const url = new URL('/robots.txt', this.o.origin);
-    const answer = await this.o.client.text(url, ROBOTS_LIMIT).catch((e) => {
-      if (e instanceof RequestFailedError) throw new Error(e.message);
-      throw e;
-    });
-    if (answer.status !== 404 && !ok(answer.status))
-      throw new Error(`robots.txt: the site answered ${answer.status}`);
-    this.robots = robotsParser(url.href, ok(answer.status) ? answer.body : '');
-    const wait = (this.robots.getCrawlDelay(this.o.userAgent) ?? 0) * 1000;
-    if (wait > this.o.client.delayMs)
-      this.o.client.delayMs = Math.min(wait, MAX_CRAWL_DELAY_MS);
-  }
-
-  private readonly allowed = (url: URL) =>
-    this.robots.isAllowed(url.href, this.o.userAgent) !== false;
+  private readonly allowed = (url: URL) => this.robots.allowed(url);
 
   private async section(section: Section) {
     const all = await this.sitemap(section);
