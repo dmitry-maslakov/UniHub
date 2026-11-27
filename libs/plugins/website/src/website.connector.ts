@@ -33,7 +33,6 @@ export class WebsiteConnector implements PollsPortal {
     });
     await new Crawl({
       origin,
-      userAgent,
       sections,
       ingest,
       client,

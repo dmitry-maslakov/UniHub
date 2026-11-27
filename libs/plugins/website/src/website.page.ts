@@ -30,14 +30,10 @@ export interface Page {
   documents: Document[];
 }
 
-// `<title>` up to the first ' – ' or ' | ', else the page's pathname
-function titleOf(text: string, fallback: string) {
-  const cuts = [' – ', ' | ']
-    .map((sep) => text.indexOf(sep))
-    .filter((at) => at >= 0);
-  const title = (cuts.length ? text.slice(0, Math.min(...cuts)) : text).trim();
-  return title || fallback;
-}
+// `<title>` up to the first ' – ' or ' | ' (one it starts with too, a
+// template's empty name), else the page's pathname
+const titleOf = (text: string, fallback: string) =>
+  text.split(/(?:^|\s)[–|](?:\s|$)/)[0].trim() || fallback;
 
 const decoded = (text: string) => {
   try {
@@ -56,11 +52,13 @@ export async function readPage(
   section: Section,
 ): Promise<Page | null> {
   const { content, files, skipFiles } = section;
-  const page = await readSitePage(html, url, { content, skip: skipFiles });
+  const page = await readSitePage(html, url, {
+    content,
+    skip: files ? skipFiles : undefined,
+  });
   if (!page) return null;
   const found = new Map<string, Document>();
   for (const link of files ? page.links : []) {
-    if (!link.inContent) continue;
     const href = new URL(link.url);
     const mime = DOCUMENTS.get(posix.extname(href.pathname).toLowerCase());
     if (href.origin !== url.origin || !mime) continue;

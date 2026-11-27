@@ -12,67 +12,38 @@ type Element = Extract<
 // types stripped.
 //
 // `{ html, url, content, skip }` posts `{ page }`: the content element
-// cleaned of all but its text, structure and links, its text a line per
-// block, the page's title and its links, but the content's whose pathname
-// or text `skip` matches; `{ page: null }` when the selector finds nothing.
+// cleaned of all but its text, structure and links, with the page's title,
+// the text's length and its links but those `skip` matches; `{ page: null }`
+// when the selector finds nothing.
 const MAX_BODY_CHARS = 200_000;
 // deeper than this is dropped, not walked
 const MAX_DEPTH = 200;
 const REMOVED = new Set(
   'script style noscript svg button nav form iframe template'.split(' '),
 );
-// what ends a line of the text
-const BLOCKS = new Set(
-  'address article aside blockquote br dd div dl dt figcaption figure footer h1 h2 h3 h4 h5 h6 header hr li main ol p pre section table td th tr ul'.split(
-    ' ',
-  ),
-);
 
 const { html, url, content, skip } = workerData as {
   html: string;
   url: string;
   content: string;
-  skip: { source: string; flags: string } | null;
+  skip: RegExp | null;
 };
-const skipped = skip && new RegExp(skip.source, skip.flags);
+// without the flags that make test() go on from where it last matched
+const skipped =
+  skip && new RegExp(skip.source, skip.flags.replace(/[gy]/g, ''));
 
-const clean = (text: string) => text.replace(/\p{Cc}+/gu, ' ').trim();
+const spaced = (text: string) => text.replace(/\s+/g, ' ').trim();
 
-// an anchor's address, resolved and without its fragment; null when it's
-// no address
-function hrefOf(a: Element, base: URL) {
+// an anchor's http(s) address, resolved and without its fragment; null for
+// none, or another kind (mailto:, javascript:)
+function hrefOf(href: string, base: URL) {
   try {
-    const href = new URL(a.attribs.href, base);
-    href.hash = '';
-    return href.href;
+    const at = new URL(href, base);
+    at.hash = '';
+    return /^https?:$/.test(at.protocol) ? at.href : null;
   } catch {
     return null;
   }
-}
-
-// the text of what's kept, a line per block, its spaces each one
-function textOf(root: Element) {
-  const parts: string[] = [];
-  const stack: (Element | string)[] = [root];
-  for (let at = stack.pop(); at !== undefined; at = stack.pop()) {
-    if (typeof at === 'string') {
-      parts.push(at);
-      continue;
-    }
-    const block = BLOCKS.has(at.name);
-    if (block) stack.push('\n');
-    for (const node of [...at.children].reverse()) {
-      if (node.type === 'text') stack.push(node.data.replace(/\s+/g, ' '));
-      else if (node.type === 'tag') stack.push(node);
-    }
-    if (block) stack.push('\n');
-  }
-  return parts
-    .join('')
-    .split('\n')
-    .map((line) => line.replace(/\s+/g, ' ').trim())
-    .filter(Boolean)
-    .join('\n');
 }
 
 const $ = load(html);
@@ -81,27 +52,9 @@ const root = $(content).first();
 if (!root.length) {
   parentPort!.postMessage({ page: null });
 } else {
-  const top = root[0] as Element;
-  const link = (a: Element, inContent: boolean) => {
-    const href = hrefOf(a, page);
-    if (!href) return null;
-    const text = $(a).text().trim();
-    if (
-      inContent &&
-      (skipped?.test(new URL(href).pathname) || skipped?.test(text))
-    )
-      return null;
-    return { url: href, text, inContent };
-  };
-  // the page's links outside the content, before it's cleaned
-  const outside = $('a[href]')
-    .toArray()
-    .filter((a) => a !== top && !$.contains(top, a))
-    .map((a) => link(a as Element, false));
-
   // an explicit stack: a page nested deeper than the call stack is no crash
   let textChars = 0;
-  const stack: [Element, number][] = [[top, 0]];
+  const stack: [Element, number][] = [[root[0] as Element, 0]];
   for (let at = stack.pop(); at; at = stack.pop()) {
     const [parent, depth] = at;
     parent.children = parent.children.filter((node) => {
@@ -118,19 +71,28 @@ if (!root.length) {
       return true;
     });
   }
-  // what's kept of the content's links, in the page's order
-  const inside = root
-    .find('a[href]')
-    .toArray()
-    .map((a) => link(a as Element, true));
+
+  // what's kept of its links, in the page's order
+  const links = [];
+  for (const a of root.find('a[href]').toArray()) {
+    const href = hrefOf((a as Element).attribs.href, page);
+    if (!href) continue;
+    const text = spaced($(a).text());
+    if (skipped?.test(new URL(href).pathname) || skipped?.test(text)) continue;
+    links.push({ url: href, text });
+  }
 
   parentPort!.postMessage({
     page: {
-      title: clean($('title').first().text()),
+      title: spaced(
+        $('title')
+          .first()
+          .text()
+          .replace(/\p{Cc}+/gu, ' '),
+      ),
       body: (root.html() ?? '').slice(0, MAX_BODY_CHARS),
-      text: textOf(top).slice(0, MAX_BODY_CHARS),
       textChars,
-      links: [...inside, ...outside].filter(Boolean),
+      links,
     },
   });
 }

@@ -3,7 +3,6 @@ import {
   InvalidRecordError,
   OutOfBudgetError,
   RequestFailedError,
-  siteRobots,
   UnknownReferenceError,
   UnreadablePageError,
   type Json,
@@ -50,7 +49,6 @@ const ok = (status: number) => status >= 200 && status < 300;
 
 export interface CrawlOptions {
   origin: string;
-  userAgent: string;
   sections: Section[];
   ingest: PortalIngest;
   client: SiteClient;
@@ -104,8 +102,8 @@ export class Crawl {
   };
 
   private async crawl() {
-    const { ingest, origin, sections, client, userAgent } = this.o;
-    this.robots = await siteRobots(client, origin, userAgent);
+    const { ingest, origin, sections, client } = this.o;
+    this.robots = await client.robots();
     for (const { id, name } of sections)
       await ingest.course({ externalId: id, name, url: origin });
     for (const section of sections) await this.section(section);

@@ -1,7 +1,11 @@
 import { addAbortSignal, Readable } from 'node:stream';
 import { setTimeout } from 'node:timers/promises';
 import axios, { type AxiosInstance } from 'axios';
+import robots from 'robots-parser';
 import { portalRequests } from './http.js';
+
+// the package's types say `default`, its code exports the function itself
+const robotsParser = robots as unknown as typeof robots.default;
 
 // the run has spent its requests
 export class OutOfBudgetError extends Error {
@@ -12,7 +16,7 @@ export class OutOfBudgetError extends Error {
 }
 
 // What didn't come back as an answer: the network, a timeout, a body past
-// its limit, a redirect to another site.
+// its limit, an address or a redirect on another site.
 export class RequestFailedError extends Error {
   constructor(url: URL, why: string) {
     // the path alone, not a query
@@ -37,10 +41,18 @@ const DEADLINE_MS = 60_000;
 const IDLE_MS = 60_000;
 const MAX_REDIRECTS = 5;
 const REDIRECTS = new Set([301, 302, 303, 307, 308]);
+const ROBOTS_LIMIT = 1024 * 1024;
+const MAX_CRAWL_DELAY_MS = 30_000;
+
+export interface SiteRobots {
+  // false for a page robots.txt disallows to the client's agent
+  allowed(url: URL): boolean;
+}
 
 export interface SiteClientOptions {
   // https://faculty.example.edu: the one origin every request goes to
   origin: string;
+  // names neither the hub nor whoever runs it
   userAgent: string;
   delayMs: number;
   maxRequests: number;
@@ -50,18 +62,20 @@ export interface SiteClientOptions {
 }
 
 // For a plugin that reads a public website, with no account: the site's
-// requests, one at a time, through the sdk's guard on what a portal's
-// requests reach: GET only, the User-Agent and nothing else that
+// requests, each awaited before the next, through the sdk's guard on what a
+// portal's requests reach: GET only, the User-Agent and nothing else that
 // identifies, a pause between any two, a budget every request is taken from
-// (a redirect's hop too), and no leaving the site: a redirect to another
-// origin is a failure.
+// (a redirect's hop too), and no leaving the site: an address or a
+// redirect on another origin is a failure.
 export class SiteClient {
   private readonly http: AxiosInstance;
+  private readonly origin: string;
   private spent = 0;
   private lastAt = 0;
-  delayMs: number;
+  private delayMs: number;
 
   constructor(private readonly options: SiteClientOptions) {
+    this.origin = new URL(options.origin).origin;
     this.delayMs = options.delayMs;
     this.http = axios.create({
       ...portalRequests,
@@ -88,11 +102,35 @@ export class SiteClient {
     return this.get(url, 'stream', -1) as Promise<Answer<Readable>>;
   }
 
+  // The site's robots.txt for the client's agent, asked for once: none (a
+  // 404) allows everything, and a Crawl-delay longer than the client's pause
+  // replaces it from then on, up to 30 s. Any other answer, or none, is an
+  // error: a site that can't say what it allows is left alone.
+  async robots(): Promise<SiteRobots> {
+    const url = new URL('/robots.txt', this.origin);
+    const answer = await this.text(url, ROBOTS_LIMIT).catch((e) => {
+      if (e instanceof RequestFailedError) throw new Error(e.message);
+      throw e;
+    });
+    const ok = answer.status >= 200 && answer.status < 300;
+    if (answer.status !== 404 && !ok)
+      throw new Error(`robots.txt: the site answered ${answer.status}`);
+    const parsed = robotsParser(url.href, ok ? answer.body : '');
+    const { userAgent } = this.options;
+    const wait = (parsed.getCrawlDelay(userAgent) ?? 0) * 1000;
+    if (wait > this.delayMs) this.delayMs = Math.min(wait, MAX_CRAWL_DELAY_MS);
+    return {
+      allowed: (page) => parsed.isAllowed(page.href, userAgent) !== false,
+    };
+  }
+
   private async get(
     from: URL,
     responseType: 'text' | 'stream',
     limit: number,
   ): Promise<Answer<string | Readable>> {
+    if (from.origin !== this.origin)
+      throw new RequestFailedError(from, 'on another site');
     let url = from;
     for (let hops = 0; ; hops++) {
       await this.turn();
@@ -125,7 +163,7 @@ export class SiteClient {
         this.lastAt = Date.now();
         throw new RequestFailedError(url, (error as Error).message);
       }
-      if (url.origin !== this.options.origin)
+      if (url.origin !== this.origin)
         throw new RequestFailedError(from, 'redirected to another site');
       if (hops >= MAX_REDIRECTS)
         throw new RequestFailedError(from, 'too many redirects');

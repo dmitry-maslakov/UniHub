@@ -2,18 +2,15 @@ import { Worker } from 'node:worker_threads';
 import { firstMessage } from './parsing.js';
 
 // a text body is cut here before it is parsed
-export const MAX_HTML_CHARS = 2 * 1024 * 1024;
+const MAX_HTML_CHARS = 2 * 1024 * 1024;
 const PARSE_TIMEOUT_MS = 20_000;
 const HEAP_MB = 256;
 
 export interface PageLink {
-  // resolved against the page, without its fragment
+  // an http(s) address, resolved against the page, without its fragment
   url: string;
-  // as the page shows it, trimmed
+  // as the page shows it, its spaces each one, trimmed
   text: string;
-  // in what's kept of the content element; else elsewhere on the page (its
-  // menus, its footer), never in what the cleaning took out of the content
-  inContent: boolean;
 }
 
 export interface SitePage {
@@ -22,13 +19,9 @@ export interface SitePage {
   // the content element cleaned of all but its text, structure and links
   // (an `href`), up to 200,000 characters
   body: string;
-  // its text, a line per block (a paragraph, an item, a cell), each line's
-  // spaces one, up to 200,000 characters
-  text: string;
-  // the text's characters, spaces aside
+  // its text's characters, spaces aside
   textChars: number;
-  // the content's links in the page's order, but those `skip` matches,
-  // then the rest of the page's
+  // its links, in the page's order, but those `skip` matches
   links: PageLink[];
 }
 
@@ -65,7 +58,7 @@ export async function readPage(
       html: html.slice(0, MAX_HTML_CHARS),
       url: url.href,
       content,
-      skip: skip ? { source: skip.source, flags: skip.flags } : null,
+      skip: skip ?? null,
     },
     resourceLimits: { maxOldGenerationSizeMb: HEAP_MB },
   });

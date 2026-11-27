@@ -143,26 +143,11 @@ describe('WebsiteConnector', () => {
       expect(pagesAsked()).toEqual(['/p/a']);
     });
 
-    it('allows everything when there is none', async () => {
-      await run();
-      expect(ingest.items.size).toBe(2);
-    });
-
     it('ends the run on any other failure', async () => {
       site.set('/robots.txt', 500);
       await expect(run()).rejects.toThrow('robots.txt');
       expect(site.asked).toEqual(['/robots.txt']);
       expect(ingest.courses_.size).toBe(0);
-    });
-
-    it("waits as long as the site's crawl-delay asks, when it is more than ours", async () => {
-      site.set('/robots.txt', 'User-agent: *\nCrawl-delay: 0.3');
-      serve('/p/private/b');
-      await run();
-
-      expect(site.times).toHaveLength(4);
-      for (let i = 1; i < site.times.length; i++)
-        expect(site.times[i] - site.times[i - 1]).toBeGreaterThanOrEqual(280);
     });
   });
 
@@ -307,39 +292,14 @@ describe('WebsiteConnector', () => {
       site.set('/sitemap.xml', sitemap('/p/a'));
     });
 
-    it('is cleaned: scripts, comments, attributes, a stray comment end', async () => {
-      serve(
-        '/p/a',
-        `<h1 class="x" onclick="evil()">Heading</h1>
-         <script>alert(1)</script><style>p{}</style><noscript>n</noscript>
-         <svg><circle/></svg><button>Go</button><nav>links</nav>
-         <form><input></form><iframe src="x"></iframe><template><p>t</p></template>
-         <!-- a comment --><p id="i" style="color:red">${TEXT} --> after</p>
-         <a href="/p/b" target="_blank" class="l">link</a>`,
-      );
-      await run();
-
-      const { body } = ingest.items.get('/p/a')!.raw as { body: string };
-      expect(body).not.toMatch(
-        /script|alert|style|svg|button|nav|form|iframe|template|comment|-->|class|onclick|id=/,
-      );
-      expect(body).toContain('<h1>Heading</h1>');
-      expect(body).toContain('<a href="/p/b">link</a>');
-      expect(body).toContain(`${TEXT}  after`);
-    });
-
-    it('is cut at 200,000 characters', async () => {
-      serve('/p/a', `<p>${'x'.repeat(250_000)}</p>`);
-      await run();
-      const { body } = ingest.items.get('/p/a')!.raw as { body: string };
-      expect(body).toHaveLength(200_000);
-    });
-
     it('has the title up to the first separator, or its pathname', async () => {
       const titles: [string, string][] = [
         ['Algorithms – Faculty', 'Algorithms'],
         ['Databases | Faculty – News', 'Databases'],
         ['  Plain  ', 'Plain'],
+        // a template's empty name
+        [' | Faculty', '/p/a'],
+        [' – Faculty', '/p/a'],
         ['', '/p/a'],
       ];
       for (const [title, expected] of titles) {
@@ -500,22 +460,6 @@ describe('WebsiteConnector', () => {
 
       expect([...ingest.items.keys()]).toEqual(['/p/b']);
       expect(state().pages['/p/a']).toMatchObject({ a: today(), d: 0 });
-    });
-
-    it('is parsed whatever its nesting, and cut at 2 MiB first', async () => {
-      const deep = TEXT + '<div>'.repeat(5_000) + '</div>'.repeat(5_000);
-      serve('/p/a', deep);
-      // the content starts past the 2 MiB
-      site.set('/p/b', 'x'.repeat(3 * 1024 * 1024) + page(TEXT));
-      site.set('/sitemap.xml', sitemap('/p/a', '/p/b'));
-      await run();
-
-      const { body } = ingest.items.get('/p/a')!.raw as { body: string };
-      // 200 levels deep, no deeper
-      expect(body).toContain('<div>'.repeat(200));
-      expect(body).not.toContain('<div>'.repeat(201));
-      expect(ingest.items.has('/p/b')).toBe(false);
-      expect(state().pages['/p/b']).toMatchObject({ k: false });
     });
   });
 

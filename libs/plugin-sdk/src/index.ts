@@ -24,5 +24,4 @@ export * from './records.js';
 export * from './settings.js';
 export * from './site-client.js';
 export * from './site-page.js';
-export * from './site-robots.js';
 export * from './unpackers.js';

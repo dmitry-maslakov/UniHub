@@ -13,6 +13,8 @@ const ELSEWHERE = 'https://elsewhere.example.org';
 
 const asked: { path: string; at: number; agent: string | null }[] = [];
 const elsewhere: string[] = [];
+// what /robots.txt answers: a body, or a status with none
+let robots: string | number = 404;
 const server = setupServer(
   http.get(`${SITE}/*`, async ({ request }) => {
     const { pathname } = new URL(request.url);
@@ -21,6 +23,10 @@ const server = setupServer(
       at: Date.now(),
       agent: request.headers.get('user-agent'),
     });
+    if (pathname === '/robots.txt')
+      return typeof robots === 'number'
+        ? new HttpResponse(null, { status: robots })
+        : new HttpResponse(robots);
     if (pathname === '/away')
       return new HttpResponse(null, {
         status: 302,
@@ -57,6 +63,7 @@ beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
 beforeEach(() => {
   asked.length = 0;
   elsewhere.length = 0;
+  robots = 404;
 });
 afterAll(() => server.close());
 
@@ -70,6 +77,7 @@ const client = (options: object = {}) =>
     ...options,
   });
 const at = (path: string) => new URL(`${SITE}${path}`);
+const gaps = () => asked.slice(1).map((a, i) => a.at - asked[i].at);
 
 describe('SiteClient', () => {
   it('asks the delay apart, as the agent it is given', async () => {
@@ -88,16 +96,29 @@ describe('SiteClient', () => {
       type: 'text/html; charset=utf-8',
     });
     expect(asked.map((a) => a.agent)).toEqual(['reader', 'reader', 'reader']);
-    for (let i = 1; i < asked.length; i++)
-      expect(asked[i].at - asked[i - 1].at).toBeGreaterThanOrEqual(140);
+    for (const gap of gaps()) expect(gap).toBeGreaterThanOrEqual(140);
   });
 
   it('follows a redirect on the site, each hop paced and counted', async () => {
-    const site = client({ maxRequests: 3 });
+    const site = client({ maxRequests: 3, delayMs: 150 });
     const answer = await site.text(at('/hop/1'), 1024);
     expect(answer.url.pathname).toBe('/end');
+    expect(asked.map((a) => a.path)).toEqual(['/hop/1', '/hop/0', '/end']);
+    for (const gap of gaps()) expect(gap).toBeGreaterThanOrEqual(140);
     expect(site.requests).toBe(3);
     await expect(site.text(at('/a'), 1024)).rejects.toThrow(OutOfBudgetError);
+  });
+
+  it('asks nothing of another site', async () => {
+    await expect(
+      client().text(new URL(`${ELSEWHERE}/x`), 1024),
+    ).rejects.toThrow(
+      new RequestFailedError(new URL(`${ELSEWHERE}/x`), 'on another site'),
+    );
+    // its origin is the site's, whatever path it was given with
+    const site = client({ origin: `${SITE}/courses/` });
+    expect((await site.text(at('/a'), 1024)).status).toBe(200);
+    expect(elsewhere).toEqual([]);
   });
 
   it('fails a redirect to another site without asking it, and a long chain', async () => {
@@ -135,5 +156,48 @@ describe('SiteClient', () => {
     await expect(text(body)).rejects.toThrow();
     await expect(site.text(at('/a'), 1024)).rejects.toThrow('the run is over');
     expect(asked.map((a) => a.path)).toEqual(['/hang.pdf']);
+  });
+
+  describe('robots()', () => {
+    it('disallows what robots.txt disallows to its agent', async () => {
+      robots =
+        'User-agent: reader\nDisallow: /private/\n\nUser-agent: *\nDisallow: /';
+      const rules = await client().robots();
+      expect(rules.allowed(at('/private/a'))).toBe(false);
+      expect(rules.allowed(at('/courses/a'))).toBe(true);
+    });
+
+    it('allows everything when there is none', async () => {
+      const rules = await client().robots();
+      expect(rules.allowed(at('/anything'))).toBe(true);
+    });
+
+    it('fails on any other answer', async () => {
+      robots = 500;
+      await expect(client().robots()).rejects.toThrow(
+        'robots.txt: the site answered 500',
+      );
+    });
+
+    it("waits as long as the site's crawl-delay asks, when it is more than its own, up to 30 s", async () => {
+      robots = 'User-agent: *\nCrawl-delay: 0.3';
+      const site = client({ delayMs: 100 });
+      await site.robots();
+      await site.text(at('/a'), 1024);
+      expect(gaps()[0]).toBeGreaterThanOrEqual(280);
+
+      // a shorter one leaves its own
+      robots = 'User-agent: *\nCrawl-delay: 0.05';
+      const own = client({ delayMs: 200 });
+      asked.length = 0;
+      await own.robots();
+      await own.text(at('/a'), 1024);
+      expect(gaps()[0]).toBeGreaterThanOrEqual(190);
+
+      robots = 'User-agent: *\nCrawl-delay: 3600';
+      const capped = client();
+      await capped.robots();
+      expect(Reflect.get(capped, 'delayMs')).toBe(30_000);
+    });
   });
 });
